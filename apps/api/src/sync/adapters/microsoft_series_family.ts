@@ -110,19 +110,38 @@ const page = z.object({ value: z.array(z.unknown()), "@odata.nextLink": opaque.o
 /** Complete read for tracked known families. A second expanded master detects
  * changed rule/cancellation/exception observations;
  * neither it nor an unchanged master ETag constitutes an atomic family read. */
-export async function readGraphSeriesFamily(accessToken: string, calendarID: string, template: Event, ref: ExternalEventRef, signal?: AbortSignal): Promise<GraphSeriesFamily> {
+async function readFamily(accessToken: string, calendarID: string, template: Event, ref: ExternalEventRef, signal: AbortSignal | undefined, allowMissing: boolean): Promise<GraphSeriesFamily | null> {
   template = structuredClone(template); ref = { ...ref };
   if (!opaque.safeParse(calendarID).success || !opaque.safeParse(ref.externalEventId).success || !opaque.safeParse(ref.icalUid).success) refuse();
   const base = new URL(`https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarID)}/events/${encodeURIComponent(ref.externalEventId)}`);
+  const request = (url: URL) => fetch(url, { headers: { Authorization: `Bearer ${accessToken}`, Prefer: 'outlook.timezone="UTC", outlook.body-content-type="text"', "Cache-Control": "no-cache" }, redirect: "error", signal });
   const read = async (url: URL): Promise<unknown> => {
-    const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}`, Prefer: 'outlook.timezone="UTC", outlook.body-content-type="text"', "Cache-Control": "no-cache" }, redirect: "error", signal });
+    const response = await request(url);
     assertCompleteEventReadResponse(response);
     return response.json();
   };
   const masterURL = new URL(base);
   masterURL.searchParams.set("$select", `${fields},cancelledOccurrences,exceptionOccurrences`);
   masterURL.searchParams.set("$expand", "exceptionOccurrences");
-  const first = await read(masterURL);
+  const firstResponse = await request(masterURL);
+  if (allowMissing && firstResponse.status === 404) {
+    const missing = async (response: Response) => {
+      if (response.status !== 404 || response.headers.has("content-range")) refuse();
+      // Consume and validate the complete standard Graph error response. A
+      // truncated/partial body or a generic failed request is not absence.
+      const error = z.object({ error: z.object({ code: z.string().min(1) }) }).safeParse(await response.json());
+      if (!error.success) refuse();
+    };
+    await missing(firstResponse);
+    const calendarURL = new URL(`https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendarID)}`);
+    calendarURL.searchParams.set("$select", "id");
+    const calendar = z.object({ id: opaque, "@odata.nextLink": z.never().optional(), "@removed": z.never().optional() }).safeParse(await read(calendarURL));
+    if (!calendar.success || calendar.data.id !== calendarID) refuse();
+    await missing(await request(masterURL));
+    return null;
+  }
+  assertCompleteEventReadResponse(firstResponse);
+  const first = await firstResponse.json();
   let slots: GraphSeriesOccurrence[];
   try { slots = header(first, template, ref).slots; } catch { return refuse(); }
   const instanceURL = new URL(`${base}/instances`);
@@ -150,4 +169,17 @@ export async function readGraphSeriesFamily(accessToken: string, calendarID: str
   const again = graphSeriesFamilyEvidence(await read(masterURL), values, template, ref);
   if (!isDeepStrictEqual(result, again)) refuse();
   return result;
+}
+
+/** Strict full-family evidence, including for future create ACK. */
+export async function readGraphSeriesFamily(accessToken: string, calendarID: string, template: Event, ref: ExternalEventRef, signal?: AbortSignal): Promise<GraphSeriesFamily> {
+  const family = await readFamily(accessToken, calendarID, template, ref, signal, false);
+  if (!family) refuse();
+  return family;
+}
+
+/** Null means two complete exact-master 404 responses bracketing a successful
+ * exact-calendar read. It is never permission to repeat a create POST. */
+export function readGraphSeriesFamilyOrMissing(accessToken: string, calendarID: string, template: Event, ref: ExternalEventRef, signal?: AbortSignal): Promise<GraphSeriesFamily | null> {
+  return readFamily(accessToken, calendarID, template, ref, signal, true);
 }

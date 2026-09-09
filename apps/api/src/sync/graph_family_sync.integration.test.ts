@@ -23,9 +23,11 @@ async function main() {
     const url = new URL(req.url!, "http://fixture.test"); reads.push(url.pathname);
     const json = (body: unknown, status = 200) => { res.writeHead(status, { "Content-Type": "application/json" }); res.end(JSON.stringify(body)); };
     if (url.pathname === "/v1.0/me/calendars") return json({ value: [{ id: "calendar", name: "Fixture", canEdit: true }] });
+    if (url.pathname === "/v1.0/me/calendars/calendar") return json({ id: "calendar" }, mode === "removed-denied" ? 403 : 200);
     if (url.pathname === "/v1.0/me/calendars/calendar/events/series") {
       assert.equal(url.searchParams.get("$expand"), "exceptionOccurrences", "Tracked series use the full reader, never calendarView hydration");
       if (mode === "master-failure") return json({}, 503);
+      if (mode.startsWith("removed")) return json({ error: { code: "ErrorItemNotFound" } }, 404);
       if (mode === "missing-master") return json({}, 404);
       return json(master);
     }
@@ -101,6 +103,27 @@ async function main() {
     assert.equal((await getUserExternalCalendars("microsoft", userID, "account"))[0]!.cursor, oldCursor);
     assert.equal((await rows()).find(value => value.id === child("occ-28").id)!.isCanceled, true, "Stale context cannot partially revive children");
     await sync(); assert.equal((await rows()).length, 6); assert.equal((await rows()).filter(value => value.isCanceled).length, 0);
+    mode = "removed-denied";
+    const beforeDenied = await snapshot(); await assert.rejects(sync); assert.deepEqual(await snapshot(), beforeDenied);
+    mode = "removed";
+    localChange = async () => { await db.update(events).set({ revision: sql`${events.revision} + 1` }).where(eq(events.id, root.id)); };
+    await assert.rejects(sync); assert.ok((await rows()).every(value => !value.deletedAt), "Stale context cannot remove the family");
+    const beforeRemoved = await rows(), beforeRemovedMaps = await maps();
+    await setCursor(calendar.id, null);
+    assert.deepEqual(await sync(), [calendar.id]);
+    const removed = await rows();
+    assert.equal(removed.filter(value => value.deletedAt).length, 5);
+    assert.deepEqual(removed.find(value => !value.seriesID && !value.recurrence), beforeRemoved.find(value => !value.seriesID && !value.recurrence), "Unrelated one-off survives");
+    assert.deepEqual(await maps(), beforeRemovedMaps, "Retain source addresses for full-proof revival");
+    assert.deepEqual(await sync(), []); assert.deepEqual(await rows(), removed, "Repeated negative proof is a no-op despite stale ordinary delta");
+    await setCursor(calendar.id, null); await sync(); assert.deepEqual(await rows(), removed, "Reset cannot revive removed family from stale components");
+    mode = "normal"; master.cancelledOccurrences = ["opaque-cancelled"]; instances = [ordinary[0], ordinary[2], ordinary[3]];
+    assert.deepEqual(await sync(), [calendar.id]);
+    const restored = await rows();
+    assert.deepEqual(restored.map(value => value.id), beforeRemoved.map(value => value.id));
+    assert.ok(restored.every(value => !value.deletedAt));
+    assert.equal(restored.find(value => value.id === child("occ-28").id)!.isCanceled, true, "Revival retains native cancellation");
+    assert.deepEqual(await sync(), []); assert.deepEqual(await rows(), restored);
     console.log("Tracked Graph family sync: actual scoped native reads, flag-off preservation, calendarView/stale-ID suppression before hydration, reset/window renewal, moved/cancelled/revived UUIDs, complete-read failures and local-race cursor preservation: OK");
   } finally { config.api.eventTimeEditsEnabled = enabled; globalThis.fetch = realFetch; server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await db.delete(user).where(eq(user.id, userID)); }
 }

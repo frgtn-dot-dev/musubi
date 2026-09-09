@@ -31,7 +31,7 @@ async function accepted(tx: DbTransaction, address: Address) {
   const [initial] = await tx.select().from(externalEvents).where(and(eq(externalEvents.provider, "microsoft"), eq(externalEvents.calendarID, address.calendarID), eq(externalEvents.externalEventID, address.externalMasterID)));
   if (!initial) refuse();
   const [root] = await tx.select().from(events).where(eq(events.id, initial.eventID)).for("update");
-  if (!root || root.deletedAt || root.isCanceled || root.seriesID || root.originalStart || !root.recurrence || !["zoned", "all-day"].includes(root.timeModel?.kind ?? "")) refuse();
+  if (!root || root.isCanceled || root.seriesID || root.originalStart || !root.recurrence || !["zoned", "all-day"].includes(root.timeModel?.kind ?? "")) refuse();
   const children = await tx.select().from(events).where(eq(events.seriesID, root.id)).orderBy(events.id).for("update");
   const family = [root, ...children], ids = family.map(value => value.id);
   if (family.some(value => value.creatorID !== address.userID || value.originCalendarID !== address.calendarID)) refuse();
@@ -137,7 +137,7 @@ export async function replaceGraphFamily(context: GraphFamilyContext, observatio
     // Validate the proposed family once, including moved-out definitions. Do
     // not re-expand the entire COUNT sequence separately for every child.
     expandRecurringEvents([candidate, ...prepared.map(value => value.event)], candidate.start, new Date(candidate.start.getTime() + 730 * DAY), { consumerTimeZone: "UTC", includeAllNonRecurring: true });
-    await save(root, { ...root, ...observation.master.values });
+    await save(root, { ...root, ...observation.master.values, deletedAt: null });
     await map(root.id, observation.master, null);
     for (const value of prepared) {
       await save(value.previous, value.values); await map(value.values.id, value.native, value.values.originalStart);
@@ -167,8 +167,25 @@ export async function listGraphFamilyContexts(userID: string, accountID: string,
     .innerJoin(events, eq(events.id, externalEvents.eventID))
     .innerJoin(externalCalendars, eq(externalCalendars.calendarID, externalEvents.calendarID))
     .where(and(eq(externalEvents.provider, "microsoft"), eq(externalEvents.calendarID, calendarID), eq(externalCalendars.provider, "microsoft"), eq(externalCalendars.userID, userID), eq(externalCalendars.accountID, accountID),
-      sql`${events.seriesID} is null and ${events.deletedAt} is null and ${events.recurrence} is not null and ${events.recurrence} <> '' and ${events.timeModel}->>'kind' in ('zoned', 'all-day')`)).orderBy(externalEvents.externalEventID);
+      sql`${events.seriesID} is null and ${events.recurrence} is not null and ${events.recurrence} <> '' and ${events.timeModel}->>'kind' in ('zoned', 'all-day')`)).orderBy(externalEvents.externalEventID);
   const result: GraphFamilyContext[] = [];
   for (const root of roots) result.push(await readGraphFamilyContext({ userID, accountID, calendarID, externalMasterID: root.externalMasterID }));
   return result;
+}
+
+/** Fresh negative native proof removes the whole accepted family locally.
+ * Retain native maps and original UUIDs for subsequent full-proof revival. */
+export async function removeGraphFamily(context: GraphFamilyContext): Promise<{ changed: boolean; seenExternalIDs: string[] }> {
+  context = structuredClone(context);
+  return db.transaction(async tx => {
+    await lockAddress(tx, context.address);
+    const current = await accepted(tx, context.address);
+    if (!same(context, current)) refuse();
+    let changed = false;
+    for (const value of [current.root, ...current.children]) if (!value.deletedAt) {
+      await tx.update(events).set({ deletedAt: new Date(), revision: sql`${events.revision} + 1` }).where(eq(events.id, value.id));
+      changed = true;
+    }
+    return { changed, seenExternalIDs: current.mappings.map(value => value.externalEventID).sort() };
+  }).catch(() => { throw new Error("Complete Graph family could not be removed."); });
 }
