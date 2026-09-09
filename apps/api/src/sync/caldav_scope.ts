@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { planEventScope } from "@musubi/calendar";
 import { sameCaldavScopeContext } from "@musubi/db";
-import type { CaldavSeriesContext, CaldavSeriesPrepared } from "@musubi/db";
+import type { CaldavSeriesContext, CaldavSeriesPrepared, CaldavSeriesDeletionPrepared } from "@musubi/db";
 import { EventScopeRequestSchema, EventWriteError } from "@musubi/types";
-import { caldavAdapter, prepareCaldavSeriesWrite } from "./adapters/caldav";
+import { caldavAdapter, prepareCaldavSeriesWrite, prepareCaldavSeriesDeletion } from "./adapters/caldav";
 import { ProviderEventWriteError } from "./event_write";
 
 export async function prepareCaldavSeries(context: CaldavSeriesContext, input: unknown): Promise<CaldavSeriesPrepared> {
@@ -26,6 +26,24 @@ export async function prepareCaldavSeries(context: CaldavSeriesContext, input: u
     if (error instanceof ProviderEventWriteError || error instanceof EventWriteError) throw error;
     // Parser/decryption/transport exceptions can contain raw resource lines.
     // Do not preserve their message, stack or cause across the HTTP boundary.
+    throw new ProviderEventWriteError("provider-write-failed");
+  }
+}
+
+export async function prepareCaldavSeriesDelete(context: CaldavSeriesContext, input: unknown): Promise<CaldavSeriesDeletionPrepared> {
+  const request = EventScopeRequestSchema.parse(input);
+  if (request.scope !== "series" || request.action !== "delete") throw new EventWriteError("event-write", "unsupported");
+  const root = context.mappings.find(item => item.eventID === context.master.id)!;
+  const baseline = { master: context.master, children: context.children, ref: { externalEventId: root.externalEventID, etag: root.etag, icalUid: root.icalUid } };
+  try {
+    const evidence = await caldavAdapter.readCaldavSeriesForDelete!(context.link.userID, context.link.accountID, context.link.externalCalendarID, baseline, AbortSignal.timeout(10_000));
+    for (const observed of [evidence.master, ...evidence.exceptions]) {
+      const mapping = context.mappings.find(item => item.externalEventID === observed.externalId);
+      if (!mapping || !sameCaldavScopeContext(mapping.originalStart, observed.originalStart ?? null)) throw new ProviderEventWriteError("provider-conflict");
+    }
+    return { context, deletion: prepareCaldavSeriesDeletion(evidence, baseline) };
+  } catch (error) {
+    if (error instanceof ProviderEventWriteError || error instanceof EventWriteError) throw error;
     throw new ProviderEventWriteError("provider-write-failed");
   }
 }

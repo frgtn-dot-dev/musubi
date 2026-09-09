@@ -10,10 +10,10 @@ async function main() {
   assert.ok(process.env.DATABASE_URL);
   const { config } = await import("@musubi/config");
   const { CLIENT_VERSION_HEADER, PRODUCT_VERSION } = await import("@musubi/types");
-  const { db, user, events, calendarMembers, calendarEvents, createCalendar, eventOutbox, externalEvents, eventScopeOperations, externalCalendars, externalEventTombstones, saveCaldavAccount, importExternalCalendar, replaceExternalEventResource, getEventSnapshot, replaceMemberToken, applyLocalEventScope, claimEventOutbox, completeEventOutbox, confirmCaldavSeriesOutbox } = await import("@musubi/db");
+  const { db, user, events, calendarMembers, calendarEvents, createCalendar, eventOutbox, externalEvents, eventScopeOperations, externalCalendars, externalEventTombstones, saveCaldavAccount, importExternalCalendar, replaceExternalEventResource, getEventSnapshot, replaceMemberToken, applyLocalEventScope, claimEventOutbox, completeEventOutbox, confirmCaldavSeriesOutbox, deleteExternalEvent, purgeDeletedEvents } = await import("@musubi/db");
   const { caldavAdapter } = await import("./adapters/caldav");
   const { normalizeCaldavResource } = await import("./adapters/caldav_time");
-  const { prepareCaldavSeries } = await import("./caldav_scope");
+  const { prepareCaldavSeries, prepareCaldavSeriesDelete } = await import("./caldav_scope");
   const { prepareEventDeliveryResolution } = await import("./event_resolution");
   const { commitEventDeliveryResolution, getEventDeliveryResolutionReplay } = await import("@musubi/db");
   const { deliverEventOutbox } = await import("./event_delivery");
@@ -24,14 +24,22 @@ async function main() {
   const { handlerEventScope } = await import("../handlers/events");
   const { handlerGetEventDelivery, handlerGetEventDeliveryConflict, handlerResolveEventDelivery } = await import("../handlers/event_delivery");
   let data = "", etag = '"before"', mode = "ok", puts = 0;
+  let missing = false, deletes = 0;
+  let onDelete: (() => Promise<void>) | undefined;
   let onGet: (() => Promise<void>) | undefined;
   let onPut: (() => Promise<void>) | undefined;
   const fixture = createServer(async (req, res) => {
     if (req.method === "PROPFIND") {
       res.writeHead(207, { "content-type": "application/xml" });
-      return res.end(`<d:multistatus xmlns:d="DAV:"><d:response><d:href>${req.url}</d:href><d:propstat><d:prop><d:current-user-privilege-set><d:privilege><d:write-content/></d:privilege></d:current-user-privilege-set></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>`);
+      return res.end(`<d:multistatus xmlns:d="DAV:"><d:response><d:href>${req.url}</d:href><d:propstat><d:prop><d:current-user-privilege-set><d:privilege><d:write-content/></d:privilege><d:privilege><d:unbind/></d:privilege></d:current-user-privilege-set></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>`);
     }
-    if (req.method === "GET") { await onGet?.(); res.writeHead(200, { "content-type": "text/calendar", etag }); return res.end(data); }
+    if (req.method === "GET") { await onGet?.(); if (missing) { res.writeHead(404); return res.end(); } res.writeHead(200, { "content-type": "text/calendar", etag }); return res.end(data); }
+    if (req.method === "DELETE") {
+      deletes++;
+      if (mode === "race") { data = data.replace("SUMMARY:Moved", "SUMMARY:Remote child"); etag = '"raced"'; }
+      if (req.headers["if-match"] !== etag) { res.writeHead(412); return res.end(); }
+      missing = true; await onDelete?.(); res.writeHead(mode === "lost" ? 503 : 204); return res.end();
+    }
     assert.equal(req.method, "PUT"); puts++;
     let body = ""; for await (const chunk of req) body += chunk;
     if (mode === "race") { data = data.replace("SUMMARY:Moved", "SUMMARY:Remote child"); etag = '"raced"'; }
@@ -53,7 +61,7 @@ async function main() {
   const apiOrigin = `http://127.0.0.1:${(api.address() as any).port}`;
   const enabled = config.api.eventTimeEditsEnabled;
   try {
-    for (const scenario of ["grant-before", "grant-after", "recurrence-zoned", "recurrence-all-day", "recurrence-floating", "recurrence-lost", "recurrence-race", "recurrence-orphan", "recurrence-bare", "recurrence-order", "series-time-zoned", "series-time-all-day", "series-time-floating", "series-time-lost", "series-time-race", "series-time-tombstone", "generated-time-zoned", "generated-time-all-day", "generated-time-floating", "generated-time-lost", "generated-time-race", "time-zoned", "time-all-day", "time-floating", "time-lost", "time-race", "revive-zoned", "revive-all-day", "revive-floating", "revive-lost", "revive-race", "generated-zoned", "generated-all-day", "generated-floating", "generated-cancel-zoned", "generated-cancel-all-day", "generated-cancel-floating", "generated-lost", "generated-race", "generated-prepare-race", "generated-tombstone", "cancel-zoned", "cancel-all-day", "cancel-floating", "cancel-lost", "cancel-race", "occurrence-zoned", "occurrence-all-day", "occurrence-floating", "occurrence-lost", "occurrence-race", "zoned", "all-day", "floating", "no-children", "malformed-private", "meeting", "copied", "lost", "race", "local-race", "mapping-race", "lease-race", "tombstone", "prepare-race", "no-op", "resolve", "resolve-all-day", "resolve-floating", "resolve-twice", "resolve-http", "resolve-timezone", "resolve-stale", "resolve-local-race", "resolve-child-race"]) {
+    for (const scenario of ["delete-recreate", "delete-cleanup", "delete-zoned", "delete-all-day", "delete-floating", "delete-lost", "delete-race", "delete-prepare-race", "delete-grant-before", "delete-grant-after", "delete-local-race", "delete-lease-race", "grant-before", "grant-after", "recurrence-zoned", "recurrence-all-day", "recurrence-floating", "recurrence-lost", "recurrence-race", "recurrence-orphan", "recurrence-bare", "recurrence-order", "series-time-zoned", "series-time-all-day", "series-time-floating", "series-time-lost", "series-time-race", "series-time-tombstone", "generated-time-zoned", "generated-time-all-day", "generated-time-floating", "generated-time-lost", "generated-time-race", "time-zoned", "time-all-day", "time-floating", "time-lost", "time-race", "revive-zoned", "revive-all-day", "revive-floating", "revive-lost", "revive-race", "generated-zoned", "generated-all-day", "generated-floating", "generated-cancel-zoned", "generated-cancel-all-day", "generated-cancel-floating", "generated-lost", "generated-race", "generated-prepare-race", "generated-tombstone", "cancel-zoned", "cancel-all-day", "cancel-floating", "cancel-lost", "cancel-race", "occurrence-zoned", "occurrence-all-day", "occurrence-floating", "occurrence-lost", "occurrence-race", "zoned", "all-day", "floating", "no-children", "malformed-private", "meeting", "copied", "lost", "race", "local-race", "mapping-race", "lease-race", "tombstone", "prepare-race", "no-op", "resolve", "resolve-all-day", "resolve-floating", "resolve-twice", "resolve-http", "resolve-timezone", "resolve-stale", "resolve-local-race", "resolve-child-race"]) {
       const owner = `caldav-scope-${randomUUID()}`;
       const credential = issueMemberToken();
       await db.insert(user).values({ id: owner, name: "Fixture", email: `${owner}@example.test`, isExternal: true });
@@ -71,7 +79,7 @@ async function main() {
         const cancelled = component(stamp("RECURRENCE-ID", "30", "09"), stamp("DTSTART", "30", "09"), stamp("DTEND", "31", "10"), "SUMMARY:Cancelled", "STATUS:CANCELLED");
         data = ["BEGIN:VCALENDAR", "VERSION:2.0", master, ...(scenario === "no-children" ? [] : [child, cancelled]), "END:VCALENDAR", ""].join("\r\n");
         if (scenario === "meeting") data = data.replace("SUMMARY:Master", "SUMMARY:Master\r\nORGANIZER:mailto:owner@example.test\r\nATTENDEE:mailto:guest@example.test");
-        etag = '"before"'; mode = "ok"; puts = 0; onPut = undefined; onGet = undefined;
+        etag = '"before"'; mode = "ok"; puts = 0; missing = false; deletes = 0; onDelete = undefined; onPut = undefined; onGet = undefined;
         const persist = () => replaceExternalEventResource("caldav", owner, calendar.id, collection, resource, normalizeCaldavResource({ url: resource, etag, data }).map(event => ({ externalId: event.externalId, etag, icalUid: "family", values: { title: event.title, start: event.start, end: event.end, color: "#7A8BA3", isAllDay: event.isAllDay, description: event.description, location: event.location, organizer: event.organizer ?? "", recurrence: event.recurrence, url: event.url }, time: { timeModel: event.timeModel!, externalSeriesID: event.externalSeriesID, originalStart: event.originalStart, isCanceled: event.isCanceled } })));
         await persist();
         const rows = () => db.select().from(events).where(eq(events.creatorID, owner)).orderBy(events.id);
@@ -79,6 +87,76 @@ async function main() {
         const outbox = () => db.select().from(eventOutbox).where(eq(eventOutbox.userID, owner));
         const original = await rows(), mappings = await maps();
         const root = original.find(event => !event.seriesID)!;
+        if (scenario.startsWith("delete-")) {
+          const request = { operationID: randomUUID(), scope: "series", action: "delete", expectedRevision: root.revision };
+          const candidate = await applyLocalEventScope(root.id, owner, request, { prepareProvider: true });
+          if (candidate.status !== "caldav_required") throw new Error("Missing series deletion context");
+          const prepared = await prepareCaldavSeriesDelete(candidate.context, request);
+          if (scenario === "delete-prepare-race") {
+            await db.update(events).set({ revision: sql`${events.revision} + 1` }).where(eq(events.id, original.find(item => item.seriesID)!.id));
+            assert.equal((await applyLocalEventScope(root.id, owner, request, { caldavDeletion: prepared })).status, "conflict");
+            assert.ok((await rows()).every(item => !item.deletedAt)); assert.deepEqual(await maps(), mappings); assert.equal((await outbox()).length, 0); continue;
+          }
+          if (scenario === "delete-zoned") {
+            const response = await fetch(`${apiOrigin}/events/${root.id}/scope`, { method: "POST", headers: { authorization: `Bearer ${credential.raw}`, "content-type": "application/json", [CLIENT_VERSION_HEADER]: PRODUCT_VERSION }, body: JSON.stringify(request) });
+            assert.equal(response.status, 200, await response.text());
+          } else assert.equal((await applyLocalEventScope(root.id, owner, request, { caldavDeletion: prepared })).status, "saved");
+          if (scenario === "delete-cleanup") {
+            for (const item of original) await db.update(events).set({ deletedAt: new Date("2020-01-01") }).where(eq(events.id, item.id));
+            await purgeDeletedEvents(new Date("2021-01-01"));
+          }
+          const savedRows = await rows();
+          assert.equal(savedRows.length, original.length);
+          assert.ok(savedRows.every(item => item.deletedAt && item.revision === original.find(old => old.id === item.id)!.revision + 1));
+          assert.deepEqual(await maps(), mappings);
+          const [operation] = await outbox(); assert.equal((await outbox()).length, 1); assert.equal(operation.action, "delete");
+          assert.equal((await applyLocalEventScope(root.id, owner, request, { prepareProvider: true })).status, "replayed");
+          await assert.rejects(persist); assert.deepEqual(await rows(), savedRows);
+          const claim = await claimEventOutbox(operation.id); assert.ok(claim);
+          assert.equal(await completeEventOutbox(operation.id, claim.leaseToken!, prepared.deletion.baseline.ref, prepared.deletion.baseline.ref), undefined);
+          await db.update(eventOutbox).set({ status: "pending", leaseToken: null, leaseUntil: null, nextAttemptAt: new Date(0) }).where(eq(eventOutbox.id, operation.id));
+          const revoke = () => db.update(calendarMembers).set({ role: "viewer" }).where(and(eq(calendarMembers.calendarID, calendar.id), eq(calendarMembers.userID, owner))).then(() => {});
+          if (scenario === "delete-grant-before") onGet = revoke;
+          if (scenario === "delete-grant-after") onDelete = revoke;
+          if (scenario === "delete-local-race") onDelete = () => db.update(events).set({ revision: sql`${events.revision} + 1` }).where(eq(events.id, original.find(item => item.seriesID)!.id)).then(() => {});
+          if (scenario === "delete-lease-race") onDelete = () => db.update(eventOutbox).set({ leaseUntil: new Date(0) }).where(eq(eventOutbox.id, operation.id)).then(() => {});
+          mode = scenario === "delete-lost" ? "lost" : scenario === "delete-race" ? "race" : "ok";
+          let delivered = await deliverEventOutbox(operation.id, () => caldavAdapter);
+          if (scenario === "delete-lost") {
+            assert.equal(delivered?.status, "unconfirmed"); assert.deepEqual(await maps(), mappings);
+            await deleteExternalEvent("caldav", calendar.id, resource); assert.deepEqual(await rows(), savedRows); assert.deepEqual(await maps(), mappings);
+            mode = "ok"; await db.update(eventOutbox).set({ nextAttemptAt: new Date(0) }).where(eq(eventOutbox.id, operation.id));
+            delivered = await deliverEventOutbox(operation.id, () => caldavAdapter);
+          }
+          assert.equal(puts, 0); assert.equal(deletes, scenario === "delete-grant-before" ? 0 : 1);
+          if (["delete-race", "delete-grant-before", "delete-grant-after", "delete-local-race", "delete-lease-race"].includes(scenario)) {
+            assert.notEqual(delivered?.status, "completed"); assert.deepEqual(await maps(), mappings);
+          } else {
+            assert.equal(delivered?.status, "completed", JSON.stringify(delivered)); assert.deepEqual(await maps(), []);
+            assert.equal(await persist(), false, "An old resource snapshot must not resurrect a confirmed deletion");
+            assert.deepEqual(await rows(), savedRows); assert.deepEqual(await maps(), []);
+            await deliverEventOutbox(operation.id, () => caldavAdapter); assert.equal(deletes, 1);
+            if (scenario === "delete-recreate") {
+              for (const mapping of mappings) await deleteExternalEvent("caldav", calendar.id, mapping.externalEventID);
+              assert.equal((await db.select().from(externalEventTombstones).where(eq(externalEventTombstones.externalCalendarLinkID, prepared.context.link.id))).length, 0);
+              missing = false; etag = '"recreated"'; assert.equal(await persist(), true);
+              const recreated = (await rows()).find(item => !item.deletedAt && !item.seriesID)!; assert.notEqual(recreated.id, root.id);
+              const edit = { operationID: randomUUID(), scope: "series", action: "update", expectedRevision: recreated.revision, patch: { title: "Editable recreation" } };
+              const next = await applyLocalEventScope(recreated.id, owner, edit, { prepareProvider: true });
+              assert.equal(next.status, "caldav_required"); if (next.status !== "caldav_required") throw new Error("Recreated family must remain editable");
+              const nextPrepared = await prepareCaldavSeries(next.context, edit);
+              assert.equal((await applyLocalEventScope(recreated.id, owner, edit, { caldav: nextPrepared })).status, "saved");
+              const update = (await outbox()).find(item => item.mutationID === edit.operationID)!;
+              assert.equal((await deliverEventOutbox(update.id, () => caldavAdapter))?.status, "completed");
+            }
+            if (scenario === "delete-cleanup") {
+              await purgeDeletedEvents(new Date("2021-01-01")); assert.deepEqual(await rows(), []);
+              assert.equal(await persist(), false); assert.deepEqual(await rows(), []); continue;
+            }
+            assert.equal((await applyLocalEventScope(root.id, owner, request, { prepareProvider: true })).status, "replayed");
+          }
+          continue;
+        }
         if (scenario.startsWith("series-time-")) {
           const time = scenario.endsWith("all-day") ? { kind: "all-day", startDate: "2026-03-29", endDate: "2026-03-30" } : { kind: scenario.endsWith("floating") ? "floating" : "zoned", ...(scenario.endsWith("floating") ? {} : { timeZone: "Europe/Prague" }), startLocal: "2026-03-29T09:00:00.000", endLocal: "2026-03-30T10:00:00.000" };
           const request = { operationID: randomUUID(), scope: "series", action: "update", expectedRevision: root.revision, patch: {}, time };

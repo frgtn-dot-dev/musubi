@@ -1,5 +1,5 @@
 import { queueGoogleRsvp } from "../sync/provider_rsvp";
-import { prepareCaldavSeries } from "../sync/caldav_scope";
+import { prepareCaldavSeries, prepareCaldavSeriesDelete } from "../sync/caldav_scope";
 import { ProviderEventWriteError } from "../sync/event_write";
 import { prepareGoogleOccurrence } from "../sync/google_scope";
 import { config } from "@musubi/config";
@@ -327,8 +327,13 @@ export async function handlerEventScope(req: Request, res: Response) {
   }
   if (result.status === "caldav_required") {
     try {
-      const caldav = await prepareCaldavSeries(result.context, req.body);
-      result = await applyLocalEventScope(eventID, req.user!.id, req.body, { caldav });
+      if (req.body.scope === "series" && req.body.action === "delete") {
+        const caldavDeletion = await prepareCaldavSeriesDelete(result.context, req.body);
+        result = await applyLocalEventScope(eventID, req.user!.id, req.body, { caldavDeletion });
+      } else {
+        const caldav = await prepareCaldavSeries(result.context, req.body);
+        result = await applyLocalEventScope(eventID, req.user!.id, req.body, { caldav });
+      }
     } catch (error) {
       if (error instanceof ProviderEventWriteError && error.code === "provider-conflict")
         return res.status(409).json({ error: "The provider series changed. Sync the calendar before retrying.", code: "provider-conflict", localCommitted: false });

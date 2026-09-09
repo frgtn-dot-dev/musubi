@@ -661,6 +661,14 @@ export async function replaceExternalEventResource(
       throw new Error("Invalid complete event resource.");
     if (observations.some(item => item.icalUid !== master.icalUid || (item !== master && item.time.externalSeriesID !== resourceID)))
       throw new Error("Inconsistent event resource identity.");
+    // A snapshot fetched before a confirmed local DELETE must not resurrect
+    // the same accepted resource version after its mappings have been removed.
+    const [deletedVersion] = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(
+      eq(eventOutbox.provider, provider), eq(eventOutbox.userID, userID), eq(eventOutbox.calendarID, calendarID), eq(eventOutbox.externalEventID, resourceID),
+      eq(eventOutbox.action, "delete"), eq(eventOutbox.status, "completed"), sql`${eventOutbox.payload}->'caldavSeriesDeletion' is not null`,
+      ...(master.etag ? [eq(eventOutbox.expectedEtag, master.etag)] : []),
+    )).limit(1);
+    if (deletedVersion) return false;
     const mappings = await tx.select().from(externalEvents).where(and(
       eq(externalEvents.provider, provider), eq(externalEvents.calendarID, calendarID),
       sql`(${externalEvents.externalEventID} = ${resourceID} or ${externalEvents.externalSeriesID} = ${resourceID})`,

@@ -353,3 +353,48 @@ for its upcoming durable worker integration.
 DB HTTP regressions revoke the grant during GET and after PUT. The first sends no
 PUT, and neither case advances validators. A transport regression also verifies
 that a failed deletion checkpoint sends no DELETE.
+
+## Durable whole-series deletion
+
+The series/delete endpoint prepares the complete native resource under positive
+collection unbind permission. Its final scope transaction rechecks the family and
+atomically tombstones the master and every detached definition, increments each
+revision once and appends one root deletion intent. All accepted mappings remain
+until delivery is confirmed.
+
+The worker rechecks the entire tombstoned family, destination, edit grant and lease
+before DELETE and before ACK. Only confirmed remote absence removes every family
+mapping and completes the receipt in one transaction; generic single-event ACK is
+not allowed. Applied 503 recovery reads absence without repeating DELETE. A remote
+edit, changed local definition, revoked grant or lost lease leaves mappings intact.
+An incoming deletion while delivery is uncertain is retained as an echo candidate.
+
+A completed deletion receipt rejects later imports of its old accepted resource
+version, including a snapshot fetched before the DELETE. An observation without a
+validator is also refused for that deleted address. A genuinely new resource version
+can be imported normally; identical-validator recreation cannot be distinguished
+from a stale snapshot and is conservatively ignored. This barrier depends on keeping
+the completed receipt, as with other durable recovery evidence.
+
+HTTP/DB regressions cover zoned, all-day and floating families, authenticated scope,
+replay, applied 503, provider/local/preparation races, grant revocation, lease loss,
+generic ACK refusal and stale-snapshot non-resurrection. Radicale exercises the
+scope transaction, worker, full mapping removal, retry and subsequent sync. Following
+scope and deletion conflict resolution remain unavailable. Flags remain disabled.
+
+Independent review added a retention guard for the complete unresolved deletion
+family: scheduled tombstone cleanup cannot remove the rows/mappings needed for
+recovery. After confirmed completion ordinary cleanup is allowed, while the durable
+receipt still blocks stale imports. A partial address/version index (migration
+0068) supports that lookup without scanning unrelated completed outbox history.
+The DB regression ages a pending family past retention, runs cleanup, completes
+delivery, runs cleanup again and confirms that an old snapshot cannot revive it.
+
+A delayed unmapped deletion delta for the completed operation is recognized as its
+own echo, so it does not install a permanent address tombstone on a later resource
+incarnation. A pending create at that address retains the existing deletion fence.
+The regression recreates the family under a new ETag after that delayed delta and
+successfully edits/delivers it again with new local identities.
+The echo check includes exact detached addresses retained in the receipt's mapping
+set, using the indexed root resource address first. A full sweep that captured
+those mappings before ACK must not leave child-address tombstones either.

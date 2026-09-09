@@ -7,6 +7,7 @@ import {
 	calendarEvents,
 	calendarMembers,
 	eventUsers,
+	eventOutbox,
 	events,
 	user,
 } from "../schema";
@@ -221,5 +222,10 @@ export async function setAttendance(
 export async function purgeDeletedEvents(before: Date) {
 	await db
 		.delete(events)
-		.where(and(isNotNull(events.deletedAt), lt(events.deletedAt, before)));
+		.where(and(isNotNull(events.deletedAt), lt(events.deletedAt, before), sql`not exists (
+      select 1 from ${eventOutbox}
+      where ${eventOutbox.eventID} = coalesce(${events.seriesID}, ${events.id})
+        and ${eventOutbox.payload}->'caldavSeriesDeletion' is not null
+        and ${eventOutbox.status} not in ('completed', 'not-needed')
+    )`));
 }
