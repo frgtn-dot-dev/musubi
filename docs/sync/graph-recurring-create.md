@@ -286,3 +286,29 @@ PostgreSQL tests cover concurrent exact replay, changed/unsupported admission,
 permission rollback, pending/unconfirmed/cancelled import refusal, cursor safety,
 lease restart/expiry, local revision/deletion, permission/token removal, premature
 mapping/child refusal and generic ACK rejection.
+
+
+## Private atomic create acknowledgement
+
+Complete personal native master/instance evidence can now atomically install
+all mappings and canonical children and complete the exact leased create row.
+The same admission/source/lease check runs inside this transaction. The exact
+master read also retains native transactionId, which must equal this operation
+UUID; matching content alone cannot acknowledge another creation. Saved time,
+content and the entire finite original footprint must match; changed exceptions,
+cancellations, attendees, foreign ownership, duplicate IDs/UIDs/originals and
+unknown instance zones cannot confirm a new personal creation. Equivalent finite
+recurrence footprints are compared without depending on RRULE token order.
+
+Native tombstone addresses and existing mappings are checked before installation.
+Only the independently validated create row is exempted from the family's pending
+operation fence. Existing tracked sync cannot use that exemption. Master map,
+children, metadata and journal completion roll back together if any proof fails
+or the lease expires before final ACK. Normal full-family sync is a no-op after
+acceptance, and stale ordinary instance echoes remain excluded.
+
+PostgreSQL regressions cover timed DST and all-day year boundaries, incomplete or
+changed proof, duplicate identities, tombstones/collisions, concurrent one-winner
+ACK, deterministic lease expiry during family writes, and subsequent sync no-op.
+Native HTTP delivery/recovery and public create admission still need composition;
+this private transaction alone is not production recurring creation.

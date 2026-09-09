@@ -16,6 +16,7 @@ const ref = { externalEventId: master.id, icalUid: master.iCalUId };
 const evidence = (native = changed, values = listed) => graphSeriesFamilyEvidence(native, values, template, ref);
 const before = JSON.stringify({ changed, listed, template });
 const proof = evidence();
+assert.equal(evidence({ ...changed, transactionId: "00000000-0000-4000-8000-000000000190" }).master.creationOperationID, "00000000-0000-4000-8000-000000000190");
 assert.deepEqual(proof.instances.map(value => value.externalId), ["occ-27", "occ-29", "occ-30"]);
 assert.deepEqual(proof.instances.map(value => value.icalUid), ["uid-27", "uid-29", "uid-30"]);
 assert.equal(proof.instances[1]!.start.toISOString(), "2027-05-01T12:00:00.000Z");
@@ -99,7 +100,9 @@ async function main() {
     if (url.pathname === path) {
       assert.equal(url.searchParams.get("$expand"), "exceptionOccurrences");
       assert.ok(url.searchParams.get("$select")?.includes("cancelledOccurrences"));
+      assert.ok(url.searchParams.get("$select")?.includes("transactionId"));
       masterReads++;
+      if (masterReads === 2 && mode === "changed-transaction") return send({ ...changed, transactionId: "another-operation" });
       if (masterReads === 2 && mode === "changed-exception") return send({ ...changed, exceptionOccurrences: [{ ...moved, subject: "Concurrent" }] });
       if (masterReads === 2 && mode === "changed-cancel") return send({ ...changed, cancelledOccurrences: ["different-opaque"] });
       if (masterReads === 2 && mode === "changed-rule") return send({ ...changed, recurrence: { ...master.recurrence, range: { ...master.recurrence.range, numberOfOccurrences: 5 } } });
@@ -129,7 +132,7 @@ async function main() {
   const read = () => readGraphSeriesFamily("synthetic-token", "cal/one", template, ref);
   try {
     assert.deepEqual(await read(), proof); assert.equal(reads.length, 4); assert.equal(masterReads, 2);
-    for (const scenario of ["partial", "redirect", "network", "foreign", "wrong-calendar", "wrong-master", "loop", "malformed", "page-failure", "duplicate", "wrong-count", "changed-exception", "changed-cancel", "changed-rule", "master-failure"]) {
+    for (const scenario of ["partial", "redirect", "network", "foreign", "wrong-calendar", "wrong-master", "loop", "malformed", "page-failure", "duplicate", "wrong-count", "changed-exception", "changed-transaction", "changed-cancel", "changed-rule", "master-failure"]) {
       mode = scenario; reads = []; masterReads = 0; await assert.rejects(read); assert.ok(reads.length <= 4);
     }
     mode = "missing"; reads = []; masterReads = 0;
