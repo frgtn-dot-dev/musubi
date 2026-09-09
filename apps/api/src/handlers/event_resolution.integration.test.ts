@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import express from "express";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   account,
+  calendarMembers,
   CALENDAR_SCOPE,
   db,
   user,
@@ -60,6 +61,7 @@ async function main() {
     ifMatch: string | undefined;
     body: Record<string, any>;
   }[] = [];
+  let providerReads = 0;
   let version = 0;
   let dropCreateReply = false;
   let releaseRefresh: (() => void) | undefined;
@@ -67,6 +69,7 @@ async function main() {
   let beforeWrite: (() => void) | undefined;
   let writable = true;
   const fixture = createServer(async (req, res) => {
+    if (req.method === "GET" || req.method === "PROPFIND") providerReads++;
     let raw = "";
     for await (const chunk of req) raw += chunk;
     const path = new URL(req.url!, "http://fixture.test").pathname;
@@ -341,6 +344,22 @@ async function main() {
       );
     };
 
+
+    const readOnly = await seed();
+    const priorPreview = await prepareEventDeliveryResolution(owner, readOnly.event.id, readOnly.id);
+    const priorConfirmation = confirmation(priorPreview.preview);
+    const beforeReadOnly = await rows(readOnly.event.id);
+    await db.update(calendarMembers).set({ role: "viewer" }).where(and(eq(calendarMembers.calendarID, calendar.id), eq(calendarMembers.userID, owner)));
+    const readsBeforeDenial = providerReads;
+    const deniedPreview = await call(readOnly);
+    assert.equal(deniedPreview.status, 409, "A past receipt cannot authorize a private conflict preview after write access is lost");
+    assert.equal(providerReads, readsBeforeDenial, "Refuse locally before fetching native details");
+    assert.equal((await call(readOnly, "POST", priorConfirmation)).status, 409);
+    assert.equal(providerReads, readsBeforeDenial);
+    await assert.rejects(() => commitEventDeliveryResolution(owner, priorPreview.proof, priorConfirmation));
+    assert.deepEqual(await rows(readOnly.event.id), beforeReadOnly);
+    await db.update(calendarMembers).set({ role: "owner" }).where(and(eq(calendarMembers.calendarID, calendar.id), eq(calendarMembers.userID, owner)));
+    assert.equal((await call(readOnly)).status, 200);
     const queued = await seed();
     const next = {
       ...queued.intent,
