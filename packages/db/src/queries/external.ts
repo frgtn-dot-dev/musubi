@@ -286,7 +286,7 @@ export async function setExternalCalendarCapabilities(
 export async function setCursor(calendarID: string, cursor: string | null, context?: ExternalCalendarAccessContext) {
   if (context) return db.transaction(async tx => {
     await lockCalendarLifecycle(tx, [calendarID], "shared");
-    await assertExternalCalendarAccess(tx, "google", calendarID, context);
+    await assertExternalCalendarAccess(tx, context.provider ?? "google", calendarID, context);
     await tx.update(externalCalendars).set({ cursor }).where(eq(externalCalendars.calendarID, calendarID));
   });
   await db
@@ -674,14 +674,15 @@ export type ExternalEventResourceObservation = {
 
 /** A private split owns both addresses until specialized full-resource ACK.
  * A component projection is never enough to adopt an unmapped new family. */
-async function assertNoPendingCaldavSplit(tx: DbTransaction, provider: string, userID: string, calendarID: string, externalCalendarID: string, resourceID: string) {
-  if (provider !== "caldav") return;
-    const [splitPending] = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(
+async function assertNoPendingCaldavResourceWrite(tx: DbTransaction, provider: string, userID: string, calendarID: string, externalCalendarID: string, resourceID: string) {
+  if (provider !== "caldav") return false;
+    const [splitPending] = await tx.select({ id: eventOutbox.id, split: sql<boolean>`${eventOutbox.payload}->'caldavSplit' is not null` }).from(eventOutbox).where(and(
       eq(eventOutbox.provider, provider), eq(eventOutbox.userID, userID), eq(eventOutbox.calendarID, calendarID),
       eq(eventOutbox.externalCalendarID, externalCalendarID), eq(eventOutbox.externalEventID, resourceID),
-      sql`${eventOutbox.payload}->'caldavSplit' is not null and ${eventOutbox.status} not in ('completed', 'not-needed')`,
+      sql`(${eventOutbox.payload}->'caldavSplit' is not null or ${eventOutbox.payload}->'caldavAlarm' is not null) and ${eventOutbox.status} not in ('completed', 'not-needed')`,
     )).limit(1);
-    if (splitPending) throw new Error("CalDAV split resource has pending local writes.");
+    if (splitPending?.split) throw new Error("CalDAV split resource has pending local writes.");
+    return !!splitPending;
 }
 
 /** A CalDAV GET replaces one whole resource, including omitted overrides. */
@@ -699,10 +700,11 @@ async function isRetiredCaldavRecurrence(tx: DbTransaction, provider: string, us
 
 export async function replaceExternalEventResource(
   provider: string, userID: string, calendarID: string, externalCalendarID: string,
-  resourceID: string, observations: ExternalEventResourceObservation[],
+  resourceID: string, observations: ExternalEventResourceObservation[], accessContext?: ExternalCalendarAccessContext,
 ): Promise<boolean> {
   return db.transaction(async tx => {
     await lockCalendarLifecycle(tx, [calendarID], "shared");
+    await assertExternalCalendarAccess(tx, provider, calendarID, accessContext);
     await lockExternalEventAddress(tx, provider, calendarID, resourceID);
     const master = observations.find(item => item.externalId === resourceID && !item.time.externalSeriesID);
     if (!master || observations.filter(item => !item.time.externalSeriesID).length !== 1 || new Set(observations.map(item => item.externalId)).size !== observations.length)
@@ -735,7 +737,7 @@ export async function replaceExternalEventResource(
       )).limit(1);
       if (resolvedVersion) return false;
     }
-    await assertNoPendingCaldavSplit(tx, provider, userID, calendarID, externalCalendarID, resourceID);
+    if (await assertNoPendingCaldavResourceWrite(tx, provider, userID, calendarID, externalCalendarID, resourceID)) return false;
     const mappings = await tx.select().from(externalEvents).where(and(
       eq(externalEvents.provider, provider), eq(externalEvents.calendarID, calendarID),
       sql`(${externalEvents.externalEventID} = ${resourceID} or ${externalEvents.externalSeriesID} = ${resourceID})`,
@@ -813,7 +815,7 @@ async function upsertExternalEventInTransaction(
     }
 
     if (!deferFamilyValidation && await isRetiredCaldavRecurrence(tx, provider, userID, calendarID, externalCalendarID, time?.externalSeriesID ?? externalEventID, etag)) return false;
-    if (!deferFamilyValidation) await assertNoPendingCaldavSplit(tx, provider, userID, calendarID, externalCalendarID, time?.externalSeriesID ?? externalEventID);
+    if (!deferFamilyValidation && await assertNoPendingCaldavResourceWrite(tx, provider, userID, calendarID, externalCalendarID, time?.externalSeriesID ?? externalEventID)) return false;
     const expandedIdentity = providerOccurrence ? {
       externalSeriesID: providerOccurrence.externalSeriesID,
       originalStart: OccurrenceStartSchema.parse(providerOccurrence.originalStart),

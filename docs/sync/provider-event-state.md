@@ -173,3 +173,11 @@ Google acceptance, physical native QA, series and other providers remain open;
 `PROVIDER_REMINDER_EDITS_ENABLED` stays off and versions/minima are unchanged.
 
 Before each editor opening, both clients refresh the private observation. A failed refresh cannot reopen a stale editor; an already-open draft keeps its frozen CAS. The native sheet uses the existing keyboard-avoiding modal pattern, a shrinking scroll area and explicit keyboard dismissal on close. Physical keyboard/device behavior still requires native QA.
+
+## Default-off CalDAV event alarms
+
+The separate `CALDAV_ALARM_EDITS_ENABLED` flag enables the narrow one-off
+[CalDAV event alarm contract](./caldav-event-alarms.md). Fresh full-resource and
+positive native write-privilege evidence are required. This is resource alarm
+content, not a promise of private per-user settings; Google defaults and Musubi
+reminder scheduling do not apply.

@@ -519,3 +519,107 @@ it("refuses future-only confirmation without the saved future content", async ()
   mount(); fireEvent.click(await screen.findByRole("button", { name: "Review changes" }));
   expect((await screen.findByRole("button", { name: "Finish future series" }) as HTMLButtonElement).disabled).toBe(true);
 });
+
+it("compares CalDAV event alarms and freezes the explicit alarm proof across retry", async () => {
+  const requests: any[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith("/conflict")) return json({ ...preview, caldavAlarmResolution: { desired: { minutesBeforeStart: null }, remote: { minutesBeforeStart: 20 }, stateVersion: "a".repeat(64) } });
+    if (url.endsWith("/resolve")) { requests.push(JSON.parse(String(init?.body))); if (requests.length === 1) throw new Error("Lost response"); return json(receipt, 202); }
+    return json(receipt);
+  }));
+  mount(); fireEvent.click(await screen.findByRole("button", { name: "Review changes" }));
+  const comparison = await screen.findByRole("dialog", { name: "Review remote changes" });
+  expect(within(comparison).getByText("Saved CalDAV event alarm")).toBeTruthy();
+  expect(within(comparison).getByText("Display 20 minutes before start")).toBeTruthy();
+  expect(within(comparison).queryByText("Saved Google reminders")).toBeNull();
+  fireEvent.click(within(comparison).getByRole("button", { name: "Apply saved event alarm" }));
+  await within(comparison).findByText(/Could not reach the server/);
+  fireEvent.click(within(comparison).getByRole("button", { name: "Apply saved event alarm" }));
+  await waitFor(() => expect(requests).toHaveLength(2));
+  expect(requests[0].expectedReminderStateVersion).toBe("a".repeat(64));
+  expect(requests[1]).toEqual(requests[0]);
+});
+
+it("explicitly discards an unsupported saved CalDAV alarm without requesting a native resolution", async () => {
+  const writes: any[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith("/discard-alarm")) { writes.push(JSON.parse(String(init?.body))); return json({ ...receipt, targets: [{ ...target, provider: "caldav", status: "not-needed", alarmDiscarded: true }] }); }
+    return json({ ...receipt, targets: [{ ...target, provider: "caldav", ...(writes.length ? { status: "not-needed", alarmDiscarded: true } : { alarmDiscardRevision: 2 }) }] });
+  }));
+  mount(); fireEvent.click(await screen.findByRole("button", { name: "Discard saved alarm change" }));
+  const dialog = await screen.findByRole("dialog", { name: "Discard saved alarm change" });
+  expect(within(dialog).getByText(/does not undo a change/)).toBeTruthy();
+  expect(writes).toHaveLength(0);
+  fireEvent.click(within(dialog).getByRole("button", { name: "Discard saved alarm change" }));
+  await waitFor(() => expect(writes).toEqual([{ expectedRevision: 2 }]));
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Discard saved alarm change" })).toBeNull());
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Refresh status" })));
+});
+
+it("announces a failed alarm discard inside its confirmation and retries the same revision", async () => {
+  const writes: unknown[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith("/discard-alarm")) {
+      writes.push(JSON.parse(String(init?.body)));
+      if (writes.length === 1) throw new TypeError("lost response");
+      return json(receipt);
+    }
+    return json({ ...receipt, targets: [{ ...target, provider: "caldav", alarmDiscardRevision: 2 }] });
+  }));
+  mount();
+  const trigger = await screen.findByRole("button", { name: "Discard saved alarm change" });
+  fireEvent.click(trigger);
+  const dialog = await screen.findByRole("dialog", { name: "Discard saved alarm change" });
+  await waitFor(() => expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "Cancel" })));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Discard saved alarm change" }));
+  expect((await within(dialog).findByRole("alert")).textContent).toContain("Could not reach the server");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Discard saved alarm change" }));
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Discard saved alarm change" })).toBeNull());
+  expect(writes).toEqual([{ expectedRevision: 2 }, { expectedRevision: 2 }]);
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Refresh status" })));
+});
+
+it("closes a stale alarm discard, refreshes its revision and returns focus before a new confirmation", async () => {
+  const writes: unknown[] = [];
+  let revision = 2;
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith("/discard-alarm")) {
+      writes.push(JSON.parse(String(init?.body)));
+      if (writes.length === 1) { revision = 3; return json({ error: "changed" }, 409); }
+      return json(receipt);
+    }
+    return json({ ...receipt, targets: [{ ...target, provider: "caldav", alarmDiscardRevision: revision }] });
+  }));
+  mount();
+  fireEvent.click(await screen.findByRole("button", { name: "Discard saved alarm change" }));
+  const dialog = await screen.findByRole("dialog", { name: "Discard saved alarm change" });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Discard saved alarm change" }));
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Discard saved alarm change" })).toBeNull());
+  expect(screen.getByRole("alert").textContent).toContain("Check the refreshed status");
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Refresh status" })));
+  fireEvent.click(screen.getByRole("button", { name: "Discard saved alarm change" }));
+  const fresh = await screen.findByRole("dialog", { name: "Discard saved alarm change" });
+  expect(within(fresh).queryByRole("alert")).toBeNull();
+  fireEvent.click(within(fresh).getByRole("button", { name: "Discard saved alarm change" }));
+  await waitFor(() => expect(writes).toEqual([{ expectedRevision: 2 }, { expectedRevision: 3 }]));
+});
+
+it("returns focus after cancelling a lost discard response whose refreshed receipt removes the trigger", async () => {
+  let discarded = false;
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    if (url.endsWith("/discard-alarm")) { discarded = true; throw new TypeError("lost response"); }
+    return json({ ...receipt, targets: [{ ...target, provider: "caldav", ...(discarded ? { status: "not-needed", alarmDiscarded: true } : { alarmDiscardRevision: 2 }) }] });
+  }));
+  mount();
+  const trigger = await screen.findByRole("button", { name: "Discard saved alarm change" });
+  fireEvent.click(trigger);
+  const dialog = await screen.findByRole("dialog", { name: "Discard saved alarm change" });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Discard saved alarm change" }));
+  expect((await within(dialog).findByRole("alert")).textContent).toContain("Could not reach the server");
+  await waitFor(() => expect(trigger.isConnected).toBe(false));
+  const cancel = within(dialog).getByRole("button", { name: "Cancel" });
+  await waitFor(() => expect(cancel.hasAttribute("disabled")).toBe(false));
+  fireEvent.click(cancel);
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Discard saved alarm change" })).toBeNull());
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Refresh status" })));
+});

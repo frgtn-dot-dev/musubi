@@ -1,3 +1,4 @@
+import { confirmCaldavAlarm } from "@musubi/db";
 import { googleReminderInstanceEvidence, googleReminderInstanceProjection } from "./adapters/google_reminder_instance";
 import { hasProviderReminderInstanceSource, completeProviderReminderInstanceOutbox, matchesProviderReminderInstanceState } from "@musubi/db";
 import { confirmGraphSeriesCreateOutbox, completeGraphSeriesCreateOutbox, type GraphFamilyObservation } from "@musubi/db";
@@ -209,6 +210,21 @@ export async function deliverEventOutbox(
         // Retry must recover the stable transaction and read its whole family.
         if (!(await checkDestination())) return;
         if (!(await completeGraphSeriesCreateOutbox(row.id, token, observation))) throw new ProviderEventWriteError("provider-conflict", "unconfirmed");
+        return;
+      }
+      if (row.payload.caldavAlarm) {
+        if (!config.api.caldavAlarmEditsEnabled || row.provider !== "caldav" || row.action !== "update" || !adapter?.writeCaldavAlarm) throw new EventWriteError("event-write", "unsupported");
+        const check = async () => {
+          if (!(await checkDestination()) || !(await confirmCaldavAlarm(row.id, token))) throw new ProviderEventWriteError("provider-conflict", mutationStarted ? "unconfirmed" : "not-written");
+        };
+        await check();
+        expectedRef = row.payload.caldavAlarm.context.mapping.ref;
+        const observed = await adapter.writeCaldavAlarm(row.payload.caldavAlarm, signal, async () => { await check(); mutationStarted = true; });
+        mutationStarted = true;
+        resultRef = observed.ref;
+        signal.throwIfAborted();
+        if (!(await checkDestination())) return;
+        if (!(await confirmCaldavAlarm(row.id, token, { ref: observed.ref, state: observed.state }))) throw new ProviderEventWriteError("provider-conflict", "unconfirmed");
         return;
       }
       if (row.payload.caldavSplit) {

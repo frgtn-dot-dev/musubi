@@ -1,3 +1,5 @@
+import { inspectCaldavAlarm, writeCaldavAlarm } from "./caldav_alarms";
+import type { CaldavAlarmIntent } from "@musubi/db";
 import { caldavEventState } from "./provider_event_state";
 import { caldavSeriesEvidence, caldavSeriesCreationEvidence, type CaldavSeriesSplit, caldavSeriesResolutionEvidence, caldavSeriesResourceURL, sameCaldavResource, type CaldavSeriesDeletion, type CaldavSeriesWrite, type CaldavSeriesEvidence, type CaldavSeriesIntent } from "./caldav_series";
 import ICAL from "ical.js";
@@ -1130,6 +1132,10 @@ export async function createCaldavSplitResource(externalCalendarId: string, spli
 async function seriesAuthorization(userID: string, accountId: string, externalCalendarId: string, intent: CaldavSeriesIntent, signal?: AbortSignal, action: "update" | "delete" | "create" = "update") {
   if (!config.api.eventTimeEditsEnabled)
     throw new EventWriteError("event-write", "unsupported");
+  return resourceAuthorization(userID, accountId, externalCalendarId, intent, signal, action);
+}
+
+async function resourceAuthorization(userID: string, accountId: string, externalCalendarId: string, intent: Pick<CaldavSeriesIntent, "master" | "ref">, signal?: AbortSignal, action: "update" | "delete" | "create" = "update") {
   const accounts = await getCaldavAccountsByUser(userID);
   if (!accounts.some(account => account.id === accountId))
     throw new EventWriteError("event-write", "denied");
@@ -1226,7 +1232,46 @@ export async function deliverCaldavSeriesResource(externalCalendarId: string, wr
   }
 }
 
+export async function deliverCaldavAlarmResource(intent: CaldavAlarmIntent, authorization: string, signal?: AbortSignal, beforeMutation?: () => Promise<void>) {
+  if (!config.api.caldavAlarmEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+  const { context } = intent, ref = context.mapping.ref;
+  const after = writeCaldavAlarm(intent.before, context.event, ref, intent.request.alarms);
+  if (after !== intent.after || !sameCaldavScopeContext(inspectCaldavAlarm(after, context.event, ref).state, intent.desiredState)) throw new ProviderEventWriteError("provider-conflict");
+  const resource = caldavSeriesResourceURL(context.link.externalCalendarID, ref.externalEventId);
+  const read = () => readEventResource(authorization, resource.href, ref, signal, "error", true);
+  const evidence = (current: Awaited<ReturnType<typeof read>>) => inspectCaldavAlarm(current.data, context.event, { ...ref, etag: current.etag });
+  const current = await read();
+  if (sameCaldavResource(current.data, after)) return evidence(current);
+  if (current.etag !== ref.etag || !sameCaldavResource(current.data, intent.before)) throw new ProviderEventWriteError("provider-conflict");
+  await beforeMutation?.();
+  signal?.throwIfAborted();
+  let accepted = false;
+  try {
+    const response = await caldavFetch(resource.href, { signal, redirect: "error", method: "PUT", headers: { authorization, "Content-Type": "text/calendar; charset=utf-8", "If-Match": ref.etag }, body: after });
+    assertProviderEventMutationResponse(response);
+    accepted = true;
+    const confirmed = await read();
+    if (!sameCaldavResource(confirmed.data, after)) throw new ProviderEventWriteError("provider-conflict", "unconfirmed");
+    return evidence(confirmed);
+  } catch (error) {
+    if (!accepted && error instanceof ProviderEventWriteError && error.providerStatus !== undefined) throw error;
+    throw new ProviderEventWriteError("provider-write-failed", "unconfirmed", error instanceof ProviderEventWriteError ? error.providerStatus : undefined);
+  }
+}
+
 export const caldavAdapter: CalendarAdapter = {
+  async readCaldavAlarm(context, signal) {
+    if (!config.api.caldavAlarmEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+    const { resource, authorization } = await resourceAuthorization(context.link.userID, context.link.accountID, context.link.externalCalendarID, { master: context.event, ref: context.mapping.ref }, signal);
+    const current = await readEventResource(authorization, resource.href, context.mapping.ref, signal, "error", true);
+    return inspectCaldavAlarm(current.data, context.event, { ...context.mapping.ref, etag: current.etag });
+  },
+  async writeCaldavAlarm(intent, signal, beforeMutation) {
+    if (!config.api.caldavAlarmEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+    const context = intent.context;
+    const { authorization } = await resourceAuthorization(context.link.userID, context.link.accountID, context.link.externalCalendarID, { master: context.event, ref: context.mapping.ref }, signal);
+    return deliverCaldavAlarmResource(intent, authorization, signal, beforeMutation);
+  },
   provider: "caldav",
   async readCaldavSeriesDeletionResolution(userID, accountId, externalCalendarId, intent, before, signal) {
     const { resource, authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, intent, signal, "delete");

@@ -51,3 +51,18 @@ it("keeps the native occurrence UUID and request across a failed reminder save",
   expect(h.save.mock.calls[0][1]).not.toHaveProperty("seriesID");
   expect(h.save.mock.calls[0][1]).not.toHaveProperty("originalStart");
 });
+
+it("uses the native CalDAV event alarm contract without defaults or email methods", async () => {
+  const caldav = { ...observation, reminderEdit: { provider: "caldav" as const, expectedRevision: 7, minutesBeforeStart: 15 } };
+  const renderAlarm = () => { h.index = 0; return ProviderReminderEditor({ event, observation: caldav, onClose: h.close }); };
+  h.save.mockResolvedValue({ status: "pending" });
+  let tree = renderAlarm();
+  expect(nodes(tree).some(node => node.props.children === "CalDAV event alarms")).toBe(true);
+  expect(nodes(tree).some(node => node.type === "Btn" && /method:/.test(node.props.label))).toBe(false);
+  expect(button(tree, "Add reminder").disabled).toBe(true);
+  button(tree, "Reminder mode: Custom").onPress(); tree = renderAlarm();
+  const picker = nodes(tree).find(node => node.type === "OptionPicker")!;
+  expect(picker.props.options.map((item: any) => item.value)).toEqual(["off", "custom"]);
+  picker.props.onSelect("off"); tree = renderAlarm(); button(tree, "Save CalDAV event alarms").onPress(); await settle();
+  expect(h.save.mock.calls[0][1]).toMatchObject({ provider: "caldav", alarms: { minutesBeforeStart: null } });
+});

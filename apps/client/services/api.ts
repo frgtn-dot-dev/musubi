@@ -1,5 +1,5 @@
 import { ProviderRsvpReceiptSchema, type ProviderRsvpEdit } from "@musubi/types";
-import { ProviderEventStateResponseSchema, ProviderReminderReceiptSchema, type ProviderReminderEdit } from "@musubi/types";
+import { ProviderEventStateResponseSchema, ProviderReminderReceiptSchema, type AnyProviderReminderEdit } from "@musubi/types";
 import {
   AnnouncementsResponseSchema,
   CLIENT_VERSION_HEADER,
@@ -177,6 +177,9 @@ export function useApi() {
     },
     async getEventDeliveryConflict(eventId: string, operationId: string, connectionId?: string) {
       return EventDeliveryConflictSchema.parse(await deliveryRequest(`/api/v1/events/${eventId}/delivery/${operationId}/conflict`, connectionId));
+    },
+    async discardEventAlarm(eventId: string, operationId: string, expectedRevision: number, connectionId?: string) {
+      return EventDeliverySchema.parse(await deliveryRequest(`/api/v1/events/${eventId}/delivery/${operationId}/discard-alarm`, connectionId, { expectedRevision }));
     },
     async retryEventDelivery(eventId: string, operationId: string, connectionId?: string) {
       return EventDeliverySchema.parse(await deliveryRequest(`/api/v1/events/${eventId}/delivery/${operationId}/retry`, connectionId, {}));
@@ -471,7 +474,7 @@ export function useApi() {
       return data;
     },
 
-    async editProviderReminders(event: Event, request: ProviderReminderEdit) {
+    async editProviderReminders(event: Event, request: AnyProviderReminderEdit) {
       const path = `/api/${apiVersion}/events/${encodeURIComponent(event.id)}/provider-reminders`;
       const remote = remoteOf(eventHome(event));
       if (remote) return readWire(ProviderReminderReceiptSchema, await fedFetch(remote, path, { method: "POST", body: JSON.stringify(request) }), "POST provider reminders (federated)");

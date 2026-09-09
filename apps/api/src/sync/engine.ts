@@ -304,7 +304,7 @@ export async function syncProvider(
     userID,
     accountId,
   )) {
-    const accessContext = provider === "google" && link.supportsEvents && link.providerAccessRole !== null ? { linkID: link.sourceID, revision: link.providerAccessRevision, userID, accountID: accountId, externalCalendarID: link.externalCalendarID } : undefined;
+    const accessContext = (provider === "caldav" || provider === "google" && link.providerAccessRole !== null) && link.supportsEvents ? { provider: provider as "google" | "caldav", linkID: link.sourceID, revision: link.providerAccessRevision, userID, accountID: accountId, externalCalendarID: link.externalCalendarID } : undefined;
     const taskOnly = link.supportsTasks && !link.supportsEvents;
     if (taskOnly && !remoteIDs.has(link.externalCalendarID)) continue;
     const calendarStartedAt = performance.now();
@@ -361,7 +361,7 @@ export async function syncProvider(
     const { changes, nextCursor } = fetched;
     // A grant-invalidated Google cursor requires authoritative reconciliation
     // even when known-time editing is disabled. The adapter fully pages this list.
-    const reset = fetched.reset || (!!accessContext && link.cursor === null);
+    const reset = fetched.reset || (provider === "google" && !!accessContext && link.cursor === null);
 
     const unlinkedEventIDs: { id: string; revision: number }[] = [];
     const onUnlink = (id: string, revision: number) => {
@@ -385,7 +385,7 @@ export async function syncProvider(
         replaceResource: (resourceID, observations) => replaceExternalEventResource(provider, userID, link.calendarID, link.externalCalendarID, resourceID, observations.map(event => {
           if (!event.timeModel || !event.icalUid) throw new Error("Resource observation requires a time model and UID.");
           return { providerState: event.providerState, externalId: event.externalId, values: toEventValues(event, link.calColor), etag: event.etag ?? null, icalUid: event.icalUid, time: { timeModel: event.timeModel, externalSeriesID: event.externalSeriesID, originalStart: event.originalStart, isCanceled: event.isCanceled } };
-        })),
+        }), accessContext),
         deleteEvent: (externalID) =>
           trackGoogleRead(deleteExternalEvent(provider, link.calendarID, externalID, onUnlink, accessContext)),
         deleteTask: (externalID) =>

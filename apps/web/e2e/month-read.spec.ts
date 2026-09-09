@@ -8955,3 +8955,123 @@ for (const mode of ["compact", "generated", "full"] as const) {
     expect(errors).toEqual([]);
   });
 }
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`K14 CalDAV event alarm editor preserves retry: ${theme} ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    page.on("console", message => { if (message.type() === "error" && !message.text().includes("503 (Service Unavailable)")) errors.push(message.text()); });
+    const imported = event("00000000-0000-4000-8000-000000000184", "CalDAV alarm event", "personal", "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z");
+    await mockAuthenticatedReads(page, { ...events, events: [imported] }, [{ ...calendars[0]!, provider: "caldav", accountID: "fixture", accountLabel: "Fixture" }]);
+    let observations = 0;
+    await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, {
+      state: { provider: "caldav", organizer: null, isOrganizer: false, attendees: [], attendeesComplete: true, ownResponse: null, reminders: { provider: "caldav", alarms: [{ action: "DISPLAY", trigger: "-PT30M", related: null, repeat: null, duration: null }] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] },
+      version: (++observations === 1 ? "b" : "a").repeat(64), reminderEdit: { provider: "caldav", expectedRevision: 7, minutesBeforeStart: 30 },
+    }));
+    const writes: any[] = [];
+    await page.route(`**/api/v1/events/${imported.id}/provider-reminders`, route => {
+      const body = route.request().postDataJSON(); writes.push(body);
+      return writes.length === 1 ? respond(route, { error: "Temporary failure" }, 503) : respond(route, { operationID: body.operationID, replayed: true, status: "pending", localCommitted: true }, 202);
+    });
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    await expect(page).toHaveTitle(/Musubi/);
+    const eventTrigger = page.getByRole("button", { name: /CalDAV alarm event/ }).first();
+    await eventTrigger.click();
+    const trigger = page.getByRole("button", { name: "Edit CalDAV event alarms" });
+    await trigger.click();
+    const editor = page.getByRole("dialog", { name: "CalDAV event alarms", exact: true });
+    const minutes = editor.getByRole("textbox", { name: "Reminder 1 minutes before start" });
+    await expect(minutes).toHaveValue("30");
+    await expect(editor.getByRole("textbox", { name: "Reminder 2 minutes before start" })).toHaveCount(0);
+    await expect(editor.getByRole("button", { name: "Add reminder" })).toBeDisabled();
+    await expect(editor.getByText(/may be shared with other calendar users/)).toBeVisible();
+    await minutes.fill("-5");
+    await editor.getByRole("button", { name: "Save CalDAV event alarms" }).press("Enter");
+    await expect(editor.getByRole("alert")).toContainText("whole minutes");
+    expect(writes).toHaveLength(0);
+    await minutes.fill("15");
+    await expectNoAccessibilityViolations(page);
+    expect(await editor.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    expect(await editor.evaluate(node => { const rect = node.getBoundingClientRect(); return [[rect.left + 24, rect.top + 50], [rect.right - 24, rect.top + 200], [rect.right - 24, rect.bottom - 30]].every(([x, y]) => node.contains(document.elementFromPoint(x, y))); })).toBe(true);
+    await editor.screenshot({ path: `/tmp/musubi-caldav-alarm-editor-${theme}.png` });
+    await editor.getByRole("button", { name: "Save CalDAV event alarms" }).press("Enter");
+    await expect(editor.getByRole("alert")).toContainText("Temporary failure");
+    await expect(minutes).toHaveValue("15");
+    await editor.getByRole("button", { name: "Save CalDAV event alarms" }).press("Enter");
+    await expect(editor.getByRole("status")).toContainText("CalDAV confirmation is still pending");
+    expect(writes).toHaveLength(2); expect(writes[1]).toEqual(writes[0]);
+    expect(writes[0]).toEqual({ operationID: expect.any(String), expectedRevision: 7, expectedStateVersion: "a".repeat(64), provider: "caldav", alarms: { minutesBeforeStart: 15 } });
+    await editor.getByRole("button", { name: "Close", exact: true }).press("Space");
+    await expect(eventTrigger).toBeFocused();
+    expect(errors).toEqual([]);
+    await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+  });
+}
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`K14 CalDAV saved alarm discard: ${theme} ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
+    const id = "00000000-0000-4000-8000-000000000141", operation = "00000000-0000-4000-8000-000000000142";
+    const saved = event(id, "Alarm appointment", "personal", "#b3492f", "2026-07-23T07:30:00Z", "2026-07-23T08:30:00Z");
+    await mockAuthenticatedReads(page, { ...events, events: [saved] });
+    const writes: unknown[] = [];
+    const target = { targetId: "00000000-0000-4000-8000-000000000144", calendarId: "00000000-0000-4000-8000-000000000143", calendarName: "CalDAV", provider: "caldav", connected: true, owned: true, operationId: operation, action: "update", status: "conflict", revision: 1, latestRevision: 1, updatedAt: "2026-07-23T09:00:00Z", retryAt: null, issue: "conflict", alarmDiscardRevision: 1 };
+    await page.route(`**/api/v1/events/${id}/delivery`, route => respond(route, { eventId: id, localRevision: 1, targets: [writes.length > 1 ? { ...target, alarmDiscardRevision: undefined, alarmDiscarded: true, status: "not-needed", issue: null } : target] }));
+    await page.route(`**/api/v1/events/${id}/delivery/${operation}/discard-alarm`, route => {
+      writes.push(route.request().postDataJSON());
+      if (writes.length === 1) {
+        target.alarmDiscardRevision = 2;
+        return route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ error: "Delivery revision changed" }) });
+      }
+      return respond(route, { eventId: id, localRevision: 1, targets: [{ ...target, alarmDiscardRevision: undefined, alarmDiscarded: true, status: "not-needed", issue: null }] });
+    });
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    await page.getByRole("button", { name: /Alarm appointment/ }).first().click();
+    await page.getByRole("button", { name: "Delivery details", exact: true }).click();
+    await page.getByRole("button", { name: "Discard saved alarm change", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Discard saved alarm change", exact: true });
+    await expect(dialog.getByText(/does not undo a change/)).toBeVisible();
+    expect(writes).toHaveLength(0);
+    await expectNoAccessibilityViolations(page);
+    expect(await dialog.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await dialog.getByRole("button", { name: "Discard saved alarm change", exact: true }).press("Enter");
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole("alert")).toContainText("Check the refreshed status");
+    await expect(page.getByRole("button", { name: "Refresh status", exact: true })).toBeFocused();
+    await expectNoAccessibilityViolations(page);
+    await page.getByRole("button", { name: "Discard saved alarm change", exact: true }).click();
+    await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    await dialog.getByRole("button", { name: "Discard saved alarm change", exact: true }).press("Enter");
+    await expect(page.getByText(/Saved alarm change discarded. The current CalDAV event/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Discard saved alarm change", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Refresh status", exact: true })).toBeFocused();
+    await expectNoAccessibilityViolations(page);
+    expect(writes).toEqual([{ expectedRevision: 1 }, { expectedRevision: 2 }]); expect(errors).toEqual([]);
+  });
+}
+
+test("K14 CalDAV lost alarm discard retains a usable focus target on Escape", async ({ page }) => {
+  const id = "00000000-0000-4000-8000-000000000151", operation = "00000000-0000-4000-8000-000000000152";
+  const saved = event(id, "Alarm appointment", "personal", "#b3492f", "2026-07-23T07:30:00Z", "2026-07-23T08:30:00Z");
+  await mockAuthenticatedReads(page, { ...events, events: [saved] });
+  let discarded = false;
+  const target = { targetId: "00000000-0000-4000-8000-000000000154", calendarId: "00000000-0000-4000-8000-000000000153", calendarName: "CalDAV", provider: "caldav", connected: true, owned: true, operationId: operation, action: "update", status: "conflict", revision: 1, latestRevision: 1, updatedAt: "2026-07-23T09:00:00Z", retryAt: null, issue: "conflict" };
+  await page.route(`**/api/v1/events/${id}/delivery`, route => respond(route, { eventId: id, localRevision: 1, targets: [{ ...target, ...(discarded ? { status: "not-needed", alarmDiscarded: true } : { alarmDiscardRevision: 1 }) }] }));
+  await page.route(`**/api/v1/events/${id}/delivery/${operation}/discard-alarm`, route => { discarded = true; return route.abort("connectionreset"); });
+  await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+  await page.getByRole("button", { name: /Alarm appointment/ }).first().click();
+  await page.getByRole("button", { name: "Delivery details", exact: true }).click();
+  await page.getByRole("button", { name: "Discard saved alarm change", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Discard saved alarm change", exact: true });
+  await dialog.getByRole("button", { name: "Discard saved alarm change", exact: true }).press("Enter");
+  await expect(dialog.getByRole("alert")).toContainText("Could not reach the server");
+  await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeEnabled();
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Discard saved alarm change", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Refresh status", exact: true })).toBeFocused();
+  await expectNoAccessibilityViolations(page);
+});

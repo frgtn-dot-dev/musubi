@@ -45,3 +45,16 @@ it("isolates portal pointer and keyboard events from the calendar", () => {
   expect(parent).not.toHaveBeenCalled();
   expect(screen.getByRole("textbox", { name: "Reminder 2 minutes before start" })).toBeTruthy();
 });
+
+it("edits one CalDAV event alarm without Google defaults or per-user promises", async () => {
+  save.mockResolvedValue({ status: "pending" });
+  render(<ProviderReminderEditor eventId="event" observation={{ ...observation, reminderEdit: { provider: "caldav", expectedRevision: 7, minutesBeforeStart: 20 } }} onClose={vi.fn()} />);
+  expect(screen.getByText(/may be shared with other calendar users/)).toBeTruthy();
+  expect(screen.queryByText("Calendar defaults")).toBeNull();
+  expect(screen.queryByRole("combobox", { name: "Reminder 1 method" })).toBeNull();
+  expect((screen.getByRole("button", { name: "Add reminder" }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(screen.getByRole("textbox", { name: "Reminder 1 minutes before start" }), { target: { value: "30" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save CalDAV event alarms" }));
+  await screen.findByText(/CalDAV confirmation is still pending/);
+  expect(save.mock.calls[0]).toMatchObject(["event", { provider: "caldav", expectedRevision: 7, expectedStateVersion: "a".repeat(64), alarms: { minutesBeforeStart: 30 } }, undefined]);
+});

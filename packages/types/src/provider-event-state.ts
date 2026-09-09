@@ -22,6 +22,6 @@ export const ProviderEventStateSchema = z.object({
   conferenceURLs: z.array(z.string()),
 }).strict();
 export type ProviderEventState = z.infer<typeof ProviderEventStateSchema>;
-export const ProviderEventStateResponseSchema = z.object({ state: ProviderEventStateSchema.nullable(), version: z.string().regex(/^[0-9a-f]{64}$/).nullable().optional(), reminderEdit: z.object({ provider: z.literal("google"), expectedRevision: z.number().int().positive() }).strict().optional(), rsvpEdit: z.object({ provider: z.literal("google"), expectedRevision: z.number().int().positive() }).strict().optional() }).strict();
+export const ProviderEventStateResponseSchema = z.object({ state: ProviderEventStateSchema.nullable(), version: z.string().regex(/^[0-9a-f]{64}$/).nullable().optional(), reminderEdit: z.discriminatedUnion("provider", [z.object({ provider: z.literal("google"), expectedRevision: z.number().int().positive() }).strict(), z.object({ provider: z.literal("caldav"), expectedRevision: z.number().int().positive(), minutesBeforeStart: z.number().int().min(0).max(40320).nullable() }).strict()]).optional(), rsvpEdit: z.object({ provider: z.literal("google"), expectedRevision: z.number().int().positive() }).strict().optional() }).strict();
 
 export type ProviderEventStateResponse = z.infer<typeof ProviderEventStateResponseSchema>;

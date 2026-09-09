@@ -38,8 +38,8 @@ function ProviderEventDetailsBody({ eventId, userId, connectionId, series = fals
       if ((kind === "reminders" ? observation.reminderEdit : observation.rsvpEdit) && observation.state && observation.version) {
         const handoff = kind === "reminders" ? onEditReminders : onRespond;
         if (handoff) handoff(observation); else setEditor({ kind, trigger, observation });
-      } else setOpenError("This Google action is unavailable in the refreshed state.");
-    } catch { if (active.current) setOpenError("Could not refresh Google details. Retry to load the current state."); }
+      } else setOpenError("This provider action is unavailable in the refreshed state.");
+    } catch { if (active.current) setOpenError("Could not refresh provider details. Retry to load the current state."); }
     finally { refreshing.current = false; if (active.current) setOpening(false); }
   }
   useEffect(() => {
@@ -62,7 +62,7 @@ function ProviderEventDetailsBody({ eventId, userId, connectionId, series = fals
     </p> : <p role="status">{current?.failed ? "Provider details could not be loaded. Reopen this event to retry." : "Loading provider details…"}</p>}
     {openError ? <InlineError>{openError}</InlineError> : null}
     {current?.reminderEdit && current.state && current.version && !series ? <>
-      <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget)}>{occurrence ? "Edit reminders for this occurrence" : "Edit Google reminders"}</Button>
+      <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget)}>{current?.reminderEdit?.provider === "caldav" ? "Edit CalDAV event alarms" : occurrence ? "Edit reminders for this occurrence" : "Edit Google reminders"}</Button>
     </> : null}
     {current?.rsvpEdit && current.state && current.version && !series ? <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget, "rsvp")}>{occurrence ? "Respond to this occurrence" : "Respond in Google"}</Button> : null}
     {editor?.kind === "reminders" ? <ProviderReminderEditor occurrence={occurrence} eventId={eventId} connectionId={connectionId} observation={editor.observation} returnFocus={editor.trigger} onClose={() => setEditor(undefined)} /> : null}

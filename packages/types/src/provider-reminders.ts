@@ -57,3 +57,16 @@ export function providerReminderDesiredState(input: ProviderEventState, reminder
   state.reminders = { provider: "google", useDefault: desired.useDefault, overrides: desired.useDefault ? [] : desired.overrides };
   return state;
 }
+
+/** Resource alarms, not per-user preferences or calendar defaults. */
+export const CaldavAlarmWriteSchema = z.object({ minutesBeforeStart: z.number().int().min(0).max(40320).nullable() }).strict();
+export const CaldavAlarmEditSchema = z.object({
+  operationID: z.uuid().transform(value => value.toLowerCase()),
+  expectedRevision: z.number().int().positive(),
+  expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
+  provider: z.literal("caldav"),
+  alarms: CaldavAlarmWriteSchema,
+}).strict();
+export type CaldavAlarmWrite = z.infer<typeof CaldavAlarmWriteSchema>;
+export type CaldavAlarmEdit = z.infer<typeof CaldavAlarmEditSchema>;
+export type AnyProviderReminderEdit = ProviderReminderEdit | CaldavAlarmEdit;

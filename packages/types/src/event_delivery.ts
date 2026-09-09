@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { GoogleReminderWriteSchema } from "./provider-reminders";
+import { CaldavAlarmWriteSchema, GoogleReminderWriteSchema } from "./provider-reminders";
 import { ProviderEventStateSchema } from "./provider-event-state";
 import { EventTimeModelSchema, OccurrenceStartSchema } from "./event_time";
 
@@ -30,6 +30,8 @@ export const EventDeliveryTargetSchema = z.object({
   latestRevision: z.number().int().positive().nullable(),
   updatedAt: z.coerce.date().nullable(),
   retryAt: z.coerce.date().nullable(),
+  alarmDiscarded: z.literal(true).optional(),
+  alarmDiscardRevision: z.number().int().positive().optional(),
   issue: z
     .enum([
       "reconnect-required",
@@ -101,6 +103,7 @@ export const EventDeliveryConflictSchema = z.object({
   remote: EventDeliveryContentSchema.nullable(),
   remoteEtag: z.string().nullable(),
   action: z.enum(["create", "update", "delete"]),
+  caldavAlarmResolution: z.object({ desired: CaldavAlarmWriteSchema, remote: CaldavAlarmWriteSchema, stateVersion: z.string().regex(/^[0-9a-f]{64}$/) }).strict().optional(),
   reminderResolution: z.object({
     desired: GoogleReminderWriteSchema,
     remote: ProviderEventStateSchema.shape.reminders,
