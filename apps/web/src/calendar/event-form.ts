@@ -4,6 +4,8 @@ import { toDateKey } from "./date-key";
 import { spansMultipleServers, type ConnectionMap } from "./federation-routing";
 
 export type EventFormValues = {
+  /** Stable creation identity for this draft, including retries and handoff. */
+  createID?: string;
   timeLabel?: string;
   timeKind?: EventTimeDraft["timeKind"];
   timeZone?: string;
@@ -73,6 +75,7 @@ export function defaultEventFormValues(
   const end = new Date(start.getTime() + 60 * 60 * 1_000);
 
   return {
+    createID: crypto.randomUUID(),
     timeEditable: true,
     timeKind: "legacy-unknown",
     calendarId,
@@ -216,7 +219,7 @@ export function createEventFromForm(
     description: values.description.trim() || null,
     end: boundaries.end,
     hasAttendees: values.hasAttendees,
-    id: crypto.randomUUID(),
+    id: values.createID ?? crypto.randomUUID(),
     isAllDay: values.isAllDay,
     isCanceled: false,
     location: values.location.trim() || null,

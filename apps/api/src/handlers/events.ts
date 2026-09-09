@@ -1,3 +1,4 @@
+import { resolveEventTimeEdit } from "@musubi/calendar";
 import { queueGraphSeriesCreateRequest, findGraphSeriesCreateRequest } from "../sync/graph_series_create";
 import { queueGoogleRsvp } from "../sync/provider_rsvp";
 import { prepareCaldavSeries, prepareCaldavSeriesDelete, prepareCaldavSplit } from "../sync/caldav_scope";
@@ -18,6 +19,7 @@ import {
   forkEventAtRevision,
   getCalendarMembers,
   getEventSnapshot,
+  readEventCreateReceipt,
   getExternalLinkForCalendar,
   readGraphSeriesCreateReceipt,
   getOwnProviderEventObservation,
@@ -230,7 +232,17 @@ async function prepareUpdate(
   return prepareEventWrites(writes, identity);
 }
 
+async function sendExistingCreate(res: Response, actorID: string, event: Event) {
+  const receipt = await readEventCreateReceipt(actorID, event);
+  if (receipt.kind === "missing") return false;
+  res.setHeader("Cache-Control", "private, no-store");
+  if (receipt.kind === "matching") res.status(202).json({ ...receipt.event, localCommitted: true, replayed: true });
+  else res.status(409).json({ code: "event-create-changed", error: "This creation was saved, but its event changed or is no longer available. Refresh and reconcile.", localCommitted: true, ...(receipt.kind === "changed" ? { current: receipt.event } : {}) });
+  return true;
+}
+
 export async function handlerCreateEvent(req: Request, res: Response) {
+  const identity = eventMutationIdentity(req);
   const event = EventCreateRequestSchema.parse(req.body);
   validateCalendars(event);
   event.originCalendarID ??= event.calendars[0];
@@ -238,16 +250,20 @@ export async function handlerCreateEvent(req: Request, res: Response) {
     throw new BadRequestError(
       "originCalendarID must be one of the event's calendars.",
     );
+  if (await sendExistingCreate(res, req.user!.id, { ...event, creatorID: req.user!.id })) return;
   for (const id of event.calendars)
     await assertEventCalendarAccess(req.user!.id, id);
   const deliver = await prepareEventWrites([
     { event, calendarIDs: event.calendars, action: "create" },
-  ], eventMutationIdentity(req));
-  const created = await createEvent(
-    { ...event, creatorID: req.user!.id },
-    event.calendars,
-    deliver.outbox,
-  );
+  ], identity);
+  let created;
+  try {
+    created = await createEvent({ ...event, creatorID: req.user!.id }, event.calendars, deliver.outbox);
+  } catch (error) {
+    // A concurrent first request may have committed after the initial lookup.
+    if (await sendExistingCreate(res, req.user!.id, { ...event, creatorID: req.user!.id })) return;
+    throw error;
+  }
 
   const result = { ...created, calendars: event.calendars };
 
@@ -265,7 +281,9 @@ export async function handlerCreateEventTime(req: Request, res: Response) {
   // Callers must retain this identity across retries of the same intent.
   const operationID = req.get("Idempotency-Key") === undefined ? request.event.id.toLowerCase() : identity.mutationID;
   let queued = await findGraphSeriesCreateRequest(req.user!.id, operationID, request);
+  const expected = { ...request.event, ...resolveEventTimeEdit(request.time), creatorID: req.user!.id, organizer: req.user!.id, calendars: ids, originCalendarID: request.event.originCalendarID ?? ids[0] };
   if (!queued) {
+    if (await sendExistingCreate(res, req.user!.id, expected)) return;
     for (const id of ids) await assertEventCalendarAccess(req.user!.id, id);
     const link = ids.length === 1 ? await getExternalLinkForCalendar(ids[0]!) : null;
     if (link?.provider === "microsoft" && request.event.recurrence)
@@ -283,7 +301,12 @@ export async function handlerCreateEventTime(req: Request, res: Response) {
       return res.status(failure.status).json(failure.body);
     }
   }
-  const result = await createLocalEventWithTime(request, req.user!.id);
+  let result;
+  try { result = await createLocalEventWithTime(request, req.user!.id); }
+  catch (error) {
+    if (await sendExistingCreate(res, req.user!.id, expected)) return;
+    throw error;
+  }
   return sendCommitted(res, deliver, result, result, 201, () =>
     notifyEvent(result.calendars, "event_created", result));
 }

@@ -269,6 +269,7 @@ export function AddEventModal({
     setKbPad(0);
     onClose();
 
+    setCreateID(uuidv7());
     setNewTitle("");
     setNameError("");
     setNewStart(new Date());
@@ -488,9 +489,11 @@ export function AddEventModal({
   ]);
 
   const baseline = useRef<Event | undefined>(event);
+  const [createID, setCreateID] = useState(() => uuidv7());
 
   useEffect(() => {
     if (visible) {
+      setCreateID(uuidv7());
       baseline.current = event && { ...event, calendars: [...event.calendars] };
       setTimeDraft(event ? knownEventTimeDraft(event) : null);
       setAllDayToggle(event?.isAllDay ?? false);
@@ -637,7 +640,7 @@ export function AddEventModal({
 
     let eventConstruct: Event = {
       ...event,
-      id: event?.id ?? uuidv7(),
+      id: event?.id ?? createID,
       creatorID: userID!,
       organizer: event?.organizer ?? userID!,
       calendars: [...selectedCals],

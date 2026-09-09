@@ -207,3 +207,13 @@ describe("K06 untouched nullable text", () => {
     });
   }
 });
+
+ it("retains one creation identity across retries and edited intent, with a fresh ID for a new draft", () => {
+  const values = { ...defaultEventFormValues("calendar-1", "2026-07-26"), title: "Retry" };
+  const identity = { email: "alex@example.test", userId: "user-1" };
+  const first = createEventFromForm(values, identity, "red");
+  expect(createEventFromForm(values, identity, "red")).toEqual(first);
+  expect(createEventFromForm({ ...values, title: "Changed" }, identity, "red").id).toBe(first.id);
+  const next = { ...defaultEventFormValues("calendar-1", "2026-07-26"), title: "Retry" };
+  expect(createEventFromForm(next, identity, "red").id).not.toBe(first.id);
+});

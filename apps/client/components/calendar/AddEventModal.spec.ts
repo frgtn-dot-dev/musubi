@@ -296,7 +296,7 @@ type Props = {
 function saveButton(node: ReactNode): Props | undefined {
   if (Array.isArray(node)) return node.map(saveButton).find(Boolean);
   if (!isValidElement<Props>(node)) return;
-  if (node.props.label === "Save") return node.props;
+  if (node.props.label === "Save" || node.props.label === "Create") return node.props;
   return saveButton(node.props.children);
 }
 beforeEach(() => {
@@ -832,4 +832,42 @@ it("creates an explicit zoned draft after a missing-zone retry", async () => {
   expect(mocks.request.mock.lastCall![0]).toMatch(/\/events\/time$/);
   expect(JSON.parse(mocks.request.mock.lastCall![1].body)).toMatchObject({ event: { title: "New zoned event" }, time: { kind: "zoned", timeZone: "Europe/Prague" } });
   expect(useEventsStore.getState().events.find(e => e.title === "New zoned event")?.timeModel?.kind).toBe("zoned");
+});
+
+it("new native composer retains its creation UUID through failed and edited retries, then resets for another draft", async () => {
+  const saved: { id: string; title: string }[] = [];
+  const onSave = vi.fn(async (event: { id: string; title: string }) => {
+    saved.push(event);
+    if (saved.length < 3) throw new TypeError("Response lost");
+  });
+  const props = {
+    visible: true,
+    startingDate: new Date("2026-07-26T09:00:00Z"),
+    endingDate: new Date("2026-07-26T10:00:00Z"),
+    calendars: [{ id: "00000000-0000-4000-8000-000000000155", creatorID: "owner", role: "owner" as const, name: "Calendar", color: "red", members: [] }],
+    onSave, onEdit: vi.fn(), onClose: vi.fn(),
+  };
+  const render = (mount = false): ReactNode => {
+    state.index = 0; state.collectEffects = mount;
+    const tree = AddEventModal(props);
+    state.collectEffects = false;
+    if (mount) { state.effects.splice(0).forEach(effect => effect()); return render(); }
+    return tree;
+  };
+  titleInput(render(true))!.onChangeText("Native create retry");
+  await saveButton(render())!.onPress!();
+  expect(saved).toHaveLength(1);
+  expect(props.onClose).not.toHaveBeenCalled();
+  titleInput(render())!.onChangeText("Edited after uncertain response");
+  await saveButton(render())!.onPress!();
+  expect(saved).toHaveLength(2);
+  expect(saved[1]!.id).toBe(saved[0]!.id);
+  expect(saved[1]!.title).toBe("Edited after uncertain response");
+  await saveButton(render())!.onPress!();
+  expect(saved[2]!.id).toBe(saved[0]!.id);
+  expect(props.onClose).toHaveBeenCalledOnce();
+  titleInput(render(true))!.onChangeText("Another draft");
+  await saveButton(render())!.onPress!();
+  expect(saved).toHaveLength(4);
+  expect(saved[3]!.id).not.toBe(saved[0]!.id);
 });
