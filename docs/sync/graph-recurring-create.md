@@ -69,7 +69,7 @@ delivery/ACK composition. Real Outlook acceptance remains required. This step do
 
 ## Finite original-slot preparation
 
-The private native transport now additionally requires an explicit COUNT with at
+The private native transport now additionally requires an explicit COUNT or UNTIL with at
 most 366 occurrences, with the complete series (including the final endpoint)
 inside 730 days from its start. Timed occurrences must have a positive fixed
 duration within one civil date. The standalone recurrence/body converters retain
@@ -77,7 +77,7 @@ their broader candidate forms; this tighter boundary applies before native creat
 I/O and prepares a full-family importer, not a calendarView absence heuristic.
 
 `graphSeriesFootprint` returns original occurrence identities and exact known
-time values without inventing native event IDs. Zoned COUNT civil slots are
+time values without inventing native event IDs. Zoned finite civil slots are
 first enumerated as floating values in UTC, so the existing expander cannot hide
 a DST gap by replenishing COUNT with a later valid occurrence. Each original
 start/end must be unambiguous in the native zone with the accepted duration.
@@ -89,15 +89,33 @@ Tests cover all six candidate patterns, exact COUNT/horizon limits, one occurren
 366 daily occurrences, year-boundary all-day durations, independent expected DST
 instants under three host zones, future gap/fold and Lord Howe half-hour changes,
 changed duration, cross-midnight and zero-duration timed refusal. The native HTTP
-test proves unsupported infinite/UNTIL/oversized series stop before permission
+test proves unsupported infinite/invalid-UNTIL/oversized series stop before permission
 requests, lookup or POST. No missing slot is classified as cancelled by this
 helper; a later native family reader must provide complete independent evidence.
+
+UNTIL is accepted only when its complete original-slot set has an exact native
+`endDate` round trip. All-day UNTIL uses a valid inclusive date; zoned UNTIL uses
+a valid UTC instant. The cutoff is converted in the recurrence zone, subtracting
+one civil date when it precedes that date's scheduled start. Raw civil expansion
+uses this verified date boundary, avoiding reuse of a UTC cutoff as floating time.
+The literal termination cutoff itself must be within the 730-day budget, even
+for sparse patterns. Future gaps/folds, fractional native inverse cutoffs and
+mismatched slot sets remain refused. The original UNTIL stays unchanged in both
+journal event snapshots; native canonical UNTIL may differ in time while proving
+the same inclusive endDate. An equivalent COUNT is not an identical retry or
+matching native range.
+
+This follows Microsoft's [inclusive recurrence range contract](https://learn.microsoft.com/en-us/graph/api/resources/recurrencerange?view=graph-rest-1.0).
+Pure, fake HTTP and synthetic PostgreSQL regressions cover cutoff edges, DST,
+complete family evidence, immutable retries, uncertain delivery, atomic ACK and
+flag-off sync echo. NoEnd and native UPDATE/DELETE remain outside this batch;
+no live Outlook acceptance or conditional-write guarantee is claimed.
 
 ## Complete finite family read candidate
 
 `readGraphSeriesFamily` reads the exact mapped master in its calendar, explicitly
 expands exceptions and cancellation metadata, and pages `/instances` over the
-entire proven COUNT footprint. Pagination cannot leave the HTTPS host, calendar
+entire proven finite footprint. Pagination cannot leave the HTTPS host, calendar
 or master path. Duplicate IDs, partial/malformed responses, loops, redirects,
 failed pages and inconsistent counts are refused before returning evidence.
 
@@ -152,10 +170,10 @@ original slots become canonical tombstones; a subsequent complete rule revival
 can reuse their UUIDs. Returned retained native IDs include cancellation history
 for the future reset integration.
 
-The complete candidate has an explicit COUNT of at most 366 and endpoints within
+The complete candidate has an explicit COUNT or UNTIL of at most 366 and endpoints within
 730 days. Full original-slot membership, canonical time consistency and native
 ID uniqueness are validated before acceptance; the proposed family is expanded once, rather than
-re-expanding the whole COUNT for every child. Root/child changes, mapping
+re-expanding the whole family for every child. Root/child changes, mapping
 replacement and cancellations commit together or roll back together. Repeated
 identical observations do not change revisions or source timestamps. Family
 members must belong exclusively to the source mirror; this query does not
@@ -163,7 +181,7 @@ silently drop or fan out linked copies. SQL failures expose only a generic error
 
 Disposable PostgreSQL tests cover stable UUIDs and independent Graph UIDs,
 unknown-zone moved exceptions, preserved cancellation content, never-observed
-cancellations, native-ID changes, COUNT shrink/revival, year-boundary dates,
+cancellations, native-ID changes, COUNT and UNTIL shrink/revival, year-boundary dates,
 no-op, malformed/incomplete rollback, native-ID collision, stale local/mapping
 state, pending operation, grant/link/account changes and concurrent one-winner
 commit. The engine now suppresses the matching calendarView family and retains its
@@ -346,7 +364,7 @@ conflict. No live Outlook acceptance or production activation is implied.
 `POST /events/time` now accepts a personal finite Microsoft series in one owned,
 writable connected calendar when explicit time edits are enabled. The strict
 request supplies a known zoned or all-day time model. Native projection and the
-complete COUNT footprint (at most 366 occurrences within 730 days) are validated
+complete COUNT or UNTIL footprint (at most 366 occurrences within 730 days) are validated
 before any local write. Actor identity replaces untrusted creator/organizer data.
 Meetings, conference URLs, floating time and unsupported recurrence are refused.
 

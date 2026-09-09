@@ -19,6 +19,12 @@ assert.equal(proof.ref.etag, 'W/"opaque"'); // metadata, not a strong/family CAS
 assert.equal(proof.ref.icalUid, "native-uid");
 assert.deepEqual(proof.event.providerState?.reminders, { provider: "microsoft", isOn: true, minutesBeforeStart: 15 });
 assert.equal(JSON.stringify(native), original);
+const untilSaved = { ...saved, recurrence: "RRULE:FREQ=DAILY;UNTIL=20260330T215959Z" };
+const untilNative = { ...native, recurrence: { pattern: native.recurrence.pattern, range: { type: "endDate", startDate: "2026-03-27", endDate: "2026-03-30", recurrenceTimeZone: "Europe/Prague" } } };
+assert.equal(graphSeriesCreateEvidence(untilNative, untilSaved, identity, native.id).event.recurrence, "RRULE:FREQ=DAILY;INTERVAL=1;UNTIL=20260330T070000Z");
+assert.equal(untilSaved.recurrence, "RRULE:FREQ=DAILY;UNTIL=20260330T215959Z");
+assert.throws(() => graphSeriesCreateEvidence(native, untilSaved, identity, native.id));
+assert.throws(() => graphSeriesCreateEvidence({ ...untilNative, recurrence: { ...untilNative.recurrence, range: { ...untilNative.recurrence.range, endDate: "2026-03-31" } } }, untilSaved, identity, native.id));
 const weekly = { ...saved, recurrence: "RRULE:FREQ=WEEKLY;BYDAY=FR,MO;COUNT=4" };
 const nativeWeekly = { ...native, recurrence: { ...native.recurrence, pattern: { type: "weekly", interval: 1, daysOfWeek: ["monday", "friday"], firstDayOfWeek: "monday" } } };
 assert.equal(graphSeriesCreateEvidence(nativeWeekly, weekly, identity, native.id).event.recurrence, "RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,FR;WKST=MO;COUNT=4");

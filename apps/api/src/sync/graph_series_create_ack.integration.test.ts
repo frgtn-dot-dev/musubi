@@ -7,7 +7,7 @@ import { expandRecurringEvents, resolveEventTimeEdit } from "@musubi/calendar";
 import { account, db, events, externalEvents, externalCalendars, externalEventTombstones, eventOutbox, user, importExternalCalendar, queueGraphSeriesCreate, claimEventOutbox, completeGraphSeriesCreateOutbox, readGraphFamilyContext, replaceGraphFamily, upsertExternalEvent, type GraphFamilyObservation } from "@musubi/db";
 import { microsoftEventState } from "./adapters/provider_event_state";
 
-async function run(allDay: boolean) {
+async function run(allDay: boolean, until = false) {
   assert.equal(process.env.ENVIRONMENT, "test");
   const actor = `graph-create-ack-${randomUUID()}`, flag = config.api.eventTimeEditsEnabled;
   await db.insert(user).values({ id: actor, name: "Fixture", email: `${actor}@example.test` });
@@ -16,10 +16,10 @@ async function run(allDay: boolean) {
     await db.insert(account).values({ id: randomUUID(), userId: actor, providerId: "microsoft", accountId: "fixture", scope: "Calendars.ReadWrite", refreshToken: "fixture" });
     const calendar = await importExternalCalendar("microsoft", actor, "fixture", "Fixture", { externalId: "calendar", name: "Fixture", color: "red" });
     const [link] = await db.select().from(externalCalendars).where(eq(externalCalendars.calendarID, calendar.id));
-    const event = EventSchema.parse({ id: randomUUID(), revision: 1, creatorID: actor, organizer: actor, title: "Series", color: "red", calendars: [calendar.id], originCalendarID: calendar.id, isCanceled: false, description: "Notes", location: "Office", recurrence: "RRULE:FREQ=DAILY;COUNT=4", ...resolveEventTimeEdit(allDay ? { kind: "all-day", startDate: "2026-12-30", endDate: "2026-12-31" } : { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-27T09:00:00", endLocal: "2026-03-27T10:00:00" }) });
+    const event = EventSchema.parse({ id: randomUUID(), revision: 1, creatorID: actor, organizer: actor, title: "Series", color: "red", calendars: [calendar.id], originCalendarID: calendar.id, isCanceled: false, description: "Notes", location: "Office", recurrence: until ? (allDay ? "RRULE:FREQ=DAILY;UNTIL=20270102" : "RRULE:FREQ=DAILY;UNTIL=20260330T215959Z") : "RRULE:FREQ=DAILY;COUNT=4", ...resolveEventTimeEdit(allDay ? { kind: "all-day", startDate: "2026-12-30", endDate: "2026-12-31" } : { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-27T09:00:00", endLocal: "2026-03-27T10:00:00" }) });
     const queued = await queueGraphSeriesCreate(actor, randomUUID(), event), claimed = (await claimEventOutbox(queued.operationID))!, token = claimed.leaseToken!;
     const state = microsoftEventState({ type: "seriesMaster", isCancelled: false, isOrganizer: true, organizer: { emailAddress: { address: "owner@example.test" } }, attendees: [], isReminderOn: true, reminderMinutesBeforeStart: 15, showAs: "busy", sensitivity: "normal", responseStatus: { response: "organizer" } });
-    const values = { title: event.title, description: event.description ?? null, location: event.location ?? null, url: null, organizer: "owner@example.test", start: event.start, end: event.end, isAllDay: event.isAllDay, timeModel: event.timeModel!, recurrence: event.recurrence ?? null };
+    const values = { title: event.title, description: event.description ?? null, location: event.location ?? null, url: null, organizer: "owner@example.test", start: event.start, end: event.end, isAllDay: event.isAllDay, timeModel: event.timeModel!, recurrence: until && !allDay ? "RRULE:FREQ=DAILY;INTERVAL=1;UNTIL=20260330T070000Z" : event.recurrence ?? null };
     const proof: GraphFamilyObservation = { master: { creationOperationID: queued.operationID, externalID: "master", icalUid: "master-uid", etag: 'W/"master"', values, providerState: state }, cancelled: [], instances: [27, 28, 29, 30].map(day => {
       const time = allDay ? { start: new Date(event.start.getTime() + (day - 27) * 86400000), end: new Date(event.end.getTime() + (day - 27) * 86400000), isAllDay: true, timeModel: { kind: "all-day" as const } } : resolveEventTimeEdit({ kind: "zoned", timeZone: "Europe/Prague", startLocal: `2026-03-${day}T09:00:00`, endLocal: `2026-03-${day}T10:00:00` });
       return { externalID: `native-${day}`, icalUid: `uid-${day}`, etag: `W/"${day}"`, originalStart: allDay ? { kind: "date", value: time.start.toISOString().slice(0, 10) } : { kind: "instant", value: time.start.toISOString() }, values: { ...values, ...time, recurrence: null }, providerState: { ...state, eventType: "occurrence" } };
@@ -38,6 +38,8 @@ async function run(allDay: boolean) {
       (p: GraphFamilyObservation) => { p.instances[1]!.originalStart = p.instances[0]!.originalStart; },
       (p: GraphFamilyObservation) => { p.master.values.title = "Concurrent master"; },
       (p: GraphFamilyObservation) => { p.master.values.recurrence = "RRULE:FREQ=DAILY;COUNT=5"; },
+      (p: GraphFamilyObservation) => { p.master.values.recurrence = allDay ? "FREQ=DAILY;UNTIL=20270103" : "FREQ=DAILY;UNTIL=20260331T070000Z"; },
+      (p: GraphFamilyObservation) => { p.master.values.recurrence = "FREQ=DAILY"; },
       (p: GraphFamilyObservation) => { p.instances[0]!.values.title = "Concurrent exception"; },
       (p: GraphFamilyObservation) => { p.instances[0]!.providerState.eventType = "exception"; },
       (p: GraphFamilyObservation) => { p.master.providerState.attendeesComplete = false; },
@@ -69,6 +71,8 @@ async function run(allDay: boolean) {
     const results = await Promise.all([commit(), commit()]); assert.equal(results.filter(Boolean).length, 1);
     const accepted = await snapshot(); assert.equal(accepted.rows.length, 5); assert.equal(accepted.maps.length, 5);
     assert.equal(accepted.history[0]!.status, "completed"); assert.equal(accepted.history[0]!.uncertain, false);
+    assert.equal(accepted.history[0]!.payload.event.recurrence, event.recurrence);
+    assert.equal(accepted.history[0]!.payload.graphSeriesCreate!.nativeEvent.recurrence, event.recurrence);
     assert.equal(accepted.rows.find(row => !row.seriesID)!.id, event.id); assert.equal(new Set(accepted.maps.map(map => map.icalUid)).size, 5);
     assert.equal(expandRecurringEvents(accepted.rows, new Date(event.start.getTime() - 86400000), new Date(event.end.getTime() + 10 * 86400000), { consumerTimeZone: "UTC" }).length, 4);
     assert.equal(await commit(), false); assert.deepEqual(await snapshot(), accepted);
@@ -79,5 +83,5 @@ async function run(allDay: boolean) {
     console.log("Graph create ACK: complete personal footprint, atomic family/journal commit, rollback of partial/changed/colliding/deleted evidence, one lease winner, stable root/child IDs and ordinary sync no-op: OK");
   } finally { config.api.eventTimeEditsEnabled = flag; await db.delete(user).where(eq(user.id, actor)); }
 }
-async function main() { await run(false); await run(true); }
+async function main() { await run(false); await run(true); await run(false, true); await run(true, true); }
 void main().catch(error => { console.error(error); process.exitCode = 1; });

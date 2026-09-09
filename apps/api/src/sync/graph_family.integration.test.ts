@@ -71,6 +71,23 @@ async function main() {
     await importFamily(observation);
     assert.equal((await rows()).length, 5); assert.equal((await rows()).filter(value => value.deletedAt).length, 0);
     for (const value of (await rows()).filter(value => value.originalStart)) assert.equal(value.id, ids.get(value.originalStart!.value), "Rule revival preserves historical original UUIDs");
+    // A native endDate/UNTIL change retains the same full-family contract.
+    const untilObservation = structuredClone(observation);
+    untilObservation.master.values.recurrence = "RRULE:FREQ=DAILY;UNTIL=20260330T070000Z";
+    await importFamily(untilObservation);
+    const untilShorter = structuredClone(untilObservation);
+    untilShorter.master.values.recurrence = "RRULE:FREQ=DAILY;UNTIL=20260328T080000Z";
+    untilShorter.instances = untilShorter.instances.slice(0, 2);
+    await importFamily(untilShorter);
+    assert.equal((await rows()).filter(value => value.deletedAt).length, 2);
+    await importFamily(untilObservation);
+    for (const value of (await rows()).filter(value => value.originalStart)) assert.equal(value.id, ids.get(value.originalStart!.value));
+    assert.equal((await importFamily(untilObservation)).changed, false);
+    const incompleteUntil = structuredClone(untilObservation); incompleteUntil.instances.pop();
+    const beforeIncompleteUntil = await snapshot();
+    await assert.rejects(() => importFamily(incompleteUntil));
+    assert.deepEqual(await snapshot(), beforeIncompleteUntil);
+    await importFamily(observation);
     const extended = structuredClone(observation), fifth = occurrence(31);
     extended.master.values.recurrence = "RRULE:FREQ=DAILY;COUNT=5";
     extended.cancelled = [{ originalStart: { kind: "instant", value: fifth.originalStart.value.replace(".000Z", "Z") }, start: fifth.values.start, end: fifth.values.end, isAllDay: false, timeModel: fifth.values.timeModel }];

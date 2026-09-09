@@ -16,6 +16,13 @@ const ref = { externalEventId: master.id, icalUid: master.iCalUId };
 const evidence = (native = changed, values = listed) => graphSeriesFamilyEvidence(native, values, template, ref);
 const before = JSON.stringify({ changed, listed, template });
 const proof = evidence();
+const untilChanged = { ...changed, recurrence: { pattern: master.recurrence.pattern, range: { type: "endDate", startDate: "2026-03-27", endDate: "2026-03-30", recurrenceTimeZone: "Europe/Prague" } } };
+const untilProof = evidence(untilChanged);
+assert.deepEqual(untilProof.instances, proof.instances);
+assert.deepEqual(untilProof.cancelled, proof.cancelled);
+assert.equal(untilProof.master.recurrence, "RRULE:FREQ=DAILY;INTERVAL=1;UNTIL=20260330T070000Z");
+assert.throws(() => evidence(untilChanged, listed.slice(0, 1)));
+assert.throws(() => evidence({ ...untilChanged, recurrence: { ...untilChanged.recurrence, range: { ...untilChanged.recurrence.range, endDate: "2026-03-31" } } }));
 assert.equal(evidence({ ...changed, transactionId: "00000000-0000-4000-8000-000000000190" }).master.creationOperationID, "00000000-0000-4000-8000-000000000190");
 assert.deepEqual(proof.instances.map(value => value.externalId), ["occ-27", "occ-29", "occ-30"]);
 assert.deepEqual(proof.instances.map(value => value.icalUid), ["uid-27", "uid-29", "uid-30"]);
@@ -107,6 +114,7 @@ async function main() {
       if (masterReads === 2 && mode === "changed-cancel") return send({ ...changed, cancelledOccurrences: ["different-opaque"] });
       if (masterReads === 2 && mode === "changed-rule") return send({ ...changed, recurrence: { ...master.recurrence, range: { ...master.recurrence.range, numberOfOccurrences: 5 } } });
       if (masterReads === 2 && mode === "master-failure") return send({}, 503);
+      if (mode.startsWith("until")) return send(masterReads === 2 && mode === "until-changed" ? { ...untilChanged, recurrence: { ...untilChanged.recurrence, range: { ...untilChanged.recurrence.range, endDate: "2026-03-31" } } } : untilChanged);
       return send(changed);
     }
     assert.equal(url.pathname, `${path}/instances`);
@@ -131,6 +139,9 @@ async function main() {
   };
   const read = () => readGraphSeriesFamily("synthetic-token", "cal/one", template, ref);
   try {
+    mode = "until"; assert.deepEqual(await read(), untilProof);
+    mode = "until-changed"; masterReads = 0; await assert.rejects(read);
+    mode = "normal"; reads = []; masterReads = 0;
     assert.deepEqual(await read(), proof); assert.equal(reads.length, 4); assert.equal(masterReads, 2);
     for (const scenario of ["partial", "redirect", "network", "foreign", "wrong-calendar", "wrong-master", "loop", "malformed", "page-failure", "duplicate", "wrong-count", "changed-exception", "changed-transaction", "changed-cancel", "changed-rule", "master-failure"]) {
       mode = scenario; reads = []; masterReads = 0; await assert.rejects(read); assert.ok(reads.length <= 4);

@@ -78,6 +78,24 @@ async function main() {
     const google = await createCalendar({ creatorID: owner, name: "Google", color: "red" });
     await db.insert(externalCalendars).values({ provider: "google", userID: owner, accountID: owner, externalCalendarID: "google", calendarID: google.id });
     const other = make(); assert.equal((await send({ ...other, event: { ...other.event, calendars: [google.id] } })).status, 400); assert.equal(await getEventSnapshot(other.event.id), undefined);
+    for (const allDay of [false, true]) {
+      const until = make(), untilKey = randomUUID();
+      until.event.recurrence = allDay ? "FREQ=DAILY;UNTIL=20270102" : "FREQ=DAILY;UNTIL=20260330T215959Z";
+      const untilRequest = { ...until, ...(allDay ? { time: { kind: "all-day", startDate: "2026-12-30", endDate: "2026-12-31" } } : {}) };
+      const [firstUntil, replayUntil] = await Promise.all([send(untilRequest, token.raw, untilKey), send(untilRequest, token.raw, untilKey)]);
+      assert.equal(firstUntil.status, 202, JSON.stringify(firstUntil.body)); assert.equal(replayUntil.status, 202);
+      assert.equal(firstUntil.body.recurrence, until.event.recurrence);
+      const journal = (await history()).filter(row => row.eventID === until.event.id);
+      assert.equal(journal.length, 1); assert.equal(journal[0]!.payload.event.recurrence, until.event.recurrence);
+      assert.equal(journal[0]!.payload.graphSeriesCreate!.nativeEvent.recurrence, until.event.recurrence);
+      assert.equal((await send({ ...untilRequest, event: { ...until.event, recurrence: "FREQ=DAILY;COUNT=4" } }, token.raw, untilKey)).status, 400);
+    }
+    for (const recurrence of ["FREQ=DAILY;UNTIL=20290330T070000Z", "FREQ=DAILY;UNTIL=20270330T070000Z", "FREQ=DAILY;UNTIL=20260326T070000Z", "FREQ=DAILY;UNTIL=20260230T070000Z", "FREQ=DAILY;UNTIL=20260330", "FREQ=DAILY;COUNT=4;UNTIL=20260330T070000Z"]) {
+      const invalid = make();
+      const count = (await history()).length;
+      assert.equal((await send({ ...invalid, event: { ...invalid.event, recurrence } })).status, 403);
+      assert.equal(await getEventSnapshot(invalid.event.id), undefined); assert.equal((await history()).length, count);
+    }
     const notificationRequest = make(), query = db.$client.query.bind(db.$client); let notificationFailed = false;
     (db.$client as any).query = async (statement: any, ...args: any[]) => {
       const text = typeof statement === "string" ? statement : statement.text;

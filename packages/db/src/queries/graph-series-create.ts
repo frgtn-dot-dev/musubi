@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import { and, eq, sql } from "drizzle-orm";
 import { config } from "@musubi/config";
-import { expandRecurringEvents } from "@musubi/calendar";
+import { finiteSeriesFootprint } from "@musubi/calendar";
 import { EventSchema, EventWriteError, BadRequestError, can, type Event } from "@musubi/types";
 import { db } from "..";
 import { account, calendarEvents, calendarMembers, events, externalCalendars, externalEvents, eventOutbox } from "../schema";
@@ -27,13 +27,10 @@ const same = (a: unknown, b: unknown) => isDeepStrictEqual(normalize(a), normali
  * the exact Graph recurrence serializer and civil footprint before queuing. */
 export function graphSeriesCreateProjection(input: unknown, actorID: string): Event {
   const event = normalize(input);
-  const count = /(?:^|;)COUNT=([1-9]\d*)(?:;|$)/.exec(event.recurrence?.replace(/^RRULE:/, "") ?? "");
   if (event.creatorID !== actorID || event.organizer !== actorID || event.revision !== 1 || event.calendars.length !== 1 ||
       event.originCalendarID !== event.calendars[0] || event.isCanceled || event.hasAttendees || event.seriesID || event.originalStart || event.url ||
-      !["zoned", "all-day"].includes(event.timeModel?.kind ?? "") || !count || Number(count[1]) > 366) refuse();
-  const end = new Date(event.start.getTime() + 730 * 86_400_000);
-  const slots = expandRecurringEvents([event], event.start, end, { consumerTimeZone: "UTC" });
-  if (slots.length !== Number(count[1]) || slots.some(slot => slot.end.getTime() + (slot.isAllDay ? 86_400_000 : 0) > end.getTime())) refuse();
+      !["zoned", "all-day"].includes(event.timeModel?.kind ?? "")) refuse();
+  finiteSeriesFootprint(event);
   // Native personal creation must not turn the local actor ID into an attendee
   // or an organizer supplied to Graph. Keep this explicit projection frozen.
   return { ...event, organizer: "" };
