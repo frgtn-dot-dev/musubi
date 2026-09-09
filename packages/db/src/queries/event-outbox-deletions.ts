@@ -98,8 +98,8 @@ export async function retainUnmappedEventDeletion(
     const resourceID = provider === "caldav" ? externalEventID.split("#musubi-original=")[0]! : externalEventID;
     const [completed] = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(
       eq(eventOutbox.provider, provider), eq(eventOutbox.userID, target.userID), eq(eventOutbox.calendarID, calendarID), eq(eventOutbox.externalEventID, resourceID),
-      eq(eventOutbox.externalCalendarLinkID, target.id), eq(eventOutbox.action, "delete"), eq(eventOutbox.status, "completed"), sql`${eventOutbox.payload}->'caldavSeriesDeletion' is not null`,
-      sql`${eventOutbox.payload}->'caldavSeriesDeletion'->'context'->'mappings' @> ${JSON.stringify([{ externalEventID }])}::jsonb`,
+      eq(eventOutbox.externalCalendarLinkID, target.id), eq(eventOutbox.status, "completed"), sql`((${eventOutbox.action} = 'delete' and ${eventOutbox.payload}->'caldavSeriesDeletion' is not null) or (${eventOutbox.action} = 'update' and ${eventOutbox.payload}->'caldavSeries'->'write'->'followingDelete' is not null))`,
+      sql`coalesce(${eventOutbox.payload}->'caldavSeriesDeletion'->'context'->'mappings', ${eventOutbox.payload}->'caldavSeries'->'context'->'mappings') @> ${JSON.stringify([{ externalEventID }])}::jsonb`,
     )).limit(1);
     if (completed) return;
   }

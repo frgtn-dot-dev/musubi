@@ -6,7 +6,7 @@ import { retainPendingEventPull, retainUnmappedCreatePull } from "./event-outbox
 import { appendInboundEventFanout } from "./event-outbox-fanout";
 import { retainUnmappedEventDeletion, lockExternalEventAddress } from "./event-outbox-deletions";
 import { lockCalendarLifecycle, lockUserLifecycle } from "./calendar-lifecycle";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import { logger } from "@musubi/config";
 import {
   caldavAccounts,
@@ -665,7 +665,7 @@ export async function replaceExternalEventResource(
     // the same accepted resource version after its mappings have been removed.
     const [deletedVersion] = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(
       eq(eventOutbox.provider, provider), eq(eventOutbox.userID, userID), eq(eventOutbox.calendarID, calendarID), eq(eventOutbox.externalEventID, resourceID),
-      eq(eventOutbox.action, "delete"), eq(eventOutbox.status, "completed"), sql`${eventOutbox.payload}->'caldavSeriesDeletion' is not null`,
+      eq(eventOutbox.status, "completed"), sql`((${eventOutbox.action} = 'delete' and ${eventOutbox.payload}->'caldavSeriesDeletion' is not null) or (${eventOutbox.action} = 'update' and ${eventOutbox.payload}->'caldavSeries'->'write'->'followingDelete' is not null))`,
       ...(master.etag ? [eq(eventOutbox.expectedEtag, master.etag)] : []),
     )).limit(1);
     if (deletedVersion) return false;
@@ -754,13 +754,31 @@ async function upsertExternalEventInTransaction(
       expandRecurringEvents(parent ? [{ ...parent.event, calendars: [calendarID], isCanceled: false }, candidate] : [candidate], values.start, values.end, { consumerTimeZone: "UTC" });
     }
     const pendingTemporal = temporal ?? (reminderTimeEvidence ? { timeModel: EventTimeModelSchema.parse(reminderTimeEvidence) } : undefined);
-    const map = await mappedEventForUpdate(
+    let map = await mappedEventForUpdate(
       tx,
       provider,
       calendarID,
       externalEventID,
     );
 
+    if (!map && provider === "caldav" && temporal?.seriesID && temporal.originalStart) {
+      const [historical] = await tx.select().from(events).where(and(eq(events.seriesID, temporal.seriesID), sql`${events.originalStart} = ${JSON.stringify(temporal.originalStart)}::jsonb`, isNotNull(events.deletedAt))).for("update");
+      if (historical) {
+        const [receipt] = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(
+          eq(eventOutbox.provider, provider), eq(eventOutbox.userID, userID), eq(eventOutbox.calendarID, calendarID), eq(eventOutbox.externalEventID, time!.externalSeriesID!),
+          eq(eventOutbox.status, "completed"), eq(eventOutbox.action, "update"), sql`${eventOutbox.payload}->'caldavSeries'->'write'->'followingDelete' is not null`,
+          sql`${eventOutbox.payload}->'caldavSeries'->'context'->'mappings' @> ${JSON.stringify([{ eventID: historical.id, externalEventID }])}::jsonb`,
+        )).limit(1);
+        const oldMaps = await tx.select({ id: externalEvents.id }).from(externalEvents).where(eq(externalEvents.eventID, historical.id));
+        const memberships = await tx.select().from(calendarEvents).where(eq(calendarEvents.eventID, historical.id));
+        const pending = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(eq(eventOutbox.eventID, historical.id), sql`${eventOutbox.status} not in ('completed', 'not-needed')`)).limit(1);
+        if (!receipt || historical.creatorID !== userID || historical.originCalendarID !== calendarID || oldMaps.length || pending.length || memberships.length !== 1 || memberships[0]!.calendarID !== calendarID) throw new Error("Historical occurrence requires explicit reconciliation.");
+        // Reuse the tombstone's unique original identity. The normal mapped
+        // inbound path below performs revival, revision increment and fanout.
+        await tx.insert(externalEvents).values({ provider, eventID: historical.id, calendarID, externalCalendarID, externalEventID, etag: null, icalUid, externalSeriesID: time!.externalSeriesID!, originalStart: temporal.originalStart });
+        map = await mappedEventForUpdate(tx, provider, calendarID, externalEventID);
+      }
+    }
     if (map) {
       const stateChanged = state !== undefined && JSON.stringify(map.providerState == null ? null : ProviderEventStateSchema.parse(map.providerState)) !== JSON.stringify(state);
       if (expandedIdentity && map.externalSeriesID && (map.externalSeriesID !== expandedIdentity.externalSeriesID || !sameTimeMetadata(map.originalStart, expandedIdentity.originalStart)))

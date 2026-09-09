@@ -408,8 +408,18 @@ async function main() {
     assert.deepEqual(await rows(), extendedRows, "Native truncation does not yet acknowledge a local scope");
     const restoredTruncation = await davFetch(scopedURL, { method: "PUT", headers: { authorization: basicAuth, "content-type": "text/calendar", "if-match": truncated.ref.etag! }, body: truncateEvidence.data });
     assert.ok(restoredTruncation.ok); await sync(); assert.deepEqual(await rows(), extendedRows);
+    const followingRequest = { operationID: randomUUID(), scope: "following", action: "delete", expectedRevision: (await getEventSnapshot(scopedRoot.id))!.revision, originalStart: cut.originalStart, expectedOccurrenceRevision: cut.revision };
+    const followingCandidate = await applyLocalEventScope(scopedRoot.id, userID, followingRequest, { prepareProvider: true });
+    if (followingCandidate.status !== "caldav_required" || followingCandidate.deleteResource) throw new Error("Missing partial following context");
+    const followingPrepared = await prepareCaldavSeries(followingCandidate.context, followingRequest);
+    assert.equal((await applyLocalEventScope(scopedRoot.id, userID, followingRequest, { caldav: followingPrepared })).status, "saved");
+    const beforeDeletionRows = await rows();
+    const followingOperation = (await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, scopedRoot.id))).find(item => item.mutationID === followingRequest.operationID)!;
+    assert.equal((await deliverEventOutbox(followingOperation.id, () => caldavAdapter))?.status, "completed");
+    await sync(); assert.deepEqual(await rows(), beforeDeletionRows);
+    assert.equal((await applyLocalEventScope(scopedRoot.id, userID, followingRequest, { prepareProvider: true })).status, "replayed");
     const deletionRoot = (await getEventSnapshot(scopedRoot.id))!;
-    const deletionChildren = await Promise.all((await rows()).filter(item => item.seriesID === scopedRoot.id).map(item => getEventSnapshot(item.id)));
+    const deletionChildren = await Promise.all((await rows()).filter(item => item.seriesID === scopedRoot.id && !item.deletedAt).map(item => getEventSnapshot(item.id)));
     const deletionMap = (await db.select().from(externalEvents).where(eq(externalEvents.eventID, scopedRoot.id)))[0]!;
     const deletionBaseline = { master: deletionRoot, children: deletionChildren.map(item => item!), ref: { externalEventId: deletionMap.externalEventID, etag: deletionMap.etag, icalUid: deletionMap.icalUid } };
     const deletionEvidence = await caldavAdapter.readCaldavSeriesForDelete!(userID, account.id, collectionURL, deletionBaseline);
@@ -420,7 +430,7 @@ async function main() {
     const preparedDeletion = await prepareCaldavSeriesDelete(deletionCandidate.context, deletionRequest);
     assert.equal((await applyLocalEventScope(scopedRoot.id, userID, deletionRequest, { caldavDeletion: preparedDeletion })).status, "saved");
     const deletedRows = await rows();
-    assert.ok(deletedRows.filter(item => item.id === scopedRoot.id || item.seriesID === scopedRoot.id).every(item => item.deletedAt && item.revision === extendedRows.find(old => old.id === item.id)!.revision + 1));
+    assert.ok(deletedRows.filter(item => item.id === scopedRoot.id || item.seriesID === scopedRoot.id).every(item => item.deletedAt && item.revision === beforeDeletionRows.find(old => old.id === item.id)!.revision + (beforeDeletionRows.find(old => old.id === item.id)!.deletedAt ? 0 : 1)));
     const deletionOperation = (await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, scopedRoot.id))).find(item => item.mutationID === deletionRequest.operationID)!;
     assert.equal((await deliverEventOutbox(deletionOperation.id, () => caldavAdapter))?.status, "completed");
     assert.equal((await davFetch(scopedURL, { headers: { authorization: basicAuth } })).status, 404);

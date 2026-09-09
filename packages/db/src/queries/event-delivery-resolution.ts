@@ -148,13 +148,14 @@ async function resolutionContext(
   let caldavContext: CaldavSeriesContext | undefined;
   if (row.payload.caldavSeriesDeletion) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   if (row.payload.caldavSeries) {
-    if (row.payload.caldavSeries.write.targetEventID || row.payload.caldavSeries.write.time || row.payload.caldavSeries.write.patch.recurrence !== undefined) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    if (row.payload.caldavSeries.write.followingDelete || row.payload.caldavSeries.write.targetEventID || row.payload.caldavSeries.write.time || row.payload.caldavSeries.write.patch.recurrence !== undefined) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
     if (row.provider !== "caldav" || row.action !== "update" || !linked || latest.id !== row.id || pending.some(item => item.id !== row.id))
       throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
     const childRows = await tx.query.events.findMany({ where: eq(events.seriesID, eventID), with: { calendarEvents: true }, orderBy: events.id });
-    if (childRows.some(child => child.deletedAt)) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const activeChildren = childRows.filter(child => !child.deletedAt || row.payload.caldavSeries!.context.children.some(item => item.id === child.id));
+    if (activeChildren.some(child => child.deletedAt)) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
     try {
-      caldavContext = await caldavSeriesContext(tx, userID, local, childRows.map(child => EventSchema.parse({ ...child, calendars: child.calendarEvents.map(link => link.calendarID).sort() })), row.id, true);
+      caldavContext = await caldavSeriesContext(tx, userID, local, activeChildren.map(child => EventSchema.parse({ ...child, calendars: child.calendarEvents.map(link => link.calendarID).sort() })), row.id, true);
     } catch (error) {
       if (error instanceof EventWriteError) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
       throw error;

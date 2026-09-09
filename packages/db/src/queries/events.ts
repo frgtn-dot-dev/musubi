@@ -225,7 +225,7 @@ export async function purgeDeletedEvents(before: Date) {
 		.where(and(isNotNull(events.deletedAt), lt(events.deletedAt, before), sql`not exists (
       select 1 from ${eventOutbox}
       where ${eventOutbox.eventID} = coalesce(${events.seriesID}, ${events.id})
-        and ${eventOutbox.payload}->'caldavSeriesDeletion' is not null
+        and (${eventOutbox.payload}->'caldavSeriesDeletion' is not null or ${eventOutbox.payload}->'caldavSeries' is not null)
         and ${eventOutbox.status} not in ('completed', 'not-needed')
     )`));
 }

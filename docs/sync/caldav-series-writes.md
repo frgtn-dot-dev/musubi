@@ -415,3 +415,39 @@ response recovery, concurrent child changes and mixed/stale intent refusal. Radi
 confirms the actual conditional truncation and repeat delivery. This slice is only
 the private native transport; public following scope, local tombstones, retained
 mapping reconciliation and the durable ACK are the next integration step.
+
+## Durable following deletion
+
+The public following/delete scope now delegates its first slot to whole-resource
+DELETE; a later slot enqueues one conditional resource update. The scope transaction
+commits the shortened master, future child tombstones and one outbox together.
+Pending mappings remain intact. A complete ACK checks the retained and removed
+families, removes only the deleted mappings and advances all retained ETags in one
+transaction. Grant/lease/family checks and lost-response recovery remain mandatory.
+
+Completed truncation receipts also reject their old accepted resource version on
+import. Migration 0069 broadens the indexed version barrier, and delayed sweeps
+recognize removed exception addresses from the receipt. Historical unmapped
+tombstones do not block subsequent edits or deletion of the retained family. Every
+unresolved CalDAV family operation protects its recovery evidence from cleanup.
+
+A fresh provider restoration of a removed definition reuses its tombstone ID only
+when a completed truncation receipt binds that exact address and local identity,
+its authority/membership is unchanged, and it has no other mapping or pending write.
+Local recreation after extending the rule freezes the retired definition's ID at
+preflight and rechecks it during commit. Revision and echo behavior remain stable.
+The optional retired-definition context is omitted for empty history, preserving
+compatibility with already queued pre-truncation operations.
+
+HTTP/DB covers first/later slots, all time kinds, atomic tombstones/mappings,
+503 recovery, provider/local races, revoked grant and expired lease, cleanup,
+stale-snapshot refusal, subsequent editing/deletion, provider restoration and
+local recreation/cancellation under the same identity. Radicale exercises the
+scope/worker/ACK path and subsequent sync. Following update/split and a dedicated
+following conflict resolution remain unavailable. No flags or versions change.
+
+Review regressions also cover ordinary master-content conflict resolution after a
+truncation. Retired definitions remain private history, while a newly deleted active
+child still invalidates that preview. A series time shift that would collide with
+another retired original identity is explicitly refused before provider preparation
+and again during the final transaction, rather than failing a uniqueness constraint.

@@ -1,0 +1,2 @@
+DROP INDEX "event_outbox_caldav_deleted_version_idx";--> statement-breakpoint
+CREATE INDEX "event_outbox_caldav_deleted_version_idx" ON "event_outbox" USING btree ("provider","user_id","calendar_id","external_event_id","expected_etag") WHERE "event_outbox"."status" = 'completed' and (("event_outbox"."action" = 'delete' and "event_outbox"."payload"->'caldavSeriesDeletion' is not null) or ("event_outbox"."action" = 'update' and "event_outbox"."payload"->'caldavSeries'->'write'->'followingDelete' is not null));
