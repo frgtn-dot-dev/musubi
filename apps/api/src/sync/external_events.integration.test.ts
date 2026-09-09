@@ -7,6 +7,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { logger } from "@musubi/config";
 import {
   calendarEvents,
+  caldavAccounts,
   calendarMembers,
   clearCalendarEvents,
   createEvent,
@@ -51,10 +52,20 @@ async function main() {
       // The same remote collection may be visible through multiple accounts.
       // Unlinking one mirror must not delete a sibling mirror's mapping.
       const remoteCalendar = `shared-${randomUUID()}`;
+      const accountIDs = [randomUUID(), randomUUID(), randomUUID()];
+      if (provider === "caldav") {
+        // Engine mutations carry a read-generation fence which requires the
+        // actual connected CalDAV account, even before first grant discovery.
+        await db.insert(caldavAccounts).values(accountIDs.map((id, index) => ({
+          id, userID: index === 1 ? bob : alice,
+          serverUrl: "https://fixture.invalid", username: id,
+          encryptedPassword: "unused-fixture",
+        })));
+      }
       const home = await importExternalCalendar(
         provider,
         alice,
-        randomUUID(),
+        accountIDs[0]!,
         "Origin",
         {
           externalId: remoteCalendar,
@@ -65,7 +76,7 @@ async function main() {
       const copy = await importExternalCalendar(
         provider,
         bob,
-        randomUUID(),
+        accountIDs[1]!,
         "Copy",
         {
           externalId: remoteCalendar,
@@ -76,7 +87,7 @@ async function main() {
       const sibling = await importExternalCalendar(
         provider,
         alice,
-        randomUUID(),
+        accountIDs[2]!,
         "Sibling",
         {
           externalId: remoteCalendar,
