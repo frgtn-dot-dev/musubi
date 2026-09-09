@@ -1,3 +1,4 @@
+import { caldavSeriesDesired } from "./caldav-series-scope";
 import { expandRecurringEvents } from "@musubi/calendar";
 import { ProviderEventStateSchema, type ProviderEventState, hasKnownEventTime, BadRequestError, EventTimeModelSchema, OccurrenceStartSchema, type EventTimeModel, type OccurrenceStart } from "@musubi/types";
 import { assertLegacyEventTimePatch } from "./event-time-write";
@@ -648,6 +649,18 @@ export type ExternalEventResourceObservation = {
   providerState?: ProviderEventState;
 };
 
+/** A private split owns both addresses until specialized full-resource ACK.
+ * A component projection is never enough to adopt an unmapped new family. */
+async function assertNoPendingCaldavSplit(tx: DbTransaction, provider: string, userID: string, calendarID: string, externalCalendarID: string, resourceID: string) {
+  if (provider !== "caldav") return;
+    const [splitPending] = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(
+      eq(eventOutbox.provider, provider), eq(eventOutbox.userID, userID), eq(eventOutbox.calendarID, calendarID),
+      eq(eventOutbox.externalCalendarID, externalCalendarID), eq(eventOutbox.externalEventID, resourceID),
+      sql`${eventOutbox.payload}->'caldavSplit' is not null and ${eventOutbox.status} not in ('completed', 'not-needed')`,
+    )).limit(1);
+    if (splitPending) throw new Error("CalDAV split resource has pending local writes.");
+}
+
 /** A CalDAV GET replaces one whole resource, including omitted overrides. */
 export async function replaceExternalEventResource(
   provider: string, userID: string, calendarID: string, externalCalendarID: string,
@@ -669,6 +682,7 @@ export async function replaceExternalEventResource(
       ...(master.etag ? [eq(eventOutbox.expectedEtag, master.etag)] : []),
     )).limit(1);
     if (deletedVersion) return false;
+    await assertNoPendingCaldavSplit(tx, provider, userID, calendarID, externalCalendarID, resourceID);
     const mappings = await tx.select().from(externalEvents).where(and(
       eq(externalEvents.provider, provider), eq(externalEvents.calendarID, calendarID),
       sql`(${externalEvents.externalEventID} = ${resourceID} or ${externalEvents.externalSeriesID} = ${resourceID})`,
@@ -729,6 +743,7 @@ async function upsertExternalEventInTransaction(
     if (state && state.provider !== provider) throw new Error("Provider state does not match its destination.");
     await lockCalendarLifecycle(tx, [calendarID], "shared");
     await lockExternalEventAddress(tx, provider, calendarID, externalEventID);
+    if (!deferFamilyValidation) await assertNoPendingCaldavSplit(tx, provider, userID, calendarID, externalCalendarID, time?.externalSeriesID ?? externalEventID);
     const expandedIdentity = providerOccurrence ? {
       externalSeriesID: providerOccurrence.externalSeriesID,
       originalStart: OccurrenceStartSchema.parse(providerOccurrence.originalStart),
@@ -904,6 +919,10 @@ export async function deleteExternalEvent(
   let unlinked: { id: string; revision: number } | undefined;
   const changed = await db.transaction(async (tx) => {
     await lockCalendarLifecycle(tx, [calendarID], "shared");
+    // Resource writers lock the root before components. A missing child from a
+    // reset must use the same fence even after a split reparents it locally.
+    const [address] = provider === "caldav" ? await tx.select({ resource: externalEvents.externalSeriesID }).from(externalEvents).where(and(eq(externalEvents.provider, provider), eq(externalEvents.calendarID, calendarID), eq(externalEvents.externalEventID, externalEventID))) : [];
+    if (address?.resource) await lockExternalEventAddress(tx, provider, calendarID, address.resource);
     await lockExternalEventAddress(tx, provider, calendarID, externalEventID);
     const mapped = await mappedEventForUpdate(
       tx,
@@ -914,6 +933,29 @@ export async function deleteExternalEvent(
     if (!mapped) {
       await retainUnmappedEventDeletion(tx, provider, calendarID, externalEventID);
       return false;
+    }
+    if (provider === "caldav") {
+      if ((mapped.externalSeriesID ?? null) !== (address?.resource ?? null)) throw new Error("CalDAV resource address changed during deletion.");
+      const [family] = await tx.select().from(eventOutbox).where(and(
+        eq(eventOutbox.provider, provider), eq(eventOutbox.userID, mapped.event.creatorID), eq(eventOutbox.calendarID, calendarID),
+        eq(eventOutbox.externalEventID, mapped.externalSeriesID ?? externalEventID),
+        sql`${eventOutbox.status} not in ('completed', 'not-needed')`,
+        sql`(${eventOutbox.status} <> 'cancelled' or ${eventOutbox.errorCode} is distinct from 'superseded-by-resolution')`,
+        sql`coalesce(${eventOutbox.payload}->'caldavSplit'->'prepared'->'context'->'mappings', ${eventOutbox.payload}->'caldavSeries'->'context'->'mappings', ${eventOutbox.payload}->'caldavSeriesDeletion'->'context'->'mappings') @> ${JSON.stringify([{ eventID: mapped.event.id, externalEventID }])}::jsonb`,
+      )).for("update");
+      if (family) {
+        const removedByIntent = !!family.payload.caldavSeriesDeletion ||
+          !!family.payload.caldavSplit?.after.moved.some(child => child.id === mapped.event.id) ||
+          !!(family.payload.caldavSeries?.write.followingDelete && mapped.event.id !== family.eventID && !caldavSeriesDesired(family.payload.caldavSeries.write).children.some(child => child.id === mapped.event.id));
+        if (removedByIntent && family.attempts > 0) {
+          // An expected component removal is only a candidate echo. The full
+          // native readback and lease/family ACK still have to establish success.
+          if (!family.remoteSnapshot || family.remoteSnapshot.isEcho) await tx.update(eventOutbox).set({ remoteSnapshot: { isEcho: true, externalEventId: externalEventID, etag: null, icalUid: mapped.icalUid, deleted: true, observedAt: new Date().toISOString() } }).where(eq(eventOutbox.id, family.id));
+          return false;
+        }
+        await tx.update(eventOutbox).set({ status: family.status === "cancelled" ? "cancelled" : "conflict", errorCode: family.status === "cancelled" ? family.errorCode : "provider-conflict", leaseToken: null, leaseUntil: null, updatedAt: new Date(), remoteSnapshot: { externalEventId: externalEventID, etag: null, icalUid: mapped.icalUid, deleted: true, observedAt: new Date().toISOString() } }).where(eq(eventOutbox.id, family.id));
+        return false;
+      }
     }
     if (await retainPendingEventPull(tx, mapped.event.id, calendarID, provider, externalEventID, null, null, mapped.icalUid)) return false;
 
