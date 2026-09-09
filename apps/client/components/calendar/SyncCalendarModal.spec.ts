@@ -143,8 +143,26 @@ it.each([false, true])("native Google callback requests availability scope only 
   const render = () => { state.index = 0; return SyncCalendarModal({ visible: true, onClose: vi.fn(), onConnected: vi.fn() }); };
   render();
   // Capability state, otherwise exercise the actual disclosure and OAuth callbacks.
-  state.values[1] = { origin: "https://home.example.test", enabled };
+  state.values[2] = { origin: "https://home.example.test", enabled };
   control(render(), "Google Calendar")!.onPress!();
   await control(render(), "Continue to Google")!.onPress!();
   expect(linkSocial.mock.lastCall![0].scopes.includes("https://www.googleapis.com/auth/calendar.events.freebusy")).toBe(enabled);
+});
+
+it("opens capability-gated availability from the real native connection entry", async () => {
+  const { default: AvailabilityModal } = await import("./AvailabilityModal");
+  const find = (node: ReactNode): any => {
+    if (Array.isArray(node)) return node.map(find).find(Boolean);
+    if (!isValidElement<{ children?: ReactNode }>(node)) return;
+    if (node.type === AvailabilityModal) return node.props;
+    return find(node.props.children);
+  };
+  const render = () => { state.index = 0; return SyncCalendarModal({ visible: true, onClose: vi.fn(), onConnected: vi.fn() }); };
+  expect(control(render(), "Check availability")).toBeUndefined();
+  state.values[2] = { origin: "https://other.example.test", enabled: true };
+  expect(control(render(), "Check availability")).toBeUndefined();
+  state.values[2] = { origin: "https://home.example.test", enabled: true };
+  control(render(), "Check availability")!.onPress!();
+  expect(find(render()).visible).toBe(true);
+  find(render()).onClose(); expect(find(render()).visible).toBe(false);
 });

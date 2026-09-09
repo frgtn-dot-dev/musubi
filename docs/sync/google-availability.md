@@ -57,10 +57,35 @@ interval/DST normalization, per-calendar errors, scope checks, private owner and
 account isolation, downgrade mirror retirement, disabled defaults, and delayed
 responses across source removal, selection changes and disconnect/reconnect.
 
-Day/week grid rendering and native interval browsing are deferred implementation
-follow-ups, not blocked solely by the interval DTO. A static layout may reuse
+Day/week grid rendering is a deferred implementation follow-up, not blocked
+solely by the interval DTO. A static layout may reuse
 existing visual patterns; any genuinely new visual pattern needs a Storybook
-proposal and normal Musubi UI approval. This dialog is the initial functional
-client, not completion of all K14 availability/cache work.
+proposal and normal Musubi UI approval. These dialogs are functional clients, not completion of all K14 availability/cache work.
 
 Primary protocol: https://developers.google.com/workspace/calendar/api/v3/reference/freebusy/query
+
+
+## Native connection caller
+
+The native connection screen exposes Check availability only for the current
+server capability. It reuses ModalPortal, Btn, SettingRowToggle, theme fields and
+ScrollView. A body keyed by home-server origin and authenticated user remounts on
+identity changes. The session holds only ephemeral source/interval state: nothing
+enters the event stores, SQLite, notification scheduling or offline snapshots.
+Explicit selection uses the same source generation CAS and 20-source limit as web.
+
+Home-authenticated requests validate the shared DTOs, retain cancellation through
+the existing request timeout, and never accept a provider/picker URL. Close and
+background transitions abort pending requests and clear results. Foreground,
+external-sync invalidation and source polling require fresh evidence; stale source
+polls cannot overwrite a selection. Sync refreshes arriving during a selection
+are coalesced until its PUT settles, then read current sources; close and identity
+changes still abort and retire the entire session. Interval replies with changed source identities
+or generations are discarded. Errors, reconnect-required and confirmed empty reads
+remain distinct. Reconnection uses the existing Google disclosure/OAuth flow.
+
+Pure controller and actual native modal/connection callback tests cover this
+contract with mocked authenticated transport. They are not screenshots, emulator
+rendering or physical-device QA; VoiceOver/TalkBack, touch/layout and real OAuth
+acceptance remain unverified. No live provider requests or production activation
+were performed for the native caller.

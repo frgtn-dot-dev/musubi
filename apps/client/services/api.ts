@@ -1,6 +1,7 @@
 import { ProviderRsvpReceiptSchema, type ProviderRsvpEdit } from "@musubi/types";
 import { ProviderEventStateResponseSchema, ProviderReminderReceiptSchema, type AnyProviderReminderEdit } from "@musubi/types";
 import {
+  AvailabilitySourcesSchema, AvailabilityResponseSchema, AvailabilityRequestSchema, type AvailabilityRequest,
   AnnouncementsResponseSchema,
   CLIENT_VERSION_HEADER,
   PRODUCT_VERSION,
@@ -114,7 +115,11 @@ export function useApi() {
   const authClient = {
     async $fetch<T>(url: string, options: any = {}) {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 18_000);
+      const abort = () => controller.abort();
+      const callerSignal = options.signal as AbortSignal | undefined;
+      if (callerSignal?.aborted) controller.abort();
+      else callerSignal?.addEventListener("abort", abort, { once: true });
+      const timer = setTimeout(abort, 18_000);
       try {
         return await baseAuthClient.$fetch<T>(url, {
           ...options,
@@ -122,6 +127,7 @@ export function useApi() {
         });
       } finally {
         clearTimeout(timer);
+        callerSignal?.removeEventListener("abort", abort);
       }
     },
   };
@@ -168,7 +174,15 @@ export function useApi() {
     return data;
   }
 
+  async function availabilityRequest(path: string, method: "GET" | "PUT" | "POST", body?: unknown, signal?: AbortSignal) {
+    const { error, data } = await authClient.$fetch<unknown>(`${apiUrl}/api/v1/availability${path}`, { method, signal, headers: { "Cache-Control": "no-store", "Content-Type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    throwOnError(error);
+    return data;
+  }
   return {
+    async getAvailabilitySources(signal?: AbortSignal) { return AvailabilitySourcesSchema.parse(await availabilityRequest("/sources", "GET", undefined, signal)); },
+    async selectAvailabilitySource(id: string, enabled: boolean, expectedGeneration: number, signal?: AbortSignal) { return AvailabilitySourcesSchema.parse(await availabilityRequest(`/sources/${encodeURIComponent(id)}`, "PUT", { enabled, expectedGeneration }, signal)); },
+    async getAvailability(range: AvailabilityRequest, signal?: AbortSignal) { return AvailabilityResponseSchema.parse(await availabilityRequest("", "POST", AvailabilityRequestSchema.parse(range), signal)); },
     async getEventDelivery(eventId: string, connectionId?: string) {
       return EventDeliverySchema.parse(await deliveryRequest(`/api/v1/events/${eventId}/delivery`, connectionId));
     },

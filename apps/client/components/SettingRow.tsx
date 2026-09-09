@@ -15,6 +15,7 @@ type ToggleProps = {
   toggle: boolean;
   onToggle: () => void;
   danger?: boolean;
+  disabled?: boolean;
 }
 
 type OptionsProps = {
@@ -55,18 +56,21 @@ const rowStyle = {
   minHeight: componentDimensions.rowMinHeight,
 } as const;
 
-export function SettingRowToggle({ label, toggle, onToggle }: ToggleProps) {
+export function SettingRowToggle({ label, toggle, onToggle, disabled }: ToggleProps) {
   return (
     <Tap
       onPress={onToggle}
+      disabled={disabled}
       scaleTo={1}
       style={[rowStyle, { borderColor: colors.line }]}
       accessibilityRole="switch"
       accessibilityLabel={label}
-      accessibilityState={{ checked: toggle }}
+      accessibilityState={{ checked: toggle, disabled: !!disabled }}
     >
       <Text
         style={{
+          flex: 1,
+          marginRight: spacing[2],
           fontFamily: fonts.sans,
           fontSize: typeSizes[15],
           color: colors.fg2,
@@ -75,6 +79,7 @@ export function SettingRowToggle({ label, toggle, onToggle }: ToggleProps) {
         {label}
       </Text>
       <Switch
+        disabled={disabled}
         thumbColor={toggle ? colors.accent : colors.bg3}
         trackColor={{
           false: colors.line,
