@@ -37,6 +37,37 @@ responses, redirect/network failures, missing/changed masters, expanded
 exceptions, cancellation, independent native zoned/all-day evidence and frozen
 inputs. No Graph adapter writer or existing import path is changed.
 
+## Private native create transport
+
+`createGraphSeries` is a private candidate, not composed into the production
+Microsoft adapter. The existing default-off time-edit flag blocks all I/O when
+disabled. Its caller must prove the own-account OAuth write grant and provide a
+pre-write callback which validates the durable attempt/lease; this module does
+not create a database journal or perform its ACK.
+
+It freezes the saved event and operation, checks fresh positive `canEdit` on the
+exact calendar even for recovery, and performs the complete transaction lookup.
+A verified existing master returns without POST. An uncertain missing transaction
+remains unconfirmed. Failed permission or initial recovery reads also preserve
+the prior uncertainty, including provider conflict/status and Retry-After evidence.
+Only a new attempt with no matching transaction may invoke
+the pre-write callback and issue one personal POST with the persisted transaction
+identity and no attendees. No automatic repeat POST occurs inside this transport.
+
+After a potentially applied POST, complete identity and native master evidence
+are read again. Lost/partial/503 responses can recover only through that evidence;
+failed verification retains an unconfirmed outcome. An explicit not-written
+mutation response stays a refusal. A successful returned ID which differs from
+the recovered master is a conflict. Changed content, exceptions, lost read access
+or missing evidence cannot be mistaken for proof that no creation happened.
+
+Fake HTTP verifies exact independent zoned/all-day request bodies, the disabled
+gate, positive/unknown/revoked grants, callback failure, matching recovery, absent
+uncertain recovery, lost/partial/503 responses, redirects, changed native content
+and exceptions, returned-ID mismatch and read failure after POST. The callback
+is mocked; durable family delivery/ACK and real Outlook acceptance are still
+required. This step does not establish Graph event If-Match enforcement.
+
 ## Remaining before activation
 
 The durable create operation, permission checks, uncertain POST recovery and
