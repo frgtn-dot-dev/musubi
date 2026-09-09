@@ -69,7 +69,7 @@ async function run(provider: "google" | "microsoft") {
     const preserved = (await db.select().from(eventOutbox).where(eq(eventOutbox.id, receiptID)))[0];
     assert.deepEqual(preserved, original, "read projection never rewrites accepted intent or receipt metadata");
     await db.update(eventOutbox).set({ provider: "caldav" }).where(eq(eventOutbox.id, receiptID));
-    await expectTitle(event.title, "other providers preserve existing behavior");
+    await expectTitle("Calendar event", "CalDAV receipts also require their own connected source and fresh readable event");
     await db.update(eventOutbox).set({ provider }).where(eq(eventOutbox.id, receiptID));
     await db.delete(externalCalendars).where(eq(externalCalendars.id, sourceID));
     await expectTitle("Calendar event", "missing source remains visible without its title");
