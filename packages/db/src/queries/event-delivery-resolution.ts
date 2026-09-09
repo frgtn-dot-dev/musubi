@@ -144,6 +144,7 @@ async function resolutionContext(
     throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   const [mapping] = mappings;
   if (!row.payload.reminderInstance && (latest.payload.reminderInstance || pending.some(item => item.payload.reminderInstance))) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+  if (row.payload.organizer || latest.payload.organizer || pending.some(item => item.payload.organizer)) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   if (row.payload.graphSeriesCreate || latest.payload.graphSeriesCreate || pending.some(item => item.payload.graphSeriesCreate)) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   if (!row.payload.rsvp && (latest.payload.rsvp || pending.some(item => item.payload.rsvp))) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   let providerInstance: ProviderRsvpInstance | undefined;

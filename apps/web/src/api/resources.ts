@@ -1,4 +1,4 @@
-import { ProviderRsvpReceiptSchema, type ProviderRsvpEdit } from "@musubi/types";
+import { ProviderRsvpReceiptSchema, type ProviderRsvpEdit, type ProviderOrganizerRequest } from "@musubi/types";
 import { ProviderEventStateResponseSchema, ProviderReminderReceiptSchema, type AnyProviderReminderEdit } from "@musubi/types";
 import {
   EventScopeResponseSchema,
@@ -700,4 +700,12 @@ export function editProviderRsvp(eventId: string, request: ProviderRsvpEdit, con
 
 export function discardEventAlarm(eventId: string, operationId: string, expectedRevision: number, connectionId?: string) {
   return apiRequest(route(connectionId, `/api/v1/events/${eventId}/delivery/${operationId}/discard-alarm`), { method: "POST", body: { expectedRevision }, responseSchema: EventDeliverySchema });
+}
+
+export function getOrganizerCalendar(calendarId: string, signal?: AbortSignal, connectionId?: string) {
+  return apiRequest(route(connectionId, `/api/v1/calendars/${calendarId}/provider-organizer`), { signal, responseSchema: z.object({ provider: z.literal("google"), calendarID: z.uuid(), sendUpdates: z.literal("all") }).strict() });
+}
+export async function editProviderOrganizer(request: ProviderOrganizerRequest, connectionId?: string) {
+  const { ProviderOrganizerReceiptSchema } = await import("@musubi/types");
+  return apiRequest(route(connectionId, "/api/v1/provider-organizer"), { method: "POST", body: request, responseSchema: ProviderOrganizerReceiptSchema });
 }

@@ -156,3 +156,10 @@ describe("apiRequest", () => {
     ).rejects.toBeInstanceOf(ApiError);
   });
 });
+
+it("retains only an explicit organizer pre-admission rejection signal", async () => {
+  for (const extra of [{ organizerAdmissionRejected: true }, {}]) {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "Check guests", ...extra }), { status: 400, headers: { "Content-Type": "application/json" } })));
+    await expect(apiRequest("/api/v1/provider-organizer", { method: "POST", body: {}, responseSchema: z.object({}) })).rejects.toMatchObject({ organizerAdmissionRejected: extra.organizerAdmissionRejected });
+  }
+});

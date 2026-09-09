@@ -1,3 +1,4 @@
+import { withProviderOrganizerLease, markProviderOrganizer, completeProviderOrganizer } from "@musubi/db";
 import { confirmCaldavAlarm } from "@musubi/db";
 import { googleReminderInstanceEvidence, googleReminderInstanceProjection } from "./adapters/google_reminder_instance";
 import { hasProviderReminderInstanceSource, completeProviderReminderInstanceOutbox, matchesProviderReminderInstanceState } from "@musubi/db";
@@ -154,6 +155,16 @@ export async function deliverEventOutbox(
         }
         return true;
       };
+      if (row.payload.organizer) {
+        if (!config.api.providerOrganizerEditsEnabled || !adapter?.organizer) throw new EventWriteError("organizer", "unsupported");
+        await withProviderOrganizerLease(row, async () => undefined);
+        const transport = await adapter.organizer(row.userID, row.accountID, row.externalCalendarID, signal);
+        const outcome = await transport.deliver(row.payload.organizer, async () => { await markProviderOrganizer(row); mutationStarted = true; }, async () => { await markProviderOrganizer(row, true); });
+        if (outcome.kind === "observed") await completeProviderOrganizer(row, { id: outcome.native.id, etag: outcome.native.etag, iCalUID: outcome.native.iCalUID, state: googleEventState(outcome.native) });
+        else if (outcome.kind === "deleted") await completeProviderOrganizer(row, null);
+        else await finishEventOutbox(row.id, token, "unconfirmed", outcome.kind === "absent" ? "organizer-copy-absent" : "organizer-outcome-unknown", { uncertain: !!row.payload.organizer.dispatch || mutationStarted, nextAttemptAt: new Date(Date.now() + Math.min(3_600_000, 30_000 * 2 ** Math.min(row.attempts, 7))) });
+        return;
+      }
       if (row.payload.reminderInstance) {
         if (!config.api.providerReminderEditsEnabled || row.provider !== "google" || row.action !== "update" || !adapter?.reminderInstance) throw new EventWriteError("event-write", "unsupported");
         const requireSource = async () => {

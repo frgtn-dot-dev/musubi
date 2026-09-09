@@ -374,7 +374,7 @@ export function DeliveryBody({
                         ) : null}
                         {actions.retry ? (
                           <Btn
-                            label={target.graphRsvpPhase && target.graphRsvpPhase !== "queued" ? "Check response" : "Retry"}
+                            label={target.graphRsvpPhase && target.graphRsvpPhase !== "queued" ? "Check response" : target.organizerPhase && target.organizerPhase !== "queued" ? "Check result" : "Retry"}
                             variant="secondary"
                             disabled={busy || loading}
                             onPress={() =>

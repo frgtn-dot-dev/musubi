@@ -59,3 +59,4 @@ export * from "./queries/caldav-alarms";
 export * from "./queries/availability";
 
 export * from "./queries/microsoft-access";
+export * from "./queries/provider-organizer";

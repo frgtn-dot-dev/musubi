@@ -183,7 +183,7 @@ async function completeEventOutboxInternal(
         .select()
         .from(eventOutbox)
         .where(eq(eventOutbox.id, id));
-      if (!address || address.payload.caldavAlarm || address.payload.graphSeriesCreate || address.payload.caldavSplit || address.payload.caldavSeries || address.payload.caldavSeriesDeletion || !!address.payload.rsvp !== (confirmation === "rsvp") || !!address.payload.reminderInstance !== (confirmation === "reminder-instance")) return undefined;
+      if (!address || address.payload.organizer || address.payload.caldavAlarm || address.payload.graphSeriesCreate || address.payload.caldavSplit || address.payload.caldavSeries || address.payload.caldavSeriesDeletion || !!address.payload.rsvp !== (confirmation === "rsvp") || !!address.payload.reminderInstance !== (confirmation === "reminder-instance")) return undefined;
       await lockCalendarLifecycle(tx, [address.calendarID], "shared");
       const resource =
         resultRef ?? (address.action === "delete" ? expectedRef : null);

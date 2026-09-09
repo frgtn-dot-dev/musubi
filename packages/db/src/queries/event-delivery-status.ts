@@ -126,6 +126,9 @@ export async function getEventDeliveryStatus(
         graphRsvp: sql<boolean>`${eventOutbox.payload}->'rsvp'->'request'->>'provider' = 'microsoft'`,
         graphDispatched: sql<boolean>`${eventOutbox.payload}->'rsvp'->'graphDispatch' is not null`,
         graphAccepted: sql<boolean>`${eventOutbox.payload}->'rsvp'->'graphDispatch'->>'acceptedAt' is not null`,
+        organizer: sql<boolean>`${eventOutbox.payload}->'organizer' is not null`,
+        organizerDispatched: sql<boolean>`${eventOutbox.payload}->'organizer'->'dispatch' is not null`,
+        organizerAccepted: sql<boolean>`${eventOutbox.payload}->'organizer'->'dispatch'->'acceptedAt' is not null`,
         alarm: sql<boolean>`${eventOutbox.payload}->'caldavAlarm' is not null`,
       };
       const receipts = (unresolved: boolean) =>
@@ -181,10 +184,11 @@ export async function getEventDeliveryStatus(
       );
       for (const last of latest) {
         const first = blockers.get(last.targetId) ?? last;
-        const { nextAttemptAt, errorCode, alarm, graphRsvp, graphDispatched, graphAccepted, ...display } = first;
+        const { nextAttemptAt, errorCode, alarm, graphRsvp, graphDispatched, graphAccepted, organizer, organizerDispatched, organizerAccepted, ...display } = first;
         targets.set(first.targetId, {
           ...display,
           ...(graphRsvp ? { graphRsvpPhase: (["completed", "not-needed"].includes(first.status) ? "observed" : errorCode === "graph-rsvp-copy-absent" ? "absent" : graphAccepted ? "accepted" : graphDispatched ? "dispatched" : "queued") as NonNullable<EventDeliveryTarget["graphRsvpPhase"]> } : {}),
+          ...(organizer ? { organizerPhase: first.status === "not-needed" ? "unchanged" as const : first.status === "completed" ? "observed" as const : errorCode === "organizer-copy-absent" ? "absent" as const : organizerAccepted ? "accepted" as const : organizerDispatched ? "dispatched" as const : "queued" as const } : {}),
           ...(first.status === "not-needed" && errorCode === "adopted-provider-version" ? { graphCreateAdopted: true as const } : {}),
           ...(alarm && first.status === "not-needed" && errorCode === "alarm-discarded" ? { alarmDiscarded: true as const } : {}),
           ...(alarm && first.owned && first.connected && visibleEvent && ["conflict", "blocked", "unconfirmed"].includes(first.status) ? { alarmDiscardRevision: visibleEvent.revision } : {}),

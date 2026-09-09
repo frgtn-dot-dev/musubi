@@ -1,3 +1,4 @@
+import { ProviderOrganizerCreateAction } from "./ProviderOrganizerEditor";
 import {
 	can,
 	DEFAULT_CALENDAR_COLOR,
@@ -697,7 +698,7 @@ function CalendarGroup({
 						<li key={calendar.id}>
 							<Row
 								className={styles.calendarRow}
-								detail={calendarDetail(calendar, external)}
+								detail={<>{calendarDetail(calendar, external)}{calendar.provider === "google" && calendar.role === "owner" && !federatedId ? <ProviderOrganizerCreateAction calendarID={calendar.id} color={calendar.color} /> : null}</>}
 								icon={
 									<span
 										className={styles.calendarSwatch}

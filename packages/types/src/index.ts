@@ -28,3 +28,5 @@ export * from "./provider-reminders";
 
 export * from "./provider-rsvp";
 export * from "./availability";
+
+export * from "./provider-organizer";

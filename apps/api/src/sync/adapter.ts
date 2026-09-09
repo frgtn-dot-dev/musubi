@@ -125,6 +125,7 @@ export type FetchChangesResult = {
 // Everything provider-specific lives behind this. The generic core (sync engine)
 // never talks to Google/Graph/CalDAV directly — only through an adapter.
 export type CalendarAdapter = {
+  organizer?: ReturnType<typeof import("./adapters/google_organizer_delivery").googleOrganizerTransport>;
   provider: string;
   readCaldavAlarm?(context: CaldavAlarmContext, signal?: AbortSignal): Promise<CaldavAlarmEvidence>;
   writeCaldavAlarm?(intent: CaldavAlarmIntent, signal?: AbortSignal, beforeMutation?: () => Promise<void>): Promise<CaldavAlarmEvidence>;

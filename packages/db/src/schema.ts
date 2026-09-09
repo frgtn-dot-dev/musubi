@@ -890,6 +890,7 @@ export const eventOutbox = pgTable(
         scopeEditValidated?: boolean;
         reminderEdit?: ProviderReminderEdit;
         rsvp?: ProviderRsvpIntent;
+        organizer?: import("@musubi/types").ProviderOrganizerIntent;
         reminderInstance?: ProviderReminderInstanceIntent;
         googleOccurrence?: GoogleOccurrenceIntent;
         caldavSeries?: CaldavSeriesPrepared;

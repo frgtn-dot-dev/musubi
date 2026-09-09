@@ -25,6 +25,7 @@ function matchesPersonalSettingTime(row: EventOutboxRow, values: PullValues) {
   return matchesRsvpEventProjection(row.provider, { ...row.payload.event, timeModel: nativeTime.data }, values, (row.payload.rsvp ?? row.payload.reminderInstance)?.instance);
 }
 function matchesProjection(row: EventOutboxRow, values: PullValues, providerState?: ProviderEventState) {
+  if (row.payload.organizer) return false; // Only full native organizer readback may ACK.
   if (row.payload.caldavAlarm) return false; // Component summaries cannot acknowledge a full alarm resource.
   if (row.payload.reminderInstance) return row.action === "update" && matchesPersonalSettingTime(row, values) && matchesProviderReminderInstanceState(row.payload.reminderInstance, providerState);
   if (row.payload.rsvp) return row.action === "update" && matchesPersonalSettingTime(row, values) && isDeepStrictEqual(providerState, row.payload.rsvp.desiredState);
@@ -67,6 +68,13 @@ export async function retainPendingEventPull(
     )
     .for("update");
   if (!rows.length || (onlyReplaceObservation && !rows.some(row => row.remoteSnapshot))) return false;
+  // Retain organizer observations without revoking the active native reader's
+  // lease. Full resource comparison, source CAS and permanent dispatch marker
+  // remain mandatory; projected content never acknowledges guest notifications.
+  if (rows.every(row => row.payload.organizer)) {
+    await tx.update(eventOutbox).set({ remoteSnapshot: { externalEventId: externalEventID, etag, icalUid, deleted: !values, observedAt: new Date().toISOString(), ...(providerState ? { providerState } : {}), ...(values ? { values: JSON.parse(JSON.stringify(values)) } : {}) } }).where(and(eq(eventOutbox.eventID, eventID), eq(eventOutbox.calendarID, calendarID), sql`${eventOutbox.status} not in ('completed', 'not-needed', 'cancelled')`));
+    return true;
+  }
   // A scope's local exception already contains the desired time/cancellation.
   // Its accepted pre-write provider baseline is still not a concurrent edit.
   if (values && rows.every(row => row.payload.googleOccurrence && row.expectedEtag === etag && values.seriesID === row.payload.googleOccurrence.master.id && matchesGoogleOccurrenceProjection(row.payload.googleOccurrence.baseline, values)) && rows.every(row => !row.remoteSnapshot)) return true;

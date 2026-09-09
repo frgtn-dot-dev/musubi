@@ -1,3 +1,4 @@
+import { ProviderOrganizerEditor } from "./ProviderOrganizerEditor";
 import { ProviderRsvpEditor } from "./ProviderRsvpEditor";
 import type { Event, ProviderEventStateResponse } from "@musubi/types";
 import { assertCaldavSeriesAlarmObservation, providerEventDetails } from "@musubi/calendar";
@@ -10,15 +11,15 @@ import { ProviderReminderEditor } from "./ProviderReminderEditor";
 import { SectionLabel } from "~/ui/SectionLabel";
 import styles from "./styles/event-details.module.css";
 
-type Props = { seriesMaster?: Event; eventId: string; revision?: number; userId: string; connectionId?: string; series?: boolean; occurrence?: boolean; onEditReminders?: (observation: ProviderEventStateResponse) => void; onRespond?: (observation: ProviderEventStateResponse) => void };
+type Props = { event?: Event; seriesMaster?: Event; eventId: string; revision?: number; userId: string; connectionId?: string; series?: boolean; occurrence?: boolean; onEditReminders?: (observation: ProviderEventStateResponse) => void; onRespond?: (observation: ProviderEventStateResponse) => void };
 export function ProviderEventDetails(props: Props) {
   return <ProviderEventDetailsBody key={JSON.stringify([getServerOrigin(), props.eventId, props.userId, props.connectionId, props.series, props.occurrence, props.revision, props.seriesMaster?.id, props.seriesMaster?.revision])} {...props} />;
 }
-function ProviderEventDetailsBody({ seriesMaster, eventId, userId, connectionId, series = false, occurrence = false, onEditReminders, onRespond }: Props) {
+function ProviderEventDetailsBody({ event: sourceEvent, seriesMaster, eventId, userId, connectionId, series = false, occurrence = false, onEditReminders, onRespond }: Props) {
   const titleId = useId();
   const key = JSON.stringify([eventId, userId, connectionId]);
   const [result, setResult] = useState<({ key: string; failed?: boolean } & Partial<ProviderEventStateResponse>)>();
-  const [editor, setEditor] = useState<{ kind: "reminders" | "rsvp"; trigger: HTMLElement; observation: ProviderEventStateResponse }>();
+  const [editor, setEditor] = useState<{ kind: "reminders" | "rsvp" | "organizer"; trigger: HTMLElement; observation: ProviderEventStateResponse }>();
   const readSequence = useRef(0);
   const [opening, setOpening] = useState(false);
   const [openError, setOpenError] = useState("");
@@ -26,7 +27,7 @@ function ProviderEventDetailsBody({ seriesMaster, eventId, userId, connectionId,
   const refreshing = useRef(false);
   const editorRead = useRef<AbortController | null>(null);
   useEffect(() => { active.current = true; return () => { active.current = false; editorRead.current?.abort(); }; }, []);
-  async function openEditor(trigger: HTMLElement, kind: "reminders" | "rsvp" = "reminders", seriesAction = false) {
+  async function openEditor(trigger: HTMLElement, kind: "reminders" | "rsvp" | "organizer" = "reminders", seriesAction = false) {
     if (refreshing.current) return;
     refreshing.current = true; setOpening(true); setOpenError("");
     ++readSequence.current;
@@ -39,8 +40,8 @@ function ProviderEventDetailsBody({ seriesMaster, eventId, userId, connectionId,
         assertCaldavSeriesAlarmObservation(seriesMaster, observation);
       } else if (kind === "reminders" && observation.reminderEdit?.provider === "caldav" && observation.reminderEdit.scope === "series") throw new Error("Choose Series alarm settings explicitly.");
       setResult({ key, ...observation });
-      if ((kind === "reminders" ? observation.reminderEdit : observation.rsvpEdit) && observation.state && observation.version) {
-        const handoff = kind === "reminders" ? onEditReminders : onRespond;
+      if ((kind === "organizer" ? observation.organizerEdit : kind === "reminders" ? observation.reminderEdit : observation.rsvpEdit) && observation.state && observation.version) {
+        const handoff = kind === "organizer" ? undefined : kind === "reminders" ? onEditReminders : onRespond;
         if (handoff) handoff(observation); else setEditor({ kind, trigger, observation });
       } else setOpenError("This provider action is unavailable in the refreshed state.");
     } catch { if (active.current) setOpenError("Could not refresh provider details. Retry to load the current state."); }
@@ -70,6 +71,8 @@ function ProviderEventDetailsBody({ seriesMaster, eventId, userId, connectionId,
     </> : null}
     {seriesMaster && current?.reminderEdit?.provider === "caldav" && current.reminderEdit.scope === "series" && current.state && current.version ? <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget, "reminders", true)}>Series alarm settings</Button> : null}
     {current?.rsvpEdit && current.state && current.version && !series ? <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget, "rsvp")}>{occurrence ? "Respond to this occurrence" : current.rsvpEdit.provider === "microsoft" ? "Respond in Outlook" : current.rsvpEdit.provider === "caldav" ? "Respond in calendar" : "Respond in Google"}</Button> : null}
+    {current?.organizerEdit && sourceEvent && !connectionId && !series && !occurrence ? <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget, "organizer")}>Manage Google meeting</Button> : null}
+    {editor?.kind === "organizer" && sourceEvent && editor.observation.organizerEdit ? <ProviderOrganizerEditor event={sourceEvent} color={sourceEvent.color} calendarID={editor.observation.organizerEdit.calendarID} observation={editor.observation} returnFocus={editor.trigger} onClose={() => setEditor(undefined)} /> : null}
     {editor?.kind === "reminders" ? <ProviderReminderEditor occurrence={occurrence} eventId={eventId} connectionId={connectionId} observation={editor.observation} returnFocus={editor.trigger} onClose={() => setEditor(undefined)} /> : null}
     {editor?.kind === "rsvp" ? <ProviderRsvpEditor occurrence={occurrence} eventId={eventId} connectionId={connectionId} observation={editor.observation} returnFocus={editor.trigger} onClose={() => setEditor(undefined)} /> : null}
   </section>;
