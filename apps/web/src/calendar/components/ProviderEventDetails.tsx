@@ -10,9 +10,9 @@ import { ProviderReminderEditor } from "./ProviderReminderEditor";
 import { SectionLabel } from "~/ui/SectionLabel";
 import styles from "./styles/event-details.module.css";
 
-type Props = { eventId: string; userId: string; connectionId?: string; series?: boolean; occurrence?: boolean; onEditReminders?: (observation: ProviderEventStateResponse) => void; onRespond?: (observation: ProviderEventStateResponse) => void };
+type Props = { eventId: string; revision?: number; userId: string; connectionId?: string; series?: boolean; occurrence?: boolean; onEditReminders?: (observation: ProviderEventStateResponse) => void; onRespond?: (observation: ProviderEventStateResponse) => void };
 export function ProviderEventDetails(props: Props) {
-  return <ProviderEventDetailsBody key={JSON.stringify([getServerOrigin(), props.eventId, props.userId, props.connectionId, props.series, props.occurrence])} {...props} />;
+  return <ProviderEventDetailsBody key={JSON.stringify([getServerOrigin(), props.eventId, props.userId, props.connectionId, props.series, props.occurrence, props.revision])} {...props} />;
 }
 function ProviderEventDetailsBody({ eventId, userId, connectionId, series = false, occurrence = false, onEditReminders, onRespond }: Props) {
   const titleId = useId();

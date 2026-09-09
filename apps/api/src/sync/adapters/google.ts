@@ -759,7 +759,8 @@ export const googleAdapter: CalendarAdapter = {
     return { ref: { externalEventId: data.id, etag: requireEventEtag(strongEventEtag(data.etag)) }, state: googleEventState(data), event: googleReminderEventEvidence(data) };
   },
 
-  async writeReminders(userID, accountId, externalCalendarId, ref, input, signal) {
+  async writeReminders(userID, accountId, externalCalendarId, ref, input, signal, beforeWrite) {
+    if (!beforeWrite) throw new EventWriteError("event-write", "unsupported");
     if (!config.api.providerReminderEditsEnabled) throw new EventWriteError("event-write", "unsupported");
     const reminders = GoogleReminderWriteSchema.parse(input);
     await assertOAuthEventWriteGrant(userID, "google", accountId);
@@ -771,6 +772,8 @@ export const googleAdapter: CalendarAdapter = {
     const baseline = await googleAdapter.readReminderState!(userID, accountId, externalCalendarId, ref, signal);
     if (!baseline) throw new ProviderEventWriteError("provider-conflict");
     assertAcceptedEventEtag(ref.etag, baseline.ref.etag);
+    await beforeWrite();
+    signal?.throwIfAborted();
     // Only this authenticated copy's reminders change, never participants/time.
     const response = await fetch(`${GCAL}/calendars/${encodeURIComponent(externalCalendarId)}/events/${encodeURIComponent(ref.externalEventId)}?sendUpdates=none`, { method: "PATCH", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json", "If-Match": requireEventEtag(ref.etag) }, body: JSON.stringify({ reminders }), redirect: "error", signal });
     assertProviderEventMutationResponse(response);

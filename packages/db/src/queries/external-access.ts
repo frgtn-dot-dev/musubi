@@ -1,6 +1,7 @@
+import { redactGoogleCalendarMirror } from "./external-access-redaction";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "..";
-import { calendarMembers, externalCalendars } from "../schema";
+import { calendarEvents, calendarMembers, events, externalCalendars } from "../schema";
 import type { DbTransaction } from "./calendars";
 import { lockCalendarLifecycle } from "./calendar-lifecycle";
 
@@ -26,7 +27,7 @@ export async function reconcileGoogleCalendarAccess(userID: string, accountID: s
     if (member.role !== role) await tx.update(calendarMembers).set({ role }).where(eq(calendarMembers.id, member.id));
     if (source.providerAccessRole === accessRole && member.role === role) return false;
     await tx.update(externalCalendars).set({ providerAccessRole: accessRole, providerAccessRevision: sql`${externalCalendars.providerAccessRevision} + 1`, cursor: null }).where(eq(externalCalendars.id, source.id));
-    return true;
+    return role === "viewer" ? redactGoogleCalendarMirror(tx, calendarID, userID, source.id) : [calendarID];
   });
 }
 
@@ -34,6 +35,15 @@ export async function reconcileGoogleCalendarAccess(userID: string, accountID: s
 export async function assertExternalCalendarAccess(tx: DbTransaction, provider: string, calendarID: string, context?: ExternalCalendarAccessContext) {
   if (!context) return;
   if (provider !== "google" || !Number.isSafeInteger(context.revision) || context.revision < 1) throw new Error("Invalid calendar access context.");
-  const [source] = await tx.select({ id: externalCalendars.id }).from(externalCalendars).where(and(eq(externalCalendars.id, context.linkID), eq(externalCalendars.provider, provider), eq(externalCalendars.calendarID, calendarID), eq(externalCalendars.userID, context.userID), eq(externalCalendars.accountID, context.accountID), eq(externalCalendars.externalCalendarID, context.externalCalendarID), eq(externalCalendars.disabled, false), eq(externalCalendars.supportsEvents, true), eq(externalCalendars.providerAccessRevision, context.revision)));
+  const [source] = await tx.select({ id: externalCalendars.id, role: externalCalendars.providerAccessRole }).from(externalCalendars).where(and(eq(externalCalendars.id, context.linkID), eq(externalCalendars.provider, provider), eq(externalCalendars.calendarID, calendarID), eq(externalCalendars.userID, context.userID), eq(externalCalendars.accountID, context.accountID), eq(externalCalendars.externalCalendarID, context.externalCalendarID), eq(externalCalendars.disabled, false), eq(externalCalendars.supportsEvents, true), eq(externalCalendars.providerAccessRevision, context.revision)));
   if (!source) throw new Error("Calendar access changed during sync. Retry with fresh discovery.");
+  return source;
+}
+
+/** All local readers of rows whose authoritative content comes from this mirror. */
+export async function getGoogleMirrorReadCalendars(calendarID: string) {
+  const links = await db.selectDistinct({ calendarID: calendarEvents.calendarID }).from(events)
+    .innerJoin(calendarEvents, eq(calendarEvents.eventID, events.id))
+    .where(eq(events.originCalendarID, calendarID));
+  return [...new Set([calendarID, ...links.map(link => link.calendarID)])];
 }

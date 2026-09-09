@@ -52,3 +52,5 @@ export * from "./queries/event-create-receipt";
 export * from "./queries/provider-reminder-instance";
 
 export * from "./queries/external-access";
+
+export * from "./queries/google-mirror-removal";

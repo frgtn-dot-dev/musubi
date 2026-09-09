@@ -14,6 +14,7 @@ import {
   confirmCaldavSeriesDeletionOutbox,
   matchesRsvpEventProjection,
   hasProviderRsvpSource,
+  hasProviderReminderSource,
   completeProviderRsvpOutbox,
   matchesReminderEventProjection,
   matchesGoogleReminderIntent,
@@ -312,7 +313,11 @@ export async function deliverEventOutbox(
         if (row.action !== "update" || row.provider !== intent.provider || !adapter?.readReminderState || !adapter.writeReminders)
           throw new EventWriteError("event-write", "unsupported");
         if (!(await checkDestination())) return;
-        if (!(await hasEventOutboxRevisionCoverage(row))) throw new ProviderEventWriteError("provider-conflict");
+        const requireSource = async () => {
+          signal.throwIfAborted();
+          if (!(await hasProviderReminderSource(row))) throw new ProviderEventWriteError("provider-conflict", mutationStarted ? "unconfirmed" : "not-written");
+        };
+        await requireSource();
         expectedRef = await getEventOutboxExpectedRef(row);
         if (!expectedRef) throw new ProviderEventWriteError("provider-version-unavailable");
         let observed = await adapter.readReminderState(row.userID, row.accountID, row.externalCalendarID, expectedRef, signal);
@@ -323,8 +328,9 @@ export async function deliverEventOutbox(
           if (!(await checkDestination())) return;
           signal.throwIfAborted();
           remoteSnapshot = null; // accepted baseline is not a remote conflict after an ambiguous write
-          mutationStarted = true;
-          observed = await adapter.writeReminders(row.userID, row.accountID, row.externalCalendarID, expectedRef, intent.reminders, signal);
+          observed = await adapter.writeReminders(row.userID, row.accountID, row.externalCalendarID, expectedRef, intent.reminders, signal, async () => {
+            await requireSource(); mutationStarted = true;
+          });
           if (!matchesReminderIntent(intent.reminders, observed.state)) throw new ProviderEventWriteError("provider-write-failed", "unconfirmed");
         }
         if (!matchesReminderEvent(row.provider, event, observed.event)) {

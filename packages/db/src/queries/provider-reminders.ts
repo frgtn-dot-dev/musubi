@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import {
@@ -225,4 +226,21 @@ export async function queueProviderReminderEdit(
     ]);
     return { operationID: id, replayed: false, status: "pending" as const };
   });
+}
+
+/** Exact claimed one-off source, rechecked after all native preflight reads. */
+export async function hasProviderReminderSource(row: import("./event-outbox").EventOutboxRow): Promise<boolean> {
+  const intent = row.payload.reminderEdit;
+  if (!intent || intent.expectedRevision !== row.revision || !row.leaseToken || row.provider !== "google" || row.action !== "update" || row.actorID !== row.userID) return false;
+  const [source] = await db.select({ event: events, mapping: externalEvents, role: calendarMembers.role, durable: eventOutbox })
+    .from(events)
+    .innerJoin(eventOutbox, and(eq(eventOutbox.id, row.id), eq(eventOutbox.leaseToken, row.leaseToken), eq(eventOutbox.status, "attempting"), sql`${eventOutbox.leaseUntil} > clock_timestamp()`))
+    .innerJoin(calendarEvents, and(eq(calendarEvents.eventID, events.id), eq(calendarEvents.calendarID, row.calendarID)))
+    .innerJoin(calendarMembers, and(eq(calendarMembers.calendarID, row.calendarID), eq(calendarMembers.userID, row.actorID)))
+    .innerJoin(externalCalendars, and(eq(externalCalendars.id, row.externalCalendarLinkID), eq(externalCalendars.calendarID, row.calendarID), eq(externalCalendars.userID, row.userID), eq(externalCalendars.accountID, row.accountID), eq(externalCalendars.provider, row.provider), eq(externalCalendars.externalCalendarID, row.externalCalendarID), eq(externalCalendars.disabled, false), eq(externalCalendars.supportsEvents, true)))
+    .innerJoin(externalEvents, and(eq(externalEvents.eventID, events.id), eq(externalEvents.calendarID, row.calendarID), eq(externalEvents.provider, row.provider), eq(externalEvents.externalCalendarID, row.externalCalendarID), eq(externalEvents.externalEventID, row.externalEventID!)))
+    .where(and(eq(events.id, row.eventID), eq(events.originCalendarID, row.calendarID), isNull(events.deletedAt)));
+  return !!source && ["owner", "editor"].includes(source.role) && source.event.revision === row.revision && source.durable.revision === row.revision &&
+    isDeepStrictEqual(source.durable.payload, row.payload) && source.mapping.etag === row.expectedEtag && providerStateVersion(source.mapping) === intent.expectedStateVersion &&
+    !source.event.seriesID && !source.event.originalStart && !source.event.recurrence && !source.event.isCanceled && !source.mapping.externalSeriesID && !source.mapping.originalStart;
 }

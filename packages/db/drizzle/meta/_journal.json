@@ -505,6 +505,20 @@
       "when": 1788959689381,
       "tag": "0071_brown_snowbird",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1788961668893,
+      "tag": "0072_broad_lilandra",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1788962226548,
+      "tag": "0073_dapper_rattler",
+      "breakpoints": true
     }
   ]
 }
