@@ -121,6 +121,20 @@ async function prepare(
   signal: AbortSignal,
 ) {
   const { row } = context;
+  if (context.caldavSplitFutureSnapshot) {
+    if (!config.api.eventTimeEditsEnabled || !adapter.readCaldavSplitFuture) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const before = context.caldavSplitFutureSnapshot, { journal } = before;
+    const observed = await adapter.readCaldavSplitFuture(row.userID, row.accountID, row.externalCalendarID, journal.prepared.split, signal);
+    const preview: EventDeliveryConflict = {
+      eventId: row.eventID, operationId: row.id, latestOperationId: row.id, localRevision: journal.after.head.revision!,
+      local: { ...content(journal.after.head), timeModel: journal.after.head.timeModel ?? undefined },
+      remote: observed ? { ...content(journal.after.head), timeModel: journal.after.head.timeModel ?? undefined } : null,
+      scopeResolution: { kind: "following-create", originalStart: journal.prepared.split.request.originalStart!, newSeriesId: journal.after.head.id },
+      remoteEtag: observed?.ref.etag ?? null, action: "create", canResolve: true, reason: null,
+    };
+    const proof: EventDeliveryResolutionProof = { context, ref: observed?.ref ?? null, remoteExists: !!observed, action: "create", patch: {}, deletion: undefined, caldavSplitFuture: { before } };
+    return { preview, proof };
+  }
   let ref: ExternalEventRef | null = await getEventOutboxExpectedRef(row);
   if (row.action === "create") {
     if (row.payload.createIdentityVersion !== 1 || !adapter.findCreatedEvent)

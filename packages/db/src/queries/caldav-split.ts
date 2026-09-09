@@ -16,6 +16,8 @@ export type CaldavSeriesSplitIntent = {
 export type CaldavSplitPrepared = { context: CaldavSeriesContext; split: CaldavSeriesSplitIntent };
 export type CaldavSplitJournal = {
   prepared: CaldavSplitPrepared;
+  /** Future-only replacement; the completed source and original pair stay immutable. */
+  futureRecovery?: { originalCreationOperationID: string; mutationID: string };
   sourceOperationID: string;
   creationOperationID: string;
   after: { source: Event; retained: Event[]; head: Event; moved: Event[] };

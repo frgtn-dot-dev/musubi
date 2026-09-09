@@ -1244,6 +1244,11 @@ export const caldavAdapter: CalendarAdapter = {
     const { authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, deletion.baseline, signal, "delete");
     return deleteCaldavSeriesResource(externalCalendarId, deletion, authorization, signal, beforeMutation);
   },
+  async readCaldavSplitFuture(userID, accountId, externalCalendarId, split, signal) {
+    const rebuilt = rebuildCaldavSplit(split);
+    const creation = await seriesAuthorization(userID, accountId, externalCalendarId, rebuilt.creation, signal, "create");
+    return readCaldavSplitCreation(creation.resource, rebuilt.creation, creation.authorization, signal);
+  },
   async assertCaldavSplitCreation(userID, accountId, externalCalendarId, split, signal) {
     if (!config.api.eventTimeEditsEnabled) throw new EventWriteError("event-write", "unsupported");
     const rebuilt = rebuildCaldavSplit(split);

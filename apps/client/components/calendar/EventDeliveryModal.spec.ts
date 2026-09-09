@@ -798,3 +798,18 @@ it("refuses a split confirmation without its saved future comparison", async () 
   const tree = await review();
   expect(buttons(tree, "Apply following changes")[0].disabled).toBe(true);
 });
+
+it("confirms future-only recovery without repeating the completed source step", async () => {
+  const scopeResolution = { kind: "following-create", newSeriesId: "00000000-0000-4000-8000-000000000099", originalStart: { kind: "instant", value: "2026-09-07T10:00:00.000Z" } };
+  const bodies: any[] = [];
+  h.request.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url.endsWith("/resolve")) { bodies.push(JSON.parse(String(init?.body))); return reply(receipt); }
+    return reply(url.endsWith("/conflict") ? { ...preview, action: "create", remote: null, remoteEtag: null, scopeResolution } : receipt);
+  });
+  const tree = await review();
+  expect(text(tree)).toContain("The earlier series is already saved");
+  expect(text(tree)).not.toContain("Delivery uses two steps");
+  buttons(tree, "Finish future series")[0].onPress();
+  expect(bodies).toHaveLength(0); acceptNative(); await settle();
+  expect(bodies[0]).toMatchObject({ expectedScopeResolution: scopeResolution, expectedRemoteExists: false, expectedRemoteEtag: null });
+});

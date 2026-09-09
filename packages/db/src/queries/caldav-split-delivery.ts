@@ -1,3 +1,4 @@
+import { confirmCaldavSplitFuture } from "./caldav-split-future";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { EventSchema, EventWriteError, can } from "@musubi/types";
 import { db } from "..";
@@ -14,6 +15,8 @@ class LeaseLost extends Error {}
 /** Phase-specific short transaction; no provider IO. A source ACK releases the
  * old family, while the new family remains owned by its dependent create row. */
 export async function confirmCaldavSplitOutbox(id: string, token: string, result?: Ref): Promise<boolean> {
+  const [candidate] = await db.select({ payload: eventOutbox.payload }).from(eventOutbox).where(eq(eventOutbox.id, id));
+  if (candidate?.payload.caldavSplit?.futureRecovery) return confirmCaldavSplitFuture(id, token, result);
   try {
     return await db.transaction(async tx => {
       const [address] = await tx.select().from(eventOutbox).where(eq(eventOutbox.id, id));
