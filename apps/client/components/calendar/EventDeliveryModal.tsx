@@ -184,20 +184,20 @@ export function DeliveryBody({
     if (!busyRef.current) onClose();
   }
   const confirmLabel =
-    comparison?.preview.scopeResolution ? (comparison.preview.scopeResolution.kind === "following-delete" ? "Delete following occurrences" : "Delete entire series") : comparison?.preview.rsvpResolution ? "Send saved response" : comparison?.preview.reminderResolution ? "Apply saved reminders" : comparison?.preview.action === "delete"
+    comparison?.preview.scopeResolution ? (comparison.preview.scopeResolution.kind === "following-delete" ? "Delete following occurrences" : comparison.preview.scopeResolution.kind === "following-update" ? "Apply following changes" : "Delete entire series") : comparison?.preview.rsvpResolution ? "Send saved response" : comparison?.preview.reminderResolution ? "Apply saved reminders" : comparison?.preview.action === "delete"
       ? "Delete remote copy"
       : comparison?.preview.action === "create"
         ? "Recreate remote copy"
         : "Apply saved changes";
   function submitComparison() {
-    if (!comparison || !comparison.preview.canResolve || busyRef.current)
+    if (!comparison || !comparison.preview.canResolve || (comparison.preview.scopeResolution?.kind === "following-update" && !comparison.preview.splitFuture) || busyRef.current)
       return;
     const saved = comparison;
     confirm(
       {
         title: confirmLabel,
         confirmLabel,
-        message: saved.preview.scopeResolution ? (saved.preview.scopeResolution.kind === "following-delete" ? `Delete the occurrence originally starting ${saved.preview.scopeResolution.originalStart.value} and all later occurrences from the remote series? Earlier occurrences remain. The saved deletion in Musubi remains.` : "Delete the entire remote series, including all occurrences and exceptions? The saved deletion in Musubi remains.") : saved.preview.rsvpResolution ? `Apply only your saved response and preserve the other current Google fields? ${providerRsvpNotice}` : saved.preview.reminderResolution ? "Replace your personal Google Calendar reminders with the saved settings? Event time, participants and Musubi reminders stay unchanged." :
+        message: saved.preview.scopeResolution ? (saved.preview.scopeResolution.kind === "following-delete" ? `Delete the occurrence originally starting ${saved.preview.scopeResolution.originalStart.value} and all later occurrences from the remote series? Earlier occurrences remain. The saved deletion in Musubi remains.` : saved.preview.scopeResolution.kind === "following-update" ? "Apply the saved following changes in two steps: shorten the earlier series, then create the saved future series? Delivery may finish one step at a time; retry keeps the same future series identity." : "Delete the entire remote series, including all occurrences and exceptions? The saved deletion in Musubi remains.") : saved.preview.rsvpResolution ? `Apply only your saved response and preserve the other current Google fields? ${providerRsvpNotice}` : saved.preview.reminderResolution ? "Replace your personal Google Calendar reminders with the saved settings? Event time, participants and Musubi reminders stay unchanged." :
           "Apply the version shown in this comparison? Remote differences may be replaced. Unsaved form edits are not sent.",
       },
       () => {
@@ -264,7 +264,7 @@ export function DeliveryBody({
           ) : null}
           {comparison ? (
             <>
-              {comparison.preview.scopeResolution?.kind === "following-delete" ? <Text style={copy}>Delete this and following · original start {comparison.preview.scopeResolution.originalStart.value}. Earlier occurrences remain.</Text> : comparison.preview.scopeResolution?.kind === "series-delete" ? <Text style={copy}>Entire series · all occurrences and exceptions.</Text> : null}
+              {comparison.preview.scopeResolution?.kind === "following-delete" ? <Text style={copy}>Delete this and following · original start {comparison.preview.scopeResolution.originalStart.value}. Earlier occurrences remain.</Text> : comparison.preview.scopeResolution?.kind === "following-update" ? <Text style={copy}>Change this and following · original start {comparison.preview.scopeResolution.originalStart.value}. Delivery uses two steps and keeps the saved future series identity.</Text> : comparison.preview.scopeResolution?.kind === "series-delete" ? <Text style={copy}>Entire series · all occurrences and exceptions.</Text> : null}
               {comparison.preview.rsvpResolution ? <>
                 <Text style={copy}>{providerRsvpNotice}</Text>
                 <Text style={copy}>Saved Google response: {providerRsvpResponseLabel(comparison.preview.rsvpResolution.desired)}</Text>
@@ -276,8 +276,9 @@ export function DeliveryBody({
                   <Text style={copy}>Current Google reminders: {providerReminderDescription(comparison.preview.reminderResolution.remote)}</Text>
                 </>
               ) : <>
+              {comparison.preview.splitFuture ? <DeliveryContent title="Saved future series" content={comparison.preview.splitFuture} absent="Future series unavailable" /> : null}
               <DeliveryContent
-                title="Saved in Musubi"
+                title={comparison.preview.splitFuture ? "Saved earlier series" : "Saved in Musubi"}
                 content={comparison.preview.local}
                 absent="Saved deletion / no local copy"
               />
@@ -307,7 +308,7 @@ export function DeliveryBody({
                 label={confirmLabel}
                 variant="destructive"
                 loading={busy}
-                disabled={!comparison.preview.canResolve}
+                disabled={!comparison.preview.canResolve || (comparison.preview.scopeResolution?.kind === "following-update" && !comparison.preview.splitFuture)}
                 onPress={submitComparison}
               />
             </>

@@ -769,3 +769,32 @@ it("confirms the displayed whole-series deletion with a frozen retry identity", 
   expect(requests[0].expectedScopeResolution).toEqual(scopeResolution);
   expect(requests[1]).toEqual(requests[0]);
 });
+
+it("confirms the displayed following split and its future series with a frozen retry identity", async () => {
+  const scopeResolution = { kind: "following-update", newSeriesId: "00000000-0000-4000-8000-000000000099", originalStart: { kind: "instant", value: "2026-09-07T10:00:00.000Z" } };
+  const requests: any[] = [];
+  h.request.mockImplementation(async (url: string, options: any) => {
+    if (url.endsWith("/resolve")) { requests.push(JSON.parse(options.body)); if (requests.length === 1) throw new Error("Lost response"); }
+    return reply(url.endsWith("/conflict") ? { ...preview, scopeResolution, splitFuture: { ...content, title: "Saved future title", recurrence: "RRULE:FREQ=WEEKLY;COUNT=4" } } : receipt);
+  });
+  let tree = await review();
+  expect(text(tree)).toContain("Saved future series");
+  expect(text(tree)).toContain("Saved future title");
+  expect(text(tree)).toContain("Change this and following");
+  expect(text(tree)).toContain(scopeResolution.originalStart.value);
+  expect(text(tree)).toContain("two steps");
+  expect(buttons(tree, "Apply saved changes")).toHaveLength(0);
+  buttons(tree, "Apply following changes")[0].onPress(); acceptNative(); await settle();
+  tree = render();
+  buttons(tree, "Apply following changes")[0].onPress(); acceptNative(); await settle();
+  expect(requests).toHaveLength(2);
+  expect(requests[0].expectedScopeResolution).toEqual(scopeResolution);
+  expect(requests[1]).toEqual(requests[0]);
+});
+
+
+it("refuses a split confirmation without its saved future comparison", async () => {
+  h.request.mockImplementation(async (url: string) => reply(url.endsWith("/conflict") ? { ...preview, scopeResolution: { kind: "following-update", originalStart: { kind: "instant", value: "2026-09-07T10:00:00.000Z" }, newSeriesId: "00000000-0000-4000-8000-000000000099" } } : receipt));
+  const tree = await review();
+  expect(buttons(tree, "Apply following changes")[0].disabled).toBe(true);
+});

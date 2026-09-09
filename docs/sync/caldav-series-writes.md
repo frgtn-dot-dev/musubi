@@ -766,3 +766,49 @@ lost responses, interleaved pulls and complete mapping ACK. The disposable
 Radicale split round trip uses the independent operation IDs. This is groundwork
 for replacing a conflicted pair while preserving its family identity; it does
 not enable split conflict confirmation by itself.
+
+### Split source conflict confirmation before the first ACK
+
+A source conflict can now replace the entire still-unacknowledged split pair.
+The companion creation must be genuinely unattempted and pending. Fresh source
+proof preserves every original canonical definition/time/rule and VTIMEZONE;
+known native changes, missing bind/write permission or a different resource at
+the frozen future address refuse the comparison. Both native bodies are rebuilt
+from the fresh accepted evidence and the exact saved split request while keeping
+the future canonical UUID, native URL/UID and all post-edit revisions unchanged.
+
+The comparison includes the saved earlier series, current remote source and saved
+future series. `scopeResolution` carries `following-update`, the original cut and
+`newSeriesId`; both clients explicitly show the two-step operation and require the
+future comparison before enabling confirmation. Submission and replay require the
+exact displayed scope. Older clients cannot confirm an undisplayed split.
+
+Confirmation locks both resources and all new component addresses, both roots,
+children, accepted mappings, permissions and pair rows, then repeats the complete
+pair proof. It cancels only the exact old pair/ancestors and appends two replacement
+rows under one mutation identity with the original future identity and a new
+source/create dependency. It does not change the canonical draft. Native I/O stays
+outside this transaction.
+
+Source ACK releases only the superseded source rows, so earlier-series edits may
+resume. Creation ACK still requires the paired completed source receipt and the
+unchanged future family; only then does it release the superseded creation rows.
+Native deletion observations and pending full/component pulls continue to fence
+both phases. Completed source receipts retain ancestor ETag fences against a
+delayed pre-cut snapshot, including after repeated explicit conflicts.
+
+HTTP/DB evidence covers authenticated confirmation, exact concurrent replay,
+three time kinds, old-client/changed-scope/stale preview refusal, changes to either
+root or a moved child, restored/deleted heads, grant loss, creation lease and
+private-proof races, native structure/collision/bind refusal, repeated conflicts,
+lost source/creation responses, native deletion during CREATE, independent old
+family edits and stable two-resource echoes. Radicale verifies a real source
+ETag conflict, paired replacement, both native ACKs and interleaved sync. Web/native
+unit tests cover the displayed future series, frozen retry and missing-future
+refusal; Chromium exercises desktop light/narrow dark, keyboard/focus,
+accessibility and exact scope submission.
+
+This deliberately does not resolve a creation conflict after source ACK, rewrite
+an unrelated native resource, choose a different future address or adopt competing
+native structural edits. Those contracts remain open. Live-account/physical QA,
+iCloud privilege evidence, flags and versions are unchanged.

@@ -67,11 +67,12 @@ export async function confirmCaldavSplitOutbox(id: string, token: string, result
         if (!sameCaldavScopeContext(current, context) || newMaps.some(item => !context.mappings.some(old => sameCaldavScopeContext(old, { id: item.id, provider: item.provider, eventID: item.eventID, calendarID: item.calendarID, externalCalendarID: item.externalCalendarID, externalEventID: item.externalEventID, icalUid: item.icalUid, externalSeriesID: item.externalSeriesID, originalStart: item.originalStart, etag: item.etag })))) return false;
       } else if (newMaps.length) return false;
       const pending = await tx.select().from(eventOutbox).where(and(inArray(eventOutbox.eventID, ids), sql`${eventOutbox.status} not in ('completed', 'not-needed')`));
-      if (pending.some(item => item.id !== sourceOperationID && item.id !== creationOperationID)) return false;
+      const replaced = new Set(address.payload.resolution?.replacedOperationIDs ?? []);
+      if (pending.some(item => item.id !== sourceOperationID && item.id !== creationOperationID && !(replaced.has(item.id) && item.status === "cancelled" && item.errorCode === "superseded-by-resolution" && item.userID === address.userID && item.externalCalendarLinkID === address.externalCalendarLinkID && item.payload.caldavSplit?.after.source.id === after.source.id && item.payload.caldavSplit.after.head.id === after.head.id))) return false;
       const pair = await tx.select().from(eventOutbox).where(inArray(eventOutbox.id, [sourceOperationID, creationOperationID])).orderBy(eventOutbox.id).for("update");
       const source = pair.find(item => item.id === sourceOperationID), creation = pair.find(item => item.id === creationOperationID);
       const row = pair.find(item => item.id === id);
-      if (!source || !creation || !row || pair.length !== 2 || creation.predecessorID !== source.id || !sameCaldavScopeContext(source.payload.caldavSplit, journal) || !sameCaldavScopeContext(creation.payload.caldavSplit, journal) || row.leaseToken !== token || row.status !== "attempting" || row.remoteSnapshot && !row.remoteSnapshot.isEcho) return false;
+      if (!source || !creation || !row || pair.length !== 2 || creation.predecessorID !== source.id || !sameCaldavScopeContext(source.payload.caldavSplit, journal) || !sameCaldavScopeContext(creation.payload.caldavSplit, journal) || !sameCaldavScopeContext(source.payload.resolution, creation.payload.resolution) || row.leaseToken !== token || row.status !== "attempting" || row.remoteSnapshot && !row.remoteSnapshot.isEcho) return false;
       for (const [operation, event, ref, action, position] of [[source, after.source, split.source.baseline.ref, "update", 0], [creation, after.head, split.creation.ref, "create", 1]] as const) {
         if (operation.eventID !== event.id || operation.revision !== event.revision || operation.action !== action || operation.position !== position ||
             operation.userID !== context.link.userID || operation.actorID !== operation.userID || operation.provider !== "caldav" ||
@@ -101,6 +102,7 @@ export async function confirmCaldavSplitOutbox(id: string, token: string, result
       }
       const [completed] = await tx.update(eventOutbox).set({ status: "completed", errorCode: null, resultRef: result, uncertain: false, leaseToken: null, leaseUntil: null, updatedAt: new Date() }).where(and(eq(eventOutbox.id, id), eq(eventOutbox.leaseToken, token), sql`${eventOutbox.leaseUntil} > clock_timestamp()`)).returning({ id: eventOutbox.id });
       if (!completed) throw new LeaseLost();
+      if (replaced.size) await tx.update(eventOutbox).set({ status: "not-needed", updatedAt: new Date() }).where(and(inArray(eventOutbox.id, [...replaced]), eq(eventOutbox.userID, address.userID), eq(eventOutbox.externalCalendarLinkID, address.externalCalendarLinkID), eq(eventOutbox.eventID, sourcePhase ? after.source.id : after.head.id), eq(eventOutbox.status, "cancelled"), eq(eventOutbox.errorCode, "superseded-by-resolution")));
       return true;
     });
   } catch (error) { if (error instanceof LeaseLost) return false; throw error; }
