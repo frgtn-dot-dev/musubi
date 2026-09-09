@@ -8,8 +8,10 @@ import {
   matchesGoogleOrganizer,
 } from "./google_organizer";
 import type {
+  ProviderRsvpInstance,
   ProviderOrganizerIntent,
   ProviderOrganizerRequest,
+  GoogleOrganizerRequest,
 } from "@musubi/types";
 const baseline = {
   id: "meeting",
@@ -49,179 +51,267 @@ const old = config.api.providerOrganizerEditsEnabled,
 async function main() {
   try {
     config.api.providerOrganizerEditsEnabled = true;
-    for (const action of ["create", "update", "delete"] as const)
-      for (const lost of [false, true]) {
-        const request: ProviderOrganizerRequest =
-          action === "create"
+    for (const kind of ["oneoff", "zoned-instance", "date-instance"] as const)
+      for (const action of ["create", "update", "delete"] as const)
+        for (const lost of [false, true]) {
+          if (kind !== "oneoff" && action === "create") continue;
+          const instance: ProviderRsvpInstance | undefined =
+            kind === "oneoff"
+              ? undefined
+              : {
+                  seriesID: "00000000-0000-4000-8000-000000000004",
+                  parentRevision: 3,
+                  parentMappingID: "00000000-0000-4000-8000-000000000005",
+                  externalSeriesID: "parent",
+                  originalStart:
+                    kind === "date-instance"
+                      ? { kind: "date", value: "2026-10-23" }
+                      : { kind: "instant", value: "2026-10-23T08:00:00.000Z" },
+                };
+          const bound = instance
             ? {
-                ...common,
-                action,
-                content: {
-                  title: "Meeting",
-                  description: "Notes",
-                  location: "Room",
-                },
-                time: {
-                  kind: "zoned",
-                  timeZone: "Europe/Prague",
-                  startLocal: "2026-10-24T10:00:00.000",
-                  endLocal: "2026-10-24T11:00:00.000",
-                },
-                guests: [{ email: "guest@example.test", optional: false }],
-                color: "red",
+                ...baseline,
+                recurringEventId: "parent",
+                originalStartTime:
+                  kind === "date-instance"
+                    ? { date: "2026-10-23" }
+                    : {
+                        dateTime: "2026-10-23T10:00:00+02:00",
+                        timeZone: "Europe/Prague",
+                      },
+                ...(kind === "date-instance"
+                  ? {
+                      start: { date: "2026-10-24" },
+                      end: { date: "2026-10-25" },
+                    }
+                  : {}),
               }
-            : action === "update"
+            : baseline;
+          const request: ProviderOrganizerRequest =
+            action === "create"
               ? {
                   ...common,
                   action,
-                  expectedRevision: 1,
-                  expectedStateVersion: "a".repeat(64),
-                  patch: { title: "Changed" },
+                  content: {
+                    title: "Meeting",
+                    description: "Notes",
+                    location: "Room",
+                  },
+                  time: {
+                    kind: "zoned",
+                    timeZone: "Europe/Prague",
+                    startLocal: "2026-10-24T10:00:00.000",
+                    endLocal: "2026-10-24T11:00:00.000",
+                  },
+                  guests: [{ email: "guest@example.test", optional: false }],
+                  color: "red",
                 }
-              : {
-                  ...common,
-                  action,
-                  expectedRevision: 1,
-                  expectedStateVersion: "a".repeat(64),
-                };
-        const before =
-          action === "create"
-            ? null
-            : googleOrganizerNative(baseline, "owner@example.test");
-        const desired = googleOrganizerBody(
-          request,
-          before,
-          "owner@example.test",
-        );
-        const intent = {
-          request,
-          baseline: before,
-          desired,
-          mappingID: null,
-          sourceEvent: {},
-        } as ProviderOrganizerIntent;
-        let current: any = before ? structuredClone(before) : null,
-          writes = 0,
-          reads = 0;
-        const server = createServer(async (req, res) => {
-          const url = new URL(req.url!, "http://fixture");
-          assert.equal(req.headers.authorization, "Bearer fixture");
-          if (url.pathname.endsWith("calendarList/primary")) {
-            res.end(
-              JSON.stringify({
-                id: "owner@example.test",
-                primary: true,
-                accessRole: "owner",
-              }),
-            );
-            return;
-          }
-          if (req.method === "GET") {
-            reads++;
-            if (!current) {
-              res.statusCode = 404;
-              res.end();
-            } else res.end(JSON.stringify(current));
-            return;
-          }
-          writes++;
-          assert.ok(intent.dispatch);
-          assert.equal(url.searchParams.get("sendUpdates"), "all");
-          assert.equal(url.searchParams.get("conferenceDataVersion"), "1");
-          let text = "";
-          for await (const chunk of req) text += chunk;
-          assert.equal(req.headers["if-match"], before?.etag);
-          assert.equal(
-            req.method,
-            action === "create"
-              ? "POST"
               : action === "update"
-                ? "PATCH"
-                : "DELETE",
-          );
-          assert.deepEqual(text ? JSON.parse(text) : null, desired);
-          current =
-            action === "delete"
-              ? null
-              : action === "create"
                 ? {
-                    ...baseline,
-                    conferenceData: undefined,
-                    ...desired,
-                    attendees: desired!.attendees,
-                    etag: '"v2"',
+                    ...common,
+                    action,
+                    ...(instance
+                      ? ({
+                          scope: "occurrence",
+                          expectedInstanceVersion: "b".repeat(64),
+                        } as const)
+                      : {}),
+                    expectedRevision: 1,
+                    expectedStateVersion: "a".repeat(64),
+                    patch: { title: "Changed" },
                   }
-                : { ...before, ...desired, etag: '"v2"' };
-          if (lost) {
-            req.socket.destroy();
-            return;
-          }
-          res.statusCode = action === "delete" ? 204 : 200;
-          res.end(current ? JSON.stringify(current) : undefined);
-        });
-        await new Promise<void>((resolve) =>
-          server.listen(0, "127.0.0.1", resolve),
-        );
-        const address = server.address();
-        assert.ok(address && typeof address !== "string");
-        globalThis.fetch = (input, init) => {
-          const url = new URL(String(input));
-          assert.equal(url.origin, "https://www.googleapis.com");
-          assert.equal(init?.redirect, "error");
-          return realFetch(
-            `http://127.0.0.1:${address.port}${url.pathname}${url.search}`,
-            init,
-          );
-        };
-        try {
-          const session = await googleOrganizerTransport(async () => "fixture")(
-            "user",
-            "account",
+                : {
+                    ...common,
+                    action,
+                    ...(instance
+                      ? ({
+                          scope: "occurrence",
+                          expectedInstanceVersion: "b".repeat(64),
+                        } as const)
+                      : {}),
+                    expectedRevision: 1,
+                    expectedStateVersion: "a".repeat(64),
+                  };
+          const before =
+            action === "create"
+              ? null
+              : googleOrganizerNative(bound, "owner@example.test", instance);
+          const desired = googleOrganizerBody(
+            request,
+            before,
             "owner@example.test",
           );
-          const mark = async () => {
-            intent.dispatch = {
-              kind: "google-organizer-dispatch",
-              version: 1,
-              startedAt: new Date().toISOString(),
-            };
-          };
-          const accepted = async () => {
-            intent.dispatch!.acceptedAt = new Date().toISOString();
-          };
-          if (lost)
-            await assert.rejects(session.deliver(intent, mark, accepted));
-          else
+          const intent = {
+            request,
+            ...(instance ? { instance } : {}),
+            baseline: before,
+            desired,
+            mappingID: null,
+            sourceEvent: {},
+          } as ProviderOrganizerIntent;
+          let current: any = before ? structuredClone(before) : null,
+            writes = 0,
+            reads = 0;
+          const server = createServer(async (req, res) => {
+            const url = new URL(req.url!, "http://fixture");
+            assert.equal(req.headers.authorization, "Bearer fixture");
+            if (url.pathname.endsWith("calendarList/primary")) {
+              res.end(
+                JSON.stringify({
+                  id: "owner@example.test",
+                  primary: true,
+                  accessRole: "owner",
+                }),
+              );
+              return;
+            }
+            if (req.method === "GET") {
+              reads++;
+              if (!current) {
+                res.statusCode = 404;
+                res.end();
+              } else res.end(JSON.stringify(current));
+              return;
+            }
+            writes++;
+            assert.ok(intent.dispatch);
+            assert.equal(url.searchParams.get("sendUpdates"), "all");
+            assert.equal(url.searchParams.get("conferenceDataVersion"), "1");
+            let text = "";
+            for await (const chunk of req) text += chunk;
+            assert.equal(req.headers["if-match"], before?.etag);
             assert.equal(
-              (await session.deliver(intent, mark, accepted)).kind,
-              action === "delete" ? "deleted" : "observed",
+              req.method,
+              action === "create"
+                ? "POST"
+                : action === "update"
+                  ? "PATCH"
+                  : "DELETE",
             );
-          const replay = await session.deliver(
-            intent,
-            async () => {
-              assert.fail("No second dispatch");
-            },
-            accepted,
+            assert.deepEqual(text ? JSON.parse(text) : null, desired);
+            current =
+              action === "delete"
+                ? null
+                : action === "create"
+                  ? {
+                      ...baseline,
+                      conferenceData: undefined,
+                      ...desired,
+                      attendees: desired!.attendees,
+                      etag: '"v2"',
+                    }
+                  : { ...before, ...desired, etag: '"v2"' };
+            if (lost) {
+              req.socket.destroy();
+              return;
+            }
+            res.statusCode = action === "delete" ? 204 : 200;
+            res.end(current ? JSON.stringify(current) : undefined);
+          });
+          await new Promise<void>((resolve) =>
+            server.listen(0, "127.0.0.1", resolve),
           );
-          assert.equal(
-            replay.kind,
-            action === "delete" ? (lost ? "absent" : "deleted") : "observed",
-          );
-          assert.equal(writes, 1);
-          assert.ok(reads >= 2);
-          if (current) {
-            current.customExtension = { unrelated: true };
-            if (action === "update")
+          const address = server.address();
+          assert.ok(address && typeof address !== "string");
+          globalThis.fetch = (input, init) => {
+            const url = new URL(String(input));
+            assert.equal(url.origin, "https://www.googleapis.com");
+            assert.equal(init?.redirect, "error");
+            return realFetch(
+              `http://127.0.0.1:${address.port}${url.pathname}${url.search}`,
+              init,
+            );
+          };
+          try {
+            const session = await googleOrganizerTransport(
+              async () => "fixture",
+            )("user", "account", "owner@example.test");
+            const mark = async () => {
+              intent.dispatch = {
+                kind: "google-organizer-dispatch",
+                version: 1,
+                startedAt: new Date().toISOString(),
+              };
+            };
+            const accepted = async () => {
+              intent.dispatch!.acceptedAt = new Date().toISOString();
+            };
+            if (lost)
+              await assert.rejects(session.deliver(intent, mark, accepted));
+            else
               assert.equal(
                 (await session.deliver(intent, mark, accepted)).kind,
-                "unconfirmed",
+                action === "delete" ? "deleted" : "observed",
               );
+            const replay = await session.deliver(
+              intent,
+              async () => {
+                assert.fail("No second dispatch");
+              },
+              accepted,
+            );
+            assert.equal(
+              replay.kind,
+              action === "delete" ? (lost ? "absent" : "deleted") : "observed",
+            );
+            assert.equal(writes, 1);
+            assert.ok(reads >= 2);
+            if (instance && before) {
+              for (const bad of [
+                { recurringEventId: "other-parent" },
+                { originalStartTime: { date: "2026-10-22" } },
+                {
+                  originalStartTime: {
+                    date: "2026-10-23",
+                    dateTime: "2026-10-23T08:00:00Z",
+                  },
+                },
+                { originalStartTime: { dateTime: "invalid" } },
+                { id: "parent" },
+              ])
+                assert.throws(() =>
+                  googleOrganizerNative(
+                    { ...before, ...bad },
+                    "owner@example.test",
+                    instance,
+                  ),
+                );
+              assert.throws(() =>
+                googleOrganizerBody(
+                  { ...request, scope: undefined } as GoogleOrganizerRequest,
+                  before,
+                  "owner@example.test",
+                ),
+              );
+              current = {
+                ...before,
+                status: "cancelled",
+                recurringEventId: "wrong-parent",
+              };
+              await assert.rejects(session.deliver(intent, mark, accepted));
+              assert.equal(
+                writes,
+                1,
+                "Mismatched cancelled occurrence never authorizes another dispatch",
+              );
+              current =
+                action === "delete"
+                  ? null
+                  : { ...before, ...desired, etag: '"v2"' };
+            }
+            if (current) {
+              current.customExtension = { unrelated: true };
+              if (action === "update")
+                assert.equal(
+                  (await session.deliver(intent, mark, accepted)).kind,
+                  "unconfirmed",
+                );
+            }
+          } finally {
+            globalThis.fetch = realFetch;
+            await new Promise<void>((resolve) => server.close(() => resolve()));
           }
-        } finally {
-          globalThis.fetch = realFetch;
-          await new Promise<void>((resolve) => server.close(() => resolve()));
         }
-      }
     const native = googleOrganizerNative(baseline, "owner@example.test");
     const request: ProviderOrganizerRequest = {
       ...common,

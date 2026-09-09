@@ -177,6 +177,7 @@ export function ProviderOrganizerEditor({
     }
   }
   const closeButton = useRef<HTMLButtonElement | null>(null);
+  const occurrence = provider === "google" && observation?.organizerEdit?.scope === "occurrence";
   const locked = busy || submitted || !canUpdate;
   return (
     <div
@@ -188,7 +189,7 @@ export function ProviderOrganizerEditor({
       <Dialog
         open
         closeLabel="Close meeting editor"
-        title={`${event ? "Manage" : "Create"} ${provider === "caldav" ? "CalDAV" : "Google"} meeting`}
+        title={occurrence ? "Manage this occurrence" : `${event ? "Manage" : "Create"} ${provider === "caldav" ? "CalDAV" : "Google"} meeting`}
         description={organizerNotificationNotice(provider)}
         returnFocus={returnFocus}
         onOpenChange={(open) => {
@@ -254,8 +255,8 @@ export function ProviderOrganizerEditor({
                 />
               </Field>
             )}
-            {provider === "caldav" && event ? (
-              <p>Meeting time and guests are preserved.</p>
+            {(provider === "caldav" && event) || occurrence ? (
+              <p>{occurrence ? "Only this occurrence will change. Series timing and guests stay unchanged." : "Meeting time and guests are preserved."}</p>
             ) : (
               <>
                 {provider === "caldav" && !draft.allDay ? (
@@ -300,7 +301,7 @@ export function ProviderOrganizerEditor({
             )}
             {canDelete && !submitted && (
               <Button variant="secondary" onClick={() => setConfirm(true)}>
-                Cancel meeting and notify guests
+                {occurrence ? "Cancel this occurrence and notify guests" : "Cancel meeting and notify guests"}
               </Button>
             )}
           </>
@@ -312,9 +313,9 @@ export function ProviderOrganizerEditor({
           open
           returnFocus={closeButton}
           children={error ? <InlineError>{error}</InlineError> : null}
-          title={`Cancel ${provider === "caldav" ? "CalDAV" : "Google"} meeting`}
-          description={`${provider === "caldav" ? "The CalDAV server" : "Google"} will be asked to cancel this meeting and notify every guest. Guest notification delivery cannot be verified.`}
-          confirmLabel="Cancel meeting and notify guests"
+          title={occurrence ? "Cancel this occurrence" : `Cancel ${provider === "caldav" ? "CalDAV" : "Google"} meeting`}
+          description={`${provider === "caldav" ? "The CalDAV server" : "Google"} will be asked to cancel ${occurrence ? "only this occurrence" : "this meeting"} and notify every guest. Guest notification delivery cannot be verified.`}
+          confirmLabel={occurrence ? "Cancel this occurrence and notify guests" : "Cancel meeting and notify guests"}
           closeLabel="Keep meeting"
           loading={busy}
           onOpenChange={setConfirm}

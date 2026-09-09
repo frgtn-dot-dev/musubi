@@ -96,3 +96,18 @@ it("requires explicit series action with the stored master and a matching fresh 
   action().props.onPress(); await settle();
   expect(nodes(render(displayed, master)).some(node => node.type === "ProviderReminderEditor")).toBe(false);
 });
+it("opens only the exact stored organizer child and refuses refreshed revision drift", async () => {
+  const child = { ...event, originCalendarID: "source", seriesID: "00000000-0000-4000-8000-000000000002", originalStart: { kind: "instant" as const, value: "2026-09-09T09:00:00.000Z" } };
+  const edit = { provider: "google", calendarID: "source", expectedRevision: 7, scope: "occurrence", instanceVersion: "b".repeat(64) };
+  h.fetch.mockResolvedValueOnce({ ...observation, organizerEdit: edit }).mockResolvedValueOnce({ ...observation, organizerEdit: { ...edit, expectedRevision: 8 } });
+  render(child); await settle();
+  nodes(render(child)).find(node => node.type === "Btn" && node.props.label === "Manage this occurrence")!.props.onPress(); await settle();
+  expect(nodes(render(child)).some(node => node.type === "ProviderOrganizerEditor")).toBe(false);
+  expect(h.fetch.mock.calls[1][0].id).toBe(child.id);
+});
+it("never promotes a generated occurrence ID into organizer scope", async () => {
+  const generated = { ...event, id: `${event.id}_1792915200000`, originCalendarID: "source", seriesID: "00000000-0000-4000-8000-000000000002", originalStart: { kind: "instant" as const, value: "2026-10-25T09:00:00.000Z" } };
+  h.fetch.mockResolvedValue({ ...observation, organizerEdit: { provider: "google", calendarID: "source", expectedRevision: 7, scope: "occurrence", instanceVersion: "b".repeat(64) } });
+  render(generated); await settle();
+  expect(nodes(render(generated)).some(node => node.type === "Btn" && node.props.label === "Manage this occurrence")).toBe(false);
+});

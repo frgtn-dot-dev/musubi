@@ -114,6 +114,12 @@ export function organizerRequest(
   const expected = {
     expectedRevision: observation?.organizerEdit?.expectedRevision,
     expectedStateVersion: observation?.version,
+    ...(observation?.organizerEdit?.scope === "occurrence"
+      ? {
+          scope: "occurrence",
+          expectedInstanceVersion: observation.organizerEdit.instanceVersion,
+        }
+      : {}),
   };
   if (action === "delete")
     return ProviderOrganizerRequestSchema.parse({
@@ -127,6 +133,7 @@ export function organizerRequest(
       patch[key] = draft[key] || (key === "title" ? "" : null);
   if (
     provider === "google" &&
+    observation?.organizerEdit?.scope !== "occurrence" &&
     changed.some((key) => ["start", "end", "timeZone", "allDay"].includes(key))
   )
     patch.time = time;
@@ -136,4 +143,25 @@ export function organizerRequest(
     ...expected,
     patch,
   });
+}
+
+/** Only a stored child with an explicit current occurrence observation can open
+ * organizer controls. Generated occurrences never supply their master's proof. */
+export function canManageProviderOrganizer(
+  event: Event | undefined,
+  observation: Pick<ProviderEventStateResponse, "organizerEdit"> | undefined,
+): boolean {
+  const edit = observation?.organizerEdit;
+  if (
+    !event ||
+    !edit ||
+    event.recurrence ||
+    event.isCanceled ||
+    event.revision !== edit.expectedRevision ||
+    event.originCalendarID !== edit.calendarID
+  )
+    return false;
+  return edit.scope === "occurrence"
+    ? !!(edit.provider === "google" && event.seriesID && event.originalStart && edit.instanceVersion)
+    : !event.seriesID && !event.originalStart;
 }

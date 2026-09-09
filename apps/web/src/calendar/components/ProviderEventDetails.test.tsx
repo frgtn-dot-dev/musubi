@@ -126,3 +126,13 @@ it("opens only explicit series alarm settings from a stored master and refuses a
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(await screen.findByText(/Could not refresh provider details/)).toBeTruthy();
 });
+it("refuses stale organizer occurrence observations before opening the editor", async () => {
+  const child = EventSchema.parse({ id: "00000000-0000-4000-8000-000000000001", revision: 7, title: "Child", start: new Date("2026-10-25T09:00:00Z"), end: new Date("2026-10-25T10:00:00Z"), creatorID: "owner", organizer: "owner", color: "red", calendars: ["source"], originCalendarID: "source", isAllDay: false, isCanceled: false, seriesID: "00000000-0000-4000-8000-000000000002", originalStart: { kind: "instant", value: "2026-10-24T08:00:00.000Z" } });
+  const edit = { provider: "google", calendarID: "source", expectedRevision: 7, scope: "occurrence", instanceVersion: "b".repeat(64) };
+  fetchState.mockResolvedValueOnce({ state, version: "a".repeat(64), organizerEdit: edit }).mockResolvedValueOnce({ state, version: "a".repeat(64), organizerEdit: { ...edit, expectedRevision: 8 } });
+  render(<ProviderEventDetails event={child} eventId={child.id} userId="owner" occurrence />);
+  const action = await screen.findByRole("button", { name: "Manage this occurrence" });
+  await act(async () => action.click());
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(await screen.findByText(/Could not refresh provider details/)).toBeTruthy();
+});

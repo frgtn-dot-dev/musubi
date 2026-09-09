@@ -805,6 +805,46 @@ async function upsertExternalEventInTransaction(
     const access = await assertExternalCalendarAccess(tx, provider, calendarID, accessContext);
     if (provider === "microsoft") await assertNoPendingGraphSeriesCreate(tx, calendarID);
     await lockExternalEventAddress(tx, provider, calendarID, externalEventID);
+    // Google retains cancelled exceptions as active-shaped projections. Their
+    // reconstructed master content is not an edit of the stored exception.
+    // Retain only an exact cancellation observation for the immutable intent;
+    // acceptance still requires the worker's native read and accepted marker.
+    if (provider === "google" && time?.isCanceled === true && time.externalSeriesID && time.originalStart) {
+      const [candidate] = await tx.select().from(eventOutbox).where(and(
+        eq(eventOutbox.provider, provider), eq(eventOutbox.actorID, userID), eq(eventOutbox.userID, userID),
+        eq(eventOutbox.calendarID, calendarID), eq(eventOutbox.externalCalendarID, externalCalendarID),
+        eq(eventOutbox.externalEventID, externalEventID), eq(eventOutbox.action, "delete"),
+        sql`${eventOutbox.status} not in ('cancelled', 'not-needed')`,
+        sql`${eventOutbox.payload}->'organizer'->'instance' is not null`,
+      )).orderBy(sql`${eventOutbox.revision} desc`).limit(1);
+      const intent = candidate?.payload.organizer;
+      if (candidate && intent?.instance) {
+        const map = await mappedEventForUpdate(tx, provider, calendarID, externalEventID);
+        const [link] = await tx.select().from(externalCalendars).where(and(
+          eq(externalCalendars.id, candidate.externalCalendarLinkID), eq(externalCalendars.userID, userID),
+          eq(externalCalendars.provider, provider), eq(externalCalendars.accountID, candidate.accountID),
+          eq(externalCalendars.calendarID, calendarID), eq(externalCalendars.externalCalendarID, externalCalendarID), eq(externalCalendars.disabled, false),
+        )).for("share");
+        const original = OccurrenceStartSchema.parse(time.originalStart);
+        const tombstone = intent.dispatch?.cancellationTombstone;
+        const sameRevision = map?.event.revision === candidate.revision && map.event.deletedAt === null ||
+          !!intent.dispatch?.acceptedAt && !!tombstone && map?.event.revision === candidate.revision + 1 && map.event.revision === tombstone.revision && map.event.deletedAt?.toISOString() === tombstone.deletedAt;
+        if (link && map && sameRevision && map.event.isCanceled && map.event.creatorID === userID && map.event.originCalendarID === calendarID &&
+          map.id === intent.mappingID && map.event.id === candidate.eventID && map.etag === candidate.expectedEtag &&
+          map.event.seriesID === intent.instance.seriesID && map.externalSeriesID === intent.instance.externalSeriesID &&
+          sameTimeMetadata(map.originalStart, intent.instance.originalStart) && sameTimeMetadata(map.event.originalStart, intent.instance.originalStart)) {
+          const matches = time.externalSeriesID === intent.instance.externalSeriesID && sameTimeMetadata(original, intent.instance.originalStart);
+          await tx.update(eventOutbox).set({
+            ...(!matches && candidate.status === "completed" ? { status: "conflict" as const, errorCode: "provider-conflict" } : {}),
+            remoteSnapshot: { externalEventId: externalEventID, etag, icalUid, deleted: matches, observedAt: new Date().toISOString() },
+          }).where(and(eq(eventOutbox.id, candidate.id), eq(eventOutbox.revision, candidate.revision)));
+          // This branch already holds the child. A mismatched slot must never
+          // fall through to general ingestion, which locks its parent first.
+          return false;
+        }
+        throw new Error("Organizer cancellation source changed. Reconcile before applying.");
+      }
+    }
     // A completed organizer cancellation must not be silently resurrected by
     // an active late pull. Retain it for read-only reconciliation of the same
     // permanently marked action; never recreate or send another cancellation.

@@ -295,3 +295,30 @@ it("retries the exact cancellation-only request after dismissing its failed conf
   expect(api.save.mock.calls[1]).toEqual(api.save.mock.calls[0]);
   expect(api.save.mock.calls[1][0]).toMatchObject({ action: "delete", provider: "caldav", notificationPolicy: "server-invite" });
 });
+
+it("edits a bound occurrence with its exact parent observation and hides time and guest editing", async () => {
+  api.save.mockResolvedValue({ status: "pending" });
+  const child = { ...event, seriesID: "00000000-0000-4000-8000-000000000003", originalStart: { kind: "instant" as const, value: "2026-10-23T08:00:00.000Z" } };
+  const observed = { ...observation, organizerEdit: { ...observation.organizerEdit!, scope: "occurrence" as const, instanceVersion: "b".repeat(64) } };
+  render(<ProviderOrganizerEditor event={child} observation={observed} calendarID={calendarID} color="red" onClose={vi.fn()} />);
+  expect(screen.getByRole("dialog", { name: "Manage this occurrence" })).toBeTruthy();
+  expect(screen.queryByLabelText("Start")).toBeNull();
+  expect(screen.queryByLabelText("All day")).toBeNull();
+  expect(screen.queryByLabelText("Guest email addresses")).toBeNull();
+  fireEvent.change(screen.getByRole("textbox", { name: "Title" }), { target: { value: "Changed occurrence" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save and notify guests" }));
+  await screen.findByRole("status");
+  expect(api.save.mock.calls[0][0]).toMatchObject({ eventID: child.id, expectedRevision: 4, scope: "occurrence", expectedInstanceVersion: "b".repeat(64), patch: { title: "Changed occurrence" } });
+  expect(api.save.mock.calls[0][0].patch).not.toHaveProperty("time");
+});
+it("requires explicit cancellation of only the bound occurrence", async () => {
+  api.save.mockResolvedValue({ status: "pending" });
+  const observed = { ...observation, organizerEdit: { ...observation.organizerEdit!, scope: "occurrence" as const, instanceVersion: "b".repeat(64) } };
+  render(<ProviderOrganizerEditor event={event} observation={observed} calendarID={calendarID} color="red" onClose={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Cancel this occurrence and notify guests" }));
+  expect(api.save).not.toHaveBeenCalled();
+  const confirmation = screen.getByRole("dialog", { name: "Cancel this occurrence" });
+  fireEvent.click(within(confirmation).getByRole("button", { name: "Cancel this occurrence and notify guests" }));
+  await screen.findByRole("status");
+  expect(api.save.mock.calls[0][0]).toMatchObject({ action: "delete", scope: "occurrence", expectedInstanceVersion: "b".repeat(64) });
+});

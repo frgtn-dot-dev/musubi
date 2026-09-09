@@ -1,9 +1,10 @@
-# Google one-off organizer actions
+# Google organizer actions
 
 `PROVIDER_ORGANIZER_EDITS_ENABLED` is a separate default-off gate. Enabling RSVP
 does not enable organizer writes. This implementation supports a connected
 account's own primary Google calendar: create a one-off meeting, edit its content
-or explicit zoned/all-day time, and cancel it. No deployment activation or live
+or explicit zoned/all-day time, and cancel it. It also supports content updates
+and cancellation of an already imported, bound occurrence. No deployment activation or live
 guest-notification acceptance has been performed.
 
 The existing web calendar list and native calendar settings offer **Create Google
@@ -19,7 +20,7 @@ become Musubi attendees or receive another Musubi invitation email.
 Creation accepts 1–100 unique guest email addresses, required or optional in the
 API (the initial clients enter required guests), and initializes `needsAction`.
 Current clients support the home server only. Attendee-list changes, recurring
-meetings, delegation, resource booking, conference creation and attachment writes
+meeting creation and whole-series operations, delegation, resource booking, conference creation and attachment writes
 remain unsupported. Existing meetings require a complete non-truncated guest
 list, strong ETag, UID, organizer-self proof and supported time. Only one local
 calendar link is accepted; this path does not fan out changes to other targets.
@@ -102,6 +103,50 @@ uncertain operations yielding to the next queued observation.
 
 All provider traffic in tests is intercepted by a loopback fixture. No live
 meetings, invitations or organizer acceptance were sent. Broader guest editing,
-series operations, federation callers and a human-reviewed two-account live
+whole-series operations, occurrence time editing, federation callers and a human-reviewed two-account live
 notification acceptance remain separate work. No schema migration, dependency,
 compatibility-minimum or version change is required.
+
+## Existing-instance organizer scope
+
+A stored timed or all-day child can expose **Manage this occurrence** only after
+fresh primary-owner and full native guest-state proof. Title, notes and location
+are editable; time and guest fields are absent. Cancellation has a separate
+**Cancel this occurrence and notify guests** confirmation. Generated slots,
+masters, following scopes and new exceptions remain unsupported.
+
+The public request explicitly supplies `scope: occurrence`, its exact child
+revision, provider observation version and an opaque `expectedInstanceVersion`.
+The latter hashes the validated parent revision/mapping and original slot; it
+cannot replace a missing imported binding. The immutable private intent retains
+that complete binding. Admission, dispatch and ACK recheck parent-before-child
+locks, parent generation/mapping, original identity, active source/account,
+membership and attempt lease. Pending or cancelled parent operations refuse the
+child action. Native `recurringEventId` and `originalStartTime` must match even
+when the instance has moved across a date or DST boundary. Full native readback
+preserves guest responses, timing, slot identity and opaque properties.
+
+Only the exact saved cancellation revision (or its recorded accepted inbound
+tombstone) may reconstruct the active binding for check-only reconciliation.
+The shared RSVP reader still refuses cancelled children. Parent/sibling events
+and the child mapping's parent/original identity are never rewritten. Lost
+cancellation replies remain uncertain; no retry resends notifications.
+
+`provider_organizer_instance.integration.test.ts` covers both time kinds through
+the authenticated public endpoint: stale observations and parent/native identity,
+pending parents, commit/dispatch/ACK source and lease races, rejected generated
+and master requests, lost replies and accepted cancellation tombstone replay.
+The existing one-off organizer and RSVP instance DB suites also pass. Four mocked
+browser cases cover update/cancel in desktop light and narrow dark layouts,
+exact stored child payloads, accessibility and focus return. Native/shared tests
+cover content-only payloads and stale/generated caller refusal. These are local
+fake-provider checks, not live guest-delivery acceptance.
+
+Cancelled-instance inbound regression coverage uses the real Google time
+normalizer and event upsert. Google returns these exceptions as active-shaped,
+`isCanceled` projections; an exact saved parent/original-slot cancellation is
+retained as deletion evidence without applying reconstructed master content,
+changing the mapping ETag, or altering the permanent dispatch marker. This works
+before and after ACK. Stale active copies and foreign slots remain conflicts;
+read-only reconciliation still requires native cancellation and the persisted
+accepted DELETE response.

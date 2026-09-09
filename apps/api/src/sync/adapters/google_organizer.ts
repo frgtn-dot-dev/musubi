@@ -2,6 +2,8 @@ import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import { resolveEventTimeEdit } from "@musubi/calendar";
 import {
+  OccurrenceStartSchema,
+  type ProviderRsvpInstance,
   EventWriteError,
   EventTimeZoneSchema,
   type GoogleOrganizerRequest,
@@ -21,6 +23,17 @@ const endpoint = z.union([
       date: z.never().optional(),
     })
     .passthrough(),
+]);
+const originalEndpoint = z.union([
+  z.object({ date: z.iso.date() }).strict(),
+  z
+    .object({
+      dateTime: z.iso
+        .datetime({ offset: true })
+        .refine((value) => !/\.\d{4}/.test(value)),
+      timeZone: EventTimeZoneSchema.optional(),
+    })
+    .strict(),
 ]);
 const attendee = z
   .object({
@@ -52,8 +65,8 @@ const resource = z
     locked: z.literal(false).optional(),
     eventType: z.literal("default").optional(),
     recurrence: z.never().optional(),
-    recurringEventId: z.never().optional(),
-    originalStartTime: z.never().optional(),
+    recurringEventId: z.string().min(1).optional(),
+    originalStartTime: originalEndpoint.optional(),
     start: endpoint,
     end: endpoint,
     updated: z.iso.datetime({ offset: true }).optional(),
@@ -65,12 +78,16 @@ export type GoogleOrganizerNative = z.infer<typeof resource>;
 export function googleOrganizerNative(
   raw: unknown,
   email: string,
+  instance?: ProviderRsvpInstance,
 ): GoogleOrganizerNative {
   const result = resource.safeParse(raw);
   if (!result.success) throw new EventWriteError("organizer", "unsupported");
   const value = structuredClone(result.data),
     own = email.toLowerCase();
   requireEventEtag(value.etag);
+  if (instance) assertGoogleOrganizerInstanceIdentity(value, instance);
+  else if (value.recurringEventId || value.originalStartTime)
+    throw new EventWriteError("organizer", "unsupported");
   if (
     value.organizer.email.toLowerCase() !== own ||
     new Set(value.attendees.map((item) => item.email.toLowerCase())).size !==
@@ -91,6 +108,32 @@ export function googleOrganizerNative(
   )
     throw new EventWriteError("organizer", "unsupported");
   return value;
+}
+export function assertGoogleOrganizerInstanceIdentity(
+  raw: Record<string, unknown>,
+  instance: ProviderRsvpInstance,
+) {
+  const original = originalEndpoint.safeParse(raw.originalStartTime);
+  const identity = OccurrenceStartSchema.safeParse(
+    !original.success
+      ? undefined
+      : "date" in original.data
+        ? { kind: "date", value: original.data.date }
+        : {
+            kind: "instant",
+            value: new Date(original.data.dateTime).toISOString(),
+          },
+  );
+  if (
+    typeof raw.id !== "string" ||
+    !raw.id ||
+    raw.id === instance.externalSeriesID ||
+    raw.recurringEventId !== instance.externalSeriesID ||
+    !identity.success ||
+    !isDeepStrictEqual(identity.data, instance.originalStart) ||
+    raw.recurrence !== undefined
+  )
+    throw new ProviderEventWriteError("provider-conflict");
 }
 function timeBody(input: unknown) {
   let time;
@@ -139,6 +182,12 @@ export function googleOrganizerBody(
   baseline: GoogleOrganizerNative | null,
   own: string,
 ): Record<string, unknown> | null {
+  if (
+    request.action !== "create" &&
+    baseline &&
+    !!baseline.recurringEventId !== (request.scope === "occurrence")
+  )
+    throw new EventWriteError("organizer", "unsupported");
   if (request.action === "delete") {
     if (!baseline) throw new ProviderEventWriteError("provider-conflict");
     return null;
@@ -165,6 +214,11 @@ export function googleOrganizerBody(
     };
   }
   if (!baseline) throw new ProviderEventWriteError("provider-conflict");
+  if (
+    !!baseline.recurringEventId !== (request.scope === "occurrence") ||
+    (request.scope === "occurrence" && request.patch.time)
+  )
+    throw new EventWriteError("organizer", "unsupported");
   const patch: Record<string, unknown> = {};
   for (const [key, native] of [
     ["title", "summary"],
@@ -203,9 +257,10 @@ export function matchesGoogleOrganizer(
   request: GoogleOrganizerRequest,
   baseline: GoogleOrganizerNative | null,
   own: string,
+  instance?: ProviderRsvpInstance,
 ): boolean {
   try {
-    const current = googleOrganizerNative(actual, own),
+    const current = googleOrganizerNative(actual, own, instance),
       patch = googleOrganizerBody(request, baseline, own);
     if (!patch) return false;
     if (request.action === "create") {
