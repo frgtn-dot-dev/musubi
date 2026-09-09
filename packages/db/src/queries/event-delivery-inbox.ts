@@ -7,7 +7,8 @@ import { unresolvedEventOutbox } from "./event-outbox";
 /** Discover retained deletes as well as live events after a client restart.
  * Google and Microsoft receipt titles follow the current source grant, including
  * retained deletes. CalDAV uses the current readable event title and its own
- * connected-account proof. Accepted payloads remain private and immutable; only
+ * connected-account and current destination-link proof. Accepted payloads remain
+ * private and immutable; only
  * this projection is redacted. Other providers retain saved-title behavior.
  * UUID keyset order stays stable when retries change updatedAt. Refresh begins
  * from the first page; this is a live list, not a cross-request snapshot. */
@@ -53,6 +54,7 @@ export async function getEventDeliveryInbox(
           join caldav_accounts connected on connected.id::text = source.account_id and connected.user_id = source.user_id
           join calendar_members member on member.calendar_id = source.calendar_id and member.user_id = source.user_id
           join events event on event.id = event_outbox.event_id
+          join calendar_events visible on visible.event_id = event.id and visible.calendar_id = source.calendar_id
           where source.id = event_outbox.external_calendar_link_id
             and source.provider = 'caldav' and source.user_id = event_outbox.user_id
             and source.account_id = event_outbox.account_id and source.calendar_id = event_outbox.calendar_id
