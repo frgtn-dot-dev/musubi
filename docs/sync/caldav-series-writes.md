@@ -323,3 +323,19 @@ representation to the original request using only clause-order/prefix and known
 INTERVAL=1/WKST=MO equivalence. Duplicate or dropped unknown clauses are refused.
 Bare daily, weekly and monthly editor formats are covered, and confirmed imports
 do not rewrite the canonical recurrence or increment its revision.
+
+## Conditional series deletion transport
+
+The internal deletion adapter requires positive collection `unbind` privileges,
+account/calendar ownership and a complete personal-series baseline. Immediately
+before DELETE it compares the entire resource and its accepted strong ETag, then
+sends If-Match. Only a subsequent GET 404 confirms deletion; a 204 response alone
+does not. Retry recognizes an already-absent resource without repeating DELETE.
+Concurrent edits, recreated resources and unreadable post-write state are never
+reported as a confirmed deletion.
+
+Fake HTTP tests cover all time kinds, applied 503/lost responses, races, recreated
+resources, unavailable readback, malformed/stale baseline and the disabled flag.
+Radicale confirms collection permission, conditional deletion and retry. This is
+transport evidence only: public series deletion and atomic local tombstone/outbox
+ACK wiring are the next slice. No flags or production capabilities are enabled.

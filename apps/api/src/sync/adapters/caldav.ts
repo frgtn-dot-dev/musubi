@@ -1,5 +1,5 @@
 import { caldavEventState } from "./provider_event_state";
-import { caldavSeriesEvidence, caldavSeriesResolutionEvidence, caldavSeriesResourceURL, sameCaldavResource, type CaldavSeriesWrite, type CaldavSeriesEvidence, type CaldavSeriesIntent } from "./caldav_series";
+import { caldavSeriesEvidence, caldavSeriesResolutionEvidence, caldavSeriesResourceURL, sameCaldavResource, type CaldavSeriesDeletion, type CaldavSeriesWrite, type CaldavSeriesEvidence, type CaldavSeriesIntent } from "./caldav_series";
 import ICAL from "ical.js";
 import { planEventScope } from "@musubi/calendar";
 import { randomUUID } from "crypto";
@@ -1016,7 +1016,7 @@ export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baselin
   return { baseline, patch: cleanPatch, ...(targetEventID ? { targetEventID } : {}), ...(cancelTarget ? { cancelTarget } : {}), ...(newDefinition ? { newDefinition } : {}), ...(time ? { time } : {}), before: evidence.data, after };
 }
 
-async function seriesAuthorization(userID: string, accountId: string, externalCalendarId: string, intent: CaldavSeriesIntent, signal?: AbortSignal) {
+async function seriesAuthorization(userID: string, accountId: string, externalCalendarId: string, intent: CaldavSeriesIntent, signal?: AbortSignal, action: "update" | "delete" = "update") {
   if (!config.api.eventTimeEditsEnabled)
     throw new EventWriteError("event-write", "unsupported");
   const accounts = await getCaldavAccountsByUser(userID);
@@ -1030,8 +1030,47 @@ async function seriesAuthorization(userID: string, accountId: string, externalCa
     throw new EventWriteError("event-write", "denied");
   const resource = caldavSeriesResourceURL(externalCalendarId, intent.ref.externalEventId);
   const authorization = await basicAuthForAccount(accountId);
-  assertEventWriteEvidence(caldavAllows(await caldavEventPrivileges(resource.href, authorization, signal, "error"), "update"), "event-write");
+  assertEventWriteEvidence(caldavAllows(await caldavEventPrivileges(action === "delete" ? externalCalendarId : resource.href, authorization, signal, "error"), action), "event-write");
   return { resource, authorization };
+}
+
+export function prepareCaldavSeriesDeletion(evidence: CaldavSeriesEvidence, baseline: CaldavSeriesIntent): CaldavSeriesDeletion {
+  caldavSeriesEvidence(evidence.data, baseline);
+  if (evidence.ref.externalEventId !== baseline.ref.externalEventId || evidence.ref.icalUid !== baseline.ref.icalUid || evidence.ref.etag !== baseline.ref.etag) throw new ProviderEventWriteError("provider-conflict");
+  return { baseline, before: evidence.data };
+}
+
+/** Absence after a conditional DELETE is evidence; a successful status alone is not. */
+export async function deleteCaldavSeriesResource(externalCalendarId: string, deletion: CaldavSeriesDeletion, authorization: string, signal?: AbortSignal): Promise<ExternalEventRef> {
+  if (!config.api.eventTimeEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+  const { baseline, before } = deletion;
+  caldavSeriesEvidence(before, baseline);
+  const resource = caldavSeriesResourceURL(externalCalendarId, baseline.ref.externalEventId);
+  const read = async () => {
+    const response = await caldavFetch(resource.href, { signal, redirect: "error", method: "GET", headers: { authorization, accept: "text/calendar", "Cache-Control": "no-cache" } });
+    if (response.status === 404) { await response.body?.cancel().catch(() => {}); return null; }
+    assertEventWriteResponse(response);
+    if (response.status !== 200 || response.headers.has("content-range")) throw new ProviderEventWriteError("provider-write-failed");
+    const etag = requireEventEtag(response.headers.get("etag"));
+    const data = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(await response.arrayBuffer());
+    return { data, etag };
+  };
+  const current = await read();
+  if (!current) return baseline.ref;
+  if (current.etag !== baseline.ref.etag || !sameCaldavResource(current.data, before)) throw new ProviderEventWriteError("provider-conflict");
+  signal?.throwIfAborted();
+  let accepted = false;
+  try {
+    const response = await caldavFetch(resource.href, { signal, redirect: "error", method: "DELETE", headers: { authorization, "If-Match": requireEventEtag(baseline.ref.etag) } });
+    assertProviderEventMutationResponse(response);
+    accepted = true;
+    if (await read()) throw new ProviderEventWriteError("provider-conflict", "unconfirmed");
+    return baseline.ref;
+  } catch (error) {
+    if (!accepted && error instanceof ProviderEventWriteError && error.providerStatus !== undefined) throw error;
+    if (error instanceof ProviderEventWriteError && error.outcome === "unconfirmed") throw error;
+    throw new ProviderEventWriteError("provider-write-failed", "unconfirmed", error instanceof ProviderEventWriteError ? error.providerStatus : undefined);
+  }
 }
 
 export async function deliverCaldavSeriesResource(externalCalendarId: string, write: CaldavSeriesWrite, authorization: string, signal?: AbortSignal): Promise<CaldavSeriesEvidence> {
@@ -1085,6 +1124,15 @@ export const caldavAdapter: CalendarAdapter = {
     const { resource, authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, intent, signal);
     const current = await readEventResource(authorization, resource.href, intent.ref, signal, "error");
     return caldavSeriesEvidence(current.data, intent);
+  },
+  async readCaldavSeriesForDelete(userID, accountId, externalCalendarId, intent, signal) {
+    const { resource, authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, intent, signal, "delete");
+    const current = await readEventResource(authorization, resource.href, intent.ref, signal, "error");
+    return caldavSeriesEvidence(current.data, intent);
+  },
+  async deleteCaldavSeries(userID, accountId, externalCalendarId, deletion, signal) {
+    const { authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, deletion.baseline, signal, "delete");
+    return deleteCaldavSeriesResource(externalCalendarId, deletion, authorization, signal);
   },
   async writeCaldavSeries(userID, accountId, externalCalendarId, write, signal) {
     const { authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, write.baseline, signal);

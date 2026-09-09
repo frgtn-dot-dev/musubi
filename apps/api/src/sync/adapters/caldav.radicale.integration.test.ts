@@ -30,7 +30,7 @@ async function main() {
   const { db, events, eventOutbox, externalCalendars, externalEvents, applyLocalEventScope, getEventSnapshot, getUserExternalCalendars, setCursor, saveCaldavAccount, user } = await import("@musubi/db");
   const { config } = await import("@musubi/config");
   const { syncProvider } = await import("../engine");
-  const { caldavAdapter, patchEventIcal, prepareCaldavSeriesWrite } = await import("./caldav");
+  const { caldavAdapter, patchEventIcal, prepareCaldavSeriesWrite, prepareCaldavSeriesDeletion } = await import("./caldav");
   const { createGuardedCaldavFetch } = await import("../caldav_client");
   const { encryptSecret } = await import("../crypto");
   const { prepareEventDeliveryResolution } = await import("../event_resolution");
@@ -395,6 +395,16 @@ async function main() {
     assert.equal(extendedRows.find(item => item.id === scopedRoot.id)!.recurrence, ruleRequest.patch.recurrence);
     assert.deepEqual(extendedRows.filter(item => item.seriesID === scopedRoot.id), shiftedRows.filter(item => item.seriesID === scopedRoot.id));
     await sync(); assert.deepEqual(await rows(), extendedRows);
+    const deletionRoot = (await getEventSnapshot(scopedRoot.id))!;
+    const deletionChildren = await Promise.all((await rows()).filter(item => item.seriesID === scopedRoot.id).map(item => getEventSnapshot(item.id)));
+    const deletionMap = (await db.select().from(externalEvents).where(eq(externalEvents.eventID, scopedRoot.id)))[0]!;
+    const deletionBaseline = { master: deletionRoot, children: deletionChildren.map(item => item!), ref: { externalEventId: deletionMap.externalEventID, etag: deletionMap.etag, icalUid: deletionMap.icalUid } };
+    const deletionEvidence = await caldavAdapter.readCaldavSeriesForDelete!(userID, account.id, collectionURL, deletionBaseline);
+    const deletion = prepareCaldavSeriesDeletion(deletionEvidence, deletionBaseline);
+    await caldavAdapter.deleteCaldavSeries!(userID, account.id, collectionURL, deletion);
+    assert.equal((await davFetch(scopedURL, { headers: { authorization: basicAuth } })).status, 404);
+    await caldavAdapter.deleteCaldavSeries!(userID, account.id, collectionURL, deletion);
+    assert.deepEqual(await rows(), extendedRows, "Transport deletion alone does not acknowledge local tombstones");
     console.log("Radicale scoped transaction, durable worker and atomic family ACK: OK");
     console.log("Radicale VTODO create/update/delete interop: OK");
   } finally {

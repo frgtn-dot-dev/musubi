@@ -14,17 +14,29 @@ process.env.FEDERATION_ALLOW_PRIVATE_HOSTS = "true";
 async function main() {
   const { config } = await import("@musubi/config");
   config.api.eventTimeEditsEnabled = true;
-  const { prepareCaldavSeriesWrite, deliverCaldavSeriesResource } = await import("./caldav");
+  const { prepareCaldavSeriesDeletion, deleteCaldavSeriesResource, prepareCaldavSeriesWrite, deliverCaldavSeriesResource } = await import("./caldav");
   const { caldavSeriesEvidence, sameCaldavResource } = await import("./caldav_series");
   let data = "", etag = '"before"', mode = "ok", puts = 0, gets = 0;
   let putBody = "", putEtag: string | undefined;
+  let missing = false, deletes = 0;
   const server = createServer(async (req, res) => {
     if (req.method === "GET") {
       gets++;
+      if (missing) { res.writeHead(mode === "delete-unreadable" ? 403 : 404); res.end(); return; }
       if (mode === "redirect-get") { res.writeHead(302, { location: "/collection/other.ics" }); res.end(); return; }
       res.writeHead(mode === "partial" ? 206 : 200, { "content-type": "text/calendar", etag: mode === "weak" ? 'W/"weak"' : etag, ...(mode === "partial" ? { "content-range": "bytes 0-5/1000" } : {}) });
       res.end(mode === "invalid-utf8" ? Buffer.from([0xc3, 0x28]) : data);
       return;
+    }
+    if (req.method === "DELETE") {
+      deletes++;
+      if (mode === "delete-race") { etag = '"raced"'; data = data.replace("SUMMARY:Moved", "SUMMARY:Concurrent child"); }
+      if (req.headers["if-match"] !== etag) { res.writeHead(412); res.end(); return; }
+      missing = true;
+      if (mode === "delete-recreated") { missing = false; etag = '"recreated"'; data = data.replace("SUMMARY:Master", "SUMMARY:Recreated"); }
+      if (mode === "lost") { req.socket.destroy(); return; }
+      if (mode === "applied-503") { res.writeHead(503); res.end(); return; }
+      res.writeHead(204); res.end(); return;
     }
     assert.equal(req.method, "PUT");
     puts++;
@@ -65,13 +77,29 @@ async function main() {
       assert.ok(write.after.includes("X-PRIVATE;LANGUAGE=cs:Folded\r\n extension"));
       assert.ok(write.after.includes("DESCRIPTION:Keep alarm"));
       const deliver = () => deliverCaldavSeriesResource(collection, write, "Basic Zml4dHVyZTpmaXh0dXJl", AbortSignal.timeout(5000));
-      const reset = (nextMode = "ok") => { data = before; etag = ref.etag; mode = nextMode; puts = gets = 0; };
+      const reset = (nextMode = "ok") => { missing = false; deletes = 0; data = before; etag = ref.etag; mode = nextMode; puts = gets = 0; };
       reset();
       const confirmed = await deliver();
       assert.equal(puts, 1); assert.equal(gets, 2); assert.equal(putEtag, ref.etag); assert.equal(putBody, write.after);
       assert.equal(confirmed.ref.etag, '"after"'); assert.equal(confirmed.master.title, "Renamed");
       assert.deepEqual(confirmed.exceptions.map(item => [item.title, item.timeModel, item.isCanceled]), evidence.exceptions.map(item => [item.title, item.timeModel, item.isCanceled]));
       await deliver(); assert.equal(puts, 1, "Repeated delivery recovers full desired resource without another PUT");
+      const deletion = prepareCaldavSeriesDeletion(evidence, baseline);
+      const remove = () => deleteCaldavSeriesResource(collection, JSON.parse(JSON.stringify(deletion)), "Basic Zml4dHVyZTpmaXh0dXJl", AbortSignal.timeout(5000));
+      for (const failure of ["ok", "lost", "applied-503", "delete-unreadable", "delete-race", "delete-recreated"]) {
+        reset(failure);
+        if (failure === "ok") await remove();
+        else if (failure === "delete-race") { await assert.rejects(remove, (error: any) => error.code === "provider-conflict"); assert.ok(data.includes("SUMMARY:Concurrent child")); assert.equal(missing, false); }
+        else if (failure === "delete-recreated") { await assert.rejects(remove, (error: any) => error.outcome === "unconfirmed"); mode = "ok"; await assert.rejects(remove, (error: any) => error.code === "provider-conflict"); assert.ok(data.includes("SUMMARY:Recreated")); }
+        else { await assert.rejects(remove, (error: any) => error.outcome === "unconfirmed"); mode = "ok"; await remove(); }
+        assert.equal(deletes, 1);
+        if (missing) { await remove(); assert.equal(deletes, 1, "A complete 404 recovery never repeats DELETE"); }
+      }
+      reset("ok"); missing = true; await remove(); assert.equal(deletes, 0);
+      reset("ok"); etag = '"stale"'; await assert.rejects(remove); assert.equal(deletes, 0);
+      reset("ok"); data = data.replace("Keep alarm", "Changed alarm"); await assert.rejects(remove); assert.equal(deletes, 0);
+      reset("ok"); config.api.eventTimeEditsEnabled = false; await assert.rejects(remove); assert.equal(gets, 0); config.api.eventTimeEditsEnabled = true;
+      reset("ok");
       const movedID = baseline.children.find(item => !item.isCanceled)!.id;
       const occurrenceWrite = prepareCaldavSeriesWrite(evidence, baseline, { title: "Only this occurrence", description: "Line one\nLine two", location: null }, movedID);
       assert.ok(occurrenceWrite.after.includes(master) && occurrenceWrite.after.includes(cancelled));
