@@ -651,7 +651,7 @@ it("checks a dispatched Graph pull conflict without offering a new response or r
     return json({ ...receipt, targets: [{ ...target, provider: "microsoft", status: checked ? "unconfirmed" : "conflict", graphRsvpPhase: checked ? "absent" : "accepted" }] });
   });
   vi.stubGlobal("fetch", fetcher); mount();
-  fireEvent.click(await screen.findByRole("button", { name: "Check response", exact: true }));
+  fireEvent.click(await screen.findByRole("button", { name: "Check response" }));
   await screen.findByText(/Outlook meeting copy unavailable/);
   expect(screen.queryByRole("button", { name: "Review changes" })).toBeNull();
   expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith("/retry"))).toHaveLength(1);
