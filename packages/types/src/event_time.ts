@@ -132,3 +132,6 @@ export function hasKnownEventTime(event: {
   return (event.timeModel != null && event.timeModel.kind !== "legacy-unknown") ||
     event.seriesID != null || event.originalStart != null;
 }
+
+/** Private pending-setting comparison evidence; never adopts canonical time. */
+export type ProviderSettingTimeEvidence = EventTimeModel | { timeModel: EventTimeModel; start: Date; end: Date; isAllDay: boolean };

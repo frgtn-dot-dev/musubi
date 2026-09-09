@@ -30,3 +30,18 @@ it("does not send on cancel or bubble portal interactions to the calendar", asyn
   await waitFor(() => expect(close).toHaveBeenCalledOnce());
   expect(parent).not.toHaveBeenCalled(); expect(save).not.toHaveBeenCalled();
 });
+it("sends CalDAV's explicit server reply policy and keeps an offline retry immutable", async () => {
+  const caldav = { ...observation, rsvpEdit: { provider: "caldav" as const, expectedRevision: 7 }, state: { ...observation.state!, provider: "caldav" as const, reminders: { provider: "caldav" as const, alarms: [] } } };
+  save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "completed" });
+  render(<ProviderRsvpEditor eventId="event" observation={caldav} returnFocus={document.body} onClose={vi.fn()} />);
+  expect(screen.getByText(/Organizer delivery cannot be verified/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("combobox", { name: "Your response" }));
+  fireEvent.click(await screen.findByRole("option", { name: "Accept" }));
+  fireEvent.click(screen.getByRole("button", { name: "Send response to organizer" }));
+  await screen.findByRole("alert");
+  fireEvent.click(screen.getByRole("button", { name: "Send response to organizer" }));
+  await screen.findByText(/Your response is saved on the calendar server/);
+  expect(save.mock.calls[1]).toEqual(save.mock.calls[0]);
+  expect(save.mock.calls[0][1]).toMatchObject({ provider: "caldav", response: "accepted", notificationPolicy: "server-reply" });
+  expect(save.mock.calls[0][1]).not.toHaveProperty("sendUpdates");
+});

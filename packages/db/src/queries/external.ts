@@ -3,7 +3,7 @@ import { assertExternalCalendarAccess, type ExternalCalendarAccessContext } from
 import { assertNoPendingGraphSeriesCreate } from "./graph-series-create";
 import { caldavSeriesDesired } from "./caldav-series-scope";
 import { expandRecurringEvents } from "@musubi/calendar";
-import { ProviderEventStateSchema, type ProviderEventState, hasKnownEventTime, BadRequestError, EventTimeModelSchema, OccurrenceStartSchema, type EventTimeModel, type OccurrenceStart } from "@musubi/types";
+import { ProviderEventStateSchema, type ProviderEventState, type ProviderSettingTimeEvidence, hasKnownEventTime, BadRequestError, EventTimeModelSchema, OccurrenceStartSchema, type EventTimeModel, type OccurrenceStart } from "@musubi/types";
 import { assertLegacyEventTimePatch } from "./event-time-write";
 import { appendEventOutbox, reserveEventMutation, type EventOutboxIntent } from "./event-outbox";
 import { retainPendingEventPull, retainUnmappedCreatePull } from "./event-outbox-pull";
@@ -794,7 +794,7 @@ async function upsertExternalEventInTransaction(
   time?: ProviderTime,
   providerOccurrence?: ProviderOccurrence,
   providerState?: ProviderEventState,
-  reminderTimeEvidence?: EventTimeModel,
+  reminderTimeEvidence?: ProviderSettingTimeEvidence,
   sourceSeriesID?: string,
   accessContext?: ExternalCalendarAccessContext,
 ): Promise<boolean> {
@@ -842,7 +842,9 @@ async function upsertExternalEventInTransaction(
       const candidate = { ...values, ...temporal, id: crypto.randomUUID(), creatorID: userID, calendars: [calendarID], hasAttendees: false, isCanceled: false };
       expandRecurringEvents(parent ? [{ ...parent.event, calendars: [calendarID], isCanceled: false }, candidate] : [candidate], values.start, values.end, { consumerTimeZone: "UTC" });
     }
-    const pendingTemporal = temporal ?? (reminderTimeEvidence ? { timeModel: EventTimeModelSchema.parse(reminderTimeEvidence) } : undefined);
+    const nativeSettingTime = reminderTimeEvidence && "timeModel" in reminderTimeEvidence ? reminderTimeEvidence : undefined;
+    if (nativeSettingTime && (!(nativeSettingTime.start instanceof Date) || !Number.isFinite(nativeSettingTime.start.getTime()) || !(nativeSettingTime.end instanceof Date) || !Number.isFinite(nativeSettingTime.end.getTime()) || typeof nativeSettingTime.isAllDay !== "boolean")) throw new Error("Invalid setting time evidence.");
+    const pendingTemporal = temporal ?? (nativeSettingTime ? { timeModel: EventTimeModelSchema.parse(nativeSettingTime.timeModel), start: nativeSettingTime.start, end: nativeSettingTime.end, isAllDay: nativeSettingTime.isAllDay } : reminderTimeEvidence ? { timeModel: EventTimeModelSchema.parse(reminderTimeEvidence) } : undefined);
     let map = await mappedEventForUpdate(
       tx,
       provider,

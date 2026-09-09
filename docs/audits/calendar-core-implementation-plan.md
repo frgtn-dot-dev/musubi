@@ -816,3 +816,13 @@ Import při nezávisle zapnutých připomínkách nese časový důkaz pouze pro
 **K14 Google intervalová dostupnost — implementační řez (2026-09-09):** default-off API freeBusy.query a privátní registry oddělují freeBusyReader zdroje od detailových kalendářů. Connections umožňuje explicitní výběr nejvýše 20 zdrojů a intervalový UTC dialog bez Event identit či akcí. Scope, owner/account/generation/epoch a post-fetch kontroly odmítnou opožděná pozorování; reconnect-required a unavailable neznamenají volno. DB regrese je součástí standardního test:db:sync; fake HTTP, klientské testy a desktop/narrow browser acceptance prošly. Grid a nativní intervalové zobrazení jsou navazující implementace; živý re-consent a aktivace zůstávají human-last. Nejde o uzavření celého K14. [Kontrakt](../sync/google-availability.md).
 
 **K14 nativní intervalová dostupnost — navazující řez (2026-09-09):** nativní Connections nabízí stejný explicitní výběr privátních zdrojů a UTC intervalové čtení jako web. Klient odděluje unavailable/reconnect-required od potvrzeného prázdna, nepersistuje intervaly ani Event identity a zahazuje odpovědi po změně účtu/serveru či zavření. SSE během výběru se sloučí do obnovy po dokončení PUT. Skutečné callbacky a transport, controller regrese, typy a lint prošly nezávislým review. Grid je další implementace; renderovaná/fyzická native acceptance a živý re-consent zůstávají otevřené. [Kontrakt](../sync/google-availability.md#native-connection-caller).
+
+**K13 CalDAV one-off RSVP — implementováno za default-off gate:** vlastní
+odpověď používá ověřený current-principal/owner/self/outbox scheduling proof,
+explicitní `server-reply`, plný privátní resource intent, strong ETag CAS a
+readback ACK/recovery. Public/web/native a fake-API browser acceptance jsou
+pokryté; syntetické DB regrese zahrnují retry, lowercase no-op a native DST
+endpoints při pull před ACK. Organizer delivery zůstává unknown. Graph RSVP,
+organizer create/update/cancel, širší recurrence/identity a živá dvouúčtová
+acceptance zůstávají otevřené. [Kontrakt](../sync/caldav-rsvp.md). Flagy,
+minimální klientské verze ani release verze se nemění.

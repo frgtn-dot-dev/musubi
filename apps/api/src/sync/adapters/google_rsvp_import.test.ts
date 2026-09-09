@@ -14,7 +14,7 @@ async function main() {
   const fetched = await fetchGoogleChanges("synthetic", "source", "old", { rsvpEvidence: true, fetchImpl: async () => Response.json({ items: [known], nextSyncToken: "next" }) });
   const change = fetched.changes[0]; assert.equal(change.kind, "event");
   if (change.kind !== "event") throw new Error("Expected event");
-  assert.equal(change.data.timeModel, undefined); assert.equal(change.data.reminderTimeEvidence?.kind, "zoned");
+  assert.equal(change.data.timeModel, undefined); assert.ok(change.data.reminderTimeEvidence && "kind" in change.data.reminderTimeEvidence); assert.equal(change.data.reminderTimeEvidence.kind, "zoned");
   console.log("RSVP-only Google import preserves unsupported multi-zone reads and withholds write-time evidence: OK");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

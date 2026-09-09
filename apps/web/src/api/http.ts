@@ -82,7 +82,15 @@ function responseRequestId(response: Response, body: unknown) {
 }
 
 async function parseJson(response: Response): Promise<unknown> {
-  const text = await response.text();
+  let text: string;
+  try {
+    text = await response.text();
+  } catch (error) {
+    // Received headers remain authoritative even if the error body disconnects.
+    // In particular a 401/403 must never become an offline-cache transport error.
+    if (!response.ok) throwApiError(response, undefined);
+    throw error;
+  }
   if (!text) {
     return undefined;
   }

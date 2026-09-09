@@ -85,6 +85,10 @@ export function matchesRsvpEventProjection(
   actual: EventProjection & Partial<Pick<Event, "timeModel" | "seriesID" | "originalStart" | "isCanceled">> & { externalSeriesID?: string | null },
   instance?: ProviderRsvpInstance,
 ) {
+  if (provider === "caldav") {
+    const observed = EventTimeModelSchema.safeParse(actual.timeModel);
+    return !instance && !expected.recurrence && !expected.seriesID && !expected.originalStart && !expected.isCanceled && !actual.recurrence && !actual.seriesID && !actual.externalSeriesID && !actual.originalStart && !actual.isCanceled && hasKnownEventTime(expected) && ["zoned", "all-day"].includes(expected.timeModel!.kind) && observed.success && JSON.stringify(EventTimeModelSchema.parse(expected.timeModel)) === JSON.stringify(observed.data) && matchesEventProviderProjection(provider, expected, actual);
+  }
   if (!instance) return matchesReminderEventProjection(provider, expected, actual);
   const original = OccurrenceStartSchema.safeParse(expected.originalStart);
   const binding = OccurrenceStartSchema.safeParse(instance.originalStart);

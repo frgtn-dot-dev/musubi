@@ -181,3 +181,10 @@ The separate `CALDAV_ALARM_EDITS_ENABLED` flag enables the narrow one-off
 positive native write-privilege evidence are required. This is resource alarm
 content, not a promise of private per-user settings; Google defaults and Musubi
 reminder scheduling do not apply.
+
+## Gated CalDAV RSVP
+
+The separate [CalDAV RSVP contract](caldav-rsvp.md) adds fresh scheduling and
+self-identity proof before exposing the existing editor for a personal one-off
+meeting. The public action uses an explicit server-reply policy. Private native
+resources remain in the journal, and organizer delivery remains unknown.

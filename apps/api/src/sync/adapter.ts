@@ -6,7 +6,7 @@ import type { GoogleRsvpEvidence, GoogleRsvpResponse, GoogleRsvpOccurrence } fro
 import type { GoogleOccurrenceIntent } from "@musubi/db";
 import type { GoogleOccurrenceEvidence, GoogleSeriesEvidence } from "./adapters/google_occurrence";
 import type { CaldavSeriesSplit, CaldavSeriesDeletion, CaldavSeriesIntent, CaldavSeriesEvidence, CaldavSeriesWrite, CaldavSeriesResolutionEvidence } from "./adapters/caldav_series";
-import type { GoogleReminderWrite, ProviderEventState, Event, Task, TaskStatus, EventTimeModel, OccurrenceStart } from "@musubi/types";
+import type { GoogleReminderWrite, ProviderEventState, Event, Task, TaskStatus, ProviderSettingTimeEvidence, EventTimeModel, OccurrenceStart } from "@musubi/types";
 import type { EventContentPatch } from "@musubi/db";
 
 // A calendar event reduced to what Musubi stores, provider-agnostic.
@@ -18,7 +18,7 @@ export type NormalizedEvent = {
   // Native parent address for import admission only; never canonical identity.
   sourceSeriesID?: string;
   // Observation-only proof for pending reminders; never adopts canonical time.
-  reminderTimeEvidence?: EventTimeModel;
+  reminderTimeEvidence?: ProviderSettingTimeEvidence;
   timeModel?: EventTimeModel;
   externalSeriesID?: string | null;
   originalStart?: OccurrenceStart | null;
@@ -129,6 +129,8 @@ export type CalendarAdapter = {
   writeCaldavAlarm?(intent: CaldavAlarmIntent, signal?: AbortSignal, beforeMutation?: () => Promise<void>): Promise<CaldavAlarmEvidence>;
   createGraphFamily?(userID: string, accountID: string, calendarID: string, event: Event, identity: EventCreateIdentity, state: { uncertain: boolean; beforeWrite: () => Promise<void> }): Promise<GraphSeriesFamily>;
   readGraphFamily?(userID: string, accountID: string, calendarID: string, template: Event, ref: ExternalEventRef, signal?: AbortSignal): Promise<GraphSeriesFamily | null>;
+  readCaldavRsvp?(user: string, account: string, calendar: string, ref: ExternalEventRef, response: import("./adapters/caldav_rsvp").CaldavRsvpResponse, signal?: AbortSignal): Promise<import("./adapters/caldav_rsvp").CaldavRsvpEvidence>;
+  writeCaldavRsvp?(user: string, account: string, calendar: string, evidence: import("./adapters/caldav_rsvp").CaldavRsvpEvidence, signal?: AbortSignal, beforeWrite?: () => Promise<void>): Promise<{ etag: string; recovered: boolean; notificationDelivery: "unknown"; confirmation: import("@musubi/types").CaldavRsvpConfirmation }>;
   readRsvp?(user: string, account: string, calendar: string, ref: ExternalEventRef, response: GoogleRsvpResponse, signal?: AbortSignal, occurrence?: GoogleRsvpOccurrence): Promise<GoogleRsvpEvidence>;
   readRsvpResolution?(user: string, account: string, calendar: string, ref: ExternalEventRef, response: GoogleRsvpResponse, signal?: AbortSignal, occurrence?: GoogleRsvpOccurrence): Promise<GoogleRsvpEvidence>;
   writeRsvp?(user: string, account: string, calendar: string, evidence: GoogleRsvpEvidence, policy: { sendUpdates: "all" }, signal?: AbortSignal, beforeWrite?: () => Promise<void>): Promise<{ etag: string; recovered: boolean; notificationDelivery: "unknown" }>;

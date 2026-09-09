@@ -10,6 +10,30 @@ afterEach(() => {
 });
 
 describe("apiRequest", () => {
+  it.each([401, 403])("retains HTTP %s when its response body fails", async (status) => {
+    const expired = vi.fn();
+    window.addEventListener(AUTH_EXPIRED_EVENT, expired);
+    try {
+      for (const failure of [new TypeError("Body disconnected"), new DOMException("Body timed out", "TimeoutError")]) {
+        vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => new Response(
+          new ReadableStream({ start(controller) { controller.error(failure); } }),
+          { status, headers: { "x-request-id": "headers-survive" } },
+        )));
+        const requests = [
+          () => apiRequest("/api/v1/test", { responseSchema: z.unknown() }),
+          () => apiRawBodyRequest("/api/v1/test", { body: "fixture", contentType: "text/plain", responseSchema: z.unknown() }),
+          () => apiTextRequest("/api/v1/test"),
+        ];
+        for (const request of requests) {
+          await expect(request()).rejects.toMatchObject({ status, requestId: "headers-survive" });
+        }
+      }
+      expect(expired).toHaveBeenCalledTimes(status === 401 ? 6 : 0);
+    } finally {
+      window.removeEventListener(AUTH_EXPIRED_EVENT, expired);
+    }
+  });
+
   it.each(["unsupported", "denied", "unknown"] as const)("preserves the server capability reason %s through event feedback", async (reason) => {
     const message = `Event writing is ${reason}. No changes were saved.`;
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({

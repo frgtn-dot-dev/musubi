@@ -17,6 +17,7 @@ import { useReminders } from "~/calendar/use-reminders";
 import { useProviderLinkReturn } from "~/calendar/connections";
 import { useSessionUser } from "~/auth/use-session-user";
 import { useSnapshot } from "~/offline/SnapshotProvider";
+import { canKeepOfflineQueryData } from "~/offline/query-error";
 import { signOutAndReset } from "~/offline/sign-out";
 import { toDateKey } from "~/calendar/date-key";
 import {
@@ -130,7 +131,9 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
   // Waiting on the restore counts as loading: painting an empty calendar first
   // and filling it a frame later is worse than a moment of the loading state.
   const pending = queries.some((query) => query.isPending) || !snapshot.ready;
-  const errorQuery = queries.find((query) => query.error);
+  const errorQuery = queries.find(
+    (query) => query.error && !canKeepOfflineQueryData(query, offline),
+  );
   const error =
     errorQuery?.error ?? workspace.expansionError ?? reminders?.error;
 

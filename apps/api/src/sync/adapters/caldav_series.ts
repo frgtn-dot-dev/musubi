@@ -87,7 +87,7 @@ export type CaldavSeriesWrite = import("@musubi/db").CaldavSeriesWriteIntent;
  * Only line folding/endings and ordering between different property names are
  * ignored. Unknown values, parameter spelling/order, repeated-property order
  * and subcomponent order stay exact and therefore fail closed on transforms. */
-export function sameCaldavResource(left: string, right: string): boolean {
+export function canonicalCaldavResource(data: string): string {
   type Component = { name: string; properties: { name: string; line: string }[]; children: Component[] };
   const canonical = (data: string): unknown => {
     // The shared span reader rejects malformed boundaries and trailing content.
@@ -111,7 +111,11 @@ export function sameCaldavResource(left: string, right: string): boolean {
     const sort = (component: Component): unknown => [component.name, component.properties.sort((a, b) => a.name.localeCompare(b.name)).map(property => property.line), component.children.map(sort)];
     return roots.map(sort);
   };
-  return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
+  return JSON.stringify(canonical(data));
+}
+
+export function sameCaldavResource(left: string, right: string): boolean {
+  return canonicalCaldavResource(left) === canonicalCaldavResource(right);
 }
 
 /** Refuse ambiguous path encodings before sending account credentials. Some

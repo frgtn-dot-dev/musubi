@@ -1,5 +1,6 @@
 import { inspectCaldavAlarm, writeCaldavAlarm } from "./caldav_alarms";
 import type { CaldavAlarmIntent } from "@musubi/db";
+import { readCaldavRsvp, deliverCaldavRsvp } from "./caldav_rsvp_delivery";
 import { caldavEventState } from "./provider_event_state";
 import { caldavSeriesEvidence, caldavSeriesCreationEvidence, type CaldavSeriesSplit, caldavSeriesResolutionEvidence, caldavSeriesResourceURL, sameCaldavResource, type CaldavSeriesDeletion, type CaldavSeriesWrite, type CaldavSeriesEvidence, type CaldavSeriesIntent } from "./caldav_series";
 import ICAL from "ical.js";
@@ -748,7 +749,7 @@ function assertCompleteObjects(urls: string[], objects: DAVCalendarObject[]) {
     throw new Error("CalDAV resource fetch was incomplete; cursor remains unchanged.");
 }
 
-function normalizedObjectChanges(
+export function normalizedObjectChanges(
   objects: DAVCalendarObject[],
 ): NormalizedChange[] {
   const changes: NormalizedChange[] = [];
@@ -776,6 +777,14 @@ function normalizedObjectChanges(
           ? error
           : new Error(`Invalid calendar resource: ${object.url}`);
       }
+    }
+    if (event && config.api.providerRsvpEditsEnabled) {
+      // RSVP-only import keeps the legacy read shape and enriches only an
+      // isolated supported event; recurrence/unknown reads retain compatibility.
+      try {
+        const native = normalizeCaldavResource(object);
+        if (native.length === 1 && !native[0]!.recurrence && !native[0]!.originalStart && ["zoned", "all-day"].includes(native[0]!.timeModel?.kind ?? "")) event.reminderTimeEvidence = { timeModel: native[0]!.timeModel!, start: native[0]!.start, end: native[0]!.end, isAllDay: native[0]!.isAllDay };
+      } catch { /* No write-time evidence for an unsupported native resource. */ }
     }
     if (event) changes.push({ kind: "event", data: event });
     if (task) changes.push({ kind: "task", data: task });
@@ -1147,6 +1156,17 @@ export async function createCaldavSplitResource(externalCalendarId: string, spli
   }
 }
 
+async function rsvpAuthorization(userID: string, accountID: string, externalCalendarID: string) {
+  if (!config.api.providerRsvpEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+  const accounts = await getCaldavAccountsByUser(userID);
+  const calendars = await getUserExternalCalendars("caldav", userID, accountID);
+  if (!accounts.some(item => item.id === accountID) || !calendars.some(item => item.externalCalendarID === externalCalendarID && item.supportsEvents)) throw new EventWriteError("event-write", "denied");
+  const selected = calendars.find(item => item.externalCalendarID === externalCalendarID)!;
+  const link = await getExternalLinkForCalendar(selected.calendarID);
+  if (!link || link.disabled || link.userID !== userID || link.accountID !== accountID || link.provider !== "caldav" || link.externalCalendarID !== externalCalendarID || !link.supportsEvents) throw new EventWriteError("event-write", "denied");
+  return basicAuthForAccount(accountID);
+}
+
 async function seriesAuthorization(userID: string, accountId: string, externalCalendarId: string, intent: CaldavSeriesIntent, signal?: AbortSignal, action: "update" | "delete" | "create" = "update") {
   if (!config.api.eventTimeEditsEnabled)
     throw new EventWriteError("event-write", "unsupported");
@@ -1300,6 +1320,17 @@ export const caldavAdapter: CalendarAdapter = {
     const { resource, authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, intent, signal);
     const current = await readEventResource(authorization, resource.href, intent.ref, signal, "error", true);
     return caldavSeriesResolutionEvidence(current.data, intent, { ...intent.ref, etag: current.etag }, before, targetEventID);
+  },
+  async readCaldavRsvp(userID, accountID, calendar, ref, response, signal) {
+    if (!ref.icalUid) throw new EventWriteError("event-write", "unsupported");
+    return readCaldavRsvp(calendar, { id: ref.externalEventId, etag: requireEventEtag(ref.etag), uid: ref.icalUid }, await rsvpAuthorization(userID, accountID, calendar), response, signal);
+  },
+  async writeCaldavRsvp(userID, accountID, calendar, evidence, signal, beforeWrite) {
+    const authorization = await rsvpAuthorization(userID, accountID, calendar);
+    return deliverCaldavRsvp(calendar, evidence, authorization, signal, async () => {
+      if (await rsvpAuthorization(userID, accountID, calendar) !== authorization) throw new ProviderEventWriteError("provider-conflict");
+      await beforeWrite?.();
+    });
   },
   async readCaldavSeries(userID, accountId, externalCalendarId, intent, signal) {
     const { resource, authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, intent, signal);

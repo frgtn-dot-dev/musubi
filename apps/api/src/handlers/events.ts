@@ -2,7 +2,7 @@ import { caldavAlarmObservation, queueCaldavAlarms } from "../sync/caldav_alarms
 import { queueGoogleReminders } from "../sync/provider_reminders";
 import { resolveEventTimeEdit } from "@musubi/calendar";
 import { queueGraphSeriesCreateRequest, findGraphSeriesCreateRequest } from "../sync/graph_series_create";
-import { queueGoogleRsvp } from "../sync/provider_rsvp";
+import { queueProviderRsvp, observeCaldavRsvp } from "../sync/provider_rsvp";
 import { prepareCaldavSeries, prepareCaldavSeriesDelete, prepareCaldavSplit } from "../sync/caldav_scope";
 import { ProviderEventWriteError } from "../sync/event_write";
 import { prepareGoogleOccurrence } from "../sync/google_scope";
@@ -678,7 +678,8 @@ export async function handlerGetProviderEventState(req: Request, res: Response) 
   const id = requireUUID(req.params.eventId, "eventId");
   await assertCanViewEvent(req.user!.id, id);
   res.setHeader("Cache-Control", "private, no-store");
-  res.json(await caldavAlarmObservation(req.user!.id, id, await getOwnProviderEventObservation(req.user!.id, id, config.api.providerReminderEditsEnabled, config.api.providerRsvpEditsEnabled)));
+  const observation = await getOwnProviderEventObservation(req.user!.id, id, config.api.providerReminderEditsEnabled, config.api.providerRsvpEditsEnabled);
+  res.json(await observeCaldavRsvp(req.user!.id, id, await caldavAlarmObservation(req.user!.id, id, observation)));
 }
 
 export async function handlerProviderReminderEdit(req: Request, res: Response) {
@@ -691,7 +692,7 @@ export async function handlerProviderReminderEdit(req: Request, res: Response) {
 /** A durable intent receipt is not proof that an organizer received an email. */
 export async function handlerProviderRsvpEdit(req: Request, res: Response) {
   const id = requireUUID(req.params.eventId, "eventId");
-  const receipt = await queueGoogleRsvp(req.user!.id, id, req.body);
+  const receipt = await queueProviderRsvp(req.user!.id, id, req.body);
   res.setHeader("Cache-Control", "private, no-store");
   res.status(202).json({ ...receipt, localCommitted: true, notificationDelivery: "unknown" });
 }
