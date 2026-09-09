@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
-import { db, user, events, externalEvents, externalCalendars, calendarEvents, eventOutbox, createCalendar, upsertExternalEvent, getEventSnapshot, providerStateVersion, prepareProviderReminderInstanceEdit, commitProviderReminderInstanceEdit, completeEventOutbox, hasProviderReminderInstanceSource, calendarMembers, getEventDeliveryResolutionContext } from "@musubi/db";
+import { db, user, events, externalEvents, externalCalendars, calendarEvents, eventOutbox, createCalendar, upsertExternalEvent, getEventSnapshot, providerStateVersion, prepareProviderReminderInstanceEdit, commitProviderReminderInstanceEdit, completeEventOutbox, hasProviderReminderInstanceSource, calendarMembers, getEventDeliveryResolutionContext, commitEventDeliveryResolution } from "@musubi/db";
 import { googleReminderInstanceEvidence } from "./adapters/google_reminder_instance";
 import { googleEventState } from "./adapters/provider_event_state";
 import { googleAdapter } from "./adapters/google";
@@ -85,7 +85,8 @@ async function main() {
           await db.update(eventOutbox).set({ status: "pending", leaseToken: null, leaseUntil: null }).where(eq(eventOutbox.id, row.id));
           assert.notEqual((await deliverEventOutbox(row.id, () => googleAdapter))?.status, "completed", "Generic worker never dispatches private intent");
           await db.update(eventOutbox).set({ status: "conflict" }).where(eq(eventOutbox.id, row.id));
-          await assert.rejects(() => getEventDeliveryResolutionContext(owner, child.id, row.id), "Generic resolution cannot replace a private instance journal");
+          const context = await getEventDeliveryResolutionContext(owner, child.id, row.id);
+          await assert.rejects(() => commitEventDeliveryResolution(owner, { context, ref: { externalEventId: "instance", etag: native.etag }, remoteExists: true, action: "update", patch: {}, deletion: undefined }, { mutationId: randomUUID(), expectedLocalRevision: child.revision, expectedLatestOperationId: row.id, expectedRemoteExists: true, expectedRemoteEtag: native.etag }), "Generic content proof cannot replace a private instance journal");
           assert.deepEqual(await db.select().from(externalEvents).where(eq(externalEvents.calendarID, calendar.id)).orderBy(externalEvents.id), maps);
         }
       } finally { await db.delete(user).where(eq(user.id, owner)); }

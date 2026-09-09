@@ -45,7 +45,7 @@ Changed requests, pending child or parent work, cancelled previous source work,
 permission loss and changed bindings cannot enqueue a replacement implicitly.
 Neither canonical event revision nor accepted provider mapping changes on enqueue.
 The claimed-source helper checks the current lease and accepted binding again.
-Generic ACK and conflict replacement paths refuse this private journal. The
+Generic ACK and generic content-conflict proofs refuse this private journal. The
 specialized worker/ACK is described below; public composition remains follow-up
 work.
 
@@ -73,5 +73,22 @@ an unconfirmed operation that can recover by full read without a second PATCH.
 Actual adapter/fake HTTP/PostgreSQL coverage includes defaults/off/custom, concurrent
 workers, applied lost/503 responses, failed ACK storage, pre/post-write parent and
 permission changes, changed lease/native original/unknown fields, baseline and echo
-pulls, foreign pulled state, and default-off refusal. Public admission, explicit
-conflict resolution and client acceptance are still separate work.
+pulls, foreign pulled state, and default-off refusal. Public admission and client acceptance are still separate work.
+
+## Explicit conflict confirmation
+
+An own-source conflict can be refreshed with a complete native instance read. The
+preview carries only the existing public reminder fields and an opaque version
+that binds every native field, mapping and accepted parent/slot context. A newer
+parent revision can be adopted explicitly; a different parent or original slot
+cannot. A changed parent or an unprojected native field invalidates an old preview.
+
+Confirmation rechecks current membership, mapping, journal chain and bound context
+under locks, accepts the fresh native baseline and writes a new private instance
+intent. Generic content and one-off reminder proofs cannot substitute for it.
+Concurrent identical confirmations return one replacement. The worker either
+applies only the saved reminders or confirms an already applied result without
+another PATCH, preserving the current unrelated provider state and native fields.
+Zoned/all-day PostgreSQL and fake HTTP regressions cover resend/recovery, stale
+previews, private-field changes, reparenting/original-slot refusal, permission loss
+and concurrent confirmation/replay. No raw native fields enter the public preview.

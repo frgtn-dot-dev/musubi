@@ -1,3 +1,5 @@
+import { googleReminderInstanceProjection } from "./adapters/google_reminder_instance";
+import { providerReminderDesiredState } from "@musubi/types";
 import { planEventScope } from "@musubi/calendar";
 import { googleRsvpEventEvidence } from "./adapters/google_rsvp_projection";
 import { googleEventState } from "./adapters/provider_event_state";
@@ -141,12 +143,12 @@ async function prepare(
       throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
     const request = ProviderRsvpEditSchema.parse(row.payload.rsvp.request);
     const deletion = await getEventOutboxDeletion(row, ref.externalEventId);
-    const evidence = await adapter.readRsvpResolution(row.userID, row.accountID, row.externalCalendarID, ref, request.response, signal, context.rsvpInstance ? { externalSeriesID: context.rsvpInstance.externalSeriesID, originalStart: context.rsvpInstance.originalStart } : undefined);
+    const evidence = await adapter.readRsvpResolution(row.userID, row.accountID, row.externalCalendarID, ref, request.response, signal, context.providerInstance ? { externalSeriesID: context.providerInstance.externalSeriesID, originalStart: context.providerInstance.originalStart } : undefined);
     const native = googleRsvpEventEvidence(evidence);
-    if (evidence.baseline.id !== ref.externalEventId || !strongEventEtag(evidence.baseline.etag) || !matchesRsvpEventProjection("google", context.local, native, context.rsvpInstance) || !native.timeModel)
+    if (evidence.baseline.id !== ref.externalEventId || !strongEventEtag(evidence.baseline.etag) || !matchesRsvpEventProjection("google", context.local, native, context.providerInstance) || !native.timeModel)
       throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
     const state = googleEventState(evidence.baseline);
-    const baselineVersion = providerRsvpBaselineVersion(context.mapping.id, evidence.baseline, context.rsvpInstance);
+    const baselineVersion = providerRsvpBaselineVersion(context.mapping.id, evidence.baseline, context.providerInstance);
     const currentRef = { externalEventId: evidence.baseline.id, etag: evidence.baseline.etag };
     const preview: EventDeliveryConflict = {
       eventId: row.eventID, operationId: row.id, latestOperationId: context.latest.id,
@@ -156,7 +158,31 @@ async function prepare(
       rsvpResolution: { desired: request.response, remote: state.ownResponse, baselineVersion },
     };
     const proof: EventDeliveryResolutionProof = { context, ref: currentRef, remoteExists: true, action: "update", patch: {}, deletion,
-      rsvp: { baselineVersion, intent: { request, baseline: evidence.baseline, nativeTime: native.timeModel, ...(context.rsvpInstance ? { instance: context.rsvpInstance } : {}), baselineState: state, desiredState: providerRsvpDesiredState(state, evidence.selfEmail, request.response), mappingID: context.mapping.id } } };
+      rsvp: { baselineVersion, intent: { request, baseline: evidence.baseline, nativeTime: native.timeModel, ...(context.providerInstance ? { instance: context.providerInstance } : {}), baselineState: state, desiredState: providerRsvpDesiredState(state, evidence.selfEmail, request.response), mappingID: context.mapping.id } } };
+    return { preview, proof };
+  }
+  if (row.payload.reminderInstance) {
+    if (!config.api.providerReminderEditsEnabled || !adapter.reminderInstance || !ref || context.deleted || !context.mapping || !context.providerInstance)
+      throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const request = ProviderReminderEditSchema.parse(row.payload.reminderInstance.request);
+    const deletion = await getEventOutboxDeletion(row, ref.externalEventId);
+    const binding = context.providerInstance;
+    const evidence = await adapter.reminderInstance.readResolution(row.userID, row.accountID, row.externalCalendarID, ref.externalEventId, { externalSeriesID: binding.externalSeriesID, originalStart: binding.originalStart }, request.reminders, signal);
+    const native = googleReminderInstanceProjection(evidence);
+    if (!matchesRsvpEventProjection("google", context.local, native, binding) || !native.timeModel) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const state = googleEventState(evidence.baseline);
+    if (state.reminders.provider !== "google") throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const stateVersion = providerRsvpBaselineVersion(context.mapping.id, evidence.baseline, binding);
+    const currentRef = { externalEventId: evidence.baseline.id, etag: evidence.baseline.etag };
+    const preview: EventDeliveryConflict = {
+      eventId: row.eventID, operationId: row.id, latestOperationId: context.latest.id,
+      localRevision: context.localRevision, local: { ...content(context.local), timeModel: context.local.timeModel ?? undefined },
+      remote: { ...content(native), timeModel: native.timeModel }, remoteEtag: currentRef.etag,
+      action: "update", canResolve: true, reason: null,
+      reminderResolution: { desired: request.reminders, remote: state.reminders, stateVersion },
+    };
+    const proof: EventDeliveryResolutionProof = { context, ref: currentRef, remoteExists: true, action: "update", patch: {}, deletion,
+      reminder: { intent: request, state, stateVersion, instance: { request, baseline: evidence.baseline, nativeTime: native.timeModel, instance: binding, baselineState: state, desiredState: providerReminderDesiredState(state, request.reminders), mappingID: context.mapping.id } } };
     return { preview, proof };
   }
   if (row.payload.reminderEdit) {
