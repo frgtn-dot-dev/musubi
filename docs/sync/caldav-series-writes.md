@@ -314,7 +314,8 @@ The shared planner requires every existing original identity to remain a member 
 the new rule; orphaning an override or cancellation is refused before commit.
 Native replacement retains RRULE extension parameters and every other property
 and component. COUNT/UNTIL updates share the same resource CAS, replay and atomic
-ACK. Removing recurrence or rewriting dated RDATE/EXDATE sets remains unsupported.
+ACK. Dated RDATE/EXDATE rewrites remain unsupported; the bounded recurrence
+removal contract below covers a lone personal master.
 
 Fake HTTP covers count/until for all time kinds and applied-503 recovery. DB tests
 cover native delivery, remote races, rejected orphaning with no local writes and
@@ -873,3 +874,41 @@ RADICALE_URL=http://127.0.0.1:55232/ node --import tsx apps/api/src/sync/adapter
 # From apps/web, with a local web server at PLAYWRIGHT_ORIGIN:
 ../../node_modules/.bin/playwright test --project=chromium --workers=1 -g 'K12 future-only split confirmation'
 ```
+
+
+## Removing recurrence from a lone personal master
+
+Series scope accepts an explicit `recurrence: null` for a live personal master
+with exactly one RRULE and a known zoned, floating or all-day time model. Active,
+cancelled and retired exception definitions or extra component mappings are
+refused, as are RDATE/EXDATE, duplicate rules, and a simultaneous time edit or
+time-kind/zone conversion. No child is silently discarded or reparented.
+
+The existing full-resource writer removes only the RRULE physical property.
+The root UUID, native URL and UID, DTSTART, DTEND or DURATION, VTIMEZONE, alarms,
+extensions and all untouched bytes remain intact. Explicit title/description/
+location changes retain the existing property-delta contract. The original rule
+and native bytes remain frozen in the durable baseline; the desired canonical
+root becomes one event with null recurrence and no series/original identity.
+
+Fresh positive DAV write-content evidence and the accepted strong ETag authorize
+one conditional PUT. Full-resource readback and the existing lease, source and
+canonical-state checks settle the same root mapping atomically. Lost responses
+recover from the exact desired resource without repeating the mutation. Partial
+readback, stale ETags, revoked grants and local/lease races cannot acknowledge it.
+The generic one-event ACK still cannot settle this typed resource intent.
+
+Pending pulls remain fenced. After ACK, complete-resource and component pulls
+with the retired baseline ETag cannot restore the old rule; missing validators
+also fail closed. A subsequent fresh native version can still be imported.
+Ordinary one-off echo retains UUIDs and revisions. Removal conflicts remain an
+explicit unresolved conflict; the existing recurring structure confirmation does
+not automatically rebase a saved one-off onto a changed remote series.
+
+Parser/fake HTTP regressions cover all three time kinds, exact byte preservation,
+malformed/exception refusal and uncertain recovery. Synthetic database coverage
+adds canonical/mapping identity, immutable intent, replay, pending and stale pull
+fences, permission/CAS/local/lease races and retired exception refusal. The local
+Radicale suite exercises full preparation, conditional PUT, one-off ACK and echo,
+including retained DURATION and alarms. No production flag, version, dependency
+or live-provider acceptance changes with this batch.

@@ -151,7 +151,7 @@ function inspectSeriesContent(data: string, intent: CaldavSeriesIntent, requireA
   const conflict = () => new ProviderEventWriteError("provider-conflict");
   const master = EventSchema.parse(intent.master);
   const children = intent.children.map(child => EventSchema.parse(child));
-  if (!intent.ref.icalUid || master.seriesID || master.originalStart || !master.recurrence || master.isCanceled ||
+  if (!intent.ref.icalUid || master.seriesID || master.originalStart || (!master.recurrence && !(requireAcceptedValidator && master.recurrence === null && children.length === 0)) || master.isCanceled ||
       children.some(child => child.seriesID !== master.id || !child.originalStart) ||
       new Set([master.id, ...children.map(child => child.id)]).size !== children.length + 1)
     throw conflict();

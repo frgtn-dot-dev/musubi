@@ -42,9 +42,9 @@ const unsupported = () => new EventWriteError("event-write", "unsupported", "Rec
 const strong = (value: unknown): value is string => typeof value === "string" && /^"[\x21\x23-\x7e\x80-\xff]*"$/.test(value);
 
 /** Caller holds lifecycle, resource, master and sorted child locks, in that order. */
-export async function caldavSeriesContext(tx: DbTransaction, actorID: string, master: Event, children: Event[], ownOperationID?: string, readOnly = false): Promise<CaldavSeriesContext> {
+export async function caldavSeriesContext(tx: DbTransaction, actorID: string, master: Event, children: Event[], ownOperationID?: string, readOnly = false, allowRemovedRecurrence = false): Promise<CaldavSeriesContext> {
   const family = [master, ...children];
-  if (!master.originCalendarID || master.seriesID || master.originalStart || !master.recurrence || master.isCanceled ||
+  if (!master.originCalendarID || master.seriesID || master.originalStart || (!master.recurrence && !(allowRemovedRecurrence && master.recurrence === null && children.length === 0)) || master.isCanceled ||
       family.some(event => event.creatorID !== actorID || event.originCalendarID !== master.originCalendarID || event.calendars.length !== 1 || event.calendars[0] !== master.originCalendarID || !["zoned", "floating", "all-day"].includes(event.timeModel?.kind ?? ""))) throw unsupported();
   const grantQuery = tx.select({ role: calendarMembers.role }).from(calendarMembers).where(and(eq(calendarMembers.calendarID, master.originCalendarID), eq(calendarMembers.userID, actorID)));
   const [grant] = await (readOnly ? grantQuery : grantQuery.for("share"));
@@ -70,6 +70,7 @@ export async function caldavSeriesContext(tx: DbTransaction, actorID: string, ma
   const retiredQuery = tx.select().from(events).where(and(eq(events.seriesID, master.id), sql`${events.deletedAt} is not null`)).orderBy(events.id);
   const retiredRows = await (readOnly ? retiredQuery : retiredQuery.for("share"));
   const retired = retiredRows.filter(item => !ids.includes(item.id));
+  if (allowRemovedRecurrence && retiredRows.length) throw unsupported();
   if (retired.some(item => item.creatorID !== actorID || item.originCalendarID !== master.originCalendarID || !item.originalStart)) throw unsupported();
   return { master, children, ...(retired.length ? { retiredDefinitions: retired.map(({ id, revision, originalStart }) => ({ id, revision, originalStart })) } : {}), link: { id: link.id, userID: link.userID, provider: link.provider, accountID: link.accountID, externalCalendarID: link.externalCalendarID, disabled: link.disabled, supportsEvents: link.supportsEvents, calendarID: master.originCalendarID }, mappings: mappings.map(({ id, provider, eventID, calendarID, externalCalendarID, externalEventID, icalUid, externalSeriesID, originalStart, etag }) => ({ id, provider, eventID, calendarID, externalCalendarID, externalEventID, icalUid, externalSeriesID, originalStart, etag })) };
 }
@@ -119,7 +120,9 @@ export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseli
     return { ...baseline, master: plan.updates[0]!, children: baseline.children.filter(child => !plan.deletes.includes(child.id)) };
   }
   if (write.cancelTarget !== undefined && (write.cancelTarget !== true || !targetEventID || Object.keys(write.patch).length)) throw unsupported();
-  if (write.patch.recurrence !== undefined && (targetEventID || !write.patch.recurrence || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(write.patch.recurrence) || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(baseline.master.recurrence ?? ""))) throw unsupported();
+  const removesRecurrence = write.patch.recurrence === null;
+  if (removesRecurrence && (targetEventID || write.time || write.newDefinition || write.cancelTarget || baseline.children.length)) throw unsupported();
+  if (write.patch.recurrence !== undefined && (targetEventID || (!removesRecurrence && (!write.patch.recurrence || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(write.patch.recurrence))) || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(baseline.master.recurrence ?? ""))) throw unsupported();
   if (write.time !== undefined && write.cancelTarget) throw unsupported();
   const time = write.time === undefined ? undefined : resolveEventTimeEdit(write.time);
   const currentModel = write.newDefinition || !targetEventID ? baseline.master.timeModel : baseline.children.find(child => child.id === targetEventID)?.timeModel;
@@ -169,7 +172,7 @@ export async function confirmCaldavSeriesOutbox(id: string, token: string, resul
       const links = await tx.select().from(calendarEvents).where(inArray(calendarEvents.eventID, [master.id, ...children.map(child => child.id)]));
       const snapshot = (event: typeof master) => EventSchema.parse({ ...event, calendars: links.filter(link => link.eventID === event.id).map(link => link.calendarID).sort() });
       let current: CaldavSeriesContext;
-      try { current = await caldavSeriesContext(tx, address.userID, snapshot(master), children.map(snapshot), address.id); }
+      try { current = await caldavSeriesContext(tx, address.userID, snapshot(master), children.map(snapshot), address.id, false, address.payload.caldavSeries.write.patch.recurrence === null); }
       catch (error) { if (error instanceof EventWriteError) return false; throw error; }
       const expected = { ...address.payload.caldavSeries.context, master: EventSchema.parse(address.payload.event) };
       const retained = current.children.filter(child => !removedIDs.has(child.id));

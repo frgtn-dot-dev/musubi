@@ -574,6 +574,33 @@ async function main() {
     assert.deepEqual(await rows(), beforeStructuralConfirm);
     await sync(); assert.deepEqual(await rows(), beforeStructuralConfirm);
     console.log("Radicale saved series time/RRULE conflict: complete rekeyed family confirmation and stable echo OK");
+    for (const kind of ["zoned", "floating", "all-day"]) {
+      const removalURL = new URL(`remove-${kind}.ics`, collectionURL).href;
+      const stamp = kind === "all-day" ? "DTSTART;VALUE=DATE:20260328" : `DTSTART${kind === "zoned" ? ";TZID=Europe/Prague" : ""}:20260328T090000`;
+      const native = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Musubi//Removal//EN", "BEGIN:VEVENT", `UID:remove-${kind}`, stamp, kind === "all-day" ? "DURATION:P1D" : "DURATION:PT1H", "RRULE:FREQ=DAILY;COUNT=4", "SUMMARY:Keep one meeting", "X-PRESERVE:private extension", "BEGIN:VALARM", "ACTION:DISPLAY", "TRIGGER:-PT15M", "DESCRIPTION:Keep alarm", "END:VALARM", "END:VEVENT", "END:VCALENDAR", ""].join("\r\n");
+      assert.ok((await davFetch(removalURL, { method: "PUT", headers: { authorization: basicAuth, "content-type": "text/calendar", "if-none-match": "*" }, body: native })).ok);
+      await sync();
+      const [mapping] = await db.select().from(externalEvents).where(eq(externalEvents.externalEventID, removalURL));
+      const local = (await getEventSnapshot(mapping!.eventID))!;
+      const request = { operationID: randomUUID(), scope: "series", action: "update", expectedRevision: local.revision, patch: { recurrence: null } };
+      const candidate = await applyLocalEventScope(local.id, userID, request, { prepareProvider: true });
+      if (candidate.status !== "caldav_required") throw new Error("Missing native removal context");
+      const prepared = await prepareCaldavSeries(candidate.context, request);
+      assert.equal(prepared.write.after, prepared.write.before.replace("RRULE:FREQ=DAILY;COUNT=4\r\n", ""));
+      assert.equal((await applyLocalEventScope(local.id, userID, request, { caldav: prepared })).status, "saved");
+      const operation = (await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, local.id)))[0]!;
+      assert.equal((await deliverEventOutbox(operation.id, () => caldavAdapter))?.status, "completed");
+      const settled = await rows();
+      assert.equal(settled.find(item => item.id === local.id)!.recurrence, null);
+      const read = await davFetch(removalURL, { headers: { authorization: basicAuth } });
+      const bytes = await read.text(); assert.ok(!bytes.includes("RRULE:FREQ=DAILY;COUNT=4")); assert.ok(bytes.includes("X-PRESERVE:private extension")); assert.ok(bytes.includes("DESCRIPTION:Keep alarm"));
+      const stale = await davFetch(removalURL, { method: "PUT", headers: { authorization: basicAuth, "content-type": "text/calendar", "if-match": mapping!.etag! }, body: prepared.write.before });
+      assert.equal(stale.status, 412);
+      await sync(); assert.deepEqual(await rows(), settled);
+      const [currentMapping] = await db.select().from(externalEvents).where(eq(externalEvents.eventID, local.id));
+      assert.equal(currentMapping!.id, mapping!.id); assert.equal(currentMapping!.icalUid, mapping!.icalUid);
+    }
+    console.log("Radicale recurrence removal: three time kinds, preserved full native resource, one-off ACK/echo and stale ETag refusal: OK");
     console.log("Radicale scoped transaction, durable worker and atomic family ACK: OK");
     console.log("Radicale VTODO create/update/delete interop: OK");
   } finally {

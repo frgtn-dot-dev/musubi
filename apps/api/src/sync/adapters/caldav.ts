@@ -946,6 +946,10 @@ export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baselin
     if (!sameCaldavRecurrence(cleanPatch.recurrence, canonical)) throw new EventWriteError("event-write", "unsupported");
     cleanPatch.recurrence = canonical;
   }
+  if (cleanPatch.recurrence === null) {
+    const { master } = eventMaster(evidence.data, baseline.ref.icalUid);
+    if (master.getAllProperties("rrule").length !== 1 || master.hasProperty("rdate") || master.hasProperty("exdate")) throw new EventWriteError("event-write", "unsupported");
+  }
   const desired = caldavSeriesDesired({ baseline, patch: cleanPatch, targetEventID, cancelTarget, newDefinition, time, followingDelete });
   let after: string;
   if (followingDelete) {
@@ -1007,10 +1011,14 @@ export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baselin
     after = patchEventIcal(evidence.data, desired.master, baseline.ref.icalUid!, contentPatch);
     if (cleanPatch.recurrence !== undefined) {
       const { master, index } = eventMaster(after, baseline.ref.icalUid);
-      const rule = new ICAL.Property("rrule");
-      rule.setValue(ICAL.Recur.fromString(desired.master.recurrence!.replace(/^RRULE:/i, "")));
-      Object.assign(rule.toJSON()[1], structuredClone(master.getFirstProperty("rrule")!.toJSON()[1]));
-      after = replaceEventProperties(after, index, new Map([["rrule", [rule]]]));
+      const rules: ICAL.Property[] = [];
+      if (desired.master.recurrence !== null) {
+        const rule = new ICAL.Property("rrule");
+        rule.setValue(ICAL.Recur.fromString(desired.master.recurrence!.replace(/^RRULE:/i, "")));
+        Object.assign(rule.toJSON()[1], structuredClone(master.getFirstProperty("rrule")!.toJSON()[1]));
+        rules.push(rule);
+      }
+      after = replaceEventProperties(after, index, new Map([["rrule", rules]]));
     }
     if (time) {
       const { index } = eventMaster(after, baseline.ref.icalUid);
