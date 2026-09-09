@@ -1,3 +1,5 @@
+import { eventFormValues } from "~/calendar/event-form";
+import { privateEditorFields } from "~/calendar/event-editor-privacy";
 import { handoffEventEditor } from "~/calendar/event-editor-draft";
 import {
   createFileRoute,
@@ -318,6 +320,7 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
       onOpenFullEditor={(values, event) => {
         // The draft goes in the URL so the page survives a reload.
         const search = {
+          draftFields: event ? privateEditorFields.filter(field => values[field] !== eventFormValues(event)[field]) : undefined,
           createID: event ? undefined : values.createID,
           timeKind: values.timeKind,
           timeZone: values.timeZone,

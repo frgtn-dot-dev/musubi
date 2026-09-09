@@ -1,3 +1,5 @@
+import { isGoogleEditorPrivacyRefresh, refreshPrivateEditorBaseline, refreshPrivateEditorValues } from "../event-editor-privacy";
+import { Empty } from "~/ui/Empty";
 import { ProviderRsvpEditor } from "./ProviderRsvpEditor";
 import { ProviderReminderEditor } from "./ProviderReminderEditor";
 import { getServerOrigin } from "~/api/query-keys";
@@ -200,7 +202,16 @@ export function EventDetailsPopover({
 	weekStartsOn,
 }: EventDetailsPopoverProps) {
 	const liveMaster = getEventMaster(event);
-	const [draft, setDraft] = useState<{ event: Event; master: Event }>();
+	const [draft, setDraft] = useState<{ event: Event; master: Event; values?: EventFormValues; privacyRevision?: number }>();
+  const privacyChanged = draft && draft.privacyRevision !== liveMaster.revision && isGoogleEditorPrivacyRefresh(draft.master, liveMaster, calendars);
+  if (privacyChanged) {
+    setDraft({
+      event: refreshPrivateEditorBaseline(draft.event, event),
+      master: refreshPrivateEditorBaseline(draft.master, liveMaster),
+      values: refreshPrivateEditorValues(draft.values ?? eventFormValues(draft.event), draft.event, event),
+      privacyRevision: liveMaster.revision,
+    });
+  }
 	const master = draft?.master ?? liveMaster;
 	const occurrence = draft?.event ?? event;
 	const titleId = useId();
@@ -219,6 +230,12 @@ export function EventDetailsPopover({
 	const [pendingEdit, setPendingEdit] = useState<Event>();
 	const [pendingEditScope, setPendingEditScope] = useState<EditScope>();
 	const [pendingDeleteScope, setPendingDeleteScope] = useState<DeleteScope>();
+  if (privacyChanged) {
+    if (pendingEdit) setPendingEdit(undefined);
+    if (pendingEditScope) setPendingEditScope(undefined);
+    if (pendingDeleteScope) setPendingDeleteScope(undefined);
+    if (deletePrompt) setDeletePrompt(undefined);
+  }
 	const [triggerElement, setTriggerElement] = useState<HTMLElement | null>(null);
 	const [anchorPoint, setAnchorPoint] = useState<{ x: number; y: number }>();
 	const [busyAction, setBusyAction] = useState<string>();
@@ -654,7 +671,17 @@ export function EventDetailsPopover({
 					sideOffset={12}
 					style={surfaceStyle}
 				>
-					{editing ? (
+					{editing && !editable ? (
+            <>
+              <header className={styles.editorHeader}>
+                <h2 id={titleId}>This event is read-only</h2>
+                <IconButton label="Close event editor" size="compact" onClick={() => handleOpenChange(false, true)}>
+                  <X size={17} strokeWidth={1.6} />
+                </IconButton>
+              </header>
+              <Empty title="Your draft is kept" description="Your own changes are kept while this editor is open." />
+            </>
+          ) : editing ? (
 						<>
 							<header className={styles.editorHeader}>
 								<h2 id={titleId}>{master.recurrence ? "Edit series" : "Edit event"}</h2>
@@ -667,10 +694,12 @@ export function EventDetailsPopover({
 								</IconButton>
 							</header>
 							<EventEditorForm
+                key={draft?.privacyRevision ?? "initial"}
+                onValuesChange={(values) => setDraft(current => current ? { ...current, values } : current)}
 								calendarLocked
 								calendars={calendars}
 								compact
-								initialValues={eventFormValues(
+								initialValues={draft?.values ?? eventFormValues(
 									master.recurrence && onRestoreEvent ? occurrence : master,
 								)}
 								onCancel={() => setEditing(false)}

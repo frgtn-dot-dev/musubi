@@ -10,6 +10,8 @@ const optional = z.string().optional().catch(undefined);
  * Back action restores the calendar.
  */
 export const eventEditorSearchSchema = z.object({
+  // Only explicitly changed content may survive a privacy refresh after reload.
+  draftFields: z.array(z.enum(["title", "description", "location", "url"])).optional().catch(undefined),
   createID: z.string().uuid().optional().catch(undefined),
   timeKind: z.enum(["legacy-unknown", "zoned", "floating", "all-day"]).optional().catch(undefined),
   timeZone: optional,
@@ -46,7 +48,7 @@ export type EventEditorSearch = z.infer<typeof eventEditorSearchSchema>;
 /** Navigation coordinates alone are not a restored content draft. */
 export function hasEventEditorContent(search: EventEditorSearch): boolean {
   return Object.entries(search).some(([key, value]) =>
-    value !== undefined && !["date", "returnDate", "view", "createID"].includes(key));
+    value !== undefined && !["date", "returnDate", "view", "createID", "draftFields"].includes(key));
 }
 
 export function applyEventEditorSearch(
