@@ -72,8 +72,8 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
     let caldavContext: CaldavSeriesContext | undefined;
     if (target || mapping || history) {
       if (caldavRoot && ["series", "occurrence"].includes(request.scope) && (options.prepareProvider || options.caldav)) {
-        if ((request.scope === "series" && request.action !== "update") || (request.action === "update" && (request.time !== undefined || Object.keys(request.patch).some(key => !["title", "description", "location"].includes(key)))) || childRows.some(child => child.deletedAt))
-          throw new EventWriteError("event-write", "unsupported", "CalDAV scope editing supports master content and occurrence content/cancellation. No changes were saved.");
+        if ((request.scope === "series" && request.action !== "update") || (request.action === "update" && ((request.time !== undefined && (request.scope !== "occurrence" || !childRows.some(child => sameCaldavScopeContext(child.originalStart, request.originalStart)))) || Object.keys(request.patch).some(key => !["title", "description", "location"].includes(key)))) || childRows.some(child => child.deletedAt))
+          throw new EventWriteError("event-write", "unsupported", "CalDAV scope editing supports master content, occurrence content/cancellation, and existing occurrence time edits. No changes were saved.");
         if (request.scope === "occurrence" && request.action === "delete" && childRows.some(child => child.isCanceled && sameCaldavScopeContext(child.originalStart, request.originalStart))) throw new EventWriteError("event-write", "unsupported");
         caldavContext = await caldavSeriesContext(tx, actorID, EventSchema.parse(master), childRows.map(child => EventSchema.parse(snapshot(child))));
         if (options.caldav && (!sameCaldavScopeContext(options.caldav.write.baseline.master, caldavContext.master) || !sameCaldavScopeContext(options.caldav.write.baseline.children, caldavContext.children)))

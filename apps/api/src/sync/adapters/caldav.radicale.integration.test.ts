@@ -346,6 +346,18 @@ async function main() {
     const restoredRows = await rows();
     assert.equal(restoredRows.find(item => item.id === cancelledScope.id)!.isCanceled, false);
     await sync(); assert.deepEqual(await rows(), restoredRows);
+    const movedTime = { kind: "zoned" as const, timeZone: "Europe/Prague", startLocal: "2026-04-02T12:00:00.000", endLocal: "2026-04-02T13:00:00.000" };
+    const timeRequest = { operationID: randomUUID(), scope: "occurrence", action: "update", expectedRevision: (await getEventSnapshot(scopedRoot.id))!.revision, originalStart: cancelledScope.originalStart, expectedOccurrenceRevision: (await getEventSnapshot(cancelledScope.id))!.revision, patch: {}, time: movedTime };
+    const timeCandidate = await applyLocalEventScope(scopedRoot.id, userID, timeRequest, { prepareProvider: true });
+    if (timeCandidate.status !== "caldav_required") throw new Error("Missing time scope context");
+    const timePrepared = await prepareCaldavSeries(timeCandidate.context, timeRequest);
+    assert.equal((await applyLocalEventScope(scopedRoot.id, userID, timeRequest, { caldav: timePrepared })).status, "saved");
+    const timeOperation = (await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, scopedRoot.id))).find(item => item.mutationID === timeRequest.operationID)!;
+    assert.equal((await deliverEventOutbox(timeOperation.id, () => caldavAdapter))?.status, "completed");
+    const movedRows = await rows();
+    assert.deepEqual(movedRows.find(item => item.id === cancelledScope.id)!.timeModel, movedTime);
+    assert.deepEqual(movedRows.find(item => item.id === cancelledScope.id)!.originalStart, cancelledScope.originalStart);
+    await sync(); assert.deepEqual(await rows(), movedRows);
     console.log("Radicale scoped transaction, durable worker and atomic family ACK: OK");
     console.log("Radicale VTODO create/update/delete interop: OK");
   } finally {

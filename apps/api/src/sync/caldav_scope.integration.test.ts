@@ -1,3 +1,4 @@
+import { resolveEventTimeEdit } from "@musubi/calendar";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
@@ -51,7 +52,7 @@ async function main() {
   const apiOrigin = `http://127.0.0.1:${(api.address() as any).port}`;
   const enabled = config.api.eventTimeEditsEnabled;
   try {
-    for (const scenario of ["revive-zoned", "revive-all-day", "revive-floating", "revive-lost", "revive-race", "generated-zoned", "generated-all-day", "generated-floating", "generated-cancel-zoned", "generated-cancel-all-day", "generated-cancel-floating", "generated-lost", "generated-race", "generated-prepare-race", "generated-tombstone", "cancel-zoned", "cancel-all-day", "cancel-floating", "cancel-lost", "cancel-race", "occurrence-zoned", "occurrence-all-day", "occurrence-floating", "occurrence-lost", "occurrence-race", "zoned", "all-day", "floating", "no-children", "malformed-private", "meeting", "copied", "lost", "race", "local-race", "mapping-race", "lease-race", "tombstone", "prepare-race", "no-op", "resolve", "resolve-all-day", "resolve-floating", "resolve-twice", "resolve-http", "resolve-timezone", "resolve-stale", "resolve-local-race", "resolve-child-race"]) {
+    for (const scenario of ["time-zoned", "time-all-day", "time-floating", "time-lost", "time-race", "revive-zoned", "revive-all-day", "revive-floating", "revive-lost", "revive-race", "generated-zoned", "generated-all-day", "generated-floating", "generated-cancel-zoned", "generated-cancel-all-day", "generated-cancel-floating", "generated-lost", "generated-race", "generated-prepare-race", "generated-tombstone", "cancel-zoned", "cancel-all-day", "cancel-floating", "cancel-lost", "cancel-race", "occurrence-zoned", "occurrence-all-day", "occurrence-floating", "occurrence-lost", "occurrence-race", "zoned", "all-day", "floating", "no-children", "malformed-private", "meeting", "copied", "lost", "race", "local-race", "mapping-race", "lease-race", "tombstone", "prepare-race", "no-op", "resolve", "resolve-all-day", "resolve-floating", "resolve-twice", "resolve-http", "resolve-timezone", "resolve-stale", "resolve-local-race", "resolve-child-race"]) {
       const owner = `caldav-scope-${randomUUID()}`;
       const credential = issueMemberToken();
       await db.insert(user).values({ id: owner, name: "Fixture", email: `${owner}@example.test`, isExternal: true });
@@ -133,9 +134,11 @@ async function main() {
         }
         const cancellation = scenario.startsWith("cancel-");
         const revival = scenario.startsWith("revive-");
-        const occurrence = cancellation || revival || scenario.startsWith("occurrence-");
+        const moving = scenario.startsWith("time-");
+        const time = moving ? scenario.endsWith("all-day") ? { kind: "all-day", startDate: "2026-04-02", endDate: "2026-04-03" } : { kind: scenario.endsWith("floating") ? "floating" : "zoned", ...(scenario.endsWith("floating") ? {} : { timeZone: "Europe/Prague" }), startLocal: "2026-04-02T12:00:00.000", endLocal: "2026-04-02T13:00:00.000" } : undefined;
+        const occurrence = cancellation || revival || moving || scenario.startsWith("occurrence-");
         const moved = original.find(event => event.seriesID && event.isCanceled === revival)!;
-        const request = { operationID: randomUUID(), scope: occurrence ? "occurrence" : "series", ...(occurrence ? { originalStart: moved.originalStart, expectedOccurrenceRevision: moved.revision } : {}), expectedRevision: root.revision, ...(cancellation ? { action: "delete" } : { action: "update", patch: scenario === "no-op" ? {} : { title: "Renamed" } }) };
+        const request = { operationID: randomUUID(), scope: occurrence ? "occurrence" : "series", ...(time ? { time } : {}), ...(occurrence ? { originalStart: moved.originalStart, expectedOccurrenceRevision: moved.revision } : {}), expectedRevision: root.revision, ...(cancellation ? { action: "delete" } : { action: "update", patch: scenario === "no-op" ? {} : { title: "Renamed" } }) };
         const headers = { authorization: `Bearer ${credential.raw}`, "content-type": "application/json", [CLIENT_VERSION_HEADER]: PRODUCT_VERSION };
         const post = (body = request) => fetch(`${apiOrigin}/events/${root.id}/scope`, { method: "POST", headers, body: JSON.stringify(body) });
         if (scenario === "malformed-private") {
@@ -192,14 +195,14 @@ async function main() {
         assert.equal((await getEventSnapshot(root.id))!.revision, root.revision + 1);
         if (occurrence) {
           const current = (await rows()).find(event => event.id === moved.id)!;
-          assert.deepEqual(current, { ...moved, ...(cancellation ? { isCanceled: true } : { title: "Renamed", ...(revival ? { isCanceled: false } : {}) }), revision: moved.revision + 1, updatedAt: current.updatedAt });
+          assert.deepEqual(current, { ...moved, ...(time ? resolveEventTimeEdit(time) : {}), ...(cancellation ? { isCanceled: true } : { title: "Renamed", ...(revival ? { isCanceled: false } : {}) }), revision: moved.revision + 1, updatedAt: current.updatedAt });
           assert.equal((await getEventSnapshot(root.id))!.title, "Master");
           assert.deepEqual((await rows()).filter(event => event.seriesID && event.id !== moved.id), original.filter(event => event.seriesID && event.id !== moved.id));
         } else assert.deepEqual((await rows()).filter(event => event.seriesID), original.filter(event => event.seriesID));
         assert.deepEqual(await maps(), mappings);
         await assert.rejects(persist, /resource could not be persisted/);
         assert.deepEqual(await maps(), mappings, "Pending pull cannot accept any component validator");
-        if (["lost", "race", "occurrence-lost", "occurrence-race", "cancel-lost", "cancel-race", "revive-lost", "revive-race"].includes(scenario)) mode = scenario.replace(/^(occurrence|cancel|revive)-/, "");
+        if (["lost", "race", "occurrence-lost", "occurrence-race", "cancel-lost", "cancel-race", "revive-lost", "revive-race", "time-lost", "time-race"].includes(scenario)) mode = scenario.replace(/^(occurrence|cancel|revive|time)-/, "");
         if (scenario === "local-race") onPut = async () => { await db.update(events).set({ revision: sql`${events.revision} + 1`, title: "Newer local child" }).where(eq(events.id, original.find(event => event.seriesID)!.id)); };
         if (scenario === "mapping-race") onPut = async () => { await db.update(externalEvents).set({ etag: '"newer-map"' }).where(eq(externalEvents.id, mappings.find(map => map.eventID !== root.id)!.id)); };
         if (scenario === "lease-race") onPut = async () => { await db.update(eventOutbox).set({ leaseToken: randomUUID(), leaseUntil: new Date(Date.now() + 120000) }).where(eq(eventOutbox.id, operation.id)); };
@@ -272,14 +275,14 @@ async function main() {
           continue;
         }
 
-        if (scenario === "lost" || scenario === "occurrence-lost" || (scenario === "cancel-lost" || scenario === "revive-lost")) {
+        if (scenario === "lost" || scenario === "occurrence-lost" || (scenario === "cancel-lost" || scenario === "revive-lost" || scenario === "time-lost")) {
           assert.equal(result?.status, "unconfirmed"); assert.deepEqual(await maps(), mappings);
           mode = "ok";
           await db.update(eventOutbox).set({ nextAttemptAt: new Date(0) }).where(eq(eventOutbox.id, operation.id));
           result = await deliverEventOutbox(operation.id, () => caldavAdapter);
         }
         assert.equal(puts, 1);
-        if (["revive-zoned", "revive-all-day", "revive-floating", "revive-lost", "zoned", "all-day", "floating", "no-children", "lost", "occurrence-zoned", "occurrence-all-day", "occurrence-floating", "occurrence-lost", "cancel-zoned", "cancel-all-day", "cancel-floating", "cancel-lost"].includes(scenario)) {
+        if (["time-zoned", "time-all-day", "time-floating", "time-lost", "revive-zoned", "revive-all-day", "revive-floating", "revive-lost", "zoned", "all-day", "floating", "no-children", "lost", "occurrence-zoned", "occurrence-all-day", "occurrence-floating", "occurrence-lost", "cancel-zoned", "cancel-all-day", "cancel-floating", "cancel-lost"].includes(scenario)) {
           assert.equal(result?.status, "completed", JSON.stringify({ status: result?.status, error: result?.errorCode }));
           if (occurrence) assert.ok(data.includes(master) && data.includes(revival ? child : cancelled), "Native master and unrelated cancellation bytes are untouched");
           assert.ok((await maps()).every(map => map.etag === '"after"'));
@@ -294,7 +297,7 @@ async function main() {
           for (const map of await maps()) if (!(scenario === "mapping-race" && map.eventID !== root.id && map.etag === '"newer-map"')) assert.equal(map.etag, '"before"');
           const preview = await fetch(`${apiOrigin}/events/${root.id}/delivery/${operation.id}/conflict`, { headers });
           const text = await preview.text(); assert.equal(preview.status, 409); assert.equal(JSON.parse(text).code, ["lease-race", "local-race"].includes(scenario) ? "delivery-state-changed" : "delivery-resolution-unavailable"); assert.ok(!text.includes("Never disclose") && !text.includes("BEGIN:VCALENDAR"));
-          if (scenario === "race" || scenario === "occurrence-race" || (scenario === "cancel-race" || scenario === "revive-race")) {
+          if (scenario === "race" || scenario === "occurrence-race" || (scenario === "cancel-race" || scenario === "revive-race" || scenario === "time-race")) {
             assert.ok(data.includes("SUMMARY:Remote child"));
             await db.update(eventOutbox).set({ status: "pending", nextAttemptAt: new Date(0), uncertain: false }).where(eq(eventOutbox.id, operation.id));
             const lease = await claimEventOutbox(operation.id); assert.ok(lease);

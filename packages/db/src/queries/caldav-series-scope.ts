@@ -1,6 +1,6 @@
-import { planEventScope } from "@musubi/calendar";
+import { planEventScope, resolveEventTimeEdit } from "@musubi/calendar";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
-import { EventSchema, EventWriteError, type Event } from "@musubi/types";
+import { EventSchema, EventWriteError, type Event, type EventTimeEdit } from "@musubi/types";
 import { db } from "..";
 import { calendarEvents, events, externalCalendars, externalEvents, externalEventTombstones, eventOutbox } from "../schema";
 import type { DbTransaction } from "./calendars";
@@ -22,6 +22,7 @@ export type CaldavSeriesWriteIntent = {
   targetEventID?: string;
   cancelTarget?: true;
   newDefinition?: Event;
+  time?: EventTimeEdit;
   before: string;
   after: string;
 };
@@ -75,10 +76,11 @@ export async function appendCaldavSeries(tx: DbTransaction, actorID: string, ope
 }
 
 /** Reconstruct the only permitted canonical change from the private input. */
-export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseline" | "patch" | "targetEventID" | "cancelTarget" | "newDefinition">): CaldavSeriesWriteIntent["baseline"] {
+export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseline" | "patch" | "targetEventID" | "cancelTarget" | "newDefinition" | "time">): CaldavSeriesWriteIntent["baseline"] {
   if (!write.patch || typeof write.patch !== "object" || Array.isArray(write.patch) || Object.keys(write.patch).some(key => !["title", "description", "location"].includes(key))) throw unsupported();
   const { baseline, targetEventID } = write;
   if (write.cancelTarget !== undefined && (write.cancelTarget !== true || !targetEventID || Object.keys(write.patch).length)) throw unsupported();
+  if (write.time !== undefined && (!targetEventID || write.newDefinition || write.cancelTarget)) throw unsupported();
   if (write.newDefinition) {
     const definition = EventSchema.parse(write.newDefinition);
     if (targetEventID !== definition.id || !definition.originalStart || [baseline.master, ...baseline.children].some(item => item.id === definition.id)) throw unsupported();
@@ -91,7 +93,10 @@ export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseli
   if (!targetEventID) return { ...baseline, master: EventSchema.parse({ ...baseline.master, ...write.patch }) };
   const target = baseline.children.filter(child => child.id === targetEventID);
   if (target.length !== 1 || (target[0]!.isCanceled && write.cancelTarget) || !target[0]!.originalStart) throw unsupported();
-  return { ...baseline, children: baseline.children.map(child => child.id === targetEventID ? EventSchema.parse({ ...child, ...write.patch, isCanceled: write.cancelTarget === true }) : child) };
+  const time = write.time === undefined ? undefined : resolveEventTimeEdit(write.time);
+  const currentModel = target[0]!.timeModel;
+  if (time && (time.timeModel.kind !== currentModel?.kind || time.timeModel.kind === "zoned" && (currentModel?.kind !== "zoned" || time.timeModel.timeZone !== currentModel.timeZone))) throw unsupported();
+  return { ...baseline, children: baseline.children.map(child => child.id === targetEventID ? EventSchema.parse({ ...child, ...write.patch, ...time, isCanceled: write.cancelTarget === true }) : child) };
 }
 
 class CaldavLeaseLost extends Error {}

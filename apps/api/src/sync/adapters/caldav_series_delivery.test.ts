@@ -1,4 +1,4 @@
-import { planEventScope } from "@musubi/calendar";
+import { planEventScope, resolveEventTimeEdit } from "@musubi/calendar";
 import type { OccurrenceStart } from "@musubi/types";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -96,6 +96,22 @@ async function main() {
       assert.ok(cancelledResult.exceptions.every(item => item.isCanceled));
       assert.deepEqual(cancelledResult.exceptions.map(item => item.timeModel), evidence.exceptions.map(item => item.timeModel));
       assert.equal(puts, 1, "Cancellation recovers an applied 503 without another PUT");
+      const time = kind === "all-day" ? { kind: "all-day" as const, startDate: "2026-04-02", endDate: "2026-04-03" } : { kind: kind === "floating" ? "floating" as const : "zoned" as const, ...(kind === "zoned" ? { timeZone: "Europe/Prague" } : {}), startLocal: "2026-04-02T12:00:00.000", endLocal: "2026-04-02T13:00:00.000" };
+      const timeWrite = prepareCaldavSeriesWrite(evidence, baseline, {}, movedID, undefined, undefined, time as any);
+      assert.ok(timeWrite.after.includes(master) && timeWrite.after.includes(cancelled));
+      assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, {}, undefined, undefined, undefined, time as any));
+      assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, {}, movedID, true, undefined, time as any));
+      assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, {}, movedID, undefined, undefined, { kind: "zoned", timeZone: "America/New_York", startLocal: "2026-04-02T12:00:00.000", endLocal: "2026-04-02T13:00:00.000" }));
+      reset("applied-503");
+      const deliverTime = () => deliverCaldavSeriesResource(collection, JSON.parse(JSON.stringify(timeWrite)), "Basic Zml4dHVyZTpmaXh0dXJl", AbortSignal.timeout(5000));
+      await assert.rejects(deliverTime, (error: any) => error.outcome === "unconfirmed"); mode = "ok";
+      const movedResult = await deliverTime();
+      const observedTime = movedResult.exceptions.find(item => !item.isCanceled)!;
+      assert.deepEqual(observedTime.originalStart, baseline.children.find(item => item.id === movedID)!.originalStart);
+      assert.deepEqual(observedTime.timeModel, resolveEventTimeEdit(time).timeModel);
+      assert.equal(observedTime.start.getTime(), resolveEventTimeEdit(time).start.getTime());
+      assert.equal(observedTime.end.getTime(), resolveEventTimeEdit(time).end.getTime());
+      await deliverTime(); assert.equal(puts, 1);
       const revival = prepareCaldavSeriesWrite(evidence, baseline, { title: "Restored occurrence" }, baseline.children.find(item => item.isCanceled)!.id);
       assert.ok(revival.after.includes(master) && revival.after.includes(child));
       assert.ok(revival.after.includes("STATUS:CONFIRMED"));
