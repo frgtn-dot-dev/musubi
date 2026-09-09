@@ -98,6 +98,9 @@ async function main() {
       reset("ok"); missing = true; await remove(); assert.equal(deletes, 0);
       reset("ok"); etag = '"stale"'; await assert.rejects(remove); assert.equal(deletes, 0);
       reset("ok"); data = data.replace("Keep alarm", "Changed alarm"); await assert.rejects(remove); assert.equal(deletes, 0);
+      reset("ok");
+      await assert.rejects(() => deleteCaldavSeriesResource(collection, deletion, "Basic Zml4dHVyZTpmaXh0dXJl", AbortSignal.timeout(5000), async () => { throw new Error("Authority changed"); }), /Authority changed/);
+      assert.equal(deletes, 0);
       reset("ok"); config.api.eventTimeEditsEnabled = false; await assert.rejects(remove); assert.equal(gets, 0); config.api.eventTimeEditsEnabled = true;
       reset("ok");
       const movedID = baseline.children.find(item => !item.isCanceled)!.id;

@@ -1,8 +1,8 @@
 import { planEventScope, resolveEventTimeEdit } from "@musubi/calendar";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
-import { EventSchema, EventWriteError, type Event, type EventTimeEdit } from "@musubi/types";
+import { EventSchema, EventWriteError, can, type Event, type EventTimeEdit } from "@musubi/types";
 import { db } from "..";
-import { calendarEvents, events, externalCalendars, externalEvents, externalEventTombstones, eventOutbox } from "../schema";
+import { calendarMembers, calendarEvents, events, externalCalendars, externalEvents, externalEventTombstones, eventOutbox } from "../schema";
 import type { DbTransaction } from "./calendars";
 import { appendEventOutbox } from "./event-outbox";
 import { lockCalendarLifecycle } from "./calendar-lifecycle";
@@ -42,6 +42,9 @@ export async function caldavSeriesContext(tx: DbTransaction, actorID: string, ma
   const family = [master, ...children];
   if (!master.originCalendarID || master.seriesID || master.originalStart || !master.recurrence || master.isCanceled ||
       family.some(event => event.creatorID !== actorID || event.originCalendarID !== master.originCalendarID || event.calendars.length !== 1 || event.calendars[0] !== master.originCalendarID || !["zoned", "floating", "all-day"].includes(event.timeModel?.kind ?? ""))) throw unsupported();
+  const grantQuery = tx.select({ role: calendarMembers.role }).from(calendarMembers).where(and(eq(calendarMembers.calendarID, master.originCalendarID), eq(calendarMembers.userID, actorID)));
+  const [grant] = await (readOnly ? grantQuery : grantQuery.for("share"));
+  if (!grant || !can(grant.role, "editEvents")) throw new EventWriteError("event-write", "denied");
   const linkQuery = tx.select().from(externalCalendars).where(eq(externalCalendars.calendarID, master.originCalendarID));
   const [link] = await (readOnly ? linkQuery : linkQuery.for("share"));
   if (!link || link.provider !== "caldav" || link.userID !== actorID || link.disabled || !link.supportsEvents) throw unsupported();
