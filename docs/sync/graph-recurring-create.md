@@ -94,15 +94,50 @@ test proves unsupported infinite/UNTIL/oversized series stop before permission
 requests, lookup or POST. No missing slot is classified as cancelled by this
 helper; a later native family reader must provide complete independent evidence.
 
+## Complete finite family read candidate
+
+`readGraphSeriesFamily` reads the exact mapped master in its calendar, explicitly
+expands exceptions and cancellation metadata, and pages `/instances` over the
+entire proven COUNT footprint. Pagination cannot leave the HTTPS host, calendar
+or master path. Duplicate IDs, partial/malformed responses, loops, redirects,
+failed pages and inconsistent counts are refused before returning evidence.
+
+Each active instance must reference that master and exactly one original slot.
+Ordinary occurrence times and content must match the proven current master;
+exceptions retain their own native content, UID, ETag and provider state. Expanded
+exceptions are included even when moved outside the original range. Exceptions
+also returned by `/instances` must agree with the expanded observation. Timed
+exceptions preserve exact UTC instants with `legacy-unknown` current zone:
+historical `originalStartTimeZone` is not evidence of their current zone. Zoned
+ordinary instances retain the proven model; all-day values use inclusive dates.
+
+Only a complete finite active set, complete expanded exception set and explicit
+unique cancellation cardinality permit classifying missing original slots as
+cancelled. Opaque Graph cancellation IDs are retained without parsing dates or
+inventing native IDs for absent slots. A second full expanded master read must
+produce the same family observation, including cancellation IDs. This detects
+observed drift; it does not claim an atomic snapshot, a family CAS, or conditional
+write enforcement from an unchanged master ETag.
+
+Independent native fixtures and fake HTTP tests cover DST, all-day year bounds,
+a moved exception outside the query window, per-instance native identities and
+reminders/privacy, complete cancellation, unknown zone preservation, malformed
+and cross-family inputs, incomplete pagination and changed second observations.
+This reader is not yet connected to production sync, local recurrence expansion,
+the durable create ACK or reset sweep; those integrations must preserve the same
+completeness boundary and handle unsupported observations without deleting data.
+
 ## Remaining before activation
 
 The durable create operation, permission checks, uncertain POST recovery and
 canonical master/instance echo handling must be connected together. Reset and
 window movement must not duplicate events or resurrect cancelled occurrences.
-A full family read/import contract must address remote exceptions and opaque
-cancellation identities before local recurrence expansion is enabled. Real
+The private finite reader now provides full family evidence; durable import and
+local expansion must handle its exact exception/cancellation identities before
+creation is enabled. Real
 Outlook acceptance and conditional UPDATE/DELETE proof remain separate.
 
 Sources: [event identity and transactionId](https://learn.microsoft.com/en-us/graph/api/resources/event?view=graph-rest-1.0),
 [exact master expansion](https://learn.microsoft.com/en-us/graph/api/event-get?view=graph-rest-1.0),
-[create event](https://learn.microsoft.com/en-us/graph/api/user-post-events?view=graph-rest-1.0).
+[create event](https://learn.microsoft.com/en-us/graph/api/user-post-events?view=graph-rest-1.0),
+[scoped instances](https://learn.microsoft.com/en-us/graph/api/event-list-instances?view=graph-rest-1.0).
