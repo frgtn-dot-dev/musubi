@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { EventSchema } from "@musubi/types";
 import { resolveEventTimeEdit } from "@musubi/calendar";
-import { graphSeriesFamilyEvidence, readGraphSeriesFamily } from "./microsoft_series_family";
+import { graphSeriesFamilyEvidence, readGraphSeriesFamily, readGraphSeriesFamilyOrMissing } from "./microsoft_series_family";
 import { graphInstanceTimeFromUtc, graphOriginalStartFromUtc } from "./microsoft_time";
 
 const template = EventSchema.parse({ id: "00000000-0000-4000-8000-000000000181", revision: 1, creatorID: "owner", organizer: "", title: "Series", color: "red", calendars: [], isCanceled: false, recurrence: "RRULE:FREQ=DAILY;COUNT=4", ...resolveEventTimeEdit({ kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-27T09:00:00", endLocal: "2026-03-27T10:00:00" }) });
@@ -77,6 +77,22 @@ async function main() {
     assert.match(String(req.headers.prefer), /outlook.timezone="UTC"/); assert.match(String(req.headers.prefer), /outlook.body-content-type="text"/);
     const url = new URL(req.url!, "http://fixture.test"); reads.push(url.pathname + url.search);
     const send = (value: unknown, status = 200) => { res.writeHead(status, { "Content-Type": "application/json" }); res.end(JSON.stringify(value)); };
+    if (mode.startsWith("missing")) {
+      const error = { error: { code: "ErrorItemNotFound" } };
+      if (url.pathname === "/v1.0/me/calendars/cal%2Fone") {
+        assert.equal(url.searchParams.get("$select"), "id");
+        if (mode === "missing-calendar-denied") return send(error, 403);
+        if (mode === "missing-calendar-gone") return send(error, 404);
+        if (mode === "missing-calendar-failed") return send(error, 503);
+        if (mode === "missing-calendar-partial") res.setHeader("Content-Range", "bytes 0-10/100");
+        return send({ id: mode === "missing-wrong-calendar" ? "other" : "cal/one" });
+      }
+      assert.equal(url.pathname, path); masterReads++;
+      if (mode === "missing-restored" && masterReads === 2) return send(changed);
+      if (mode === "missing-partial") res.setHeader("Content-Range", "bytes 0-10/100");
+      if (mode === "missing-truncated") { res.writeHead(404, { "Content-Type": "application/json" }); res.end('{"error":'); return; }
+      return send(mode === "missing-malformed" ? {} : error, 404);
+    }
     if (mode === "partial") { res.setHeader("Content-Range", "bytes 0-10/100"); return send(changed); }
     if (mode === "redirect") { res.writeHead(302, { location: "https://other.test/leak" }); res.end(); return; }
     if (mode === "network") { req.socket.destroy(); return; }
@@ -115,6 +131,15 @@ async function main() {
     assert.deepEqual(await read(), proof); assert.equal(reads.length, 4); assert.equal(masterReads, 2);
     for (const scenario of ["partial", "redirect", "network", "foreign", "wrong-calendar", "wrong-master", "loop", "malformed", "page-failure", "duplicate", "wrong-count", "changed-exception", "changed-cancel", "changed-rule", "master-failure"]) {
       mode = scenario; reads = []; masterReads = 0; await assert.rejects(read); assert.ok(reads.length <= 4);
+    }
+    mode = "missing"; reads = []; masterReads = 0;
+    await assert.rejects(read, "Create ACK always requires an active complete family");
+    reads = []; masterReads = 0;
+    assert.equal(await readGraphSeriesFamilyOrMissing("synthetic-token", "cal/one", template, ref), null);
+    assert.equal(masterReads, 2); assert.equal(reads.length, 3);
+    for (const scenario of ["missing-calendar-denied", "missing-calendar-gone", "missing-calendar-failed", "missing-calendar-partial", "missing-wrong-calendar", "missing-restored", "missing-partial", "missing-truncated", "missing-malformed", "master-failure", "page-failure"]) {
+      mode = scenario; reads = []; masterReads = 0;
+      await assert.rejects(() => readGraphSeriesFamilyOrMissing("synthetic-token", "cal/one", template, ref));
     }
     mode = "normal"; reads = []; masterReads = 0;
     const mutable = structuredClone(template), mutableRef = { ...ref };

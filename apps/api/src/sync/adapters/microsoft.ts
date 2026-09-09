@@ -1,4 +1,4 @@
-import { readGraphSeriesFamily } from "./microsoft_series_family";
+import { readGraphSeriesFamilyOrMissing } from "./microsoft_series_family";
 import { microsoftEventState } from "./provider_event_state";
 import { config, logger } from "@musubi/config";
 import { getOAuthAccountIDs, hasOAuthTaskScope } from "@musubi/db";
@@ -715,7 +715,7 @@ export const microsoftAdapter: CalendarAdapter = {
   async readGraphFamily(userID, accountId, externalCalendarId, template, ref, signal) {
     const timeout = AbortSignal.timeout(60_000);
     const bounded = signal ? AbortSignal.any([signal, timeout]) : timeout;
-    return readGraphSeriesFamily(await getAccessToken(userID, accountId), externalCalendarId, template, ref, bounded);
+    return readGraphSeriesFamilyOrMissing(await getAccessToken(userID, accountId), externalCalendarId, template, ref, bounded);
   },
 
   async assertEventWrite(userID, accountId, externalCalendarId, operation) {

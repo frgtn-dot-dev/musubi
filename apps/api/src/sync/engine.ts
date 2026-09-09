@@ -4,7 +4,7 @@ import { hasKnownEventTime, EventWriteError, type Event, type Task } from "@musu
 import { logger } from "@musubi/config";
 import {
   getDueEventOutboxIDs, getEventOutboxBacklog,
-  listGraphFamilyContexts, replaceGraphFamily, type GraphFamilyContext, type GraphFamilyObservation,
+  listGraphFamilyContexts, replaceGraphFamily, removeGraphFamily, type GraphFamilyContext, type GraphFamilyObservation,
   type EventOutboxIntent,
   deleteExternalEvent,
   deleteExternalTask,
@@ -288,7 +288,7 @@ export async function syncProvider(
     if (taskOnly && !remoteIDs.has(link.externalCalendarID)) continue;
     const calendarStartedAt = performance.now();
     let fetched;
-    const families: { context: GraphFamilyContext; observation: GraphFamilyObservation }[] = [];
+    const families: { context: GraphFamilyContext; observation: GraphFamilyObservation | null }[] = [];
     const excludedEventIDs = new Set<string>(), excludedSeriesIDs = new Set<string>();
     try {
       if (provider === "microsoft" && !taskOnly) {
@@ -296,6 +296,12 @@ export async function syncProvider(
           if (!adapter.readGraphFamily) throw new Error("Complete Graph family reader is unavailable.");
           const mapping = context.mappings.find(value => value.eventID === context.root.id)!;
           const native = await adapter.readGraphFamily(userID, accountId, link.externalCalendarID, { ...context.root, calendars: [link.calendarID] }, { externalEventId: mapping.externalEventID, icalUid: mapping.icalUid, etag: mapping.etag });
+          if (!native) {
+            families.push({ context, observation: null });
+            excludedSeriesIDs.add(mapping.externalEventID);
+            for (const value of context.mappings) excludedEventIDs.add(value.externalEventID);
+            continue;
+          }
           const project = (event: NormalizedEvent): GraphFamilyObservation["master"] => {
             if (!event.timeModel || !event.icalUid || !event.providerState) throw new Error("Incomplete Graph family projection.");
             return { externalID: event.externalId, icalUid: event.icalUid, etag: event.etag ?? null, providerState: event.providerState, values: { ...toEventValues(event, link.calColor), timeModel: event.timeModel } };
@@ -341,7 +347,7 @@ export async function syncProvider(
     const retainedGraphIDs = new Set<string>();
     try {
       for (const family of families) {
-        const result = await replaceGraphFamily(family.context, family.observation);
+        const result = family.observation ? await replaceGraphFamily(family.context, family.observation) : await removeGraphFamily(family.context);
         if (result.changed) changed++;
         for (const id of result.seenExternalIDs) retainedGraphIDs.add(id);
       }

@@ -197,9 +197,29 @@ suppression before hydration, repeated no-op, window renewal/reset, moved and
 cancelled exceptions, revival UUIDs, unrelated one-offs, full-reader/view failures
 a local revision race before commit, and overlapping sync/reset with replacement
 native IDs. Stale per-event updates/deletes cannot bypass full-family evidence. Failed complete proof preserves the
-family and cursor. Remote whole-master 404 currently remains an explicit failed
-read: authoritative family deletion/revival and coordination with a newly
-appearing or pending create must be completed before enabling recurring creation.
+family and cursor.
+
+## Tracked master removal and revival
+
+A missing tracked master requires two complete exact-master 404 JSON error
+responses bracketing a complete 200 read of the exact calendar. Failed access,
+partial/malformed bodies, a restored master during the check and incomplete
+active-family reads fail without applying removal or advancing the cursor.
+This is a bounded read observation, not an atomic provider snapshot. The strict
+reader used for future create ACK still requires an active complete family;
+absence never permits another POST.
+
+After normal view fetch succeeds, the accepted context is rechecked under the
+calendar lifecycle lock. Removal tombstones the entire local family atomically,
+retaining source maps and original UUIDs. Repeated absence is a no-op. Stale
+calendarView components and reset cannot revive it. Tombstoned tracked roots
+continue to receive full reads; a fresh complete active proof with the same
+master UID restores their original UUIDs and current cancellations. An unrelated
+one-off is unaffected. Local revision races refuse removal.
+
+Fake HTTP and PostgreSQL regressions cover negative proof failures, repeated
+removal, reset, stale deltas, local races and same-identity revival. Coordination
+with a newly appearing or pending create remains required before activation.
 
 ## Remaining before activation
 
@@ -214,4 +234,6 @@ Outlook acceptance and conditional UPDATE/DELETE proof remain separate.
 Sources: [event identity and transactionId](https://learn.microsoft.com/en-us/graph/api/resources/event?view=graph-rest-1.0),
 [exact master expansion](https://learn.microsoft.com/en-us/graph/api/event-get?view=graph-rest-1.0),
 [create event](https://learn.microsoft.com/en-us/graph/api/user-post-events?view=graph-rest-1.0),
-[scoped instances](https://learn.microsoft.com/en-us/graph/api/event-list-instances?view=graph-rest-1.0).
+[scoped instances](https://learn.microsoft.com/en-us/graph/api/event-list-instances?view=graph-rest-1.0),
+[calendar read](https://learn.microsoft.com/en-us/graph/api/calendar-get?view=graph-rest-1.0),
+[Graph errors](https://learn.microsoft.com/en-us/graph/errors).
