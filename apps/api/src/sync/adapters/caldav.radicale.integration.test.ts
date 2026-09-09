@@ -530,7 +530,23 @@ async function main() {
     const splitReplacementRow = (await db.select().from(eventOutbox).where(eq(eventOutbox.id, splitReplacement)))[0]!;
     assert.equal((await deliverEventOutbox(splitReplacement, () => caldavAdapter))?.status, "completed");
     await sync(); assert.deepEqual(await rows(), journalRows);
-    assert.equal((await deliverEventOutbox(splitReplacementRow.payload.caldavSplit!.creationOperationID, () => caldavAdapter))?.status, "completed");
+    const futureOperationID = splitReplacementRow.payload.caldavSplit!.creationOperationID;
+    const futureURL = splitReplacementRow.payload.caldavSplit!.prepared.split.creation.ref.externalEventId;
+    const desiredFuture = splitReplacementRow.payload.caldavSplit!.prepared.split.creation.data;
+    const acceptedSource = (await db.select().from(eventOutbox).where(eq(eventOutbox.id, splitReplacement)))[0]!;
+    // A collision AFTER source ACK must never be overwritten or readdressed.
+    assert.ok((await davFetch(futureURL, { method: "PUT", headers: { authorization: basicAuth, "content-type": "text/calendar", "If-None-Match": "*" }, body: desiredFuture.replace("Durable future family", "Synthetic collision") })).ok);
+    assert.equal((await deliverEventOutbox(futureOperationID, () => caldavAdapter))?.status, "conflict");
+    await assert.rejects(() => prepareEventDeliveryResolution(userID, journalSplit.creation.master.id, futureOperationID, () => caldavAdapter));
+    const collision = await davFetch(futureURL, { headers: { authorization: basicAuth } });
+    assert.ok((await collision.text()).includes("Synthetic collision"));
+    assert.ok((await davFetch(futureURL, { method: "DELETE", headers: { authorization: basicAuth, "If-Match": collision.headers.get("etag")! } })).ok);
+    const futureComparison = await prepareEventDeliveryResolution(userID, journalSplit.creation.master.id, futureOperationID, () => caldavAdapter);
+    assert.equal(futureComparison.preview.scopeResolution?.kind, "following-create"); assert.equal(futureComparison.preview.remote, null);
+    const futureReplacement = await commitEventDeliveryResolution(userID, futureComparison.proof, { mutationId: randomUUID(), expectedLocalRevision: futureComparison.preview.localRevision, expectedLatestOperationId: futureOperationID, expectedRemoteExists: false, expectedRemoteEtag: null, expectedScopeResolution: futureComparison.preview.scopeResolution });
+    assert.equal((await deliverEventOutbox(futureReplacement, () => caldavAdapter))?.status, "completed");
+    assert.deepEqual((await db.select().from(eventOutbox).where(eq(eventOutbox.id, splitReplacement)))[0], acceptedSource);
+    console.log("Radicale future-only recovery: completed source immutable, collision refusal, same-address conditional creation OK");
     await sync(); assert.deepEqual(await rows(), journalRows);
     const journalMaps = await db.select().from(externalEvents);
     assert.equal(journalMaps.find(item => item.eventID === journalCut.id)!.externalSeriesID, journalSplit.creation.ref.externalEventId);

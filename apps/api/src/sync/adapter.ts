@@ -132,6 +132,7 @@ export type CalendarAdapter = {
   readCaldavSeriesResolution?(user: string, account: string, calendar: string, intent: CaldavSeriesIntent, before: string, signal?: AbortSignal, targetEventID?: string | null): Promise<CaldavSeriesResolutionEvidence>;
   readCaldavSeriesForDelete?(user: string, account: string, calendar: string, intent: CaldavSeriesIntent, signal?: AbortSignal): Promise<CaldavSeriesEvidence>;
   deleteCaldavSeries?(user: string, account: string, calendar: string, intent: CaldavSeriesDeletion, signal?: AbortSignal, beforeMutation?: () => Promise<void>): Promise<ExternalEventRef>;
+  readCaldavSplitFuture?(user: string, account: string, calendar: string, intent: CaldavSeriesSplit, signal?: AbortSignal): Promise<CaldavSeriesEvidence | null>;
   assertCaldavSplitCreation?(user: string, account: string, calendar: string, intent: CaldavSeriesSplit, signal?: AbortSignal): Promise<void>;
   writeCaldavSplitSource?(user: string, account: string, calendar: string, intent: CaldavSeriesSplit, signal?: AbortSignal, beforeMutation?: () => Promise<void>): Promise<CaldavSeriesEvidence>;
   createCaldavSeries?(user: string, account: string, calendar: string, intent: CaldavSeriesSplit, signal?: AbortSignal, beforeMutation?: () => Promise<void>): Promise<CaldavSeriesEvidence>;

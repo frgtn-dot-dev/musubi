@@ -812,3 +812,64 @@ This deliberately does not resolve a creation conflict after source ACK, rewrite
 an unrelated native resource, choose a different future address or adopt competing
 native structural edits. Those contracts remain open. Live-account/physical QA,
 iCloud privilege evidence, flags and versions are unchanged.
+
+### Future-only recovery after acknowledged source
+
+An unresolved creation can now receive explicit confirmation after its paired
+source operation has completed. The comparison uses `following-create`, the
+original cut and the frozen future canonical ID. It shows the saved future series
+and the current destination, and states that the earlier series is already saved.
+Both clients submit the exact displayed scope; a missing or different scope is
+refused. Confirmation does not repeat the source cut.
+
+This bounded recovery accepts only an absent reserved URL or a complete resource
+matching the desired future bytes under the existing conservative whole-resource
+comparison. A different body, UID, alarm, extension or timezone remains a conflict.
+There is no overwrite, alternate address, structural adoption or inferred native
+ownership from a matching title. Native reads require current ownership, active
+mirror and collection bind evidence. Existing strong validators, complete UTF-8
+reads and redirect refusals remain in force.
+
+The private replacement journal references its immutable completed source and the
+original creation operation. It preserves the future UUID, native URL/UID,
+component identities, desired bytes and local revisions. Repeated confirmations
+replace only creation ancestry. The source receipt, its result and its retained
+pre-cut ETag fences remain untouched. Earlier-family edits may proceed after source
+ACK and do not invalidate an otherwise unchanged future family.
+
+Preview, confirmation and worker checks require the complete unchanged future
+family, destination grant, absence of native mappings and absence of root/child
+deletion observations. Commit locks future resource/component addresses, canonical
+rows, mappings and journal ancestry; provider I/O remains outside the transaction.
+The replacement has its own confirmation mutation and operation identity. Exact
+replay returns that operation. The worker conditionally creates with
+`If-None-Match: *`, or reconciles the complete already-applied resource without a
+second PUT. All mappings, lease settlement and release of superseded creation rows
+are atomic. A changed or expired lease cannot partially acknowledge components.
+
+Regression coverage lives in the CalDAV scope HTTP/PostgreSQL suite, synthetic
+transport suite, both client comparison suites and disposable Radicale test. It
+includes three time models, collision refusal, absent and already-applied reads,
+concurrent/repeated confirmation, stale scope/preview, future definition/grant/proof
+races, lost response, deletion during CREATE, independent source edits and stable
+native echoes. Test commands and completed validation are recorded with the change.
+Live-account/physical QA, iCloud privilege evidence, flags and versions are unchanged.
+
+Validation for this batch: the complete CalDAV scope PostgreSQL/HTTP suite passes
+with 23 future-only cases; disposable Radicale verifies recovery after a prior
+source-pair replacement, collision refusal, conditional creation and stable sync.
+Chromium passes desktop light and narrow dark comparison, keyboard/focus, axe,
+overflow and exact submission checks. Web comparison tests pass (15), native
+comparison tests pass (23), and the wire contract, API typecheck with existing
+library declarations skipped, web typecheck and targeted web lint pass. The full
+native typecheck still reports the unrelated Node URL overload in
+`contexts/serverStartup.spec.ts:4`.
+
+Targeted commands (with the repository's disposable test environment loaded):
+
+```sh
+node --import tsx apps/api/src/sync/caldav_scope.integration.test.ts
+RADICALE_URL=http://127.0.0.1:55232/ node --import tsx apps/api/src/sync/adapters/caldav.radicale.integration.test.ts
+# From apps/web, with a local web server at PLAYWRIGHT_ORIGIN:
+../../node_modules/.bin/playwright test --project=chromium --workers=1 -g 'K12 future-only split confirmation'
+```

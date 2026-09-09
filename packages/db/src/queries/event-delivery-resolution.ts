@@ -1,3 +1,4 @@
+import { readCaldavSplitFuture, replaceCaldavSplitFuture, type CaldavSplitFutureSnapshot } from "./caldav-split-future";
 import { hasGooglePersonalReadRecovery } from "./google-personal-read-recovery";
 import { readCaldavSplitResolution, replaceCaldavSplitResolution, type CaldavSplitResolutionSnapshot } from "./caldav-split-resolution";
 import type { CaldavSplitPrepared } from "./caldav-split";
@@ -167,12 +168,20 @@ async function resolutionContext(
     throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   }
   let caldavContext: CaldavSeriesContext | undefined;
+  if (row.payload.caldavSplit && row.id === row.payload.caldavSplit.creationOperationID) {
+    let future: CaldavSplitFutureSnapshot;
+    try { future = await readCaldavSplitFuture(tx, userID, row.id); }
+    catch (error) { if (error instanceof EventWriteError) throw new EventDeliveryResolutionError("delivery-resolution-unavailable"); throw error; }
+    return { masterRevision: undefined, caldavContext: undefined, providerInstance: undefined,
+      caldavSplitSnapshot: undefined, caldavSplitFutureSnapshot: future, row: future.creation, latest: future.creation, pending: [future.creation],
+      local: future.journal.after.head, localRevision: future.journal.after.head.revision!, deleted: false, mapping: undefined };
+  }
   if (row.payload.caldavSplit) {
     let split: CaldavSplitResolutionSnapshot;
     try { split = await readCaldavSplitResolution(tx, userID, row.id); }
     catch (error) { if (error instanceof EventWriteError) throw new EventDeliveryResolutionError("delivery-resolution-unavailable"); throw error; }
     return { masterRevision: undefined, caldavContext: undefined, providerInstance: undefined,
-      caldavSplitSnapshot: split, row: split.source, latest: split.source, pending: [split.source, split.creation],
+      caldavSplitFutureSnapshot: undefined, caldavSplitSnapshot: split, row: split.source, latest: split.source, pending: [split.source, split.creation],
       local: split.journal.after.source, localRevision: split.journal.after.source.revision!, deleted: false, mapping: split.mapping };
   }
   if (row.payload.caldavSeriesDeletion) {
@@ -284,6 +293,7 @@ async function resolutionContext(
   }
   return {
     masterRevision,
+    caldavSplitFutureSnapshot: undefined,
     caldavSplitSnapshot: undefined,
     caldavContext,
     providerInstance,
@@ -322,6 +332,7 @@ export type EventDeliveryResolutionProof = {
   action: EventOutboxRow["action"];
   patch: EventContentPatch;
   googleOccurrence?: GoogleOccurrenceIntent;
+  caldavSplitFuture?: { before: CaldavSplitFutureSnapshot };
   caldavSplit?: { before: CaldavSplitResolutionSnapshot; prepared: CaldavSplitPrepared };
   caldavSeries?: CaldavSeriesPrepared;
   caldavSeriesDeletion?: CaldavSeriesDeletionPrepared;
@@ -408,6 +419,12 @@ export async function commitEventDeliveryResolution(
         )
           throw new EventDeliveryResolutionError("delivery-state-changed");
         return replay.id;
+      }
+      if (proof.caldavSplitFuture) {
+        if (!row.payload.caldavSplit || proof.caldavSplit || proof.reminder || proof.rsvp || proof.caldavSeries || proof.caldavSeriesDeletion || proof.googleOccurrence || proof.action !== "create" || proof.remoteExists !== !!proof.ref ||
+            !sameCaldavScopeContext(proof.context.caldavSplitFutureSnapshot, proof.caldavSplitFuture.before) || row.id !== proof.caldavSplitFuture.before.creation.id)
+          throw new EventDeliveryResolutionError("delivery-state-changed");
+        return replaceCaldavSplitFuture(tx, userID, proof.caldavSplitFuture.before, proof.ref, request);
       }
       if (!!row.payload.caldavSplit !== !!proof.caldavSplit) throw new EventDeliveryResolutionError("delivery-state-changed");
       if (proof.caldavSplit) {
