@@ -209,9 +209,9 @@ export function EventDetailsPopover({
 	const targetActionTitleId = useId();
 	const reminderTitleId = useId();
 	const [open, setOpen] = useState(false);
-	const [deliveryOpen, setDeliveryOpen] = useState(false);
+	const [deliveryTarget, setDeliveryTarget] = useState<{ context: string; eventId: string }>();
   const [providerRsvpEditor, setProviderRsvpEditor] = useState<{ context: string; eventId: string; occurrence: boolean; observation: ProviderEventStateResponse }>();
-  const [providerReminderEditor, setProviderReminderEditor] = useState<{ context: string; eventId: string; observation: ProviderEventStateResponse }>();
+  const [providerReminderEditor, setProviderReminderEditor] = useState<{ context: string; eventId: string; occurrence: boolean; observation: ProviderEventStateResponse }>();
 	const [editing, setEditing] = useState(false);
 	const [deletePrompt, setDeletePrompt] = useState<DeletePrompt>();
 	// The edit waiting for its scope answer, kept whole so nothing typed is lost
@@ -239,6 +239,7 @@ export function EventDetailsPopover({
 	// every re-render of the calendar list.
 	const homeConnectionId = connectionOfCalendar(homeCalendar);
   const providerReminderContext = JSON.stringify([getServerOrigin(), user.id, homeConnectionId, event.id, event.seriesID, event.originalStart]);
+  if (deliveryTarget && deliveryTarget.context !== providerReminderContext) setDeliveryTarget(undefined);
   if (providerReminderEditor && providerReminderEditor.context !== providerReminderContext) setProviderReminderEditor(undefined);
   if (providerRsvpEditor && providerRsvpEditor.context !== providerReminderContext) setProviderRsvpEditor(undefined);
 	const removeCalendar =
@@ -724,7 +725,8 @@ export function EventDetailsPopover({
 							</header>
 
 							<div className={styles.detailsBody}>
-								<Button variant="ghost" size="compact" onClick={() => { setOpen(false); setDeliveryOpen(true); }}>Delivery details</Button>
+								<Button variant="ghost" size="compact" onClick={() => { setOpen(false); setDeliveryTarget({ context: providerReminderContext, eventId: event.seriesID ? event.id : liveMaster.id }); }}>{event.seriesID ? "Occurrence delivery details" : "Delivery details"}</Button>
+                {event.seriesID && liveMaster.id !== event.id ? <Button variant="ghost" size="compact" onClick={() => { setOpen(false); setDeliveryTarget({ context: providerReminderContext, eventId: liveMaster.id }); }}>Series delivery details</Button> : null}
 								<dl className={styles.whenList}>
 									<DetailRow
 										icon={<CalendarDays size={18} strokeWidth={1.5} />}
@@ -827,7 +829,7 @@ export function EventDetailsPopover({
 									</section>
 								) : null}
 
-								{homeCalendar?.provider ? <ProviderEventDetails occurrence={!!event.seriesID} eventId={event.seriesID ? event.id : master.id} series={!event.seriesID && !!master.recurrence} userId={user.id} connectionId={homeConnectionId} onRespond={observation => { setOpen(false); setProviderRsvpEditor({ context: providerReminderContext, occurrence: !!event.seriesID, eventId: event.seriesID ? event.id : master.id, observation }); }} onEditReminders={observation => { setOpen(false); setProviderReminderEditor({ context: providerReminderContext, eventId: event.seriesID ? event.id : master.id, observation }); }} /> : null}
+								{homeCalendar?.provider ? <ProviderEventDetails occurrence={!!event.seriesID} eventId={event.seriesID ? event.id : master.id} series={!event.seriesID && !!master.recurrence} userId={user.id} connectionId={homeConnectionId} onRespond={observation => { setOpen(false); setProviderRsvpEditor({ context: providerReminderContext, occurrence: !!event.seriesID, eventId: event.seriesID ? event.id : master.id, observation }); }} onEditReminders={observation => { setOpen(false); setProviderReminderEditor({ context: providerReminderContext, occurrence: !!event.seriesID, eventId: event.seriesID ? event.id : master.id, observation }); }} /> : null}
 
 								{reminder ? (
 									<section aria-labelledby={reminderTitleId} className={styles.notes}>
@@ -1159,12 +1161,12 @@ export function EventDetailsPopover({
               occurrence={providerRsvpEditor.occurrence} eventId={providerRsvpEditor.eventId} connectionId={homeConnectionId}
               observation={providerRsvpEditor.observation} returnFocus={triggerElement} onClose={() => setProviderRsvpEditor(undefined)} /> : null}
             {providerReminderEditor?.context === providerReminderContext ? <ProviderReminderEditor
-              key={providerReminderEditor.context} eventId={providerReminderEditor.eventId} connectionId={homeConnectionId}
+              key={providerReminderEditor.context} occurrence={providerReminderEditor.occurrence} eventId={providerReminderEditor.eventId} connectionId={homeConnectionId}
               observation={providerReminderEditor.observation} returnFocus={triggerElement} onClose={() => setProviderReminderEditor(undefined)} /> : null}
 
-            {deliveryOpen ? <EventDeliveryDialog key={`${user.id}:${homeConnectionId ?? "home"}:${liveMaster.id}`}
-              eventId={liveMaster.id} userId={user.id} connectionId={homeConnectionId}
-              returnFocus={triggerElement} onClose={() => setDeliveryOpen(false)} /> : null}
+            {deliveryTarget?.context === providerReminderContext ? <EventDeliveryDialog key={`${user.id}:${homeConnectionId ?? "home"}:${deliveryTarget.eventId}`}
+              eventId={deliveryTarget.eventId} userId={user.id} connectionId={homeConnectionId}
+              returnFocus={triggerElement} onClose={() => setDeliveryTarget(undefined)} /> : null}
 
 			{pendingEdit ? (
 				<RecurrenceScopeDialog

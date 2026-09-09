@@ -47,3 +47,16 @@ it("targets the existing child UUID when opening a scoped native response", asyn
   expect(h.fetch.mock.calls[1][0].id).toBe(child.id);
   expect(nodes(render(child)).some(node => node.type === "ProviderReminderEditor")).toBe(false);
 });
+
+it("refreshes the child reminder capability and passes its exact UUID to the native editor", async () => {
+  const child = { ...event, seriesID: "00000000-0000-4000-8000-000000000002", originalStart: { kind: "instant" as const, value: "2026-09-10T08:00:00.000Z" } };
+  h.fetch.mockResolvedValueOnce(observation).mockResolvedValueOnce({ ...observation, version: "b".repeat(64) }).mockResolvedValueOnce({ ...observation, reminderEdit: undefined });
+  render(child); await settle();
+  const action = () => nodes(render(child)).find(node => node.type === "Btn" && node.props.label === "Edit reminders for this occurrence")!;
+  action().props.onPress(); await settle();
+  const editor = nodes(render(child)).find(node => node.type === "ProviderReminderEditor")!;
+  expect(editor.props.event.id).toBe(child.id); expect(editor.props.event.seriesID).toBe(child.seriesID);
+  expect(editor.props.observation.version).toBe("b".repeat(64));
+  editor.props.onClose(); action().props.onPress(); await settle();
+  expect(nodes(render(child)).some(node => node.type === "ProviderReminderEditor")).toBe(false);
+});

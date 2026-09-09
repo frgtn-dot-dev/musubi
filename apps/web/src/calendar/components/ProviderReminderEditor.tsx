@@ -10,8 +10,8 @@ import { Select } from "~/ui/Select";
 import { SettingsSection } from "~/ui/SettingsSection";
 import { InlineError } from "~/ui/InlineError";
 
-export function ProviderReminderEditor({ eventId, connectionId, observation, onClose, returnFocus }: {
-  eventId: string; connectionId?: string; observation: ProviderEventStateResponse; onClose: () => void; returnFocus?: HTMLElement | null;
+export function ProviderReminderEditor({ eventId, connectionId, observation, onClose, returnFocus, occurrence = false }: {
+  eventId: string; connectionId?: string; occurrence?: boolean; observation: ProviderEventStateResponse; onClose: () => void; returnFocus?: HTMLElement | null;
 }) {
   const [draft, setDraft] = useState(() => providerReminderDraft(observation));
   const [error, setError] = useState("");
@@ -31,7 +31,7 @@ export function ProviderReminderEditor({ eventId, connectionId, observation, onC
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save Google reminders. Your draft is still here."); }
     finally { pending.current = false; setBusy(false); }
   }
-  return <div className={styles.layerBoundary} onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}><Dialog open title="Google reminders" description="Personal notifications from Google Calendar. Musubi reminders are separate; both apps may notify you." closeLabel="Close Google reminders" returnFocus={returnFocus} onOpenChange={open => { if (!open && !pending.current) onClose(); }} size="compact" footer={<>
+  return <div className={styles.layerBoundary} onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}><Dialog open title={occurrence ? "Google reminders for this occurrence" : "Google reminders"} description={`${occurrence ? "These Google reminders apply only to this occurrence. " : ""}Personal notifications from Google Calendar. Musubi reminders are separate; both apps may notify you.`} closeLabel="Close Google reminders" returnFocus={returnFocus} onOpenChange={open => { if (!open && !pending.current) onClose(); }} size="compact" footer={<>
     <Button variant="secondary" disabled={busy} onClick={onClose}>{notice ? "Close" : "Cancel"}</Button>
     {!notice ? <Button loading={busy} onClick={() => void save()}>Save Google reminders</Button> : null}
   </>}>
