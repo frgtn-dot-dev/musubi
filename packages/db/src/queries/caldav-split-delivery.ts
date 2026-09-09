@@ -26,7 +26,7 @@ export async function confirmCaldavSplitOutbox(id: string, token: string, result
       if (!sourcePhase && id !== creationOperationID) return false;
       const expectedEvent = sourcePhase ? after.source : after.head;
       const expectedRef = sourcePhase ? split.source.baseline.ref : split.creation.ref;
-      if (sourceOperationID === creationOperationID || creationOperationID !== after.head.id) return false;
+      if (sourceOperationID === creationOperationID) return false;
       if (address.eventID !== expectedEvent.id || address.action !== (sourcePhase ? "update" : "create") || address.position !== (sourcePhase ? 0 : 1) ||
           address.provider !== "caldav" || address.userID !== context.link.userID || address.actorID !== address.userID ||
           address.calendarID !== context.link.calendarID || address.accountID !== context.link.accountID || address.externalCalendarLinkID !== context.link.id || address.externalCalendarID !== context.link.externalCalendarID ||

@@ -81,9 +81,9 @@ export async function appendCaldavSplit(tx: DbTransaction, actorID: string, oper
   const expected = [after.source, after.head, ...after.moved];
   if (actorID !== context.link.userID || operationID !== split.request.operationID || saved.length !== expected.length ||
       expected.some(event => !sameCaldavScopeContext(event, saved.find(item => item.id === event.id)))) refuse();
-  // Sharing a UUID with the new event makes the existing unmapped-delete URL
-  // fence recognize this create before any mapping can exist.
-  const journal: CaldavSplitJournal = { prepared, after, sourceOperationID: randomUUID(), creationOperationID: after.head.id };
+  // Native resource identity belongs to the frozen new family, independently
+  // of the attempt journal. Explicit conflict replacement must not rename it.
+  const journal: CaldavSplitJournal = { prepared, after, sourceOperationID: randomUUID(), creationOperationID: randomUUID() };
   for (const [position, event, ref, action, id] of [
     [0, after.source, split.source.baseline.ref, "update", journal.sourceOperationID],
     [1, after.head, split.creation.ref, "create", journal.creationOperationID],
