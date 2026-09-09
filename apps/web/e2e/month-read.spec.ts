@@ -5947,10 +5947,16 @@ test("starts from its snapshot with no server, then catches up", async ({
 	// Everything the app talks to is gone — not refusing, unreachable, which is
 	// what a laptop off the network and a self-hosted server that is down both
 	// look like. `/src/**` has to keep loading or Vite itself cannot serve the app.
-	const dead = (route: Route) => route.abort();
-	for (const pattern of ["**/api/v1/**", "**/api/auth/**", "**/api/stream"]) {
+	let failedCalendarReads = 0;
+	const dead = async (route: Route) => {
+		await route.abort();
+		if (new URL(route.request().url()).pathname === "/api/v1/calendars") failedCalendarReads++;
+	};
+	for (const pattern of ["**/api/v1/**", "**/api/auth/**", "**/api/stream*"]) {
 		await page.route(pattern, dead);
 	}
+	// Make the restored queries stale without sleeping through the cache TTL.
+	await page.clock.setFixedTime(new Date(Date.now() + 120_000));
 	await page.reload();
 
 	// The five guarantees of offline v1 (`07-realtime-offline-federation.md:88-92`),
@@ -5958,6 +5964,10 @@ test("starts from its snapshot with no server, then catches up", async ({
 	// refuses to pretend a write went through.
 	await expect(page.getByRole("button", { name: /Client call/ })).toBeVisible();
 	const offlineState = page.getByText(/Offline — saved (.+ago|just now)/);
+	await expect(offlineState).toBeVisible();
+	// Wait for the background refresh and its retry to fail. Otherwise the
+	// editor assertions can finish before a failed refresh drops the snapshot.
+	await expect.poll(() => failedCalendarReads).toBeGreaterThanOrEqual(2);
 	await expect(offlineState).toBeVisible();
 
 	await page
@@ -5974,7 +5984,7 @@ test("starts from its snapshot with no server, then catches up", async ({
 	await expect(title).toHaveValue("Renamed while offline");
 	await page.keyboard.press("Escape");
 
-	for (const pattern of ["**/api/v1/**", "**/api/auth/**", "**/api/stream"]) {
+	for (const pattern of ["**/api/v1/**", "**/api/auth/**", "**/api/stream*"]) {
 		await page.unroute(pattern, dead);
 	}
 	await page.evaluate(() => window.dispatchEvent(new Event("online")));

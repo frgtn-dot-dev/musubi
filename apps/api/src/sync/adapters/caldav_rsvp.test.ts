@@ -1,15 +1,17 @@
 import assert from "node:assert/strict";
 import { config } from "@musubi/config";
-import { schedulingProperties } from "../caldav_scheduling";
 import { prepareCaldavRsvp, caldavRsvpResourceHash } from "./caldav_rsvp";
-import { readCaldavRsvp, deliverCaldavRsvp } from "./caldav_rsvp_delivery";
 import { createCaldavRsvpFixture, caldavRsvpFixtureData } from "./caldav_rsvp.fixture";
 async function main() {
   const fixture = await createCaldavRsvpFixture(), { state, collection, resource } = fixture;
+  const savedPrivate = config.security.federationAllowPrivateHosts;
+  config.security.federationAllowPrivateHosts = true;
   const savedFlag = config.api.providerRsvpEditsEnabled; config.api.providerRsvpEditsEnabled = true;
   const ref = { id: resource, etag: '"before"', uid: "rsvp-fixture" }, auth = "Basic Zml4dHVyZTpmaXh0dXJl";
   const reset = (mode = "ok") => { Object.assign(state, { data: caldavRsvpFixtureData, etag: '"before"', scheduleTag: '"schedule-before"', mode, puts: 0, reads: 0, requests: [] }); };
   try {
+    const { schedulingProperties } = await import("../caldav_scheduling");
+    const { readCaldavRsvp, deliverCaldavRsvp } = await import("./caldav_rsvp_delivery");
     const evidence = await readCaldavRsvp(collection, ref, auth, "accepted");
     assert.equal(evidence.after, caldavRsvpFixtureData.replace(";PARTSTAT=NEEDS-ACTION;ROLE=REQ-PARTICIPANT", ";ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED"));
     for (const mode of ["ok", "metadata", "lost"]) {
@@ -49,6 +51,6 @@ async function main() {
     assert.equal(schedulingProperties(xml, collection).size, 1);
     for (const bad of [xml.replace('xmlns:d="DAV:"', 'xmlns:d="DAV:" xmlns:d="evil"'), xml.replace("<d:owner>", "<d:owner bad=\"x\" bad=\"y\">"), '<!DOCTYPE x [<!ENTITY a "b">]>' + xml, xml.replace("</d:prop>", "<d:owner/></d:prop>"), xml.replace("200 OK", "nonsense"), xml.replace("</d:response>", "<d:status>HTTP/1.1 403 Forbidden</d:status></d:response>")]) assert.throws(() => schedulingProperties(bad, collection));
     console.log("CalDAV RSVP: namespace/owner/outbox/self proof, exact PARTSTAT, metadata-only full ACK, lost response/no duplicate send, no-op and adversarial refusals: OK");
-  } finally { config.api.providerRsvpEditsEnabled = savedFlag; await fixture.close(); }
+  } finally { config.security.federationAllowPrivateHosts = savedPrivate; config.api.providerRsvpEditsEnabled = savedFlag; await fixture.close(); }
 }
 void main().catch(error => { console.error(error); process.exitCode = 1; });
