@@ -127,6 +127,49 @@ This reader is not yet connected to production sync, local recurrence expansion,
 the durable create ACK or reset sweep; those integrations must preserve the same
 completeness boundary and handle unsupported observations without deleting data.
 
+## Private atomic family persistence
+
+`readGraphFamilyContext` captures the accepted local root, complete child set
+(including tombstones), mappings, exclusive origin memberships, grant, native
+calendar link and non-secret account eligibility (including refresh-token presence,
+never its value). `replaceGraphFamily` rechecks
+that context under lifecycle, root/child and source locks before committing a
+complete finite observation. Pending local operations, changed local revisions,
+foreign native identities, revoked/disconnected sources and unsupported ownership
+are refused. Retained cancelled history is released only by a completed exact
+replacement receipt on the same source; an unfinished or foreign replacement
+still blocks import. This is a private tracked-family query, not discovery or
+create ACK.
+
+Each active native occurrence has one canonical child UUID and its own mapping,
+UID, ETag and provider state. Original identities are normalized before lookup and storage; equivalent UTC
+spellings cannot create a second child. Existing semantic duplicates are refused.
+Original identity selects an existing UUID even
+when a native ID changes or a retired slot returns. A cancellation preserves an
+already observed child's content/time/model and historical mapping. A slot never
+observed natively gets only a cancellation definition with its known original
+time; no native event ID or per-instance provider state is invented. Removed
+original slots become canonical tombstones; a subsequent complete rule revival
+can reuse their UUIDs. Returned retained native IDs include cancellation history
+for the future reset integration.
+
+The complete candidate has an explicit COUNT of at most 366 and endpoints within
+730 days. Full original-slot membership, canonical time consistency and native
+ID uniqueness are validated before acceptance; the proposed family is expanded once, rather than
+re-expanding the whole COUNT for every child. Root/child changes, mapping
+replacement and cancellations commit together or roll back together. Repeated
+identical observations do not change revisions or source timestamps. Family
+members must belong exclusively to the source mirror; this query does not
+silently drop or fan out linked copies. SQL failures expose only a generic error.
+
+Disposable PostgreSQL tests cover stable UUIDs and independent Graph UIDs,
+unknown-zone moved exceptions, preserved cancellation content, never-observed
+cancellations, native-ID changes, COUNT shrink/revival, year-boundary dates,
+no-op, malformed/incomplete rollback, native-ID collision, stale local/mapping
+state, pending operation, grant/link/account changes and concurrent one-winner
+commit. The engine's calendarView suppression, reset sweep, pending-create
+coordination and durable create ACK must still be connected before activation.
+
 ## Remaining before activation
 
 The durable create operation, permission checks, uncertain POST recovery and
