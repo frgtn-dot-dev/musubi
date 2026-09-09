@@ -181,16 +181,22 @@ async function prepare(
     if (!config.api.eventTimeEditsEnabled || !adapter.readCaldavSeriesResolution || !context.caldavContext || !ref || context.deleted)
       throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
     const family = context.caldavContext;
-    const observed = await adapter.readCaldavSeriesResolution(row.userID, row.accountID, row.externalCalendarID, { ref, master: family.master, children: family.children }, row.payload.caldavSeries.write.before, signal);
-    const patch = { title: context.local.title, description: context.local.description ?? null, location: context.local.location ?? null };
+    const targetEventID = row.payload.caldavSeries.write.targetEventID;
+    const localTarget = targetEventID ? family.children.find(child => child.id === targetEventID) : family.master;
+    if (!localTarget) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const observed = await adapter.readCaldavSeriesResolution(row.userID, row.accountID, row.externalCalendarID, { ref, master: family.master, children: family.children }, row.payload.caldavSeries.write.before, signal, targetEventID);
+    const remoteTarget = targetEventID ? observed.baseline.children.find(child => child.id === targetEventID) : observed.baseline.master;
+    if (!remoteTarget) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const patch = { title: localTarget.title, description: localTarget.description ?? null, location: localTarget.location ?? null };
     const prepared = {
       context: { ...family, mappings: family.mappings.map(item => ({ ...item, etag: requireEventEtag(observed.evidence.ref.etag) })) },
-      write: prepareCaldavSeriesWrite(observed.evidence, observed.baseline, patch),
+      write: prepareCaldavSeriesWrite(observed.evidence, observed.baseline, patch, targetEventID),
     };
     const preview: EventDeliveryConflict = {
       eventId: row.eventID, operationId: row.id, latestOperationId: context.latest.id,
-      localRevision: context.localRevision, local: { ...content(context.local), timeModel: context.local.timeModel ?? undefined },
-      remote: { ...content(observed.baseline.master), timeModel: observed.baseline.master.timeModel ?? undefined },
+      localRevision: context.localRevision,
+      local: { ...content(localTarget), timeModel: localTarget.timeModel ?? undefined, originalStart: localTarget.originalStart ?? undefined },
+      remote: { ...content(remoteTarget), timeModel: remoteTarget.timeModel ?? undefined, originalStart: remoteTarget.originalStart ?? undefined },
       remoteEtag: observed.evidence.ref.etag!, action: "update", canResolve: true, reason: null,
     };
     const proof: EventDeliveryResolutionProof = { context, ref: observed.evidence.ref, remoteExists: true, action: "update", patch: {}, deletion: await getEventOutboxDeletion(row, ref.externalEventId), caldavSeries: prepared };

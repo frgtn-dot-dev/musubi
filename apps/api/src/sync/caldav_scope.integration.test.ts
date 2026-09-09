@@ -74,7 +74,7 @@ async function main() {
   const apiOrigin = `http://127.0.0.1:${(api.address() as any).port}`;
   const enabled = config.api.eventTimeEditsEnabled;
   try {
-    for (const scenario of ["public-split-noop-rule", "public-split-noop-time", "public-split-generated-zoned", "public-split-generated-all-day", "public-split-generated-floating", "public-split-first-time", "public-split-first-recurrence", "public-split-zoned", "public-split-all-day", "public-split-floating", "public-split-time", "public-split-recurrence", "public-split-first-zoned", "public-split-first-all-day", "public-split-first-floating", "public-split-noop", "public-split-off", "public-split-no-bind", "public-split-bind-unknown", "public-split-write-unknown", "public-split-grant-race", "public-split-local-race", "public-split-root-tombstone", "public-split-child-tombstone", "public-split-collision", "split-create-child-delete", "split-pair-tamper", "split-source-lost", "split-source-race", "split-source-grant-before", "split-source-grant-after", "split-source-local-race", "split-source-lease-race", "split-source-collision", "split-no-bind", "split-native-tamper", "split-create-lost", "split-create-grant-before", "split-create-grant-after", "split-create-local-race", "split-create-lease-race", "split-edit-source", "series-sweep", "split-sweep", "split-rollback", "split-delete-fence", "split-zoned", "split-all-day", "split-floating", "split-time", "split-recurrence", "split-race", "split-tamper", "following-sweep-echo", "delete-sweep-echo", "following-content-conflict", "following-shift-collision", "following-regenerate", "following-recancel", "following-zoned", "following-all-day", "following-floating", "following-lost", "following-race", "following-grant-before", "following-grant-after", "following-local-race", "following-lease-race", "following-cleanup", "following-restore", "following-first", "delete-recreate", "delete-cleanup", "delete-zoned", "delete-all-day", "delete-floating", "delete-lost", "delete-race", "delete-prepare-race", "delete-grant-before", "delete-grant-after", "delete-local-race", "delete-lease-race", "grant-before", "grant-after", "recurrence-zoned", "recurrence-all-day", "recurrence-floating", "recurrence-lost", "recurrence-race", "recurrence-orphan", "recurrence-bare", "recurrence-order", "series-time-zoned", "series-time-all-day", "series-time-floating", "series-time-lost", "series-time-race", "series-time-tombstone", "generated-time-zoned", "generated-time-all-day", "generated-time-floating", "generated-time-lost", "generated-time-race", "time-zoned", "time-all-day", "time-floating", "time-lost", "time-race", "revive-zoned", "revive-all-day", "revive-floating", "revive-lost", "revive-race", "generated-zoned", "generated-all-day", "generated-floating", "generated-cancel-zoned", "generated-cancel-all-day", "generated-cancel-floating", "generated-lost", "generated-race", "generated-prepare-race", "generated-tombstone", "cancel-zoned", "cancel-all-day", "cancel-floating", "cancel-lost", "cancel-race", "occurrence-zoned", "occurrence-all-day", "occurrence-floating", "occurrence-lost", "occurrence-race", "zoned", "all-day", "floating", "no-children", "malformed-private", "meeting", "copied", "lost", "race", "local-race", "mapping-race", "lease-race", "tombstone", "prepare-race", "no-op", "resolve", "resolve-all-day", "resolve-floating", "resolve-delete-observation", "resolve-twice", "resolve-http", "resolve-timezone", "resolve-stale", "resolve-local-race", "resolve-child-race"]) {
+    for (const scenario of ["resolve-occurrence-repeated", "resolve-occurrence-zoned", "resolve-occurrence-all-day", "resolve-occurrence-floating", "resolve-occurrence-http", "resolve-occurrence-lost", "resolve-occurrence-stale", "resolve-occurrence-local-race", "resolve-occurrence-grant", "resolve-occurrence-target-tamper", "resolve-occurrence-native-time", "resolve-occurrence-native-slot", "resolve-occurrence-other-content", "resolve-occurrence-timezone", "public-split-noop-rule", "public-split-noop-time", "public-split-generated-zoned", "public-split-generated-all-day", "public-split-generated-floating", "public-split-first-time", "public-split-first-recurrence", "public-split-zoned", "public-split-all-day", "public-split-floating", "public-split-time", "public-split-recurrence", "public-split-first-zoned", "public-split-first-all-day", "public-split-first-floating", "public-split-noop", "public-split-off", "public-split-no-bind", "public-split-bind-unknown", "public-split-write-unknown", "public-split-grant-race", "public-split-local-race", "public-split-root-tombstone", "public-split-child-tombstone", "public-split-collision", "split-create-child-delete", "split-pair-tamper", "split-source-lost", "split-source-race", "split-source-grant-before", "split-source-grant-after", "split-source-local-race", "split-source-lease-race", "split-source-collision", "split-no-bind", "split-native-tamper", "split-create-lost", "split-create-grant-before", "split-create-grant-after", "split-create-local-race", "split-create-lease-race", "split-edit-source", "series-sweep", "split-sweep", "split-rollback", "split-delete-fence", "split-zoned", "split-all-day", "split-floating", "split-time", "split-recurrence", "split-race", "split-tamper", "following-sweep-echo", "delete-sweep-echo", "following-content-conflict", "following-shift-collision", "following-regenerate", "following-recancel", "following-zoned", "following-all-day", "following-floating", "following-lost", "following-race", "following-grant-before", "following-grant-after", "following-local-race", "following-lease-race", "following-cleanup", "following-restore", "following-first", "delete-recreate", "delete-cleanup", "delete-zoned", "delete-all-day", "delete-floating", "delete-lost", "delete-race", "delete-prepare-race", "delete-grant-before", "delete-grant-after", "delete-local-race", "delete-lease-race", "grant-before", "grant-after", "recurrence-zoned", "recurrence-all-day", "recurrence-floating", "recurrence-lost", "recurrence-race", "recurrence-orphan", "recurrence-bare", "recurrence-order", "series-time-zoned", "series-time-all-day", "series-time-floating", "series-time-lost", "series-time-race", "series-time-tombstone", "generated-time-zoned", "generated-time-all-day", "generated-time-floating", "generated-time-lost", "generated-time-race", "time-zoned", "time-all-day", "time-floating", "time-lost", "time-race", "revive-zoned", "revive-all-day", "revive-floating", "revive-lost", "revive-race", "generated-zoned", "generated-all-day", "generated-floating", "generated-cancel-zoned", "generated-cancel-all-day", "generated-cancel-floating", "generated-lost", "generated-race", "generated-prepare-race", "generated-tombstone", "cancel-zoned", "cancel-all-day", "cancel-floating", "cancel-lost", "cancel-race", "occurrence-zoned", "occurrence-all-day", "occurrence-floating", "occurrence-lost", "occurrence-race", "zoned", "all-day", "floating", "no-children", "malformed-private", "meeting", "copied", "lost", "race", "local-race", "mapping-race", "lease-race", "tombstone", "prepare-race", "no-op", "resolve", "resolve-all-day", "resolve-floating", "resolve-delete-observation", "resolve-twice", "resolve-http", "resolve-timezone", "resolve-stale", "resolve-local-race", "resolve-child-race"]) {
       const owner = `caldav-scope-${randomUUID()}`;
       const credential = issueMemberToken();
       await db.insert(user).values({ id: owner, name: "Fixture", email: `${owner}@example.test`, isExternal: true });
@@ -593,7 +593,8 @@ async function main() {
         const revival = scenario.startsWith("revive-");
         const moving = scenario.startsWith("time-");
         const time = moving ? scenario.endsWith("all-day") ? { kind: "all-day", startDate: "2026-04-02", endDate: "2026-04-03" } : { kind: scenario.endsWith("floating") ? "floating" : "zoned", ...(scenario.endsWith("floating") ? {} : { timeZone: "Europe/Prague" }), startLocal: "2026-04-02T12:00:00.000", endLocal: "2026-04-02T13:00:00.000" } : undefined;
-        const occurrence = cancellation || revival || moving || scenario.startsWith("occurrence-");
+        const resolvingOccurrence = scenario.startsWith("resolve-occurrence-");
+        const occurrence = cancellation || revival || moving || scenario.startsWith("occurrence-") || resolvingOccurrence;
         const moved = original.find(event => event.seriesID && event.isCanceled === revival)!;
         const request = { operationID: randomUUID(), scope: occurrence ? "occurrence" : "series", ...(time ? { time } : {}), ...(occurrence ? { originalStart: moved.originalStart, expectedOccurrenceRevision: moved.revision } : {}), expectedRevision: root.revision, ...(cancellation ? { action: "delete" } : { action: "update", patch: scenario === "no-op" ? {} : { title: "Renamed", ...(recurrenceEdit ? { recurrence: scenario === "recurrence-bare" ? "FREQ=DAILY;COUNT=5" : scenario === "recurrence-order" ? "FREQ=DAILY;INTERVAL=1;COUNT=5" : "RRULE:FREQ=DAILY;COUNT=5" } : {}) } }) };
         const headers = { authorization: `Bearer ${credential.raw}`, "content-type": "application/json", [CLIENT_VERSION_HEADER]: PRODUCT_VERSION };
@@ -671,8 +672,91 @@ async function main() {
         if (scenario === "mapping-race") onPut = async () => { await db.update(externalEvents).set({ etag: '"newer-map"' }).where(eq(externalEvents.id, mappings.find(map => map.eventID !== root.id)!.id)); };
         if (scenario === "lease-race") onPut = async () => { await db.update(eventOutbox).set({ leaseToken: randomUUID(), leaseUntil: new Date(Date.now() + 120000) }).where(eq(eventOutbox.id, operation.id)); };
         if (scenario === "tombstone") onPut = async () => { await db.insert(externalEventTombstones).values({ externalCalendarLinkID: operation.externalCalendarLinkID, externalEventID: resource }); };
-        if (scenario.startsWith("resolve")) { data = data.replace("SUMMARY:Master", "SUMMARY:Remote master").replace("X-PRIVATE:Never disclose", "X-PRIVATE:Fresh private extension"); etag = '"remote-v2"'; }
+        if (scenario.startsWith("resolve")) { data = data.replace(resolvingOccurrence ? "SUMMARY:Moved" : "SUMMARY:Master", resolvingOccurrence ? "SUMMARY:Remote child" : "SUMMARY:Remote master").replace("X-PRIVATE:Never disclose", "X-PRIVATE:Fresh private extension"); etag = '"remote-v2"'; }
         let result = await deliverEventOutbox(operation.id, () => caldavAdapter);
+        if (resolvingOccurrence) {
+          assert.equal(result?.status, "conflict"); assert.equal(puts, 0);
+          const stableRows = await rows(), stableMaps = await maps();
+          if (scenario === "resolve-occurrence-native-time") data = data.replace(stamp("DTSTART", "30", "14"), stamp("DTSTART", "30", "15"));
+          if (scenario === "resolve-occurrence-native-slot") data = data.replace(stamp("RECURRENCE-ID", "29", "09"), stamp("RECURRENCE-ID", "31", "09"));
+          if (scenario === "resolve-occurrence-other-content") data = data.replace("SUMMARY:Master", "SUMMARY:Another remote master");
+          if (scenario === "resolve-occurrence-timezone") data = data.replace("VERSION:2.0", "VERSION:2.0\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Prague\r\nBEGIN:STANDARD\r\nDTSTART:20261025T030000\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0300\r\nEND:STANDARD\r\nEND:VTIMEZONE");
+          const previewResponse = await fetch(`${apiOrigin}/events/${root.id}/delivery/${operation.id}/conflict`, { headers });
+          if (scenario.includes("-native-") || scenario.endsWith("-other-content") || scenario.endsWith("-timezone")) {
+            assert.equal(previewResponse.status, 409); assert.equal((await outbox()).length, 1); assert.deepEqual(await rows(), stableRows); assert.deepEqual(await maps(), stableMaps); assert.equal(puts, 0); continue;
+          }
+          assert.equal(previewResponse.status, 200);
+          const publicText = await previewResponse.text(); const publicPreview = JSON.parse(publicText);
+          assert.equal(publicPreview.local.title, "Renamed"); assert.equal(publicPreview.remote.title, "Remote child");
+          assert.deepEqual(publicPreview.local.originalStart, moved.originalStart); assert.deepEqual(publicPreview.remote.originalStart, moved.originalStart);
+          assert.equal(publicPreview.localRevision, root.revision + 1, "The resource journal remains revisioned by its root");
+          assert.ok(!publicText.includes("Fresh private extension") && !publicText.includes("BEGIN:VCALENDAR"));
+          const { preview, proof } = await prepareEventDeliveryResolution(owner, root.id, operation.id, () => caldavAdapter);
+          assert.equal(proof.caldavSeries?.write.targetEventID, moved.id);
+          const resolveRequest = { mutationId: randomUUID(), expectedLocalRevision: preview.localRevision, expectedLatestOperationId: preview.latestOperationId, expectedRemoteExists: true, expectedRemoteEtag: preview.remoteEtag };
+          if (scenario === "resolve-occurrence-stale") {
+            etag = '"remote-v3"';
+            const fresh = await prepareEventDeliveryResolution(owner, root.id, operation.id, () => caldavAdapter);
+            await assert.rejects(() => commitEventDeliveryResolution(owner, fresh.proof, resolveRequest), (error: any) => error.code === "delivery-state-changed");
+            assert.deepEqual(await maps(), stableMaps); assert.equal((await outbox()).length, 1); continue;
+          }
+          if (scenario === "resolve-occurrence-local-race") {
+            await db.update(events).set({ revision: sql`${events.revision} + 1` }).where(eq(events.id, moved.id));
+            await assert.rejects(() => commitEventDeliveryResolution(owner, proof, resolveRequest));
+            assert.deepEqual(await maps(), stableMaps); assert.equal((await outbox()).length, 1); continue;
+          }
+          if (scenario === "resolve-occurrence-grant") {
+            await db.update(calendarMembers).set({ role: "viewer" }).where(and(eq(calendarMembers.calendarID, calendar.id), eq(calendarMembers.userID, owner)));
+            await assert.rejects(() => commitEventDeliveryResolution(owner, proof, resolveRequest));
+            assert.deepEqual(await maps(), stableMaps); assert.equal((await outbox()).length, 1); continue;
+          }
+          if (scenario === "resolve-occurrence-target-tamper") {
+            proof.caldavSeries!.write.targetEventID = original.find(item => item.isCanceled)!.id;
+            await assert.rejects(() => commitEventDeliveryResolution(owner, proof, resolveRequest), (error: any) => error.code === "delivery-state-changed");
+            assert.deepEqual(await maps(), stableMaps); assert.equal((await outbox()).length, 1); continue;
+          }
+          let replacementID: string;
+          if (scenario === "resolve-occurrence-http") {
+            const confirmed = await fetch(`${apiOrigin}/events/${root.id}/delivery/${operation.id}/resolve`, { method: "POST", headers, body: JSON.stringify(resolveRequest) });
+            assert.equal(confirmed.status, 202, await confirmed.text());
+            let replacement;
+            for (let attempt = 0; attempt < 100; attempt++) {
+              replacement = (await outbox()).find(item => item.id !== operation.id);
+              if (replacement?.status === "completed") break;
+              await new Promise(resolve => setTimeout(resolve, 20));
+            }
+            assert.equal(replacement?.status, "completed"); replacementID = replacement!.id;
+          } else {
+            const ids = await Promise.all([commitEventDeliveryResolution(owner, proof, resolveRequest), commitEventDeliveryResolution(owner, proof, resolveRequest)]);
+            assert.equal(ids[0], ids[1]); replacementID = ids[0]!;
+            assert.equal(await getEventDeliveryResolutionReplay(owner, root.id, operation.id, resolveRequest), replacementID);
+            if (scenario === "resolve-occurrence-repeated") {
+              data = data.replace("SUMMARY:Remote child", "SUMMARY:Changed again"); etag = '"remote-v3"';
+              assert.equal((await deliverEventOutbox(replacementID, () => caldavAdapter))?.status, "conflict");
+              const again = await prepareEventDeliveryResolution(owner, root.id, replacementID, () => caldavAdapter);
+              assert.equal(again.preview.remote?.title, "Changed again");
+              replacementID = await commitEventDeliveryResolution(owner, again.proof, { ...resolveRequest, mutationId: randomUUID(), expectedLatestOperationId: again.preview.latestOperationId, expectedRemoteEtag: again.preview.remoteEtag });
+            }
+            if (scenario === "resolve-occurrence-lost") mode = "lost";
+            let delivery = await deliverEventOutbox(replacementID, () => caldavAdapter);
+            if (scenario === "resolve-occurrence-lost") {
+              assert.equal(delivery?.status, "unconfirmed"); assert.equal(puts, 1); mode = "ok";
+              await db.update(eventOutbox).set({ nextAttemptAt: new Date(0) }).where(eq(eventOutbox.id, replacementID));
+              delivery = await deliverEventOutbox(replacementID, () => caldavAdapter);
+            }
+            assert.equal(delivery?.status, "completed");
+          }
+          assert.equal(puts, 1); assert.equal((await outbox()).length, scenario === "resolve-occurrence-repeated" ? 3 : 2);
+          assert.ok((await outbox()).filter(item => item.id !== replacementID).every(item => item.status === "not-needed"));
+          assert.deepEqual(await rows(), stableRows, "Conflict confirmation changes no canonical revision or draft");
+          assert.ok((await maps()).every(item => item.etag === '"after"'));
+          assert.ok(data.includes(master.replace("X-PRIVATE:Never disclose", "X-PRIVATE:Fresh private extension")) && data.includes(cancelled));
+          assert.ok(data.includes("SUMMARY:Renamed") && !data.includes("SUMMARY:Remote child"));
+          await persist(); assert.deepEqual(await rows(), stableRows, "Echo retains every canonical identity and revision");
+          const next = await post({ ...request, operationID: randomUUID(), expectedRevision: root.revision + 1, expectedOccurrenceRevision: moved.revision + 1, patch: { title: "After occurrence resolution" } });
+          assert.equal(next.status, 200, await next.text());
+          console.log(`CalDAV occurrence conflict ${scenario}: complete HTTP/DB preservation and ACK OK`); continue;
+        }
         if (scenario.startsWith("resolve")) {
           assert.equal(result?.status, "conflict");
           if (scenario === "resolve-timezone") {
@@ -778,7 +862,14 @@ async function main() {
           assert.notEqual(result?.status, "completed");
           for (const map of await maps()) if (!(scenario === "mapping-race" && map.eventID !== root.id && map.etag === '"newer-map"')) assert.equal(map.etag, '"before"');
           const preview = await fetch(`${apiOrigin}/events/${root.id}/delivery/${operation.id}/conflict`, { headers });
-          const text = await preview.text(); assert.equal(preview.status, 409); assert.equal(JSON.parse(text).code, ["lease-race", "local-race"].includes(scenario) ? "delivery-state-changed" : "delivery-resolution-unavailable"); assert.ok(!text.includes("Never disclose") && !text.includes("BEGIN:VCALENDAR"));
+          const text = await preview.text();
+          if (scenario === "occurrence-race") {
+            assert.equal(preview.status, 200); assert.equal(JSON.parse(text).remote.title, "Remote child");
+            assert.deepEqual(JSON.parse(text).local.originalStart, moved.originalStart);
+          } else {
+            assert.equal(preview.status, 409); assert.equal(JSON.parse(text).code, ["lease-race", "local-race"].includes(scenario) ? "delivery-state-changed" : "delivery-resolution-unavailable");
+          }
+          assert.ok(!text.includes("Never disclose") && !text.includes("BEGIN:VCALENDAR"));
           if (scenario === "race" || scenario === "occurrence-race" || (scenario === "cancel-race" || scenario === "revive-race" || scenario === "time-race" || scenario === "recurrence-race")) {
             assert.ok(data.includes("SUMMARY:Remote child"));
             await db.update(eventOutbox).set({ status: "pending", nextAttemptAt: new Date(0), uncertain: false }).where(eq(eventOutbox.id, operation.id));

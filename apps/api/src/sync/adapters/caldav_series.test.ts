@@ -47,6 +47,24 @@ for (const kind of ["zoned", "all-day", "floating"]) {
   assert.deepEqual(observed.baseline.children, intent.children);
   assert.equal(intent.master.title, "Master", "A read must not replace the saved local draft");
   assert.equal(intent.ref.etag, ref.etag);
+  const target = intent.children.find(item => !item.isCanceled)!;
+  const remoteChild = data.replace("SUMMARY:Custom child", "SUMMARY:Remote child\r\nDESCRIPTION:Child description\r\nLOCATION:Child location").replace("Keep folded", "Fresh extension");
+  const childPreview = caldavSeriesResolutionEvidence(remoteChild, intent, currentRef, data, target.id);
+  assert.deepEqual(childPreview.baseline.master, intent.master);
+  assert.equal(childPreview.baseline.children.find(item => item.id === target.id)!.title, "Remote child");
+  assert.deepEqual(childPreview.baseline.children.find(item => item.id !== target.id), intent.children.find(item => item.id !== target.id));
+  assert.equal(childPreview.evidence.data, remoteChild);
+  assert.equal(target.title, "Custom child");
+  for (const invalidTarget of ["", randomUUID(), intent.master.id, intent.children.find(item => item.isCanceled)!.id])
+    assert.throws(() => caldavSeriesResolutionEvidence(remoteChild, intent, currentRef, data, invalidTarget));
+  for (const modified of [
+    remoteChild.replace("SUMMARY:Master", "SUMMARY:Another master"),
+    remoteChild.replace("SUMMARY:Cancelled child", "SUMMARY:Another cancellation"),
+    remoteChild.replace(stamp("DTSTART", "30", "14"), stamp("DTSTART", "31", "15")),
+    remoteChild.replace(stamp("RECURRENCE-ID", "29", "09"), stamp("RECURRENCE-ID", "31", "09")),
+    remoteChild.replace("SUMMARY:Remote child", "STATUS:CANCELLED\r\nSUMMARY:Remote child"),
+    remoteChild.replace("SUMMARY:Remote child", "SUMMARY:Remote child\r\nATTENDEE:mailto:guest@example.test"),
+  ]) assert.throws(() => caldavSeriesResolutionEvidence(modified, intent, currentRef, data, target.id));
   const timezone = ["BEGIN:VTIMEZONE", "TZID:Europe/Prague", "BEGIN:STANDARD", "DTSTART:20261025T030000", "TZOFFSETFROM:+0200", "TZOFFSETTO:+0100", "END:STANDARD", "END:VTIMEZONE"].join("\r\n");
   const withZone = (value: string) => value.replace("VERSION:2.0", "VERSION:2.0\r\n" + timezone);
   assert.equal(caldavSeriesResolutionEvidence(withZone(currentData), intent, currentRef, withZone(data)).evidence.data, withZone(currentData));
