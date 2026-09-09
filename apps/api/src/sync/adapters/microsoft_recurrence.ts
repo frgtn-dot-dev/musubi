@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from "node:util";
+import { z } from "zod";
 import { civilToInstant, instantToCivil } from "@musubi/calendar";
 import { CivilDateTimeSchema, EventTimeModelSchema, EventWriteError, type Event } from "@musubi/types";
 
@@ -102,4 +104,111 @@ export function graphRecurrenceForEvent(event: Event): GraphRecurrence {
     range.type = "endDate"; range.endDate = endDate;
   }
   return { pattern, range };
+}
+
+
+const nativePatternSchema = z.object({
+  type: z.enum(["daily", "weekly", "absoluteMonthly", "relativeMonthly", "absoluteYearly", "relativeYearly"]),
+  interval: z.number().int().positive().max(2147483647),
+  dayOfMonth: z.number().int().min(0).max(31).optional(),
+  daysOfWeek: z.array(z.enum(weekdays)).optional(),
+  firstDayOfWeek: z.enum(weekdays).optional(),
+  index: z.enum(["first", "second", "third", "fourth", "last"]).optional(),
+  month: z.number().int().min(0).max(12).optional(),
+}).strict();
+const nativeRangeSchema = z.object({
+  type: z.enum(["numbered", "endDate", "noEnd"]),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  numberOfOccurrences: z.number().int().min(0).max(2147483647).optional(),
+  recurrenceTimeZone: z.string().optional(),
+}).strict();
+const nativeRecurrenceSchema = z.object({ pattern: nativePatternSchema, range: nativeRangeSchema }).strict();
+
+/** A native recurrence candidate for an independently verified master time.
+ * This does not promote calendarView instances into locally expanded series.
+ * Unknown semantics fail closed, leaving the existing provider-expanded import
+ * available. Creation delivery must additionally prove identity and echo dedup.
+ */
+export function recurrenceFromGraph(event: Event, native: unknown): string {
+  const parsed = nativeRecurrenceSchema.safeParse(native);
+  const model = EventTimeModelSchema.parse(event.timeModel);
+  if (!parsed.success || (model.kind !== "all-day" && model.kind !== "zoned") || event.seriesID || event.originalStart)
+    return unsupported("Outlook native recurrence needs a known master and a complete supported pattern.");
+  if (event.isAllDay !== (model.kind === "all-day")) return unsupported("The native master time kind is inconsistent.");
+  const { pattern, range } = parsed.data;
+  const zoned = model.kind === "zoned";
+  const anchor = zoned ? model.startLocal.slice(0, 10) : event.start.toISOString().slice(0, 10);
+  if (range.startDate !== anchor) return unsupported("The native recurrence range does not start at the accepted master.");
+  // No Windows/IANA guessing or viewer-zone fallback. Missing range zone uses
+  // the independently proven event zone, as specified by the Graph contract.
+  if (range.recurrenceTimeZone && range.recurrenceTimeZone !== (zoned ? model.timeZone : "UTC"))
+    return unsupported("The native recurrence zone differs from the accepted master.");
+  const weekly = pattern.type === "weekly";
+  const relative = pattern.type === "relativeMonthly" || pattern.type === "relativeYearly";
+  const absolute = pattern.type === "absoluteMonthly" || pattern.type === "absoluteYearly";
+  const yearly = pattern.type === "absoluteYearly" || pattern.type === "relativeYearly";
+  // Graph can serialize inactive default fields. Accept only their neutral
+  // values; a future/nondefault field must never disappear during conversion.
+  if ((!absolute && pattern.dayOfMonth) || (!yearly && pattern.month) ||
+    (!weekly && !relative && pattern.daysOfWeek?.length) ||
+    (!weekly && pattern.firstDayOfWeek && pattern.firstDayOfWeek !== "sunday") ||
+    (!relative && pattern.index && pattern.index !== "first"))
+    return unsupported("The native pattern contains unsupported inactive fields.");
+  if ((range.type !== "numbered" && range.numberOfOccurrences) ||
+    (range.type !== "endDate" && range.endDate && range.endDate !== "0001-01-01"))
+    return unsupported("The native range contains unsupported inactive fields.");
+  const frequency = weekly ? "WEEKLY" : yearly ? "YEARLY" : absolute || relative ? "MONTHLY" : "DAILY";
+  const terms = [`FREQ=${frequency}`, `INTERVAL=${pattern.interval}`];
+  const normalizedPattern: GraphRecurrence["pattern"] = { type: pattern.type, interval: pattern.interval };
+  if (weekly || relative) {
+    const days = pattern.daysOfWeek;
+    if (!days?.length || new Set(days).size !== days.length || (relative && days.length !== 1))
+      return unsupported("The native weekday set cannot be represented without changing its meaning.");
+    normalizedPattern.daysOfWeek = [...days];
+    if (weekly) {
+      const first = pattern.firstDayOfWeek ?? "sunday";
+      normalizedPattern.firstDayOfWeek = first;
+      terms.push(`BYDAY=${days.map(day => tokens[weekdays.indexOf(day)]).join(",")}`, `WKST=${tokens[weekdays.indexOf(first)]}`);
+    } else {
+      const index = pattern.index ?? "first";
+      normalizedPattern.index = index;
+      const ordinal = Object.entries(indices).find(([, name]) => name === index)![0];
+      terms.push(`BYDAY=${ordinal}${tokens[weekdays.indexOf(days[0]!)]}`);
+    }
+  }
+  if (absolute) {
+    if (!pattern.dayOfMonth) return unsupported("The native monthly day is missing.");
+    normalizedPattern.dayOfMonth = pattern.dayOfMonth;
+    terms.push(`BYMONTHDAY=${pattern.dayOfMonth}`);
+  }
+  if (yearly) {
+    if (!pattern.month) return unsupported("The native yearly month is missing.");
+    normalizedPattern.month = pattern.month;
+    terms.push(`BYMONTH=${pattern.month}`);
+  }
+  const normalizedRange: GraphRecurrence["range"] = { type: range.type, startDate: range.startDate, ...(zoned ? { recurrenceTimeZone: model.timeZone } : {}) };
+  if (range.type === "numbered") {
+    if (!range.numberOfOccurrences) return unsupported("The native recurrence count is missing.");
+    normalizedRange.numberOfOccurrences = range.numberOfOccurrences;
+    terms.push(`COUNT=${range.numberOfOccurrences}`);
+  } else if (range.type === "endDate") {
+    const endDate = range.endDate;
+    if (!endDate || !CivilDateTimeSchema.safeParse(`${endDate}T00:00:00`).success || endDate < anchor)
+      return unsupported("The native recurrence end date is invalid.");
+    normalizedRange.endDate = endDate;
+    if (zoned) {
+      // RRULE instances keep the master's wall-clock start. A cutoff at that
+      // start on the inclusive final date includes exactly the same instances.
+      const end = civilToInstant(endDate + model.startLocal.slice(10), model.timeZone, "recurrence");
+      if (!end || end.getUTCMilliseconds()) return unsupported("The native end date has no exact recurrence cutoff.");
+      terms.push(`UNTIL=${end.toISOString().replace(/[-:]/g, "").replace(".000", "")}`);
+    } else terms.push(`UNTIL=${endDate.replace(/-/g, "")}`);
+  }
+  const recurrence = `RRULE:${terms.join(";")}`;
+  // Reuse the forward converter's anchor membership, month-end and relative
+  // weekday restrictions. Both directions must describe precisely one shape.
+  if (!isDeepStrictEqual(graphRecurrenceForEvent({ ...event, recurrence }), { pattern: normalizedPattern, range: normalizedRange }))
+    return unsupported("The native recurrence cannot be represented losslessly.");
+  return recurrence;
 }

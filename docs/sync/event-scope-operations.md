@@ -41,3 +41,24 @@ The pure `microsoft_recurrence.ts` converter maps one RRULE into the six documen
 Unknown terms, dated additions/exclusions, floating time, multiple relative weekdays, fifth ordinals and unverified month-end behavior remain refused. This converter is deliberately not connected to remote delivery yet: native Graph create also needs master-echo deduplication, while update requires verified conditional-write behavior. A successful conversion alone is not a write capability.
 
 Primary references: [Graph recurrencePattern](https://learn.microsoft.com/en-us/graph/api/resources/recurrencepattern?view=graph-rest-1.0), [Graph recurrenceRange](https://learn.microsoft.com/en-us/graph/api/resources/recurrencerange?view=graph-rest-1.0). Candidate tests cover all six shapes, COUNT/UNTIL, week-start and zone-boundary behavior, plus lossless refusals.
+
+
+### Native Graph recurrence evidence candidate
+
+`recurrenceFromGraph` now reconstructs the supported single RRULE from a strict
+native pattern/range and an independently verified known master time. Native
+weekly patterns default to Sunday, whereas the existing forward conversion
+explicitly supplies Monday for an omitted RFC WKST. Relative patterns support
+one weekday and the documented first-index default. Inclusive end dates become
+an event-zone cutoff, with no viewer-zone or Windows/IANA guessing. Unresolved
+DST cutoffs, mismatched range anchors/zones, unknown fields, non-neutral inactive
+fields, ambiguous patterns and unverified month-end behavior are refused.
+
+The reverse candidate reuses forward anchor-membership restrictions and checks
+that both directions represent the same active native fields. Independent
+expansion fixtures pin actual dates for all six patterns, all-day ranges,
+Prague spring DST and New York autumn DST, including three process time zones.
+The original provider object is not changed. This is a pure prerequisite only:
+Graph calendarView stays provider-expanded, recurring create stays disabled,
+and canonical master echo identity/deduplication still needs integration and
+HTTP/DB evidence before any capability is exposed. No live account was used.
