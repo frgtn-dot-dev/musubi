@@ -1,3 +1,4 @@
+import { queueGraphSeriesCreateRequest, findGraphSeriesCreateRequest } from "../sync/graph_series_create";
 import { queueGoogleRsvp } from "../sync/provider_rsvp";
 import { prepareCaldavSeries, prepareCaldavSeriesDelete, prepareCaldavSplit } from "../sync/caldav_scope";
 import { ProviderEventWriteError } from "../sync/event_write";
@@ -17,6 +18,8 @@ import {
   forkEventAtRevision,
   getCalendarMembers,
   getEventSnapshot,
+  getExternalLinkForCalendar,
+  readGraphSeriesCreateReceipt,
   getOwnProviderEventObservation,
   queueProviderReminderEdit,
   getEventAttendees,
@@ -31,6 +34,7 @@ import {
   type Event,
   EventSchema,
   EventTimeEditRequestSchema,
+  EventTimeCreateRequestSchema,
   hasKnownEventTime,
   eventCreateRequest,
   EventCreateRequestSchema,
@@ -254,8 +258,32 @@ export async function handlerCreateEvent(req: Request, res: Response) {
 export async function handlerCreateEventTime(req: Request, res: Response) {
   if (!config.api.eventTimeEditsEnabled)
     throw new EventWriteError("event-write", "unsupported", "Explicit time creation is not enabled on this server. No changes were saved.");
-  const deliver = await prepareEventWrites([], eventMutationIdentity(req));
-  const result = await createLocalEventWithTime(req.body, req.user!.id);
+  const identity = eventMutationIdentity(req);
+  const deliver = await prepareEventWrites([], identity);
+  const request = EventTimeCreateRequestSchema.parse(req.body);
+  const ids = [...new Set(request.event.calendars.map(id => id.toLowerCase()))];
+  // Callers must retain this identity across retries of the same intent.
+  const operationID = req.get("Idempotency-Key") === undefined ? request.event.id.toLowerCase() : identity.mutationID;
+  let queued = await findGraphSeriesCreateRequest(req.user!.id, operationID, request);
+  if (!queued) {
+    for (const id of ids) await assertEventCalendarAccess(req.user!.id, id);
+    const link = ids.length === 1 ? await getExternalLinkForCalendar(ids[0]!) : null;
+    if (link?.provider === "microsoft" && request.event.recurrence)
+      queued = await queueGraphSeriesCreateRequest(req.user!.id, operationID, request);
+  }
+  if (queued) {
+    res.setHeader("Cache-Control", "private, no-store");
+    try {
+      const receipt = await readGraphSeriesCreateReceipt(req.user!.id, queued.operationID);
+      if (receipt.kind !== "active") return res.status(409).json({ code: "event-create-no-longer-active", error: "This creation was saved, but its event is no longer available here. Refresh before continuing.", localCommitted: true });
+      await notifyEvent(receipt.event.calendars, "event_created", receipt.event);
+      return res.status(202).json({ ...receipt.event, localCommitted: true });
+    } catch (error) {
+      const failure = committedFailure(error, [queued.event]);
+      return res.status(failure.status).json(failure.body);
+    }
+  }
+  const result = await createLocalEventWithTime(request, req.user!.id);
   return sendCommitted(res, deliver, result, result, 201, () =>
     notifyEvent(result.calendars, "event_created", result));
 }

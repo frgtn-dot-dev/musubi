@@ -1,9 +1,9 @@
 # Graph recurring-create preparation
 
-Recurring creation remains unsupported in the production adapter. These native
-candidates are prerequisites for a durable writer and an import contract that
-does not duplicate a local master with provider-expanded instances. They are not
-a write capability, permission check, or live-provider certification.
+Finite personal recurring creation is composed behind the disabled time-edit
+flag: public admission, durable delivery/recovery, full-family ACK and tracked
+sync. The sections below describe the individual contracts; client/browser and
+live-provider acceptance remain open. Production activation is not implied.
 
 ## Native identity and recovery read
 
@@ -39,8 +39,8 @@ inputs. No Graph adapter writer or existing import path is changed.
 
 ## Private native create transport
 
-`createGraphSeries` is a private candidate, not composed into the production
-Microsoft adapter. The existing default-off time-edit flag blocks all I/O when
+`createGraphSeries` is the private native transport used by the specialized
+Microsoft recurring-create worker. The existing default-off time-edit flag blocks all I/O when
 disabled. Its caller must prove the own-account OAuth write grant and provide a
 pre-write callback which validates the durable attempt/lease; this module does
 not create a database journal or perform its ACK.
@@ -64,9 +64,8 @@ or missing evidence cannot be mistaken for proof that no creation happened.
 Fake HTTP verifies exact independent zoned/all-day request bodies, the disabled
 gate, positive/unknown/revoked grants, callback failure, matching recovery, absent
 uncertain recovery, lost/partial/503 responses, redirects, changed native content
-and exceptions, returned-ID mismatch and read failure after POST. The callback
-is mocked; durable family delivery/ACK and real Outlook acceptance are still
-required. This step does not establish Graph event If-Match enforcement.
+and exceptions, returned-ID mismatch and read failure after POST. These transport tests mock the callback; later sections cover durable family
+delivery/ACK composition. Real Outlook acceptance remains required. This step does not establish Graph event If-Match enforcement.
 
 ## Finite original-slot preparation
 
@@ -310,8 +309,8 @@ acceptance, and stale ordinary instance echoes remain excluded.
 PostgreSQL regressions cover timed DST and all-day year boundaries, incomplete or
 changed proof, duplicate identities, tombstones/collisions, concurrent one-winner
 ACK, deterministic lease expiry during family writes, and subsequent sync no-op.
-Native HTTP delivery/recovery and public create admission still need composition;
-this private transaction alone is not production recurring creation.
+The worker and public admission described below compose this transaction;
+the transaction alone does not prove live provider acceptance.
 
 
 ## Default-off create worker composition
@@ -319,7 +318,7 @@ this private transaction alone is not production recurring creation.
 The specialized Microsoft adapter/worker now connects the frozen create journal,
 current local and native write permission, stable transaction recovery, one POST,
 strict full-family read and atomic ACK. The ordinary legacy create path still
-refuses recurring writes. Public known-time create admission remains separate.
+refuses recurring writes. Public known-time create admission is described below.
 
 Transient database failures during authority checks remain retryable before POST;
 failures during ACK preserve uncertainty and roll back all family writes. They
@@ -340,3 +339,33 @@ local/permission/lease races. Every successful recovery has one POST, five stabl
 canonical definitions/mappings for the four-slot family, and a flag-off ordinary
 sync no-op. Uncertain absence never reposts; changed native intent remains a
 conflict. No live Outlook acceptance or production activation is implied.
+
+
+## Default-off public create admission
+
+`POST /events/time` now accepts a personal finite Microsoft series in one owned,
+writable connected calendar when explicit time edits are enabled. The strict
+request supplies a known zoned or all-day time model. Native projection and the
+complete COUNT footprint (at most 366 occurrences within 730 days) are validated
+before any local write. Actor identity replaces untrusted creator/organizer data.
+Meetings, conference URLs, floating time and unsupported recurrence are refused.
+
+The response is `202` with `localCommitted: true`: only durable local intent has
+been accepted. Admission performs no provider I/O; the worker checks fresh native
+permission before POST. An explicit UUID `Idempotency-Key`, or the event UUID by
+default, identifies exact retries. Changed intent cannot reuse the key or event.
+
+An actor/key's exact saved intent is resolved before new-write permission checks,
+including after OAuth write eligibility or calendar access changes. Changed
+requests cannot reuse the saved identity. An exact retry reads the current
+canonical receipt under event, membership and source locks. A deleted or no-longer-readable event returns a content-free `409`
+with `localCommitted: true`; it is never resurrected from the saved request.
+Post-commit notification/read failure reports committed state honestly, without
+blindly refetching later private edits. Responses use `private, no-store` and
+expose neither native projection nor account/journal credentials.
+
+Real HTTP/PostgreSQL regressions cover strict authentication and admission,
+concurrent replay, current/deleted results, permission loss between commit and
+receipt, notification failure, and unchanged local/other-provider behavior.
+Client/browser and live Outlook acceptance remain separate, as do wider recurrence
+and native UPDATE/DELETE contracts. Production flags remain disabled.
