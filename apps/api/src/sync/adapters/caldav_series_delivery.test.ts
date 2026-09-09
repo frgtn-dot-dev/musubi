@@ -14,12 +14,26 @@ process.env.FEDERATION_ALLOW_PRIVATE_HOSTS = "true";
 async function main() {
   const { config } = await import("@musubi/config");
   config.api.eventTimeEditsEnabled = true;
-  const { prepareCaldavSeriesDeletion, deleteCaldavSeriesResource, prepareCaldavSeriesWrite, deliverCaldavSeriesResource } = await import("./caldav");
+  const { prepareCaldavSeriesSplit, createCaldavSplitResource, prepareCaldavSeriesDeletion, deleteCaldavSeriesResource, prepareCaldavSeriesWrite, deliverCaldavSeriesResource } = await import("./caldav");
   const { caldavSeriesEvidence, sameCaldavResource } = await import("./caldav_series");
   let data = "", etag = '"before"', mode = "ok", puts = 0, gets = 0;
   let putBody = "", putEtag: string | undefined;
   let missing = false, deletes = 0;
+  let createPath = "", createData: string | null = null, createPuts = 0;
   const server = createServer(async (req, res) => {
+    if (req.url === createPath) {
+      if (req.method === "GET") {
+        if (createData === null) { res.writeHead(404); return res.end(); }
+        res.writeHead(mode === "create-unreadable" ? 403 : 200, { "content-type": "text/calendar", etag: mode === "create-weak" ? 'W/"created"' : '"created"' }); return res.end(createData);
+      }
+      assert.equal(req.method, "PUT"); assert.equal(req.headers["if-none-match"], "*"); createPuts++;
+      if (mode === "create-race") createData = "Foreign resource";
+      if (createData !== null) { res.writeHead(412); return res.end(); }
+      let body = ""; for await (const chunk of req) body += chunk; createData = body;
+      if (mode === "changed-after-put") createData = body.replace("Keep alarm", "Changed alarm");
+      if (mode === "lost") { req.socket.destroy(); return; }
+      res.writeHead(mode === "applied-503" ? 503 : 201); return res.end();
+    }
     if (req.method === "GET") {
       gets++;
       if (missing) { res.writeHead(mode === "delete-unreadable" ? 403 : 404); res.end(); return; }
@@ -77,7 +91,7 @@ async function main() {
       assert.ok(write.after.includes("X-PRIVATE;LANGUAGE=cs:Folded\r\n extension"));
       assert.ok(write.after.includes("DESCRIPTION:Keep alarm"));
       const deliver = () => deliverCaldavSeriesResource(collection, write, "Basic Zml4dHVyZTpmaXh0dXJl", AbortSignal.timeout(5000));
-      const reset = (nextMode = "ok") => { missing = false; deletes = 0; data = before; etag = ref.etag; mode = nextMode; puts = gets = 0; };
+      const reset = (nextMode = "ok") => { createData = null; createPuts = 0; missing = false; deletes = 0; data = before; etag = ref.etag; mode = nextMode; puts = gets = 0; };
       reset();
       const confirmed = await deliver();
       assert.equal(puts, 1); assert.equal(gets, 2); assert.equal(putEtag, ref.etag); assert.equal(putBody, write.after);
@@ -110,6 +124,44 @@ async function main() {
       }
       assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, { title: "Mixed intent" }, undefined, undefined, undefined, undefined, followingDelete));
       assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, {}, undefined, undefined, undefined, undefined, { ...followingDelete, expectedOccurrenceRevision: 999 }));
+      const splitCut = baseline.children.find(item => !item.isCanceled)!;
+      const splitRequest = { operationID: randomUUID(), scope: "following", action: "update", expectedRevision: baseline.master.revision, originalStart: splitCut.originalStart, expectedOccurrenceRevision: splitCut.revision, patch: { title: "Future series" } };
+      const split = prepareCaldavSeriesSplit(evidence, baseline, splitRequest);
+      assert.ok(split.source.after.includes("COUNT=1")); assert.ok(!split.source.after.includes(child) && !split.source.after.includes(cancelled));
+      assert.equal(split.creation.children.length, 2); assert.equal(split.creation.ref.etag, undefined);
+      assert.ok(split.creation.data.includes(child.replace("UID:family", "UID:" + split.creation.master.id)) && split.creation.data.includes(cancelled.replace("UID:family", "UID:" + split.creation.master.id)));
+      for (const recurrence of ["FREQ=DAILY;COUNT=5", "FREQ=DAILY;INTERVAL=1;COUNT=5", "RRULE:FREQ=DAILY;COUNT=5"]) {
+        const changedRule = prepareCaldavSeriesSplit(evidence, baseline, { ...splitRequest, patch: { recurrence } });
+        assert.ok(changedRule.creation.master.recurrence!.startsWith("RRULE:"));
+        assert.equal(changedRule.creation.children.length, 2);
+      }
+      const untilSplit = prepareCaldavSeriesSplit(caldavSeriesEvidence(untilBefore, untilBaseline), untilBaseline, splitRequest);
+      assert.ok(untilSplit.creation.master.recurrence!.includes("UNTIL="));
+      const splitTime = kind === "all-day" ? { kind: "all-day", startDate: "2026-04-02", endDate: "2026-04-03" } : { kind, ...(kind === "zoned" ? { timeZone: "Europe/Prague" } : {}), startLocal: "2026-04-02T12:00:00.000", endLocal: "2026-04-03T13:00:00.000" };
+      const movedSplit = prepareCaldavSeriesSplit(evidence, baseline, { ...splitRequest, time: splitTime });
+      for (const child of movedSplit.creation.children) {
+        const old = baseline.children.find(item => item.id === child.id)!;
+        assert.deepEqual(child.timeModel, old.timeModel); assert.equal(child.title, old.title); assert.equal(child.isCanceled, old.isCanceled);
+        assert.notDeepEqual(child.originalStart, old.originalStart);
+      }
+      createPath = new URL(split.creation.ref.externalEventId).pathname;
+      const create = () => createCaldavSplitResource(collection, JSON.parse(JSON.stringify(split)), "Basic Zml4dHVyZTpmaXh0dXJl", AbortSignal.timeout(5000));
+      for (const failure of ["ok", "lost", "applied-503", "create-unreadable", "create-weak", "create-race", "changed-after-put"]) {
+        reset(failure);
+        if (failure === "create-race") { await assert.rejects(create, (error: any) => error.code === "provider-conflict"); assert.equal(createData, "Foreign resource"); }
+        else if (failure === "changed-after-put") { await assert.rejects(create, (error: any) => error.outcome === "unconfirmed"); mode = "ok"; await assert.rejects(create); }
+        else {
+          if (failure !== "ok") { await assert.rejects(create, (error: any) => error.outcome === "unconfirmed"); mode = "ok"; }
+          const result = await create(); assert.equal(result.ref.etag, '"created"'); assert.equal(result.master.title, "Future series"); assert.equal(result.exceptions.length, 2); await create();
+        }
+        assert.equal(createPuts, 1); assert.equal(data, before); assert.equal(puts, 0, "Creating the new resource never silently truncates the old one");
+      }
+      reset(); createData = split.creation.data.replace("Future series", "Other series"); await assert.rejects(create); assert.equal(createPuts, 0);
+      reset(); await assert.rejects(() => createCaldavSplitResource(collection, { ...split, creation: { ...split.creation, data: split.creation.data.replace("Keep alarm", "Tampered alarm") } }, "Basic Zml4dHVyZTpmaXh0dXJl")); assert.equal(createPuts, 0);
+      reset(); await assert.rejects(() => createCaldavSplitResource(collection, split, "Basic Zml4dHVyZTpmaXh0dXJl", undefined, async () => { throw new Error("Authority changed"); }), /Authority changed/); assert.equal(createPuts, 0);
+      reset(); config.api.eventTimeEditsEnabled = false; await assert.rejects(create); assert.equal(createPuts, 0); config.api.eventTimeEditsEnabled = true;
+      assert.throws(() => prepareCaldavSeriesSplit(evidence, baseline, { ...splitRequest, patch: { url: "https://example.test" } }));
+      assert.throws(() => prepareCaldavSeriesSplit(evidence, baseline, { ...splitRequest, originalStart: initialStart, expectedOccurrenceRevision: null }));
       const deletion = prepareCaldavSeriesDeletion(evidence, baseline);
       const remove = () => deleteCaldavSeriesResource(collection, JSON.parse(JSON.stringify(deletion)), "Basic Zml4dHVyZTpmaXh0dXJl", AbortSignal.timeout(5000));
       for (const failure of ["ok", "lost", "applied-503", "delete-unreadable", "delete-race", "delete-recreated"]) {

@@ -30,7 +30,7 @@ async function main() {
   const { db, events, eventOutbox, externalCalendars, externalEvents, applyLocalEventScope, getEventSnapshot, getUserExternalCalendars, setCursor, saveCaldavAccount, user } = await import("@musubi/db");
   const { config } = await import("@musubi/config");
   const { syncProvider } = await import("../engine");
-  const { caldavAdapter, patchEventIcal, prepareCaldavSeriesWrite, prepareCaldavSeriesDeletion } = await import("./caldav");
+  const { caldavAdapter, patchEventIcal, prepareCaldavSeriesWrite, prepareCaldavSeriesDeletion, prepareCaldavSeriesSplit } = await import("./caldav");
   const { createGuardedCaldavFetch } = await import("../caldav_client");
   const { encryptSecret } = await import("../crypto");
   const { prepareEventDeliveryResolution } = await import("../event_resolution");
@@ -400,6 +400,14 @@ async function main() {
     const truncateMap = (await db.select().from(externalEvents).where(eq(externalEvents.eventID, scopedRoot.id)))[0]!;
     const truncateBaseline = { master: truncateRoot, children: truncateChildren.map(item => item!), ref: { externalEventId: truncateMap.externalEventID, etag: truncateMap.etag, icalUid: truncateMap.icalUid } };
     const truncateEvidence = await caldavAdapter.readCaldavSeries!(userID, account.id, collectionURL, truncateBaseline);
+    const splitCut = [...truncateBaseline.children].sort((a, b) => a.originalStart!.value.localeCompare(b.originalStart!.value))[1]!;
+    const split = prepareCaldavSeriesSplit(truncateEvidence, truncateBaseline, { operationID: randomUUID(), scope: "following", action: "update", expectedRevision: truncateRoot.revision, originalStart: splitCut.originalStart, expectedOccurrenceRevision: splitCut.revision, patch: { title: "Future native family" } });
+    const createdSplit = await caldavAdapter.createCaldavSeries!(userID, account.id, collectionURL, split);
+    assert.equal(createdSplit.master.title, "Future native family"); assert.equal(createdSplit.exceptions.length, split.creation.children.length);
+    const recoveredSplit = await caldavAdapter.createCaldavSeries!(userID, account.id, collectionURL, JSON.parse(JSON.stringify(split)));
+    assert.equal(recoveredSplit.ref.etag, createdSplit.ref.etag); assert.deepEqual(await rows(), extendedRows);
+    const splitCleanup = await davFetch(split.creation.ref.externalEventId, { method: "DELETE", headers: { authorization: basicAuth, "if-match": recoveredSplit.ref.etag! } });
+    assert.ok(splitCleanup.ok); assert.equal((await davFetch(split.creation.ref.externalEventId, { headers: { authorization: basicAuth } })).status, 404);
     const cut = [...truncateBaseline.children].sort((a, b) => b.originalStart!.value.localeCompare(a.originalStart!.value))[0]!;
     const truncateWrite = prepareCaldavSeriesWrite(truncateEvidence, truncateBaseline, {}, undefined, undefined, undefined, undefined, { originalStart: cut.originalStart!, expectedOccurrenceRevision: cut.revision! });
     const truncated = await caldavAdapter.writeCaldavSeries!(userID, account.id, collectionURL, truncateWrite);
