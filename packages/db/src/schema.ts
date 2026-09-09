@@ -254,6 +254,7 @@ export const events = pgTable("events", {
   id: uuid("id").primaryKey(),
   // Shared content, membership and tombstone version; provider ETags live on mappings.
   revision: integer("revision").notNull().default(1),
+  providerReadRetiredRevision: integer("provider_read_retired_revision"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at")
     .notNull()

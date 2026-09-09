@@ -7,7 +7,7 @@ import { lockCalendarLifecycle } from "./calendar-lifecycle";
 
 export type GoogleCalendarAccessRole = "owner" | "writer" | "reader" | "writerWithoutPrivateAccess" | "unknown";
 export type ExternalCalendarAccessContext = {
-  provider?: "google" | "caldav";
+  provider?: "google" | "caldav" | "microsoft";
   linkID: string;
   revision: number;
   userID: string;
@@ -35,7 +35,7 @@ export async function reconcileGoogleCalendarAccess(userID: string, accountID: s
 /** Call after the calendar lifecycle shared fence, before any imported mutation. */
 export async function assertExternalCalendarAccess(tx: DbTransaction, provider: string, calendarID: string, context?: ExternalCalendarAccessContext) {
   if (!context) return;
-  if (!["google", "caldav"].includes(provider) || (context.provider ?? "google") !== provider || !Number.isSafeInteger(context.revision) || context.revision < (provider === "caldav" ? 0 : 1)) throw new Error("Invalid calendar access context.");
+  if (!["google", "caldav", "microsoft"].includes(provider) || (context.provider ?? "google") !== provider || !Number.isSafeInteger(context.revision) || context.revision < (provider === "caldav" ? 0 : 1)) throw new Error("Invalid calendar access context.");
   const [source] = await tx.select({ id: externalCalendars.id, role: externalCalendars.providerAccessRole }).from(externalCalendars).where(and(eq(externalCalendars.id, context.linkID), eq(externalCalendars.provider, provider), eq(externalCalendars.calendarID, calendarID), eq(externalCalendars.userID, context.userID), eq(externalCalendars.accountID, context.accountID), eq(externalCalendars.externalCalendarID, context.externalCalendarID), eq(externalCalendars.disabled, false), eq(externalCalendars.supportsEvents, true), eq(externalCalendars.providerAccessRevision, context.revision)));
   if (!source) throw new Error("Calendar access changed during sync. Retry with fresh discovery.");
   return source;

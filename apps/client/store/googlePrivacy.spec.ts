@@ -1,10 +1,11 @@
-import { beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/services/eventsCache", () => ({ cacheDeleteEvents: vi.fn().mockResolvedValue(undefined), cacheUpsertEvents: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/services/notifications", () => ({ cancelEventNotification: vi.fn().mockResolvedValue(undefined), syncScheduledReminders: vi.fn() }));
 import { useEditComposerStore, useEventDetailStore, resetEventModalSnapshots } from "./useEventDetailStore";
 import { useEventsStore } from "./useEventsStore";
 import { useCalendarsStore } from "./useCalendarsStore";
-const source = { id: "source", provider: "google", role: "owner" } as any;
+describe.each(["google", "microsoft"])("%s confirmed privacy retirement", provider => {
+const source = { id: "source", provider, role: "owner" } as any;
 const event = { creatorID: "owner", organizer: "owner", color: "red", start: new Date(), end: new Date(), isAllDay: false, isCanceled: false, id: "event", revision: 2, originCalendarID: "source", calendars: ["source"], title: "Private" } as any;
 beforeEach(() => { useEventsStore.getState().resetEvents(); useCalendarsStore.getState().loadCalendars([source]); });
 it("only confirmed reconciliation retires a prior Google row, never initial cache loads", () => {
@@ -85,4 +86,6 @@ it("reconciles a large mixed Google snapshot and keeps only missing identities r
   useEventsStore.getState().loadEvents(incoming, { reconciled: true });
   expect(useEventsStore.getState().events).toEqual(incoming);
   expect([...useEventsStore.getState().retiredGoogleEventIDs].sort()).toEqual(prior.filter((_, i) => i % 3 === 0).map(row => row.id).sort());
+});
+
 });

@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { eq, sql } from "drizzle-orm";
 import { config } from "@musubi/config";
 import { expandRecurringEvents, resolveEventTimeEdit } from "@musubi/calendar";
-import { account, db, deleteExternalEvent, events, externalEvents, sweepExternalEvents, getUserExternalCalendars, importExternalCalendar, setCursor, upsertExternalEvent, user } from "@musubi/db";
+import { account, db, reconcileMicrosoftCalendarAccess, deleteExternalEvent, events, externalEvents, sweepExternalEvents, getUserExternalCalendars, importExternalCalendar, setCursor, upsertExternalEvent, user } from "@musubi/db";
 import { microsoftAdapter } from "./adapters/microsoft";
 import { microsoftEventState } from "./adapters/provider_event_state";
 import { syncProvider } from "./engine";
@@ -17,12 +17,13 @@ async function main() {
   const occurrence = (day: number, hour: number): any => ({ ...native, id: `occ-${day}`, iCalUId: `uid-${day}`, "@odata.etag": `W/"${day}"`, type: "occurrence", seriesMasterId: "series", originalStart: `2026-03-${day}T0${hour}:00:00Z`, recurrence: null, start: { dateTime: `2026-03-${day}T0${hour}:00:00`, timeZone: "UTC" }, end: { dateTime: `2026-03-${day}T0${hour + 1}:00:00`, timeZone: "UTC" } });
   const ordinary = [occurrence(27, 8), occurrence(28, 8), occurrence(29, 7), occurrence(30, 7)];
   const oneOff = { ...ordinary[0], id: "standalone", type: "singleInstance", seriesMasterId: null, subject: "Untracked event", originalStart: null };
+  let privateRead: boolean | undefined = true;
   let master = structuredClone(native), instances = structuredClone(ordinary), mode = "normal", reads: string[] = [], localChange: (() => Promise<void>) | undefined;
   const server = createServer((req, res) => { void (async () => {
     assert.equal(req.method, "GET"); assert.equal(req.headers.authorization, "Bearer fixture");
     const url = new URL(req.url!, "http://fixture.test"); reads.push(url.pathname);
     const json = (body: unknown, status = 200) => { res.writeHead(status, { "Content-Type": "application/json" }); res.end(JSON.stringify(body)); };
-    if (url.pathname === "/v1.0/me/calendars") return json({ value: [{ id: "calendar", name: "Fixture", canEdit: true }] });
+    if (url.pathname === "/v1.0/me/calendars") return json({ value: [{ id: "calendar", name: "Fixture", canEdit: true, canViewPrivateItems: privateRead }] });
     if (url.pathname === "/v1.0/me/calendars/calendar") return json({ id: "calendar" }, mode === "removed-denied" ? 403 : 200);
     if (url.pathname === "/v1.0/me/calendars/calendar/events/series") {
       if (mode !== "late-root") assert.equal(url.searchParams.get("$expand"), "exceptionOccurrences", "Tracked series use the full reader, never calendarView hydration");
@@ -137,6 +138,38 @@ async function main() {
       assert.equal(await upsertExternalEvent("microsoft", userID, calendar.id, "calendar", "unmapped-late", { ...values, recurrence: null, title: "Stale echo", color: "red" }, null, "late-uid", undefined, undefined, undefined, undefined, undefined, "series"), false);
     }
     assert.deepEqual(await snapshot(), beforeUnmapped, "Source parent guard never promotes a bounded instance or changes mappings");
+    for (const accessMode of ["normal", "removed"]) {
+      mode = accessMode;
+      localChange = async () => {
+        await reconcileMicrosoftCalendarAccess(userID, "account", calendar.id, { canEdit: true, canViewPrivateItems: false });
+        await reconcileMicrosoftCalendarAccess(userID, "account", calendar.id, { canEdit: true, canViewPrivateItems: true });
+      };
+      await assert.rejects(sync, Error, "Held family proof cannot replace/delete after access ABA");
+      assert.ok((await rows()).every(value => value.title === "Busy"), "Redaction includes unmapped cancelled children");
+      assert.ok((await rows()).every(value => !value.deletedAt));
+      mode = "normal"; await sync();
+      assert.equal((await rows()).find(value => value.id === root.id)!.title, native.subject);
+    }
+    // Remove the native mapping as for a never-observed cancelled slot, then
+    // prove this test exercises event-level evidence rather than a map marker.
+    const cancelledChild = (await rows()).find(value => value.seriesID === root.id && value.isCanceled)!;
+    assert.ok(cancelledChild.providerReadRetiredRevision);
+    await db.delete(externalEvents).where(eq(externalEvents.eventID, cancelledChild.id));
+    assert.equal((await db.select().from(externalEvents).where(eq(externalEvents.eventID, cancelledChild.id))).length, 0);
+    // The cancelled child has no mapping after the root's authorized recovery.
+    privateRead = undefined; master = structuredClone(native); instances = structuredClone(ordinary);
+    await assert.rejects(sync, Error, "Unknown proof cannot revive an unmapped retired child after root recovery");
+    privateRead = true; await sync();
+    // A genuinely new cancelled identity must not inherit its restored root's history.
+    const newSlot = (await rows()).find(value => value.seriesID === root.id && !value.isCanceled)!;
+    await db.delete(events).where(eq(events.id, newSlot.id));
+    const slotDay = newSlot.originalStart!.value.slice(8, 10);
+    master.cancelledOccurrences = ["new-cancelled-slot"];
+    instances = ordinary.filter(value => value.originalStart.slice(8, 10) !== slotDay);
+    await sync();
+    const createdCancelled = (await rows()).find(value => value.seriesID === root.id && value.isCanceled)!;
+    assert.notEqual(createdCancelled.id, newSlot.id); assert.equal(createdCancelled.providerReadRetiredRevision, null);
+    privateRead = undefined; await sync();
     console.log("Tracked Graph family sync: actual scoped native reads, flag-off preservation, calendarView/stale-ID suppression before hydration, reset/window renewal, moved/cancelled/revived UUIDs, complete-read failures and local-race cursor preservation: OK");
   } finally { config.api.eventTimeEditsEnabled = enabled; globalThis.fetch = realFetch; server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await db.delete(user).where(eq(user.id, userID)); }
 }

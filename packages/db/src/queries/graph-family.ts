@@ -1,3 +1,4 @@
+import { hasFullProviderReadAccess, microsoftPrivateAccess } from "./microsoft-access";
 import { createHash } from "node:crypto";
 import { config } from "@musubi/config";
 import { GraphCreateAdoptionRequestSchema, GraphCreateAdoptionRecordSchema, type GraphCreateAdoptionRequest } from "@musubi/types";
@@ -93,6 +94,7 @@ async function replaceGraphFamilyInTransaction(tx: DbTransaction, context: Graph
     const current = await accepted(tx, context.address, excludedOperationID);
     if (!same(context, current)) refuse();
     const { root, children, mappings, address } = current;
+    if ((mappings.some(mapping => mapping.readRedactionRevision !== null) || children.some(child => child.providerReadRetiredRevision !== null && !mappings.some(mapping => mapping.eventID === child.id))) && microsoftPrivateAccess(current.link.providerAccessRole) === null) refuse();
     const rootMap = mappings.find(value => value.eventID === root.id)!;
     if (observation.master.externalID !== address.externalMasterID || observation.master.icalUid !== rootMap.icalUid || !observation.master.values.recurrence) refuse();
     const candidate = EventSchema.parse({ ...root, ...observation.master.values, calendars: [address.calendarID] });
@@ -130,7 +132,8 @@ async function replaceGraphFamilyInTransaction(tx: DbTransaction, context: Graph
       const providerState = ProviderEventStateSchema.parse(value.providerState);
       if (providerState.provider !== "microsoft") refuse();
       const previous = mappings.find(mapping => mapping.eventID === id);
-      const values = { provider: "microsoft", eventID: id, calendarID: address.calendarID, externalCalendarID: current.link.externalCalendarID, externalEventID: value.externalID, etag: value.etag, icalUid: value.icalUid, externalSeriesID: originalStart ? address.externalMasterID : null, originalStart, providerState };
+      const readRedactionRevision = hasFullProviderReadAccess("microsoft", current.link.providerAccessRole) || (microsoftPrivateAccess(current.link.providerAccessRole) === null && previous?.readRedactionRevision == null) ? null : (await tx.select({ revision: events.revision }).from(events).where(eq(events.id, id)))[0]!.revision;
+      const values = { readRedactionRevision, provider: "microsoft", eventID: id, calendarID: address.calendarID, externalCalendarID: current.link.externalCalendarID, externalEventID: value.externalID, etag: value.etag, icalUid: value.icalUid, externalSeriesID: originalStart ? address.externalMasterID : null, originalStart, providerState };
       if (previous && previous.externalEventID !== value.externalID) await tx.delete(externalEvents).where(eq(externalEvents.id, previous.id));
       if (!previous || previous.externalEventID !== value.externalID) {
         await tx.insert(externalEvents).values({ ...values, providerStateObservedAt: new Date() }); changed = true;
@@ -140,7 +143,7 @@ async function replaceGraphFamilyInTransaction(tx: DbTransaction, context: Graph
     };
     const prepared = observation.instances.map(value => {
       const previous = children.find(child => key(child.originalStart!) === key(value.originalStart));
-      const values = { ...root, ...value.values, id: previous?.id ?? randomUUID(), revision: previous?.revision ?? 1, seriesID: root.id, originalStart: value.originalStart, isCanceled: false, deletedAt: null };
+      const values = { ...root, ...value.values, id: previous?.id ?? randomUUID(), revision: previous?.revision ?? 1, providerReadRetiredRevision: previous?.providerReadRetiredRevision ?? null, seriesID: root.id, originalStart: value.originalStart, isCanceled: false, deletedAt: null };
       return { previous, values, native: value, event: EventSchema.parse({ ...values, calendars: [address.calendarID] }) };
     });
     // Validate the proposed family once, including moved-out definitions. Do
@@ -156,7 +159,7 @@ async function replaceGraphFamilyInTransaction(tx: DbTransaction, context: Graph
       const slot = footprint.get(key(value.originalStart))!;
       if (!same({ start: slot.start, end: slot.end, isAllDay: slot.isAllDay, timeModel: slot.timeModel }, { start: value.start, end: value.end, isAllDay: value.isAllDay, timeModel: value.timeModel })) refuse();
       // Preserve any previously observed exception content/time and native map.
-      const values = previous ? { ...previous, originalStart: value.originalStart, isCanceled: true, deletedAt: null } : { ...root, ...observation.master.values, start: slot.start, end: slot.end, isAllDay: slot.isAllDay, timeModel: slot.timeModel!, id: randomUUID(), revision: 1, seriesID: root.id, originalStart: value.originalStart, recurrence: null, isCanceled: true, deletedAt: null };
+      const values = previous ? { ...previous, originalStart: value.originalStart, isCanceled: true, deletedAt: null } : { ...root, ...observation.master.values, start: slot.start, end: slot.end, isAllDay: slot.isAllDay, timeModel: slot.timeModel!, id: randomUUID(), revision: 1, providerReadRetiredRevision: null, seriesID: root.id, originalStart: value.originalStart, recurrence: null, isCanceled: true, deletedAt: null };
       await save(previous, values);
     }
     for (const previous of children.filter(value => !originals.has(key(value.originalStart!)))) {
@@ -255,7 +258,7 @@ function validatePlainGraphCreation(observation: GraphFamilyObservation, expecte
 
 /** Local preview comparison only; Graph has no atomic whole-family read CAS. */
 export function graphCreateAdoptionVersion(context: GraphCreateAdoptionContext, observation: GraphFamilyObservation) {
-  return createHash("sha256").update(JSON.stringify(canonical({ context, observation }))).digest("hex");
+  return createHash("sha256").update(JSON.stringify(canonical({ context: { ...context, event: { ...context.event, providerReadRetiredRevision: context.event.providerReadRetiredRevision ?? undefined } }, observation }))).digest("hex");
 }
 export function validateGraphCreateAdoptionObservation(context: GraphCreateAdoptionContext, observation: GraphFamilyObservation) {
   const expected = graphSeriesCreateProjection({ ...context.row.payload.event, ...observation.master.values, organizer: context.row.userID }, context.row.userID);

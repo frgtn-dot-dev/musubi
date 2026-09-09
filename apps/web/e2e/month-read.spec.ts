@@ -8901,8 +8901,9 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
   }
 }
 
+for (const provider of ["google", "microsoft"] as const) {
 for (const mode of ["compact", "generated", "full"] as const) {
-  test(`Google editor privacy refresh preserves typed deltas (${mode})`, async ({ page }, testInfo) => {
+  test(`${provider} editor privacy refresh preserves typed deltas (${mode})`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: mode === "generated" ? 390 : 1280, height: 900 });
     await page.emulateMedia({ reducedMotion: "reduce" });
     if (mode === "generated") await page.addInitScript(() => localStorage.setItem("musubi-theme", "dark"));
@@ -8923,7 +8924,7 @@ for (const mode of ["compact", "generated", "full"] as const) {
       originCalendarID: "personal", description: "Private provider notes", location: "Private provider room", url: "https://private.example.test",
       ...(mode === "generated" ? { recurrence: "FREQ=DAILY;COUNT=3" } : {}),
     });
-    let source = { ...calendars[0]!, provider: "google", role: "owner" };
+    let source = { ...calendars[0]!, provider, role: "owner" };
     await mockAuthenticatedReads(page, { ...events, events: [current] }, [source]);
     await page.route("**/api/v1/calendars", route => respond(route, [source]));
     await page.route(/\/api\/v1\/events(?:\?.*)?$/, route => {
@@ -8943,27 +8944,30 @@ for (const mode of ["compact", "generated", "full"] as const) {
     const emit = () => page.evaluate(() => {
       (window as unknown as { privacyStream: { onmessage: (event: { data: string }) => void } }).privacyStream.onmessage({ data: JSON.stringify({ type: "external_sync" }) });
     });
-    current = { ...current, title: "Busy", description: null, location: null, url: null, organizer: "", revision: 2 };
-    source = { ...source, role: "viewer" };
+    current = { ...current, title: provider === "microsoft" ? "Public permitted title" : "Busy", description: null, location: null, url: null, organizer: "", revision: 3, providerReadRetiredRevision: 2 };
+    source = { ...source, role: provider === "microsoft" ? "owner" : "viewer" };
     await emit();
-    await expect(page.getByRole("textbox", { name: "Event title" })).toHaveCount(0);
-    await expect(page.getByText("This event is read-only", { exact: true }).first()).toBeVisible();
+    if (provider === "google") {
+      await expect(page.getByRole("textbox", { name: "Event title" })).toHaveCount(0);
+      await expect(page.getByText("This event is read-only", { exact: true }).first()).toBeVisible();
+    } else await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue("My typed title");
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-    await page.screenshot({ path: testInfo.outputPath(`google-editor-${mode}-readonly.png`), fullPage: false });
+    await page.screenshot({ path: testInfo.outputPath(`${provider}-editor-${mode}-readonly.png`), fullPage: false });
     source = { ...source, role: "owner" };
     await emit();
     await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue("My typed title");
-    expect(await page.locator("input, textarea").evaluateAll(nodes => nodes.map(node => (node as HTMLInputElement).value))).not.toContain("Private provider notes");
+    await expect.poll(() => page.locator("input, textarea").evaluateAll(nodes => nodes.map(node => (node as HTMLInputElement).value))).not.toContain("Private provider notes");
     expect(page.url()).not.toContain("Private+provider");
     expect(page.url()).not.toContain("Private%20provider");
-    await page.screenshot({ path: testInfo.outputPath(`google-editor-${mode}.png`), fullPage: false });
+    await page.screenshot({ path: testInfo.outputPath(`${provider}-editor-${mode}.png`), fullPage: false });
     if (mode !== "full") {
       await page.keyboard.press("Escape");
-      await expect(page.getByRole("button", { name: /Busy/ }).first()).toBeFocused();
+      await expect(page.getByRole("button", { name: provider === "microsoft" ? /Public permitted title/ : /Busy/ }).first()).toBeFocused();
     }
     await expect(page.locator("vite-error-overlay")).toHaveCount(0);
     expect(errors).toEqual([]);
   });
+}
 }
 for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
   test(`K14 CalDAV event alarm editor preserves retry: ${theme} ${width}`, async ({ page }) => {

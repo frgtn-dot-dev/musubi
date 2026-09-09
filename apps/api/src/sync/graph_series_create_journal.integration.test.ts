@@ -40,6 +40,10 @@ async function main(until = false) {
     await assert.rejects(() => queueGraphSeriesCreate(userID, operationID, { ...event, title: "Changed retry" }));
     await assert.rejects(() => queueGraphSeriesCreate(userID, randomUUID(), event));
     assert.equal((await history()).length, 1);
+    // Simulate a durable journal written before migration 0075.
+    delete intent.payload.event.providerReadRetiredRevision;
+    delete intent.payload.graphSeriesCreate!.nativeEvent.providerReadRetiredRevision;
+    await db.update(eventOutbox).set({ payload: intent.payload }).where(eq(eventOutbox.id, intent.id));
     const before = await rows();
     const importEcho = () => upsertExternalEvent("microsoft", userID, calendar.id, "native-calendar", "unknown-instance", { title: event.title, color: event.color, start: event.start, end: event.end, isAllDay: event.isAllDay, description: event.description ?? null, location: event.location ?? null, url: event.url ?? null, organizer: "owner@example.test", recurrence: null }, null, "uid");
     for (const status of ["pending", "unconfirmed", "cancelled", "conflict"] as const) {

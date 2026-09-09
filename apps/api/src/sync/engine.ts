@@ -29,6 +29,7 @@ import {
   setExternalTaskSyncData,
   setMemberRole,
   reconcileGoogleCalendarAccess,
+  reconcileMicrosoftCalendarAccess,
   getGoogleMirrorReadCalendars,
   sweepExternalEvents,
   sweepExternalTasks,
@@ -177,6 +178,13 @@ export async function reconcileExternalChanges(
   return changed;
 }
 
+async function reconcileMicrosoftAccessAndNotify(...args: Parameters<typeof reconcileMicrosoftCalendarAccess>) {
+  const calendars = await reconcileMicrosoftCalendarAccess(...args);
+  if (!calendars) return;
+  const members = await Promise.all(calendars.map(id => getCalendarMembers(id)));
+  notifyCalendarMembers([...new Set([args[0], ...members.flat().map(member => member.userID)])], "external_sync", { calendars });
+}
+
 async function reconcileGoogleAccessAndNotify(...args: Parameters<typeof reconcileGoogleCalendarAccess>) {
   const calendars = await reconcileGoogleCalendarAccess(...args);
   if (!calendars) return;
@@ -247,8 +255,8 @@ export async function syncProvider(
     !remoteIDs.has(link.externalCalendarID) &&
     (taskListsComplete || link.supportsEvents || !link.supportsTasks));
   const changedCalendarIDs: string[] = [];
-  if (provider === "google") {
-    const removed = await removeGoogleCalendarMirrors(userID, accountId, absent.filter(link => link.supportsEvents));
+  if (provider === "google" || provider === "microsoft") {
+    const removed = await removeGoogleCalendarMirrors(userID, accountId, absent.filter(link => link.supportsEvents), provider);
     if (removed.calendarIDs.length) {
       // Memberships were captured before source deletion. Publish the committed
       // invalidation even when a later unrelated calendar fetch fails.
@@ -261,7 +269,7 @@ export async function syncProvider(
     notifyCalendarMembers([userID], "external_sync", {});
   }
   for (const link of absent) {
-    if (provider !== "google" || !link.supportsEvents) await removeCalendar(link.calendarID);
+    if (!["google", "microsoft"].includes(provider) || !link.supportsEvents) await removeCalendar(link.calendarID);
   }
   // new remote calendar -> import; existing -> keep the read-only flag fresh
   // (also self-heals calendars imported before readOnly existed, e.g. holidays)
@@ -280,6 +288,7 @@ export async function syncProvider(
     if (link) {
       if (provider === "google" && cal.googleAccessRole && capabilities.supportsEvents)
         await reconcileGoogleAccessAndNotify(userID, accountId, link.calendarID, cal.googleAccessRole);
+      else if (provider === "microsoft" && cal.microsoftAccess && capabilities.supportsEvents) await reconcileMicrosoftAccessAndNotify(userID, accountId, link.calendarID, cal.microsoftAccess);
       else await setMemberRole(userID, link.calendarID, desiredRole);
       await setExternalCalendarCapabilities(
         provider,
@@ -299,6 +308,7 @@ export async function syncProvider(
       );
       if (provider === "google" && cal.googleAccessRole && capabilities.supportsEvents)
         await reconcileGoogleAccessAndNotify(userID, accountId, imported.id, cal.googleAccessRole);
+      else if (provider === "microsoft" && cal.microsoftAccess && capabilities.supportsEvents) await reconcileMicrosoftAccessAndNotify(userID, accountId, imported.id, cal.microsoftAccess);
     }
   }
 
@@ -310,7 +320,7 @@ export async function syncProvider(
     userID,
     accountId,
   )) {
-    const accessContext = (provider === "caldav" || provider === "google" && link.providerAccessRole !== null) && link.supportsEvents ? { provider: provider as "google" | "caldav", linkID: link.sourceID, revision: link.providerAccessRevision, userID, accountID: accountId, externalCalendarID: link.externalCalendarID } : undefined;
+    const accessContext = (provider === "caldav" || ["google", "microsoft"].includes(provider) && link.providerAccessRole !== null) && link.supportsEvents ? { provider: provider as "google" | "caldav" | "microsoft", linkID: link.sourceID, revision: link.providerAccessRevision, userID, accountID: accountId, externalCalendarID: link.externalCalendarID } : undefined;
     const taskOnly = link.supportsTasks && !link.supportsEvents;
     if (taskOnly && !remoteIDs.has(link.externalCalendarID)) continue;
     const calendarStartedAt = performance.now();
@@ -367,7 +377,7 @@ export async function syncProvider(
     const { changes, nextCursor } = fetched;
     // A grant-invalidated Google cursor requires authoritative reconciliation
     // even when known-time editing is disabled. The adapter fully pages this list.
-    const reset = fetched.reset || (provider === "google" && !!accessContext && link.cursor === null);
+    const reset = fetched.reset || (["google", "microsoft"].includes(provider) && !!accessContext && link.cursor === null);
 
     const unlinkedEventIDs: { id: string; revision: number }[] = [];
     const onUnlink = (id: string, revision: number) => {
@@ -377,14 +387,14 @@ export async function syncProvider(
     let googleReadChanged = false;
     const trackGoogleRead = async <T extends boolean | number>(write: Promise<T>): Promise<T> => {
       const result = await write;
-      if (provider === "google" && result) googleReadChanged = true;
+      if (["google", "microsoft"].includes(provider) && result) googleReadChanged = true;
       return result;
     };
     const retainedGraphIDs = new Set<string>();
     try {
       for (const family of families) {
         const result = family.observation ? await replaceGraphFamily(family.context, family.observation) : await removeGraphFamily(family.context);
-        if (result.changed) changed++;
+        if (result.changed) { changed++; googleReadChanged = true; }
         for (const id of result.seenExternalIDs) retainedGraphIDs.add(id);
       }
       changed += await reconcileExternalChanges(changes, reset, {

@@ -57,3 +57,5 @@ export * from "./queries/google-mirror-removal";
 
 export * from "./queries/caldav-alarms";
 export * from "./queries/availability";
+
+export * from "./queries/microsoft-access";

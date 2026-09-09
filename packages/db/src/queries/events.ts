@@ -54,6 +54,7 @@ export async function createEventInTransaction(
 		.insert(events)
 		.values({
 			...event,
+			providerReadRetiredRevision: null,
 			revision: 1, // New identity never inherits a draft/source revision.
 			originCalendarID: event.originCalendarID ?? calendars[0],
 		})

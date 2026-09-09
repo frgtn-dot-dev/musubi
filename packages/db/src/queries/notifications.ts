@@ -57,9 +57,9 @@ export async function getDuePendingNotifications(now: Date, ids?: string[]) {
               where link.event_id = event.id and member.user_id = ${pendingNotifications.userID}))
           and (not exists (select 1 from external_events mapping
               where mapping.event_id = event.id and mapping.calendar_id = event.origin_calendar_id
-                and mapping.provider = 'google')
+                and mapping.provider in ('google', 'microsoft'))
             and not exists (select 1 from external_calendars source
-              where source.calendar_id = event.origin_calendar_id and source.provider = 'google')
+              where source.calendar_id = event.origin_calendar_id and source.provider in ('google', 'microsoft'))
             or exists (select 1 from external_events mapping
               join external_calendars source on source.calendar_id = mapping.calendar_id
                 and source.external_calendar_id = mapping.external_calendar_id and source.provider = mapping.provider
@@ -67,10 +67,11 @@ export async function getDuePendingNotifications(now: Date, ids?: string[]) {
               join account connected on connected.account_id = source.account_id
                 and connected.provider_id = source.provider and connected.user_id = source.user_id
               where mapping.event_id = event.id and mapping.calendar_id = event.origin_calendar_id
-                and mapping.provider = 'google' and source.user_id = event.creator_id
+                and mapping.provider in ('google', 'microsoft') and source.user_id = event.creator_id
                 and source.disabled = false and source.supports_events = true
-                and connected.sync_status = 'active' and member.role in ('owner', 'editor')
-                and (source.provider_access_role in ('owner', 'writer')
+                and connected.sync_status = 'active' and (member.role in ('owner', 'editor') or (source.provider = 'microsoft' and member.role = 'viewer'))
+                and ((source.provider = 'google' and source.provider_access_role in ('owner', 'writer'))
+                  or (source.provider = 'microsoft' and source.provider_access_role like 'microsoft:private=yes;%')
                   or (source.provider_access_role is null and source.provider_access_revision = 0))
                 and (source.provider_access_revision = 0 or nullif(source.cursor, '') is not null)
                 and mapping.read_redaction_revision is null))

@@ -7,7 +7,7 @@ import { lockCalendarLifecycle, lockUserLifecycle } from "./calendar-lifecycle";
 
 function comparable(input: Event) {
   const event = EventSchema.parse(input);
-  return { ...event, id: event.id.toLowerCase(), revision: 1,
+  return { ...event, providerReadRetiredRevision: event.providerReadRetiredRevision ?? null, id: event.id.toLowerCase(), revision: 1,
     calendars: [...new Set(event.calendars.map(id => id.toLowerCase()))].sort(),
     originCalendarID: (event.originCalendarID ?? event.calendars[0])?.toLowerCase(),
     description: event.description ?? null, location: event.location ?? null,

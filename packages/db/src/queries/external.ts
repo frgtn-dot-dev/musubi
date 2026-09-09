@@ -1,3 +1,4 @@
+import { hasFullProviderReadAccess, microsoftPrivateAccess } from "./microsoft-access";
 import { googlePersonalReadRecovery, finishGooglePersonalReadRecovery } from "./google-personal-read-recovery";
 import { assertExternalCalendarAccess, type ExternalCalendarAccessContext } from "./external-access";
 import { assertNoPendingGraphSeriesCreate } from "./graph-series-create";
@@ -888,13 +889,14 @@ async function upsertExternalEventInTransaction(
       }
 
       if (map.readRedactionRevision !== null && !accessContext) throw new Error("Redacted mirror requires fresh access context.");
-      const restoringRead = map.readRedactionRevision !== null && map.readRedactionRevision === map.event.revision;
+      if (map.readRedactionRevision !== null && provider === "microsoft" && microsoftPrivateAccess(access?.role ?? null) === null) throw new Error("Microsoft private-read evidence is unknown.");
+      const restoringRead = map.readRedactionRevision !== null && (provider === "microsoft" || map.readRedactionRevision === map.event.revision);
       // A limited-grant marker survives accepted reads so a later fuller read
       // can restore same-ETag details. Only the first post-redaction observation
       // and full-grant restoration suppress fanout; subsequent native changes
       // under the same limited grant remain ordinary inbound updates.
-      const privacyRestoration = restoringRead && (map.etag === null || !!access && ["owner", "writer"].includes(access.role ?? ""));
-      const readRecovery = state && accessContext ? await googlePersonalReadRecovery(tx, map.event, map, accessContext) : undefined;
+      const privacyRestoration = restoringRead && (map.etag === null || !!access && hasFullProviderReadAccess(provider, access.role));
+      const readRecovery = provider === "google" && state && accessContext ? await googlePersonalReadRecovery(tx, map.event, map, accessContext) : undefined;
       if (!restoringRead && !readRecovery && !stateChanged && (!expandedIdentity || (map.externalSeriesID === expandedIdentity.externalSeriesID && sameTimeMetadata(map.originalStart, expandedIdentity.originalStart))) && etag !== null && map.etag === etag && map.event.deletedAt === null && (!temporal || (sameTimeMetadata(map.event.timeModel, temporal.timeModel) && map.event.seriesID === temporal.seriesID && sameTimeMetadata(map.event.originalStart, temporal.originalStart) && map.event.isCanceled === temporal.isCanceled)))
       {
         // Older Graph one-off imports omitted UID. Enrich only this accepted
@@ -960,7 +962,7 @@ async function upsertExternalEventInTransaction(
       }
       await tx
         .update(externalEvents)
-        .set({ etag, ...(restoringRead ? { readRedactionRevision: access && ["owner", "writer"].includes(access.role ?? "") ? null : map.event.revision + Number(changed) } : {}), ...(state !== undefined ? { providerState: state, providerStateObservedAt: new Date() } : {}), icalUid: icalUid ?? map.icalUid, ...(time ? { externalSeriesID: time.externalSeriesID ?? null, originalStart: temporal!.originalStart } : {}), ...expandedIdentity })
+        .set({ etag, ...(restoringRead ? { readRedactionRevision: access && hasFullProviderReadAccess(provider, access.role) ? null : map.event.revision + Number(changed) } : {}), ...(state !== undefined ? { providerState: state, providerStateObservedAt: new Date() } : {}), icalUid: icalUid ?? map.icalUid, ...(time ? { externalSeriesID: time.externalSeriesID ?? null, originalStart: temporal!.originalStart } : {}), ...expandedIdentity })
         .where(eq(externalEvents.id, map.id));
       if (readRecovery) await finishGooglePersonalReadRecovery(tx, readRecovery, map.event.revision + Number(changed));
       if (changed && contentChanged && !readRecovery && !privacyRestoration) await appendInboundEventFanout(tx, map.event.id, calendarID, "update", patch);
@@ -981,6 +983,7 @@ async function upsertExternalEventInTransaction(
         .returning();
       await tx.insert(calendarEvents).values({ eventID: ev.id, calendarID });
       await tx.insert(externalEvents).values({
+        readRedactionRevision: provider === "microsoft" && microsoftPrivateAccess(access?.role ?? null) === false ? ev.revision : null,
         provider,
         eventID: ev.id,
         calendarID,

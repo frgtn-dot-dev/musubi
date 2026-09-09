@@ -18,7 +18,7 @@ function refuse(): never { throw new EventWriteError("event-write", "unsupported
 const normalize = (input: unknown): Event => {
   const event = EventSchema.parse(input);
   const uuid = (value: string) => z.string().uuid().parse(value).toLowerCase();
-  return { ...event, id: uuid(event.id), calendars: event.calendars.map(uuid), originCalendarID: event.originCalendarID ? uuid(event.originCalendarID) : null,
+  return { ...event, providerReadRetiredRevision: event.providerReadRetiredRevision ?? null, id: uuid(event.id), calendars: event.calendars.map(uuid), originCalendarID: event.originCalendarID ? uuid(event.originCalendarID) : null,
     seriesID: event.seriesID ?? null, originalStart: event.originalStart ?? null, description: event.description ?? null, location: event.location ?? null, recurrence: event.recurrence ?? null, url: event.url ?? null };
 };
 const same = (a: unknown, b: unknown) => isDeepStrictEqual(normalize(a), normalize(b));
@@ -65,7 +65,7 @@ export async function queueGraphSeriesCreate(actorID: string, operationID: strin
       if (existing.length !== 1 || row.position !== 0 || row.action !== "create" || row.provider !== "microsoft" || row.userID !== actorID || row.eventID !== event.id || row.revision !== 1 ||
           row.calendarID !== calendarID || row.externalCalendarLinkID !== link.id || row.accountID !== link.accountID || row.externalCalendarID !== link.externalCalendarID ||
           row.payload.graphSeriesCreate?.version !== 1 || !same(row.payload.event, event) || !same(row.payload.graphSeriesCreate.nativeEvent, nativeEvent)) throw new BadRequestError("This creation identity was already used for another request. No changes were saved.");
-      return { event: EventSchema.parse(row.payload.event), operationID: row.id };
+      return { event: normalize(row.payload.event), operationID: row.id };
     }
     // No partially adopted identity or previous journal may be repurposed.
     const old = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(eq(eventOutbox.eventID, event.id)).limit(1);
@@ -80,7 +80,7 @@ export async function queueGraphSeriesCreate(actorID: string, operationID: strin
       action: "create", externalEventID: null, expectedEtag: null, icalUid: null,
       payload: { event: saved, createIdentityVersion: 1, graphSeriesCreate: { version: 1, nativeEvent } },
     }]);
-    return { event: saved, operationID: id };
+    return { event: normalize(saved), operationID: id };
   }).catch(error => {
     if (error instanceof EventWriteError || error instanceof BadRequestError) throw error;
     throw new Error("Outlook recurring intent could not be queued. No changes were saved.");
@@ -159,7 +159,7 @@ export async function findGraphSeriesCreateReplay(actorID: string, operationID: 
   const row = rows[0]!;
   if (rows.length !== 1 || row.position !== 0 || row.action !== "create" || row.provider !== "microsoft" || row.payload.graphSeriesCreate?.version !== 1 || !same(row.payload.event, input))
     throw new BadRequestError("This creation identity was already used for another request. No changes were saved.");
-  return { event: EventSchema.parse(row.payload.event), operationID: row.id };
+  return { event: normalize(row.payload.event), operationID: row.id };
 }
 
 export async function readGraphCreateAdoptionContextInTransaction(tx: DbTransaction, actorID: string, eventID: string, id: string) {
