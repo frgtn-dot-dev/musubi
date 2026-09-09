@@ -746,3 +746,6 @@ Import při nezávisle zapnutých připomínkách nese časový důkaz pouze pro
 
 
 **K12 CalDAV — konflikt obsahu existující výjimky:** veřejný náhled/confirm odvozuje vybraný child z uloženého záměru a ukazuje jeho původní slot a uložený/aktuální obsah. Celý resource se znovu ověří; commit zachová cíl a pod family zámky atomicky nahradí journal bez změny kanonického draftu. [HTTP/DB a nativní regrese](../sync/caldav-series-writes.md#existing-occurrence-content-conflict-resolution) pokrývají tři časové typy, stale/repeated konflikty, oprávnění, identity, souběh, 503 a echo. Generated/revival/cancel/time/RRULE/following/split konfliktové operace následují; iCloud privileges a produkční flagy/verze zůstávají beze změny.
+
+
+**K12 CalDAV — potvrzení uloženého time/RRULE záměru:** fresh preview nyní vychází z původního nativního baseline a přesně znovu aplikuje uložený čas série/existující výjimky nebo RRULE. Commit váže původní čas/rule/scope a celý kanonický family stav; rekeyed identity se potvrdí společně. [HTTP/DB kontrakt](../sync/caldav-series-writes.md#saved-time-and-rrule-conflict-confirmation) pokrývá tři časové typy, souběhy, repeated/503, tampering a odmítnutí jiné nativní struktury. Nejde o adopci souběžné providerové změny času či pravidla; generated/cancel/following/split konflikty zůstávají navazující práce. Flagy/verze/privileges beze změny.

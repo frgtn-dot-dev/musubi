@@ -181,16 +181,17 @@ async function prepare(
     if (!config.api.eventTimeEditsEnabled || !adapter.readCaldavSeriesResolution || !context.caldavContext || !ref || context.deleted)
       throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
     const family = context.caldavContext;
-    const targetEventID = row.payload.caldavSeries.write.targetEventID;
+    const savedWrite = row.payload.caldavSeries.write;
+    const targetEventID = savedWrite.targetEventID;
     const localTarget = targetEventID ? family.children.find(child => child.id === targetEventID) : family.master;
     if (!localTarget) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
-    const observed = await adapter.readCaldavSeriesResolution(row.userID, row.accountID, row.externalCalendarID, { ref, master: family.master, children: family.children }, row.payload.caldavSeries.write.before, signal, targetEventID);
+    const observed = await adapter.readCaldavSeriesResolution(row.userID, row.accountID, row.externalCalendarID, { ...savedWrite.baseline, ref }, savedWrite.before, signal, targetEventID);
     const remoteTarget = targetEventID ? observed.baseline.children.find(child => child.id === targetEventID) : observed.baseline.master;
     if (!remoteTarget) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
-    const patch = { title: localTarget.title, description: localTarget.description ?? null, location: localTarget.location ?? null };
+    const patch = { title: localTarget.title, description: localTarget.description ?? null, location: localTarget.location ?? null, ...(savedWrite.patch.recurrence !== undefined ? { recurrence: savedWrite.patch.recurrence } : {}) };
     const prepared = {
       context: { ...family, mappings: family.mappings.map(item => ({ ...item, etag: requireEventEtag(observed.evidence.ref.etag) })) },
-      write: prepareCaldavSeriesWrite(observed.evidence, observed.baseline, patch, targetEventID),
+      write: prepareCaldavSeriesWrite(observed.evidence, observed.baseline, patch, targetEventID, undefined, undefined, savedWrite.time),
     };
     const preview: EventDeliveryConflict = {
       eventId: row.eventID, operationId: row.id, latestOperationId: context.latest.id,
