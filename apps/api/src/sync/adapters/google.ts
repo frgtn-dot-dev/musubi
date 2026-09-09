@@ -658,6 +658,7 @@ export const googleAdapter: CalendarAdapter = {
           name: c.summary,
           color: c.backgroundColor,
           readOnly: c.accessRole !== "owner" && c.accessRole !== "writer",
+          googleAccessRole: ["owner", "writer", "reader", "writerWithoutPrivateAccess"].includes(c.accessRole) ? c.accessRole : "unknown",
           supportsEvents: true,
           supportsTasks: false,
         });

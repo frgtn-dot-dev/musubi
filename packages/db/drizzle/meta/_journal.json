@@ -498,6 +498,13 @@
       "when": 1788923386001,
       "tag": "0070_caldav_split_versions",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1788959689381,
+      "tag": "0071_brown_snowbird",
+      "breakpoints": true
     }
   ]
 }

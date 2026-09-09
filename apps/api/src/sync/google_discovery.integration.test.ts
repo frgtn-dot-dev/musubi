@@ -87,7 +87,7 @@ async function main() {
     const after = await getUserExternalCalendars("google", userID, "account");
     assert.deepEqual(new Set(after.map((link) => link.calendarID)), new Set(links.slice(0, 2)), "Complete discovery preserves late-page mirrors and sweeps only truly absent ones");
     assert.ok(after.every((link) => link.cursor === "fresh-cursor"));
-    assert.equal((await getOwnProviderEventState(userID, mappingsBefore[0].eventID))?.organizer?.address, "private-host@example.test");
+    assert.equal(await getOwnProviderEventState(userID, mappingsBefore[0].eventID), null, "Initial access evidence invalidates old cursor; the fresh empty full set cannot retain private observations");
     lastAccess = "freeBusyReader";
     failEvents = true;
     await assert.rejects(syncProvider(googleAdapter, userID, { id: "account", label: "Fixture" }), /Google 503/);
