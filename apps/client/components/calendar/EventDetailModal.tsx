@@ -453,7 +453,7 @@ export default function EventDetailModal({
 									</View>
 								</View>
 							)}
-							{visible && event && userID && calendars.find(calendar => calendar.id === (event.originCalendarID ?? event.calendars[0]))?.provider ? <ProviderEventDetails event={event} userId={userID} observationRevision={observationRevision} /> : null}
+							{visible && event && userID && calendars.find(calendar => calendar.id === (event.originCalendarID ?? event.calendars[0]))?.provider ? <ProviderEventDetails seriesMaster={!event.seriesID && master?.recurrence ? master : undefined} event={event} userId={userID} observationRevision={observationRevision} /> : null}
 							{event?.hasAttendees && attendees && (
 								// paddingHorizontal 26 (not the container's 16) — optically lines
 								// up with the title block above; circles at 16 read wider than text.

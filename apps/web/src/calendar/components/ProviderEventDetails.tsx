@@ -1,6 +1,6 @@
 import { ProviderRsvpEditor } from "./ProviderRsvpEditor";
-import type { ProviderEventStateResponse } from "@musubi/types";
-import { providerEventDetails } from "@musubi/calendar";
+import type { Event, ProviderEventStateResponse } from "@musubi/types";
+import { assertCaldavSeriesAlarmObservation, providerEventDetails } from "@musubi/calendar";
 import { useEffect, useId, useRef, useState } from "react";
 import { getProviderEventState } from "~/api/resources";
 import { getServerOrigin } from "~/api/query-keys";
@@ -10,11 +10,11 @@ import { ProviderReminderEditor } from "./ProviderReminderEditor";
 import { SectionLabel } from "~/ui/SectionLabel";
 import styles from "./styles/event-details.module.css";
 
-type Props = { eventId: string; revision?: number; userId: string; connectionId?: string; series?: boolean; occurrence?: boolean; onEditReminders?: (observation: ProviderEventStateResponse) => void; onRespond?: (observation: ProviderEventStateResponse) => void };
+type Props = { seriesMaster?: Event; eventId: string; revision?: number; userId: string; connectionId?: string; series?: boolean; occurrence?: boolean; onEditReminders?: (observation: ProviderEventStateResponse) => void; onRespond?: (observation: ProviderEventStateResponse) => void };
 export function ProviderEventDetails(props: Props) {
-  return <ProviderEventDetailsBody key={JSON.stringify([getServerOrigin(), props.eventId, props.userId, props.connectionId, props.series, props.occurrence, props.revision])} {...props} />;
+  return <ProviderEventDetailsBody key={JSON.stringify([getServerOrigin(), props.eventId, props.userId, props.connectionId, props.series, props.occurrence, props.revision, props.seriesMaster?.id, props.seriesMaster?.revision])} {...props} />;
 }
-function ProviderEventDetailsBody({ eventId, userId, connectionId, series = false, occurrence = false, onEditReminders, onRespond }: Props) {
+function ProviderEventDetailsBody({ seriesMaster, eventId, userId, connectionId, series = false, occurrence = false, onEditReminders, onRespond }: Props) {
   const titleId = useId();
   const key = JSON.stringify([eventId, userId, connectionId]);
   const [result, setResult] = useState<({ key: string; failed?: boolean } & Partial<ProviderEventStateResponse>)>();
@@ -26,14 +26,18 @@ function ProviderEventDetailsBody({ eventId, userId, connectionId, series = fals
   const refreshing = useRef(false);
   const editorRead = useRef<AbortController | null>(null);
   useEffect(() => { active.current = true; return () => { active.current = false; editorRead.current?.abort(); }; }, []);
-  async function openEditor(trigger: HTMLElement, kind: "reminders" | "rsvp" = "reminders") {
+  async function openEditor(trigger: HTMLElement, kind: "reminders" | "rsvp" = "reminders", seriesAction = false) {
     if (refreshing.current) return;
     refreshing.current = true; setOpening(true); setOpenError("");
     ++readSequence.current;
     editorRead.current = new AbortController();
     try {
-      const observation = await getProviderEventState(eventId, editorRead.current.signal, connectionId);
+      const observation = await getProviderEventState(seriesAction && seriesMaster ? seriesMaster.id : eventId, editorRead.current.signal, connectionId);
       if (!active.current) return;
+      if (seriesAction) {
+        if (!seriesMaster) throw new Error("Missing stored series master.");
+        assertCaldavSeriesAlarmObservation(seriesMaster, observation);
+      } else if (kind === "reminders" && observation.reminderEdit?.provider === "caldav" && observation.reminderEdit.scope === "series") throw new Error("Choose Series alarm settings explicitly.");
       setResult({ key, ...observation });
       if ((kind === "reminders" ? observation.reminderEdit : observation.rsvpEdit) && observation.state && observation.version) {
         const handoff = kind === "reminders" ? onEditReminders : onRespond;
@@ -61,9 +65,10 @@ function ProviderEventDetailsBody({ eventId, userId, connectionId, series = fals
       {"\n"}Provider notifications and Musubi reminders are separate. Both apps may notify you.
     </p> : <p role="status">{current?.failed ? "Provider details could not be loaded. Reopen this event to retry." : "Loading provider details…"}</p>}
     {openError ? <InlineError>{openError}</InlineError> : null}
-    {current?.reminderEdit && current.state && current.version && !series ? <>
+    {current?.reminderEdit && current.state && current.version && !series && !(current.reminderEdit.provider === "caldav" && current.reminderEdit.scope === "series") ? <>
       <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget)}>{current?.reminderEdit?.provider === "caldav" ? "Edit CalDAV event alarms" : occurrence ? "Edit reminders for this occurrence" : "Edit Google reminders"}</Button>
     </> : null}
+    {seriesMaster && current?.reminderEdit?.provider === "caldav" && current.reminderEdit.scope === "series" && current.state && current.version ? <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget, "reminders", true)}>Series alarm settings</Button> : null}
     {current?.rsvpEdit && current.state && current.version && !series ? <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget, "rsvp")}>{occurrence ? "Respond to this occurrence" : current.rsvpEdit.provider === "microsoft" ? "Respond in Outlook" : current.rsvpEdit.provider === "caldav" ? "Respond in calendar" : "Respond in Google"}</Button> : null}
     {editor?.kind === "reminders" ? <ProviderReminderEditor occurrence={occurrence} eventId={eventId} connectionId={connectionId} observation={editor.observation} returnFocus={editor.trigger} onClose={() => setEditor(undefined)} /> : null}
     {editor?.kind === "rsvp" ? <ProviderRsvpEditor occurrence={occurrence} eventId={eventId} connectionId={connectionId} observation={editor.observation} returnFocus={editor.trigger} onClose={() => setEditor(undefined)} /> : null}

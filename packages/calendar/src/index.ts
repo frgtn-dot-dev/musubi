@@ -25,3 +25,5 @@ export * from "./finite-series";
 
 export * from "./caldav-series-zone";
 export * from "./exdate-restoration";
+
+export * from "./caldav-alarm-scope";

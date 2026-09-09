@@ -9442,3 +9442,43 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     expect(writes[0]).not.toHaveProperty("time");
   });
 }
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`K14 explicit CalDAV series alarm: ${theme} ${width}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const master = event("00000000-0000-4000-8000-000000000303", "CalDAV finite alarm series", "personal", "red", "2026-03-28T22:00:00Z", "2026-03-29T00:00:00Z", {
+      revision: 7, recurrence: "RRULE:FREQ=DAILY;COUNT=4", timeModel: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-28T23:00:00.000", endLocal: "2026-03-29T01:00:00.000" },
+    });
+    await mockAuthenticatedReads(page, { ...events, events: [master] }, [{ ...calendars[0]!, provider: "caldav", accountID: "fixture", accountLabel: "Fixture" }]);
+    let stale = false;
+    await page.route(`**/api/v1/events/${master.id}/provider-state`, route => respond(route, {
+      state: { provider: "caldav", organizer: null, isOrganizer: false, attendees: [], attendeesComplete: true, ownResponse: null, reminders: { provider: "caldav", alarms: [] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] },
+      version: "a".repeat(64), reminderEdit: { provider: "caldav", scope: "series", expectedRevision: stale ? 8 : 7, minutesBeforeStart: 15 },
+    }));
+    const writes: unknown[] = [];
+    await page.route(`**/api/v1/events/${master.id}/provider-reminders`, route => { const body = route.request().postDataJSON(); writes.push(body); return respond(route, { operationID: body.operationID, replayed: false, status: "pending", localCommitted: true }, 202); });
+    await page.goto("/app/p/my-calendar/month?date=2026-03-29");
+    const occurrence = page.locator('[data-day-key="2026-03-29"]').getByRole("button", { name: /CalDAV finite alarm series/ }).last();
+    await occurrence.click();
+    await expect(page.getByRole("button", { name: "Edit CalDAV event alarms" })).toHaveCount(0);
+    const seriesAction = page.getByRole("button", { name: "Series alarm settings" });
+    await expect(seriesAction).toBeVisible();
+    stale = true;
+    await seriesAction.click();
+    await expect(page.getByRole("dialog", { name: "CalDAV series alarm", exact: true })).toHaveCount(0);
+    await expect(page.getByText(/Could not refresh provider details/)).toBeVisible();
+    stale = false;
+    await seriesAction.click();
+    const editor = page.getByRole("dialog", { name: "CalDAV series alarm", exact: true });
+    await expect(editor.getByText(/applies to every occurrence in this series/)).toBeVisible();
+    await editor.getByRole("textbox", { name: "Reminder 1 minutes before start" }).fill("30");
+    await expectNoAccessibilityViolations(page);
+    await editor.screenshot({ path: testInfo.outputPath("series-alarm.png") });
+    await editor.getByRole("button", { name: "Save CalDAV series alarm" }).click();
+    await expect(editor.getByRole("status")).toContainText("confirmation is still pending");
+    expect(writes).toEqual([{ operationID: expect.any(String), expectedRevision: 7, expectedStateVersion: "a".repeat(64), provider: "caldav", scope: "series", alarms: { minutesBeforeStart: 30 } }]);
+    await editor.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(occurrence).toBeFocused();
+  });
+}

@@ -3,3 +3,11 @@
 .layerBoundary {
   display: contents;
 }
+
+/* The reminder form owns field grouping; shared controls own their surfaces. */
+.reminderForm,
+.reminderFields {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}

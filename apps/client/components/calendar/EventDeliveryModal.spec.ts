@@ -854,3 +854,16 @@ it("offers read-only checking of a dispatched Graph conflict and preserves its o
   expect(h.request.mock.calls.filter(call => call[0].endsWith("/retry"))).toHaveLength(1);
   expect(h.request.mock.calls.some(call => call[0].includes("/resolve") || call[0].includes("/provider-rsvp"))).toBe(false);
 });
+
+it("explicitly confirms applying the saved CalDAV alarm to every series occurrence", async () => {
+  const bodies: any[] = [];
+  h.request.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url.endsWith("/resolve")) { bodies.push(JSON.parse(String(init?.body))); return reply(receipt); }
+    return reply(url.endsWith("/conflict") ? { ...preview, caldavAlarmResolution: { scope: "series", desired: { minutesBeforeStart: 30 }, remote: { minutesBeforeStart: 20 }, stateVersion: "a".repeat(64) } } : receipt);
+  });
+  const tree = await review();
+  buttons(tree, "Apply saved series alarm")[0].onPress();
+  expect(h.alert.mock.lastCall![1]).toContain("every occurrence in the series");
+  expect(bodies).toHaveLength(0); acceptNative(); await settle();
+  expect(bodies[0].expectedReminderStateVersion).toBe("a".repeat(64));
+});

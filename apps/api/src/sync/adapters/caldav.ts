@@ -1,3 +1,4 @@
+import { caldavAlarmScope } from "@musubi/calendar";
 import { restoreEventExdates } from "./caldav_event_ical";
 import { inspectCaldavAlarm, writeCaldavAlarm } from "./caldav_alarms";
 import type { CaldavAlarmIntent } from "@musubi/db";
@@ -1278,6 +1279,7 @@ export async function deliverCaldavSeriesResource(externalCalendarId: string, wr
 export async function deliverCaldavAlarmResource(intent: CaldavAlarmIntent, authorization: string, signal?: AbortSignal, beforeMutation?: () => Promise<void>) {
   if (!config.api.caldavAlarmEditsEnabled) throw new EventWriteError("event-write", "unsupported");
   const { context } = intent, ref = context.mapping.ref;
+  if (intent.request.scope !== caldavAlarmScope(context.event)) throw new ProviderEventWriteError("provider-conflict");
   const after = writeCaldavAlarm(intent.before, context.event, ref, intent.request.alarms);
   if (after !== intent.after || !sameCaldavScopeContext(inspectCaldavAlarm(after, context.event, ref).state, intent.desiredState)) throw new ProviderEventWriteError("provider-conflict");
   const resource = caldavSeriesResourceURL(context.link.externalCalendarID, ref.externalEventId);

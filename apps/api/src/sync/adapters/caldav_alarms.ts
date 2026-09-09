@@ -1,7 +1,8 @@
+import { caldavAlarmScope } from "@musubi/calendar";
 import ICAL from "ical.js";
 import { CaldavAlarmWriteSchema, EventWriteError, type CaldavAlarmWrite, type Event } from "@musubi/types";
 import { matchesEventProviderProjection, sameCaldavScopeContext } from "@musubi/db";
-import { calendarLines, replaceEventProperties } from "./caldav_event_ical";
+import { calendarLines, eventComponentBytes, replaceEventProperties } from "./caldav_event_ical";
 import { sameCaldavResource } from "./caldav_series";
 import { normalizeCaldavResource } from "./caldav_time";
 import { caldavEventState } from "./provider_event_state";
@@ -40,8 +41,17 @@ export function inspectCaldavAlarm(data: string, event: Event, ref: ExternalEven
     const components = calendar.getAllSubcomponents("vevent");
     if (calendar.name !== "vcalendar" || calendar.hasProperty("method") || components.length !== 1 || calendar.getAllSubcomponents().some(component => !["vevent", "vtimezone"].includes(component.name))) throw unsupported();
     const component = components[0];
-    if (!ref.icalUid || component.getFirstPropertyValue("uid") !== ref.icalUid || event.recurrence || event.seriesID || event.originalStart || event.isCanceled || !["zoned", "all-day"].includes(event.timeModel?.kind ?? "")) throw unsupported();
-    if (["organizer", "attendee", "recurrence-id", "rrule", "rdate", "exdate"].some(name => component.hasProperty(name))) throw unsupported();
+    if (!ref.icalUid || component.getFirstPropertyValue("uid") !== ref.icalUid || event.seriesID || event.originalStart || event.isCanceled || !["zoned", "all-day"].includes(event.timeModel?.kind ?? "")) throw unsupported();
+    if (["organizer", "attendee", "recurrence-id", "rdate", "exdate"].some(name => component.hasProperty(name))) throw unsupported();
+    const scope = caldavAlarmScope(event);
+    const rules = component.getAllProperties("rrule");
+    if (rules.length !== (scope === "series" ? 1 : 0)) throw unsupported();
+    if (scope === "series") {
+      // Preserve one exact plain RRULE. No parser-normalized duplicate terms,
+      // parameters, exclusions or alternate raw recurrence evidence.
+      const rawRules = calendarLines(eventComponentBytes(data, 0)).filter(line => /^RRULE[:;]/i.test(line.unfolded));
+      if (rawRules.length !== 1 || rawRules[0].unfolded !== (event.recurrence!.startsWith("RRULE:") ? event.recurrence : "RRULE:" + event.recurrence)) throw unsupported();
+    }
     for (const name of ["uid", "dtstart", "dtend", "duration", "summary", "description", "location", "status"]) if (component.getAllProperties(name).length > 1) throw unsupported();
     if (component.getAllSubcomponents().some(child => child.name !== "valarm")) throw unsupported();
     const normalized = normalizeCaldavResource({ url: ref.externalEventId, etag, data });
