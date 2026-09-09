@@ -61,7 +61,7 @@ async function main() {
   const apiOrigin = `http://127.0.0.1:${(api.address() as any).port}`;
   const enabled = config.api.eventTimeEditsEnabled;
   try {
-    for (const scenario of ["delete-recreate", "delete-cleanup", "delete-zoned", "delete-all-day", "delete-floating", "delete-lost", "delete-race", "delete-prepare-race", "delete-grant-before", "delete-grant-after", "delete-local-race", "delete-lease-race", "grant-before", "grant-after", "recurrence-zoned", "recurrence-all-day", "recurrence-floating", "recurrence-lost", "recurrence-race", "recurrence-orphan", "recurrence-bare", "recurrence-order", "series-time-zoned", "series-time-all-day", "series-time-floating", "series-time-lost", "series-time-race", "series-time-tombstone", "generated-time-zoned", "generated-time-all-day", "generated-time-floating", "generated-time-lost", "generated-time-race", "time-zoned", "time-all-day", "time-floating", "time-lost", "time-race", "revive-zoned", "revive-all-day", "revive-floating", "revive-lost", "revive-race", "generated-zoned", "generated-all-day", "generated-floating", "generated-cancel-zoned", "generated-cancel-all-day", "generated-cancel-floating", "generated-lost", "generated-race", "generated-prepare-race", "generated-tombstone", "cancel-zoned", "cancel-all-day", "cancel-floating", "cancel-lost", "cancel-race", "occurrence-zoned", "occurrence-all-day", "occurrence-floating", "occurrence-lost", "occurrence-race", "zoned", "all-day", "floating", "no-children", "malformed-private", "meeting", "copied", "lost", "race", "local-race", "mapping-race", "lease-race", "tombstone", "prepare-race", "no-op", "resolve", "resolve-all-day", "resolve-floating", "resolve-twice", "resolve-http", "resolve-timezone", "resolve-stale", "resolve-local-race", "resolve-child-race"]) {
+    for (const scenario of ["following-content-conflict", "following-shift-collision", "following-regenerate", "following-recancel", "following-zoned", "following-all-day", "following-floating", "following-lost", "following-race", "following-grant-before", "following-grant-after", "following-local-race", "following-lease-race", "following-cleanup", "following-restore", "following-first", "delete-recreate", "delete-cleanup", "delete-zoned", "delete-all-day", "delete-floating", "delete-lost", "delete-race", "delete-prepare-race", "delete-grant-before", "delete-grant-after", "delete-local-race", "delete-lease-race", "grant-before", "grant-after", "recurrence-zoned", "recurrence-all-day", "recurrence-floating", "recurrence-lost", "recurrence-race", "recurrence-orphan", "recurrence-bare", "recurrence-order", "series-time-zoned", "series-time-all-day", "series-time-floating", "series-time-lost", "series-time-race", "series-time-tombstone", "generated-time-zoned", "generated-time-all-day", "generated-time-floating", "generated-time-lost", "generated-time-race", "time-zoned", "time-all-day", "time-floating", "time-lost", "time-race", "revive-zoned", "revive-all-day", "revive-floating", "revive-lost", "revive-race", "generated-zoned", "generated-all-day", "generated-floating", "generated-cancel-zoned", "generated-cancel-all-day", "generated-cancel-floating", "generated-lost", "generated-race", "generated-prepare-race", "generated-tombstone", "cancel-zoned", "cancel-all-day", "cancel-floating", "cancel-lost", "cancel-race", "occurrence-zoned", "occurrence-all-day", "occurrence-floating", "occurrence-lost", "occurrence-race", "zoned", "all-day", "floating", "no-children", "malformed-private", "meeting", "copied", "lost", "race", "local-race", "mapping-race", "lease-race", "tombstone", "prepare-race", "no-op", "resolve", "resolve-all-day", "resolve-floating", "resolve-twice", "resolve-http", "resolve-timezone", "resolve-stale", "resolve-local-race", "resolve-child-race"]) {
       const owner = `caldav-scope-${randomUUID()}`;
       const credential = issueMemberToken();
       await db.insert(user).values({ id: owner, name: "Fixture", email: `${owner}@example.test`, isExternal: true });
@@ -87,6 +87,112 @@ async function main() {
         const outbox = () => db.select().from(eventOutbox).where(eq(eventOutbox.userID, owner));
         const original = await rows(), mappings = await maps();
         const root = original.find(event => !event.seriesID)!;
+        if (scenario.startsWith("following-")) {
+          const cut = original.find(item => item.isCanceled)!;
+          const originalStart = scenario === "following-first" ? { kind: "instant", value: "2026-03-28T08:00:00.000Z" } : cut.originalStart;
+          const request = { operationID: randomUUID(), scope: "following", action: "delete", expectedRevision: root.revision, originalStart, expectedOccurrenceRevision: scenario === "following-first" ? null : cut.revision };
+          const candidate = await applyLocalEventScope(root.id, owner, request, { prepareProvider: true });
+          if (candidate.status !== "caldav_required") throw new Error("Missing following scope context");
+          const plan = planEventScope(candidate.context.master, candidate.context.children, request);
+          const fullDelete = scenario === "following-first";
+          assert.equal(candidate.deleteResource, fullDelete);
+          const beforeData = data;
+          const response = await fetch(`${apiOrigin}/events/${root.id}/scope`, { method: "POST", headers: { authorization: `Bearer ${credential.raw}`, "content-type": "application/json", [CLIENT_VERSION_HEADER]: PRODUCT_VERSION }, body: JSON.stringify(request) });
+          assert.equal(response.status, 200, await response.text());
+          if (scenario === "following-cleanup") {
+            for (const id of plan.deletes) await db.update(events).set({ deletedAt: new Date("2020-01-01") }).where(eq(events.id, id));
+            await purgeDeletedEvents(new Date("2021-01-01"));
+          }
+          const savedRows = await rows(); assert.equal(savedRows.length, original.length);
+          for (const current of savedRows) {
+            const previous = original.find(item => item.id === current.id)!;
+            assert.equal(!!current.deletedAt, plan.deletes.includes(current.id));
+            assert.equal(current.revision, previous.revision + (current.id === root.id || plan.deletes.includes(current.id) ? 1 : 0));
+            if (current.id !== root.id && !plan.deletes.includes(current.id)) assert.deepEqual(current, previous);
+          }
+          assert.deepEqual(await maps(), mappings); await assert.rejects(persist);
+          const [operation] = await outbox(); assert.equal((await outbox()).length, 1); assert.equal(operation.action, fullDelete ? "delete" : "update");
+          assert.equal((await applyLocalEventScope(root.id, owner, request, { prepareProvider: true })).status, "replayed");
+          const revoke = () => db.update(calendarMembers).set({ role: "viewer" }).where(and(eq(calendarMembers.calendarID, calendar.id), eq(calendarMembers.userID, owner))).then(() => {});
+          if (scenario === "following-grant-before") onGet = revoke;
+          if (scenario === "following-grant-after") onPut = revoke;
+          if (scenario === "following-local-race") onPut = () => db.update(events).set({ revision: sql`${events.revision} + 1` }).where(eq(events.id, cut.id)).then(() => {});
+          if (scenario === "following-lease-race") onPut = () => db.update(eventOutbox).set({ leaseUntil: new Date(0) }).where(eq(eventOutbox.id, operation.id)).then(() => {});
+          mode = scenario === "following-lost" ? "lost" : scenario === "following-race" ? "race" : "ok";
+          let delivered = await deliverEventOutbox(operation.id, () => caldavAdapter);
+          if (scenario === "following-lost") {
+            assert.equal(delivered?.status, "unconfirmed"); assert.deepEqual(await maps(), mappings);
+            mode = "ok"; await db.update(eventOutbox).set({ nextAttemptAt: new Date(0) }).where(eq(eventOutbox.id, operation.id));
+            delivered = await deliverEventOutbox(operation.id, () => caldavAdapter);
+          }
+          assert.equal(puts, fullDelete || scenario === "following-grant-before" ? 0 : 1); assert.equal(deletes, fullDelete ? 1 : 0);
+          if (["following-race", "following-grant-before", "following-grant-after", "following-local-race", "following-lease-race"].includes(scenario)) {
+            assert.notEqual(delivered?.status, "completed"); assert.deepEqual(await maps(), mappings);
+            await assert.rejects(() => prepareEventDeliveryResolution(owner, root.id, operation.id, () => caldavAdapter)); continue;
+          }
+          assert.equal(delivered?.status, "completed", JSON.stringify(delivered));
+          const acceptedMaps = await maps(); assert.equal(acceptedMaps.length, mappings.length - plan.deletes.length);
+          assert.ok(acceptedMaps.every(item => item.etag === '"after"'));
+          const acceptedData = data, acceptedETag = etag;
+          data = beforeData; etag = '"before"'; assert.equal(await persist(), false); assert.deepEqual(await rows(), savedRows);
+          data = acceptedData; etag = acceptedETag;
+          for (const mapping of mappings.filter(item => plan.deletes.includes(item.eventID))) await deleteExternalEvent("caldav", calendar.id, mapping.externalEventID);
+          assert.equal((await db.select().from(externalEventTombstones).where(eq(externalEventTombstones.externalCalendarLinkID, candidate.context.link.id))).length, 0);
+          if (fullDelete) continue;
+          await persist(); assert.deepEqual(await rows(), savedRows);
+          if (scenario === "following-restore") {
+            data = beforeData; etag = '"restored"'; await persist();
+            const restored = (await rows()).find(item => item.id === cut.id)!;
+            assert.equal(restored.deletedAt, null); assert.equal(restored.revision, cut.revision + 2); assert.equal((await rows()).length, original.length);
+            assert.equal((await maps()).find(item => item.eventID === cut.id)!.externalEventID, mappings.find(item => item.eventID === cut.id)!.externalEventID);
+          }
+          if (scenario === "following-shift-collision") {
+            const shift = { operationID: randomUUID(), scope: "series", action: "update", expectedRevision: (await getEventSnapshot(root.id))!.revision, patch: {}, time: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-29T09:00:00.000", endLocal: "2026-03-30T10:00:00.000" } };
+            const beforeRows = await rows(), beforeMaps = await maps(), beforeOutbox = await outbox();
+            await assert.rejects(() => applyLocalEventScope(root.id, owner, shift, { prepareProvider: true }), /retired occurrence identity/);
+            assert.deepEqual(await rows(), beforeRows); assert.deepEqual(await maps(), beforeMaps); assert.deepEqual(await outbox(), beforeOutbox);
+          }
+          const current = (await getEventSnapshot(root.id))!;
+          const edit = { operationID: randomUUID(), scope: "series", action: "update", expectedRevision: current.revision, patch: { title: "Retained family remains editable", ...(["following-regenerate", "following-recancel"].includes(scenario) ? { recurrence: "RRULE:FREQ=DAILY;COUNT=4" } : {}) } };
+          const next = await applyLocalEventScope(root.id, owner, edit, { prepareProvider: true });
+          if (next.status !== "caldav_required") throw new Error("Historical tombstone blocked the remaining family");
+          const prepared = await prepareCaldavSeries(next.context, edit);
+          assert.equal((await applyLocalEventScope(root.id, owner, edit, { caldav: prepared })).status, "saved");
+          const nextOperation = (await outbox()).find(item => item.mutationID === edit.operationID)!;
+          if (scenario === "following-content-conflict") {
+            data = data.replace("SUMMARY:Master", "SUMMARY:Remote master"); etag = '"remote-content"';
+            assert.equal((await deliverEventOutbox(nextOperation.id, () => caldavAdapter))?.status, "conflict");
+            const { preview, proof } = await prepareEventDeliveryResolution(owner, root.id, nextOperation.id, () => caldavAdapter);
+            assert.equal(preview.canResolve, true);
+            const replacement = await commitEventDeliveryResolution(owner, proof, { mutationId: randomUUID(), expectedLocalRevision: preview.localRevision, expectedLatestOperationId: preview.latestOperationId, expectedRemoteExists: true, expectedRemoteEtag: preview.remoteEtag });
+            assert.equal((await deliverEventOutbox(replacement!, () => caldavAdapter))?.status, "completed");
+          } else assert.equal((await deliverEventOutbox(nextOperation.id, () => caldavAdapter))?.status, "completed");
+          if (["following-regenerate", "following-recancel"].includes(scenario)) {
+            const request = { operationID: randomUUID(), scope: "occurrence", expectedRevision: (await getEventSnapshot(root.id))!.revision, originalStart: cut.originalStart, expectedOccurrenceRevision: null, ...(scenario === "following-recancel" ? { action: "delete" } : { action: "update", patch: { title: "Recreated occurrence" } }) };
+            const retry = await applyLocalEventScope(root.id, owner, request, { prepareProvider: true });
+            if (retry.status !== "caldav_required") throw new Error("Missing regenerated scope context");
+            const retryPrepared = await prepareCaldavSeries(retry.context, request);
+            assert.equal(retryPrepared.write.newDefinition!.id, cut.id);
+            assert.equal((await applyLocalEventScope(root.id, owner, request, { caldav: retryPrepared })).status, "saved");
+            const retryOperation = (await outbox()).find(item => item.mutationID === request.operationID)!;
+            assert.equal((await deliverEventOutbox(retryOperation.id, () => caldavAdapter))?.status, "completed");
+            const child = (await rows()).find(item => item.id === cut.id)!;
+            assert.equal(child.deletedAt, null); assert.equal(child.revision, cut.revision + 2); assert.equal(child.isCanceled, scenario === "following-recancel");
+            await persist(); assert.equal((await rows()).length, original.length);
+          }
+          if (scenario === "following-cleanup") {
+            await purgeDeletedEvents(new Date("2021-01-01")); assert.equal((await rows()).length, original.length - plan.deletes.length);
+          }
+          const finalRoot = (await getEventSnapshot(root.id))!;
+          const remove = { operationID: randomUUID(), scope: "series", action: "delete", expectedRevision: finalRoot.revision };
+          const final = await applyLocalEventScope(root.id, owner, remove, { prepareProvider: true });
+          if (final.status !== "caldav_required") throw new Error("Remaining family cannot be deleted");
+          const deletion = await prepareCaldavSeriesDelete(final.context, remove);
+          assert.equal((await applyLocalEventScope(root.id, owner, remove, { caldavDeletion: deletion })).status, "saved");
+          const finalOperation = (await outbox()).find(item => item.mutationID === remove.operationID)!;
+          assert.equal((await deliverEventOutbox(finalOperation.id, () => caldavAdapter))?.status, "completed"); assert.deepEqual(await maps(), []);
+          continue;
+        }
         if (scenario.startsWith("delete-")) {
           const request = { operationID: randomUUID(), scope: "series", action: "delete", expectedRevision: root.revision };
           const candidate = await applyLocalEventScope(root.id, owner, request, { prepareProvider: true });

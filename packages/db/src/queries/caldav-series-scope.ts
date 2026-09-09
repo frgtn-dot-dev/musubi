@@ -12,6 +12,7 @@ type Ref = { externalEventId: string; etag?: string | null; icalUid?: string | n
 export type CaldavSeriesContext = {
   master: Event;
   children: Event[];
+  retiredDefinitions?: Pick<Event, "id" | "revision" | "originalStart">[];
   link: Pick<typeof externalCalendars.$inferSelect, "id" | "userID" | "provider" | "accountID" | "externalCalendarID" | "disabled" | "supportsEvents"> & { calendarID: string };
   mappings: Pick<typeof externalEvents.$inferSelect, "id" | "provider" | "eventID" | "calendarID" | "externalCalendarID" | "externalEventID" | "icalUid" | "externalSeriesID" | "originalStart" | "etag">[];
 };
@@ -66,7 +67,11 @@ export async function caldavSeriesContext(tx: DbTransaction, actorID: string, ma
   if (pending.some(item => item.id !== ownOperationID && !(replaced.has(item.id) && item.status === "cancelled" && item.errorCode === "superseded-by-resolution" && item.eventID === master.id && item.externalCalendarLinkID === link.id && item.userID === actorID && item.payload.caldavSeries))) throw unsupported();
   const tombstones = await tx.select({ id: externalEventTombstones.id }).from(externalEventTombstones).where(and(eq(externalEventTombstones.externalCalendarLinkID, link.id), inArray(externalEventTombstones.externalEventID, mappings.map(item => item.externalEventID)))).limit(1);
   if (tombstones.length) throw unsupported();
-  return { master, children, link: { id: link.id, userID: link.userID, provider: link.provider, accountID: link.accountID, externalCalendarID: link.externalCalendarID, disabled: link.disabled, supportsEvents: link.supportsEvents, calendarID: master.originCalendarID }, mappings: mappings.map(({ id, provider, eventID, calendarID, externalCalendarID, externalEventID, icalUid, externalSeriesID, originalStart, etag }) => ({ id, provider, eventID, calendarID, externalCalendarID, externalEventID, icalUid, externalSeriesID, originalStart, etag })) };
+  const retiredQuery = tx.select().from(events).where(and(eq(events.seriesID, master.id), sql`${events.deletedAt} is not null`)).orderBy(events.id);
+  const retiredRows = await (readOnly ? retiredQuery : retiredQuery.for("share"));
+  const retired = retiredRows.filter(item => !ids.includes(item.id));
+  if (retired.some(item => item.creatorID !== actorID || item.originCalendarID !== master.originCalendarID || !item.originalStart)) throw unsupported();
+  return { master, children, ...(retired.length ? { retiredDefinitions: retired.map(({ id, revision, originalStart }) => ({ id, revision, originalStart })) } : {}), link: { id: link.id, userID: link.userID, provider: link.provider, accountID: link.accountID, externalCalendarID: link.externalCalendarID, disabled: link.disabled, supportsEvents: link.supportsEvents, calendarID: master.originCalendarID }, mappings: mappings.map(({ id, provider, eventID, calendarID, externalCalendarID, externalEventID, icalUid, externalSeriesID, originalStart, etag }) => ({ id, provider, eventID, calendarID, externalCalendarID, externalEventID, icalUid, externalSeriesID, originalStart, etag })) };
 }
 
 export async function appendCaldavSeries(tx: DbTransaction, actorID: string, operationID: string, prepared: CaldavSeriesPrepared, event: Event) {
@@ -142,18 +147,28 @@ export async function confirmCaldavSeriesOutbox(id: string, token: string, resul
       await lockCalendarLifecycle(tx, [address.calendarID], "shared");
       await lockExternalEventIdentity(tx, address.externalCalendarLinkID, address.externalEventID);
       const [master] = await tx.select().from(events).where(eq(events.id, address.eventID)).for("update");
-      const children = await tx.select().from(events).where(eq(events.seriesID, address.eventID)).orderBy(events.id).for("update");
-      if (!master || master.deletedAt || children.some(child => child.deletedAt)) return false;
+      const allChildren = await tx.select().from(events).where(eq(events.seriesID, address.eventID)).orderBy(events.id).for("update");
+      const trackedIDs = new Set(address.payload.caldavSeries.context.children.map(child => child.id));
+      const children = allChildren.filter(child => !child.deletedAt || trackedIDs.has(child.id));
+      if (!master || master.deletedAt) return false;
+      const desired = caldavSeriesDesired(address.payload.caldavSeries.write);
+      const removed = address.payload.caldavSeries.write.followingDelete ? address.payload.caldavSeries.write.baseline.children.filter(child => !desired.children.some(item => item.id === child.id)) : [];
+      const removedIDs = new Set(removed.map(child => child.id));
+      if (children.some(child => !!child.deletedAt !== removedIDs.has(child.id)) || removed.some(old => {
+        const current = children.find(item => item.id === old.id);
+        return !current || current.revision !== old.revision! + 1;
+      })) return false;
       const links = await tx.select().from(calendarEvents).where(inArray(calendarEvents.eventID, [master.id, ...children.map(child => child.id)]));
       const snapshot = (event: typeof master) => EventSchema.parse({ ...event, calendars: links.filter(link => link.eventID === event.id).map(link => link.calendarID).sort() });
       let current: CaldavSeriesContext;
       try { current = await caldavSeriesContext(tx, address.userID, snapshot(master), children.map(snapshot), address.id); }
       catch (error) { if (error instanceof EventWriteError) return false; throw error; }
       const expected = { ...address.payload.caldavSeries.context, master: EventSchema.parse(address.payload.event) };
-      const desired = caldavSeriesDesired(address.payload.caldavSeries.write);
+      const retained = current.children.filter(child => !removedIDs.has(child.id));
+      if (removed.some(old => { const actual = current.children.find(item => item.id === old.id); return !actual || !sameCaldavScopeContext(EventSchema.parse({ ...old, revision: actual.revision }), actual); })) return false;
       if (!sameCaldavScopeContext(EventSchema.parse({ ...desired.master, revision: current.master.revision }), current.master) ||
-          desired.children.length !== current.children.length || desired.children.some(child => {
-            const actual = current.children.find(item => item.id === child.id);
+          desired.children.length !== retained.length || desired.children.some(child => {
+            const actual = retained.find(item => item.id === child.id);
             return !actual || !sameCaldavScopeContext(EventSchema.parse({ ...child, revision: actual.revision }), actual);
           })) return false;
       if (!sameCaldavScopeContext(current, expected) || address.provider !== "caldav" || address.action !== "update" || address.revision !== master.revision ||
@@ -165,7 +180,9 @@ export async function confirmCaldavSeriesOutbox(id: string, token: string, resul
       if (!sameCaldavScopeContext(address.payload.caldavSeries.write.baseline.ref, { externalEventId: root.externalEventID, etag: root.etag, icalUid: root.icalUid })) return false;
       if (!result) return true;
       if (result.externalEventId !== row.externalEventID || result.icalUid !== row.icalUid || !strong(result.etag)) return false;
-      await tx.update(externalEvents).set({ etag: result.etag }).where(inArray(externalEvents.id, current.mappings.map(item => item.id)));
+      const removedMappings = current.mappings.filter(item => removedIDs.has(item.eventID));
+      if (removedMappings.length) await tx.delete(externalEvents).where(inArray(externalEvents.id, removedMappings.map(item => item.id)));
+      await tx.update(externalEvents).set({ etag: result.etag }).where(inArray(externalEvents.id, current.mappings.filter(item => !removedIDs.has(item.eventID)).map(item => item.id)));
       const [completed] = await tx.update(eventOutbox).set({ status: "completed", errorCode: null, resultRef: result, uncertain: false, leaseToken: null, leaseUntil: null, updatedAt: new Date() }).where(and(eq(eventOutbox.id, id), eq(eventOutbox.leaseToken, token), sql`${eventOutbox.leaseUntil} > clock_timestamp()`)).returning({ id: eventOutbox.id });
       if (!completed) throw new CaldavLeaseLost();
       const replaced = row.payload.resolution?.replacedOperationIDs ?? [];
@@ -194,7 +211,9 @@ export async function confirmCaldavSeriesDeletionOutbox(id: string, token: strin
       await lockCalendarLifecycle(tx, [address.calendarID], "shared");
       await lockExternalEventIdentity(tx, address.externalCalendarLinkID, address.externalEventID);
       const [master] = await tx.select().from(events).where(eq(events.id, address.eventID)).for("update");
-      const children = await tx.select().from(events).where(eq(events.seriesID, address.eventID)).orderBy(events.id).for("update");
+      const allChildren = await tx.select().from(events).where(eq(events.seriesID, address.eventID)).orderBy(events.id).for("update");
+      const trackedIDs = new Set(address.payload.caldavSeriesDeletion.context.children.map(child => child.id));
+      const children = allChildren.filter(child => !child.deletedAt || trackedIDs.has(child.id));
       if (!master?.deletedAt || children.some(child => !child.deletedAt)) return false;
       const links = await tx.select().from(calendarEvents).where(inArray(calendarEvents.eventID, [master.id, ...children.map(child => child.id)]));
       const snapshot = (event: typeof master) => EventSchema.parse({ ...event, calendars: links.filter(link => link.eventID === event.id).map(link => link.calendarID).sort() });

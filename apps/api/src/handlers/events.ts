@@ -327,7 +327,7 @@ export async function handlerEventScope(req: Request, res: Response) {
   }
   if (result.status === "caldav_required") {
     try {
-      if (req.body.scope === "series" && req.body.action === "delete") {
+      if (result.deleteResource) {
         const caldavDeletion = await prepareCaldavSeriesDelete(result.context, req.body);
         result = await applyLocalEventScope(eventID, req.user!.id, req.body, { caldavDeletion });
       } else {

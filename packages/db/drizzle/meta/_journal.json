@@ -484,6 +484,13 @@
       "when": 1788918023350,
       "tag": "0068_caldav_series_deletion",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1788919459317,
+      "tag": "0069_caldav_truncated_versions",
+      "breakpoints": true
     }
   ]
 }
