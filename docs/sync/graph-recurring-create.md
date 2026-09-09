@@ -237,3 +237,21 @@ Sources: [event identity and transactionId](https://learn.microsoft.com/en-us/gr
 [scoped instances](https://learn.microsoft.com/en-us/graph/api/event-list-instances?view=graph-rest-1.0),
 [calendar read](https://learn.microsoft.com/en-us/graph/api/calendar-get?view=graph-rest-1.0),
 [Graph errors](https://learn.microsoft.com/en-us/graph/errors).
+
+
+## Late family acceptance during ordinary import
+
+Microsoft retains each native instance's parent address as an internal admission
+hint even with time editing disabled. Under the calendar shared lifecycle lock,
+ordinary upsert checks whether that exact calendar/master address now maps to a
+known canonical root, including a retained tombstone. If so, it skips the
+component even when the instance has never been mapped and the fetch captured
+its exclusions before the family was accepted. Complete family acceptance uses
+the exclusive lifecycle lock. The hint never creates canonical parent/original
+identity and is not persisted as a substitute for a complete family read.
+
+The adapter/PostgreSQL regression accepts a root during the view response, after
+family enumeration, then verifies that none of its four unmapped occurrences
+becomes a standalone row. A subsequent full read installs the family normally.
+Pending creation without a native master address still requires its own journal
+and admission fence before recurring creation can be enabled.

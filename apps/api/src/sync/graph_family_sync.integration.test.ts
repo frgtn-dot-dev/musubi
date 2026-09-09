@@ -25,7 +25,7 @@ async function main() {
     if (url.pathname === "/v1.0/me/calendars") return json({ value: [{ id: "calendar", name: "Fixture", canEdit: true }] });
     if (url.pathname === "/v1.0/me/calendars/calendar") return json({ id: "calendar" }, mode === "removed-denied" ? 403 : 200);
     if (url.pathname === "/v1.0/me/calendars/calendar/events/series") {
-      assert.equal(url.searchParams.get("$expand"), "exceptionOccurrences", "Tracked series use the full reader, never calendarView hydration");
+      if (mode !== "late-root") assert.equal(url.searchParams.get("$expand"), "exceptionOccurrences", "Tracked series use the full reader, never calendarView hydration");
       if (mode === "master-failure") return json({}, 503);
       if (mode.startsWith("removed")) return json({ error: { code: "ErrorItemNotFound" } }, 404);
       if (mode === "missing-master") return json({}, 404);
@@ -42,7 +42,7 @@ async function main() {
       if (mode === "view-failure") return json({}, 503);
       // The full family is authoritative even when the bounded view is empty,
       // or contains stale IDs absent from both current maps and native slots.
-      return json({ value: mode === "empty-view" ? [oneOff] : [...ordinary, { id: "retired-unmapped", seriesMasterId: "series", type: "exception" }, { id: "occ-28", "@removed": { reason: "deleted" } }, oneOff], "@odata.deltaLink": "https://graph.microsoft.com/delta" });
+      return json({ value: mode === "late-root" ? [...ordinary, oneOff] : mode === "empty-view" ? [oneOff] : [...ordinary, { id: "retired-unmapped", seriesMasterId: "series", type: "exception" }, { id: "occ-28", "@removed": { reason: "deleted" } }, oneOff], "@odata.deltaLink": "https://graph.microsoft.com/delta" });
     }
     return json({ error: "Unexpected hydration route" }, 500);
   })().catch(error => { console.error(error); res.statusCode = 500; res.end(); }); });
@@ -54,12 +54,19 @@ async function main() {
   try {
     await db.insert(account).values({ id: randomUUID(), userId: userID, providerId: "microsoft", accountId: "account", scope: "Calendars.ReadWrite", refreshToken: "fixture", accessToken: "fixture", accessTokenExpiresAt: new Date(Date.now() + 3600000) });
     const calendar = await importExternalCalendar("microsoft", userID, "account", "Fixture", { externalId: "calendar", name: "Fixture", color: "red" });
-    await upsertExternalEvent("microsoft", userID, calendar.id, "calendar", "series", { ...values, color: "red" }, 'W/"master"', "master-uid", undefined, { timeModel: values.timeModel }, undefined, microsoftEventState(native));
+    const acceptRoot = async () => {
+      await upsertExternalEvent("microsoft", userID, calendar.id, "calendar", "series", { ...values, color: "red" }, 'W/"master"', "master-uid", undefined, { timeModel: values.timeModel }, undefined, microsoftEventState(native));
+    };
     const rows = () => db.select().from(events).where(eq(events.creatorID, userID)).orderBy(events.id);
     const maps = () => db.select().from(externalEvents).where(eq(externalEvents.calendarID, calendar.id)).orderBy(externalEvents.id);
     const sync = () => syncProvider(microsoftAdapter, userID, { id: "account", label: "Fixture" });
     const snapshot = async () => ({ rows: await rows(), maps: await maps(), links: await getUserExternalCalendars("microsoft", userID, "account") });
     config.api.eventTimeEditsEnabled = false;
+    mode = "late-root"; localChange = acceptRoot;
+    await sync();
+    assert.equal((await rows()).length, 2, "A newly accepted master fences unmapped instance echoes after fetch exclusions were captured");
+    assert.equal((await maps()).length, 2);
+    mode = "normal"; reads = [];
     assert.deepEqual(await sync(), [calendar.id]);
     const initial = await rows(), initialMaps = await maps(), root = initial.find(value => value.recurrence)!;
     assert.equal(initial.length, 6); assert.equal(initialMaps.length, 6);
@@ -124,6 +131,12 @@ async function main() {
     assert.ok(restored.every(value => !value.deletedAt));
     assert.equal(restored.find(value => value.id === child("occ-28").id)!.isCanceled, true, "Revival retains native cancellation");
     assert.deepEqual(await sync(), []); assert.deepEqual(await rows(), restored);
+    const beforeUnmapped = await snapshot();
+    for (const flag of [true, false]) {
+      config.api.eventTimeEditsEnabled = flag;
+      assert.equal(await upsertExternalEvent("microsoft", userID, calendar.id, "calendar", "unmapped-late", { ...values, recurrence: null, title: "Stale echo", color: "red" }, null, "late-uid", undefined, undefined, undefined, undefined, undefined, "series"), false);
+    }
+    assert.deepEqual(await snapshot(), beforeUnmapped, "Source parent guard never promotes a bounded instance or changes mappings");
     console.log("Tracked Graph family sync: actual scoped native reads, flag-off preservation, calendarView/stale-ID suppression before hydration, reset/window renewal, moved/cancelled/revived UUIDs, complete-read failures and local-race cursor preservation: OK");
   } finally { config.api.eventTimeEditsEnabled = enabled; globalThis.fetch = realFetch; server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await db.delete(user).where(eq(user.id, userID)); }
 }

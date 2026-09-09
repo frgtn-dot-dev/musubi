@@ -12,6 +12,8 @@ export type NormalizedEvent = {
   providerState?: ProviderEventState;
   creationOperationID?: string;
   providerOccurrence?: { externalSeriesID: string; originalStart: OccurrenceStart };
+  // Native parent address for import admission only; never canonical identity.
+  sourceSeriesID?: string;
   // Observation-only proof for pending reminders; never adopts canonical time.
   reminderTimeEvidence?: EventTimeModel;
   timeModel?: EventTimeModel;

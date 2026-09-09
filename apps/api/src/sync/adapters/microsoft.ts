@@ -574,6 +574,13 @@ export async function fetchMicrosoftChanges(
         } else item = { ...master, ...item };
       }
       const event = toNormalized(item);
+      // Keep the native parent address even with time editing disabled. A
+      // family may be accepted after this fetch captured its exclusions.
+      if (item.seriesMasterId != null) {
+        if (typeof item.seriesMasterId !== "string" || !item.seriesMasterId.trim() || item.seriesMasterId.trim() !== item.seriesMasterId || item.seriesMasterId === item.id)
+          throw new Error("Outlook returned an invalid source series address.");
+        event.sourceSeriesID = item.seriesMasterId;
+      }
       if (options.timeModels && !item["@removed"]) {
         event.providerOccurrence = item.providerOccurrence;
         // The provider expands this bounded view. Never attach its recurrence
