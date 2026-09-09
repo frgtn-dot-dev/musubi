@@ -1,5 +1,5 @@
-import { appendCaldavSplit, caldavSplitPlan, type CaldavSplitPrepared } from "./caldav-split";
-import { appendCaldavSeriesDeletion, type CaldavSeriesDeletionPrepared, sameCaldavRecurrence, caldavSeriesContext, caldavSeriesDesired, appendCaldavSeries, sameCaldavScopeContext, type CaldavSeriesContext, type CaldavSeriesPrepared } from "./caldav-series-scope";
+import { appendCaldavSplit, caldavSplitPlan, caldavSplitCreationAddresses, type CaldavSplitPrepared } from "./caldav-split";
+import { appendCaldavSeriesDeletion, type CaldavSeriesDeletionPrepared, sameCaldavRecurrence, normalizeCaldavScopeRequest, caldavSeriesContext, caldavSeriesDesired, appendCaldavSeries, sameCaldavScopeContext, type CaldavSeriesContext, type CaldavSeriesPrepared } from "./caldav-series-scope";
 import { lockExternalEventAddress } from "./event-outbox-deletions";
 import { googleOccurrenceContext, appendGoogleOccurrence, type GoogleOccurrenceContext, type GoogleOccurrencePrepared } from "./google-occurrence-scope";
 import { createHash, randomUUID } from "node:crypto";
@@ -7,12 +7,12 @@ import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { planEventScope } from "@musubi/calendar";
 import { BadRequestError, can, EventSchema, EventScopeOutcomeSchema, EventScopeRequestSchema, EventWriteError, occurrenceKey, type Event, type EventScopeOutcome } from "@musubi/types";
 import { db } from "..";
-import { calendarEvents, calendarMembers, events, eventScopeOperations, externalCalendars, externalEvents, eventOutbox } from "../schema";
+import { calendarEvents, calendarMembers, events, eventScopeOperations, externalCalendars, externalEvents, externalEventTombstones, eventOutbox } from "../schema";
 import { lockCalendarLifecycle } from "./calendar-lifecycle";
 
 type Snapshot = typeof events.$inferSelect & { calendars: string[] };
 export type LocalEventScopeResult =
-  | { status: "caldav_required"; context: CaldavSeriesContext; deleteResource: boolean }
+  | { status: "caldav_required"; context: CaldavSeriesContext; deleteResource: boolean; splitResource: boolean }
   | { status: "provider_required"; context: GoogleOccurrenceContext }
   | { status: "not_found" }
   | { status: "conflict"; current: Event }
@@ -42,7 +42,7 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
     // Whole-resource import takes this fence before the master. Discover the
     // address first, then recheck it in the locked provider context below.
     const [caldavRoot] = initialMaster.originCalendarID ? await tx.select().from(externalEvents).where(and(eq(externalEvents.provider, "caldav"), eq(externalEvents.eventID, eventID), eq(externalEvents.calendarID, initialMaster.originCalendarID))) : [];
-    if (caldavRoot) for (const address of [...new Set([caldavRoot.externalEventID, ...(options.caldavSplit ? [options.caldavSplit.split.creation.ref.externalEventId] : [])])].sort()) await lockExternalEventAddress(tx, "caldav", caldavRoot.calendarID, address);
+    if (caldavRoot) for (const address of [...new Set([caldavRoot.externalEventID, ...(options.caldavSplit ? caldavSplitCreationAddresses(options.caldavSplit.split) : [])])].sort()) await lockExternalEventAddress(tx, "caldav", caldavRoot.calendarID, address);
     const [masterRow] = await tx.select().from(events).where(eq(events.id, eventID)).for("update");
     if (!masterRow) return { status: "not_found" };
     const childRows = await tx.select().from(events).where(eq(events.seriesID, eventID)).orderBy(events.id).for("update");
@@ -73,14 +73,15 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
     let caldavContext: CaldavSeriesContext | undefined;
     if (target || mapping || history) {
       if (caldavRoot && ["series", "occurrence", "following"].includes(request.scope) && (options.prepareProvider || options.caldav || options.caldavDeletion || options.caldavSplit)) {
-        if ((request.action === "update" && (Object.keys(request.patch).some(key => !["title", "description", "location", "recurrence"].includes(key)))) || (request.scope === "following" && request.action !== "delete" && !options.caldavSplit))
+        if ((request.action === "update" && (Object.keys(request.patch).some(key => !["title", "description", "location", "recurrence"].includes(key)))))
           throw new EventWriteError("event-write", "unsupported", "CalDAV scope editing supports series content/time and occurrence content/time/cancellation. No changes were saved.");
         if (request.scope === "occurrence" && request.action === "delete" && childRows.some(child => !child.deletedAt && child.isCanceled && sameCaldavScopeContext(child.originalStart, request.originalStart))) throw new EventWriteError("event-write", "unsupported");
         if (request.action === "update" && request.patch.recurrence !== undefined && (!request.patch.recurrence || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(request.patch.recurrence) || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(master.recurrence ?? ""))) throw new EventWriteError("event-write", "unsupported");
         caldavContext = await caldavSeriesContext(tx, actorID, EventSchema.parse(master), childRows.filter(child => !child.deletedAt).map(child => EventSchema.parse(snapshot(child))));
-        if (options.caldavSplit && (options.caldav || options.caldavDeletion || options.provider || !sameCaldavScopeContext(options.caldavSplit.context, caldavContext) || !sameCaldavScopeContext(options.caldavSplit.split.request, request))) throw new EventWriteError("event-write", "unsupported");
+        if (options.caldavSplit && (options.caldav || options.caldavDeletion || options.provider || !sameCaldavScopeContext(options.caldavSplit.split.request, request))) throw new EventWriteError("event-write", "unsupported");
+        if (options.caldavSplit && !sameCaldavScopeContext(options.caldavSplit.context, caldavContext)) return { status: "conflict", current: EventSchema.parse(master) };
         if (options.caldavDeletion && (!["series", "following"].includes(request.scope) || request.action !== "delete" || !sameCaldavScopeContext(options.caldavDeletion.context, caldavContext) || !sameCaldavScopeContext(options.caldavDeletion.deletion.baseline.master, caldavContext.master) || !sameCaldavScopeContext(options.caldavDeletion.deletion.baseline.children, caldavContext.children))) return { status: "conflict", current: EventSchema.parse(master) };
-        if (options.caldav && (request.scope === "following" ? request.action !== "delete" || !sameCaldavScopeContext(options.caldav.write.followingDelete, { originalStart: request.originalStart, expectedOccurrenceRevision: request.expectedOccurrenceRevision }) : options.caldav.write.followingDelete !== undefined)) throw new EventWriteError("event-write", "unsupported");
+        if (options.caldav && (request.scope === "following" && request.action === "delete" ? !sameCaldavScopeContext(options.caldav.write.followingDelete, { originalStart: request.originalStart, expectedOccurrenceRevision: request.expectedOccurrenceRevision }) : options.caldav.write.followingDelete !== undefined)) throw new EventWriteError("event-write", "unsupported");
         if (options.caldav && request.scope === "series" && request.action === "delete") throw new EventWriteError("event-write", "unsupported");
         if (options.caldav && (!sameCaldavScopeContext(options.caldav.write.baseline.master, caldavContext.master) || !sameCaldavScopeContext(options.caldav.write.baseline.children, caldavContext.children)))
           return { status: "conflict", current: EventSchema.parse(master) };
@@ -102,10 +103,11 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
     const revival = request.scope === "occurrence" ? childRows.find(child => child.deletedAt && child.originalStart && occurrenceKey({ seriesId: eventID, originalStart: child.originalStart }) === occurrenceKey({ seriesId: eventID, originalStart: request.originalStart! })) : undefined;
     let plan;
     try {
-      let plannedRequest = request;
+      let plannedRequest = caldavContext ? normalizeCaldavScopeRequest(EventSchema.parse(master), request) : request;
       if (options.caldav && request.action === "update" && request.patch.recurrence !== undefined) {
-        if (!sameCaldavRecurrence(request.patch.recurrence, options.caldav.write.patch.recurrence)) throw new EventWriteError("event-write", "unsupported");
-        plannedRequest = { ...request, patch: { ...request.patch, recurrence: options.caldav.write.patch.recurrence } };
+        const recurrence = options.caldav.write.patch.recurrence ?? (sameCaldavRecurrence(request.patch.recurrence, master.recurrence) ? master.recurrence : undefined);
+        if (!sameCaldavRecurrence(request.patch.recurrence, recurrence)) throw new EventWriteError("event-write", "unsupported");
+        plannedRequest = { ...request, patch: { ...request.patch, recurrence } };
       }
       plan = options.caldavSplit ? caldavSplitPlan(options.caldavSplit) : planEventScope(EventSchema.parse(master), liveChildren, plannedRequest, () => revival?.id ?? options.caldav?.write.newDefinition?.id ?? randomUUID());
     } catch (error) {
@@ -115,7 +117,16 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
       throw new EventWriteError("event-write", "unsupported", "Google occurrence editing requires a supported time kind and provider content. No changes were saved.");
     if (caldavContext && [...plan.updates, ...plan.creates].some(next => next.seriesID === master.id && childRows.some(old => old.deletedAt && old.id !== next.id && sameCaldavScopeContext(old.originalStart, next.originalStart))))
       throw new EventWriteError("event-write", "unsupported", "This change collides with a retired occurrence identity. No changes were saved.");
-    if (caldavContext && !options.caldav && !options.caldavDeletion && !options.caldavSplit) return { status: "caldav_required", context: caldavContext, deleteResource: plan.deletes.includes(master.id) };
+    if (options.caldav && request.scope === "following" && request.action === "update" && (plan.creates.length || plan.deletes.length)) throw new EventWriteError("event-write", "unsupported");
+    if (caldavContext && !options.caldav && !options.caldavDeletion && !options.caldavSplit) return { status: "caldav_required", context: caldavContext, deleteResource: plan.deletes.includes(master.id), splitResource: plan.creates.some(event => !event.seriesID) };
+    if (caldavContext && options.caldavSplit) {
+      const creation = options.caldavSplit.split.creation;
+      const addresses = caldavSplitCreationAddresses(options.caldavSplit.split);
+      const [tombstone] = await tx.select({ id: externalEventTombstones.id }).from(externalEventTombstones).where(and(eq(externalEventTombstones.externalCalendarLinkID, caldavContext.link.id), inArray(externalEventTombstones.externalEventID, addresses))).limit(1);
+      const [mapping] = await tx.select({ id: externalEvents.id }).from(externalEvents).where(and(eq(externalEvents.provider, "caldav"), eq(externalEvents.calendarID, caldavContext.link.calendarID), or(inArray(externalEvents.externalEventID, addresses), eq(externalEvents.externalSeriesID, creation.ref.externalEventId)))).limit(1);
+      const [identity] = await tx.select({ id: events.id }).from(events).where(eq(events.id, creation.master.id));
+      if (tombstone || mapping || identity) return { status: "conflict", current: EventSchema.parse(master) };
+    }
     if (providerContext && !options.provider) return { status: "provider_required", context: providerContext };
     const outcome: EventScopeOutcome = { operationID: request.operationID, changed: false, events: [], deleted: [] };
     const previous: Event[] = [];

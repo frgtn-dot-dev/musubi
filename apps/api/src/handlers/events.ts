@@ -1,5 +1,5 @@
 import { queueGoogleRsvp } from "../sync/provider_rsvp";
-import { prepareCaldavSeries, prepareCaldavSeriesDelete } from "../sync/caldav_scope";
+import { prepareCaldavSeries, prepareCaldavSeriesDelete, prepareCaldavSplit } from "../sync/caldav_scope";
 import { ProviderEventWriteError } from "../sync/event_write";
 import { prepareGoogleOccurrence } from "../sync/google_scope";
 import { config } from "@musubi/config";
@@ -330,6 +330,9 @@ export async function handlerEventScope(req: Request, res: Response) {
       if (result.deleteResource) {
         const caldavDeletion = await prepareCaldavSeriesDelete(result.context, req.body);
         result = await applyLocalEventScope(eventID, req.user!.id, req.body, { caldavDeletion });
+      } else if (result.splitResource) {
+        const caldavSplit = await prepareCaldavSplit(result.context, req.body);
+        result = await applyLocalEventScope(eventID, req.user!.id, req.body, { caldavSplit });
       } else {
         const caldav = await prepareCaldavSeries(result.context, req.body);
         result = await applyLocalEventScope(eventID, req.user!.id, req.body, { caldav });

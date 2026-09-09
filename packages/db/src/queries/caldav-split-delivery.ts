@@ -5,7 +5,7 @@ import { events, calendarEvents, calendarMembers, externalCalendars, externalEve
 import { lockCalendarLifecycle } from "./calendar-lifecycle";
 import { lockExternalEventIdentity } from "./event-outbox-deletions";
 import { caldavSeriesContext, sameCaldavScopeContext } from "./caldav-series-scope";
-import { caldavSplitAfter } from "./caldav-split";
+import { caldavSplitAfter, caldavSplitCreationAddresses } from "./caldav-split";
 
 type Ref = { externalEventId: string; etag?: string | null; icalUid?: string | null };
 const strong = (value: unknown): value is string => typeof value === "string" && /^"[\x21\x23-\x7e\x80-\xff]*"$/.test(value);
@@ -36,7 +36,7 @@ export async function confirmCaldavSplitOutbox(id: string, token: string, result
       // Unmapped child DELETE observations have their own address fence too.
       // Hold each one through mapping insertion so no tombstone can slip between
       // the final absence check and accepting a newly created component.
-      const creationAddresses = [split.creation.ref.externalEventId, ...after.moved.map(child => split.creation.ref.externalEventId + "#musubi-original=" + encodeURIComponent(JSON.stringify(child.originalStart)))];
+      const creationAddresses = caldavSplitCreationAddresses(split);
       const resources = [...new Set(sourcePhase ? [split.source.baseline.ref.externalEventId, ...creationAddresses] : creationAddresses)].sort();
       for (const resource of resources) await lockExternalEventIdentity(tx, context.link.id, resource);
       const roots = sourcePhase ? [after.source.id, after.head.id].sort() : [after.head.id];

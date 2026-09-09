@@ -725,3 +725,6 @@ Import při nezávisle zapnutých připomínkách nese časový důkaz pouze pro
 
 
 **K12 CalDAV — durable split worker:** první krok ověří obě nativní části a práva, podmíněně zkrátí zdroj a atomicky potvrdí jeho mapování. Závislý create potvrdí celou novou family společně; obnova po 503 neopakuje přijatý PUT. [HTTP/DB/Radicale kontrakt](../sync/caldav-series-writes.md#durable-split-delivery-and-independent-family-ack) zahrnuje synchronizaci mezi kroky a nezávislou editaci původní části po prvním ACK. Veřejný following update a jeho permission preflight bridge ještě následují; flagy/verze beze změny.
+
+
+**K12 CalDAV — veřejný following update:** autentizovaný scope endpoint spojuje úplný nativní preflight, resource write + collection bind a atomický split journal. První výskyt použije stávající series PUT, no-op pouze replay receipt. [HTTP/DB/Radicale kontrakt](../sync/caldav-series-writes.md#public-following-update-scope) ověřuje souběžné retry, tři časové typy, RRULE/time změny a odmítnutí stale kontextu či nové deletion/mapping identity před uložením. Konflikty mimo master content a širší recurrence/time převody zůstávají samostatnou prací; iCloud unknown privilege ani produkční flagy/verze se nemění.

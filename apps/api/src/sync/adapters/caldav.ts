@@ -1034,7 +1034,7 @@ export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baselin
 /** Pure split preparation. It does not promise atomicity across two resources. */
 export function prepareCaldavSeriesSplit(evidence: CaldavSeriesEvidence, baseline: CaldavSeriesIntent, input: unknown, newRootID: string = randomUUID()): CaldavSeriesSplit {
   const request = EventScopeRequestSchema.parse(input);
-  if (request.scope !== "following" || request.action !== "update" || Object.keys(request.patch).some(key => !["title", "description", "location", "recurrence"].includes(key)) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newRootID)) throw new EventWriteError("event-write", "unsupported");
+  if (request.scope !== "following" || request.action !== "update" || Object.keys(request.patch).some(key => !["title", "description", "location", "recurrence"].includes(key)) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newRootID) || newRootID === baseline.ref.icalUid) throw new EventWriteError("event-write", "unsupported");
   caldavSeriesEvidence(evidence.data, baseline);
   if (evidence.ref.externalEventId !== baseline.ref.externalEventId || evidence.ref.icalUid !== baseline.ref.icalUid || evidence.ref.etag !== baseline.ref.etag) throw new ProviderEventWriteError("provider-conflict");
   let plannedRequest = request;
@@ -1238,6 +1238,12 @@ export const caldavAdapter: CalendarAdapter = {
   async deleteCaldavSeries(userID, accountId, externalCalendarId, deletion, signal, beforeMutation) {
     const { authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, deletion.baseline, signal, "delete");
     return deleteCaldavSeriesResource(externalCalendarId, deletion, authorization, signal, beforeMutation);
+  },
+  async assertCaldavSplitCreation(userID, accountId, externalCalendarId, split, signal) {
+    if (!config.api.eventTimeEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+    const rebuilt = rebuildCaldavSplit(split);
+    const creation = await seriesAuthorization(userID, accountId, externalCalendarId, rebuilt.creation, signal, "create");
+    await readCaldavSplitCreation(creation.resource, rebuilt.creation, creation.authorization, signal);
   },
   async writeCaldavSplitSource(userID, accountId, externalCalendarId, split, signal, beforeMutation) {
     if (!config.api.eventTimeEditsEnabled) throw new EventWriteError("event-write", "unsupported");

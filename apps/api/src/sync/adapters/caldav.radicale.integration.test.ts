@@ -35,7 +35,7 @@ async function main() {
   const { encryptSecret } = await import("../crypto");
   const { prepareEventDeliveryResolution } = await import("../event_resolution");
   const { commitEventDeliveryResolution } = await import("@musubi/db");
-  const { prepareCaldavSeries, prepareCaldavSeriesDelete } = await import("../caldav_scope");
+  const { prepareCaldavSeries, prepareCaldavSeriesDelete, prepareCaldavSplit } = await import("../caldav_scope");
   const { deliverEventOutbox } = await import("../event_delivery");
 
   const userID = `radicale-interop-${randomUUID()}`;
@@ -456,9 +456,11 @@ async function main() {
     const journalBaseline = { master: journalProbe.context.master, children: journalProbe.context.children, ref: { externalEventId: journalURL, etag: journalMapping.etag, icalUid: journalMapping.icalUid } };
     const journalCut = [...journalBaseline.children].sort((a, b) => a.originalStart!.value.localeCompare(b.originalStart!.value))[1]!;
     const journalRequest = { operationID: randomUUID(), scope: "following", action: "update", expectedRevision: journalRoot.revision, originalStart: journalCut.originalStart, expectedOccurrenceRevision: journalCut.revision, patch: { title: "Durable future family" } };
-    const journalEvidence = await caldavAdapter.readCaldavSeries!(userID, account.id, collectionURL, journalBaseline);
-    const journalSplit = prepareCaldavSeriesSplit(journalEvidence, journalBaseline, journalRequest);
-    assert.equal((await applyLocalEventScope(journalRoot.id, userID, journalRequest, { caldavSplit: JSON.parse(JSON.stringify({ context: journalProbe.context, split: journalSplit })) })).status, "saved");
+    const journalCandidate = await applyLocalEventScope(journalRoot.id, userID, journalRequest, { prepareProvider: true });
+    if (journalCandidate.status !== "caldav_required" || !journalCandidate.splitResource) throw new Error("Missing following split preparation");
+    const journalPrepared = await prepareCaldavSplit(journalCandidate.context, journalRequest);
+    const journalSplit = journalPrepared.split;
+    assert.equal((await applyLocalEventScope(journalRoot.id, userID, journalRequest, { caldavSplit: JSON.parse(JSON.stringify(journalPrepared)) })).status, "saved");
     const journalRows = await rows();
     const journalOperations = (await db.select().from(eventOutbox).where(eq(eventOutbox.mutationID, journalRequest.operationID))).sort((a, b) => a.position - b.position);
     assert.equal(journalOperations.length, 2);

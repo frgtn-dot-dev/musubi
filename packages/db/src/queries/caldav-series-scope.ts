@@ -1,6 +1,6 @@
 import { planEventScope, resolveEventTimeEdit } from "@musubi/calendar";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
-import { EventSchema, EventWriteError, can, type Event, type EventTimeEdit, type OccurrenceStart } from "@musubi/types";
+import { EventSchema, EventWriteError, can, type Event, type EventScopeRequest, type EventTimeEdit, type OccurrenceStart } from "@musubi/types";
 import { db } from "..";
 import { calendarMembers, calendarEvents, events, externalCalendars, externalEvents, externalEventTombstones, eventOutbox } from "../schema";
 import type { DbTransaction } from "./calendars";
@@ -97,6 +97,14 @@ export function sameCaldavRecurrence(left: unknown, right: unknown): boolean {
   };
   const expected = clauses(left);
   return expected !== null && expected === clauses(right);
+}
+
+/** Keep routing, native preflight and commit consistent for supported spelling
+ * differences/default clauses. This does not guess equivalence of arbitrary rules. */
+export function normalizeCaldavScopeRequest(master: Event, request: EventScopeRequest): EventScopeRequest {
+  return request.action === "update" && request.patch.recurrence !== undefined && sameCaldavRecurrence(request.patch.recurrence, master.recurrence)
+    ? { ...request, patch: { ...request.patch, recurrence: master.recurrence } }
+    : request;
 }
 
 /** Reconstruct the only permitted canonical change from the private input. */
