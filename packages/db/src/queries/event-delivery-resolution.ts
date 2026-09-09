@@ -33,7 +33,7 @@ import {
   unresolvedEventOutbox,
   type EventOutboxRow,
 } from "./event-outbox";
-import { caldavSeriesDesired, caldavSeriesContext, sameCaldavScopeContext, type CaldavSeriesContext, type CaldavSeriesPrepared } from "./caldav-series-scope";
+import { caldavSeriesDesired, caldavSeriesContext, sameCaldavScopeContext, type CaldavSeriesDeletionPrepared, type CaldavSeriesContext, type CaldavSeriesPrepared } from "./caldav-series-scope";
 import type { GoogleOccurrenceIntent } from "./google-occurrence-scope";
 import type { DbTransaction } from "./calendars";
 import type { EventContentPatch } from "./events";
@@ -161,7 +161,26 @@ async function resolutionContext(
     throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   }
   let caldavContext: CaldavSeriesContext | undefined;
-  if (row.payload.caldavSplit || row.payload.caldavSeriesDeletion) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+  if (row.payload.caldavSplit) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+  if (row.payload.caldavSeriesDeletion) {
+    if (row.provider !== "caldav" || row.action !== "delete" || !current?.deletedAt || latest.id !== row.id || pending.some(item => item.id !== row.id))
+      throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const saved = row.payload.caldavSeriesDeletion;
+    const childRows = await tx.query.events.findMany({ where: eq(events.seriesID, eventID), with: { calendarEvents: true }, orderBy: events.id });
+    const tracked = childRows.filter(child => !child.deletedAt || saved.context.children.some(item => item.id === child.id));
+    if (tracked.some(child => !child.deletedAt)) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const snapshot = (item: typeof current) => EventSchema.parse({ ...item, calendars: item.calendarEvents.map(link => link.calendarID).sort() });
+    try { caldavContext = await caldavSeriesContext(tx, userID, snapshot(current), tracked.map(snapshot), row.id, true); }
+    catch (error) { if (error instanceof EventWriteError) throw new EventDeliveryResolutionError("delivery-resolution-unavailable"); throw error; }
+    const baseline = saved.deletion.baseline;
+    if (!sameCaldavScopeContext(caldavContext, saved.context) || !sameCaldavScopeContext(caldavContext.master, local) ||
+        baseline.children.length !== caldavContext.children.length || [baseline.master, ...baseline.children].some(old => {
+          const actual = [caldavContext!.master, ...caldavContext!.children].find(item => item.id === old.id);
+          return !actual || actual.revision !== old.revision! + 1 || !sameCaldavScopeContext(EventSchema.parse({ ...old, revision: actual.revision }), actual);
+        })) throw new EventDeliveryResolutionError("delivery-state-changed");
+  } else if (latest.payload.caldavSeriesDeletion || pending.some(item => item.payload.caldavSeriesDeletion)) {
+    throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+  }
   if (row.payload.caldavSeries) {
     if (row.provider !== "caldav" || row.action !== "update" || !linked || latest.id !== row.id || pending.some(item => item.id !== row.id))
       throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
@@ -290,6 +309,7 @@ export type EventDeliveryResolutionProof = {
   patch: EventContentPatch;
   googleOccurrence?: GoogleOccurrenceIntent;
   caldavSeries?: CaldavSeriesPrepared;
+  caldavSeriesDeletion?: CaldavSeriesDeletionPrepared;
   rsvp?: { intent: ProviderRsvpIntent; baselineVersion: string };
   reminder?: { intent: ProviderReminderEdit; state: ProviderEventState; stateVersion: string };
   deletion: typeof externalEventTombstones.$inferSelect | undefined;
@@ -393,7 +413,7 @@ export async function commitEventDeliveryResolution(
         .from(events)
         .where(eq(events.id, row.eventID))
         .for("update");
-      if (row.payload.caldavSeries) {
+      if (row.payload.caldavSeries || row.payload.caldavSeriesDeletion) {
         await tx.select({ id: events.id }).from(events).where(eq(events.seriesID, row.eventID)).orderBy(events.id).for("update");
         await tx.select({ id: externalEvents.id }).from(externalEvents).where(and(eq(externalEvents.calendarID, row.calendarID), or(eq(externalEvents.externalEventID, row.externalEventID!), eq(externalEvents.externalSeriesID, row.externalEventID!)))).orderBy(externalEvents.eventID, externalEvents.id).for("update");
       }
@@ -440,11 +460,12 @@ export async function commitEventDeliveryResolution(
         !!current.row.payload.reminderEdit !== !!proof.reminder ||
         proof.reminder?.stateVersion !== request.expectedReminderStateVersion ||
         !sameCaldavScopeContext(request.expectedScopeResolution, current.row.payload.caldavSeries?.write.followingDelete
-          ? { kind: "following-delete", originalStart: current.row.payload.caldavSeries.write.followingDelete.originalStart } : undefined) ||
+          ? { kind: "following-delete", originalStart: current.row.payload.caldavSeries.write.followingDelete.originalStart } : current.row.payload.caldavSeriesDeletion ? { kind: "series-delete" } : undefined) ||
         current.masterRevision !== request.expectedMasterRevision ||
         current.masterRevision !== proof.context.masterRevision ||
         !!current.row.payload.googleOccurrence !== !!proof.googleOccurrence ||
         !!current.row.payload.caldavSeries !== !!proof.caldavSeries ||
+        !!current.row.payload.caldavSeriesDeletion !== !!proof.caldavSeriesDeletion ||
         !sameCaldavScopeContext(current.caldavContext, proof.context.caldavContext) ||
         current.localRevision !== request.expectedLocalRevision ||
         current.latest.id !== request.expectedLatestOperationId ||
@@ -526,7 +547,7 @@ export async function commitEventDeliveryResolution(
             await tx
               .delete(externalEventTombstones)
               .where(eq(externalEventTombstones.id, deletion.id));
-          if (current.mapping && !proof.caldavSeries)
+          if (current.mapping && !proof.caldavSeries && !proof.caldavSeriesDeletion)
             await tx
               .update(externalEvents)
               .set({
@@ -550,6 +571,14 @@ export async function commitEventDeliveryResolution(
             .delete(externalEvents)
             .where(eq(externalEvents.id, current.mapping.id));
         }
+      }
+      if (proof.caldavSeriesDeletion) {
+        const family = current.caldavContext, saved = current.row.payload.caldavSeriesDeletion;
+        if (!family || !saved || !proof.ref || !proof.remoteExists || proof.action !== "delete" ||
+            !sameCaldavScopeContext(proof.caldavSeriesDeletion.context, { ...family, mappings: family.mappings.map(item => ({ ...item, etag: proof.ref!.etag })) }) ||
+            !sameCaldavScopeContext(proof.caldavSeriesDeletion.deletion.baseline, { ...saved.deletion.baseline, ref: proof.ref }))
+          throw new EventDeliveryResolutionError("delivery-state-changed");
+        await tx.update(externalEvents).set({ etag: proof.ref.etag }).where(inArray(externalEvents.id, family.mappings.map(item => item.id)));
       }
       if (proof.caldavSeries) {
         const family = current.caldavContext;
@@ -614,6 +643,7 @@ export async function commitEventDeliveryResolution(
           ...(proof.rsvp ? { rsvp: { ...proof.rsvp.intent, request: { ...proof.rsvp.intent.request, operationID: request.mutationId, expectedRevision: current.localRevision!, expectedStateVersion: providerStateVersion({ id: current.mapping!.id, etag: proof.ref!.etag ?? null, providerState: proof.rsvp.intent.baselineState })! } } } : {}),
           ...(proof.reminder ? { reminderEdit: { ...proof.reminder.intent, operationID: request.mutationId, expectedRevision: current.localRevision!, expectedStateVersion: proof.reminder.stateVersion } } : {}),
           ...(proof.caldavSeries ? { caldavSeries: proof.caldavSeries } : {}),
+          ...(proof.caldavSeriesDeletion ? { caldavSeriesDeletion: proof.caldavSeriesDeletion } : {}),
           ...(proof.googleOccurrence
             ? { googleOccurrence: proof.googleOccurrence }
             : {}),

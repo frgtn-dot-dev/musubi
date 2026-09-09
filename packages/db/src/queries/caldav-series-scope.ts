@@ -64,7 +64,7 @@ export async function caldavSeriesContext(tx: DbTransaction, actorID: string, ma
   const pending = await tx.select().from(eventOutbox).where(and(inArray(eventOutbox.eventID, ids), sql`${eventOutbox.status} not in ('completed', 'not-needed')`));
   const own = pending.find(item => item.id === ownOperationID);
   const replaced = new Set(own?.payload.resolution?.replacedOperationIDs ?? []);
-  if (pending.some(item => item.id !== ownOperationID && !(replaced.has(item.id) && item.status === "cancelled" && item.errorCode === "superseded-by-resolution" && item.eventID === master.id && item.externalCalendarLinkID === link.id && item.userID === actorID && item.payload.caldavSeries))) throw unsupported();
+  if (pending.some(item => item.id !== ownOperationID && !(replaced.has(item.id) && item.status === "cancelled" && item.errorCode === "superseded-by-resolution" && item.eventID === master.id && item.externalCalendarLinkID === link.id && item.userID === actorID && (own?.payload.caldavSeries && item.payload.caldavSeries || own?.payload.caldavSeriesDeletion && item.payload.caldavSeriesDeletion)))) throw unsupported();
   const tombstones = await tx.select({ id: externalEventTombstones.id }).from(externalEventTombstones).where(and(eq(externalEventTombstones.externalCalendarLinkID, link.id), inArray(externalEventTombstones.externalEventID, mappings.map(item => item.externalEventID)))).limit(1);
   if (tombstones.length) throw unsupported();
   const retiredQuery = tx.select().from(events).where(and(eq(events.seriesID, master.id), sql`${events.deletedAt} is not null`)).orderBy(events.id);
@@ -245,6 +245,8 @@ export async function confirmCaldavSeriesDeletionOutbox(id: string, token: strin
       await tx.delete(externalEvents).where(inArray(externalEvents.id, current.mappings.map(item => item.id)));
       const [completed] = await tx.update(eventOutbox).set({ status: "completed", errorCode: null, resultRef: result, uncertain: false, leaseToken: null, leaseUntil: null, updatedAt: new Date() }).where(and(eq(eventOutbox.id, id), eq(eventOutbox.leaseToken, token), sql`${eventOutbox.leaseUntil} > clock_timestamp()`)).returning({ id: eventOutbox.id });
       if (!completed) throw new CaldavLeaseLost();
+      const replaced = row.payload.resolution?.replacedOperationIDs ?? [];
+      if (replaced.length) await tx.update(eventOutbox).set({ status: "not-needed", updatedAt: new Date() }).where(and(inArray(eventOutbox.id, replaced), eq(eventOutbox.eventID, row.eventID), eq(eventOutbox.externalCalendarLinkID, row.externalCalendarLinkID), eq(eventOutbox.status, "cancelled"), eq(eventOutbox.errorCode, "superseded-by-resolution")));
       return true;
     });
   } catch (error) { if (error instanceof CaldavLeaseLost) return false; throw error; }

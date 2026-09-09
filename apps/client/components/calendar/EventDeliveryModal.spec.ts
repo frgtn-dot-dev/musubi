@@ -750,3 +750,22 @@ it("confirms the displayed following-deletion cut with a frozen retry identity",
   expect(requests[0].expectedScopeResolution).toEqual(scopeResolution);
   expect(requests[1]).toEqual(requests[0]);
 });
+
+it("confirms the displayed whole-series deletion with a frozen retry identity", async () => {
+  const scopeResolution = { kind: "series-delete" };
+  const requests: any[] = [];
+  h.request.mockImplementation(async (url: string, options: any) => {
+    if (url.endsWith("/resolve")) { requests.push(JSON.parse(options.body)); if (requests.length === 1) throw new Error("Lost response"); }
+    return reply(url.endsWith("/conflict") ? { ...preview, scopeResolution, action: "delete", local: null, localRevision: null } : receipt);
+  });
+  let tree = await review();
+  expect(text(tree)).toContain("Entire series");
+  expect(text(tree)).toContain("all occurrences and exceptions");
+  expect(buttons(tree, "Apply saved changes")).toHaveLength(0);
+  buttons(tree, "Delete entire series")[0].onPress(); acceptNative(); await settle();
+  tree = render();
+  buttons(tree, "Delete entire series")[0].onPress(); acceptNative(); await settle();
+  expect(requests).toHaveLength(2);
+  expect(requests[0].expectedScopeResolution).toEqual(scopeResolution);
+  expect(requests[1]).toEqual(requests[0]);
+});

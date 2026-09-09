@@ -486,7 +486,16 @@ async function main() {
     const deletedRows = await rows();
     assert.ok(deletedRows.filter(item => item.id === scopedRoot.id || item.seriesID === scopedRoot.id).every(item => item.deletedAt && item.revision === beforeDeletionRows.find(old => old.id === item.id)!.revision + (beforeDeletionRows.find(old => old.id === item.id)!.deletedAt ? 0 : 1)));
     const deletionOperation = (await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, scopedRoot.id))).find(item => item.mutationID === deletionRequest.operationID)!;
-    assert.equal((await deliverEventOutbox(deletionOperation.id, () => caldavAdapter))?.status, "completed");
+    const deleteRemote = await davFetch(scopedURL, { headers: { authorization: basicAuth } });
+    const deleteBody = await deleteRemote.text();
+    const deleteChanged = await davFetch(scopedURL, { method: "PUT", headers: { authorization: basicAuth, "content-type": "text/calendar", "if-match": deleteRemote.headers.get("etag")! }, body: deleteBody.replace("END:VCALENDAR", "X-MUSUBI-DELETE-CONFLICT:1\r\nEND:VCALENDAR") });
+    assert.ok(deleteChanged.ok);
+    assert.equal((await deliverEventOutbox(deletionOperation.id, () => caldavAdapter))?.status, "conflict");
+    const deleteComparison = await prepareEventDeliveryResolution(userID, scopedRoot.id, deletionOperation.id, () => caldavAdapter);
+    assert.deepEqual(deleteComparison.preview.scopeResolution, { kind: "series-delete" });
+    assert.equal(deleteComparison.preview.local, null);
+    const deleteReplacement = await commitEventDeliveryResolution(userID, deleteComparison.proof, { mutationId: randomUUID(), expectedLocalRevision: null, expectedLatestOperationId: deleteComparison.preview.latestOperationId, expectedRemoteExists: true, expectedRemoteEtag: deleteComparison.preview.remoteEtag, expectedScopeResolution: deleteComparison.preview.scopeResolution });
+    assert.equal((await deliverEventOutbox(deleteReplacement, () => caldavAdapter))?.status, "completed");
     assert.equal((await davFetch(scopedURL, { headers: { authorization: basicAuth } })).status, 404);
     assert.equal((await db.select().from(externalEvents)).filter(item => item.externalEventID === scopedURL || item.externalSeriesID === scopedURL).length, 0);
     await caldavAdapter.deleteCaldavSeries!(userID, account.id, collectionURL, deletion);

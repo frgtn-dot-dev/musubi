@@ -429,3 +429,29 @@ it("confirms the displayed following-deletion cut and retains it across an ambig
   expect(requests[0].expectedScopeResolution).toEqual(scopeResolution);
   expect(requests[1]).toEqual(requests[0]);
 });
+
+it("confirms the displayed whole-series deletion and retains it across an ambiguous retry", async () => {
+  const scopeResolution = { kind: "series-delete" };
+  const requests: any[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith("/conflict")) return json({ ...preview, scopeResolution, action: "delete", local: null, localRevision: null });
+    if (url.endsWith("/resolve")) {
+      requests.push(JSON.parse(String(init?.body)));
+      if (requests.length === 1) throw new Error("Lost response");
+      return json(receipt, 202);
+    }
+    return json(receipt);
+  }));
+  mount();
+  fireEvent.click(await screen.findByRole("button", { name: "Review changes" }));
+  const comparison = await screen.findByRole("dialog", { name: "Review remote changes" });
+  expect(within(comparison).getByText("Entire series")).toBeTruthy();
+  expect(within(comparison).getByText(/This removes the entire remote series/)).toBeTruthy();
+  expect(within(comparison).queryByRole("button", { name: "Apply saved changes" })).toBeNull();
+  fireEvent.click(within(comparison).getByRole("button", { name: "Delete entire series" }));
+  await within(comparison).findByText(/Could not reach the server/);
+  fireEvent.click(within(comparison).getByRole("button", { name: "Delete entire series" }));
+  await waitFor(() => expect(requests).toHaveLength(2));
+  expect(requests[0].expectedScopeResolution).toEqual(scopeResolution);
+  expect(requests[1]).toEqual(requests[0]);
+});

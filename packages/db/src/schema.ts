@@ -894,7 +894,7 @@ export const eventOutbox = pgTable(
           expectedRemoteExists: boolean;
           expectedRemoteEtag: string | null;
           expectedMasterRevision?: number;
-          expectedScopeResolution?: { kind: "following-delete"; originalStart: OccurrenceStart };
+          expectedScopeResolution?: { kind: "following-delete"; originalStart: OccurrenceStart } | { kind: "series-delete" };
           expectedReminderStateVersion?: string;
           expectedRsvpBaselineVersion?: string;
         };

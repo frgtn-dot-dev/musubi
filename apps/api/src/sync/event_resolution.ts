@@ -34,7 +34,7 @@ import {
   googleEventCreateID,
   caldavEventCreateIdentity,
 } from "./event_create_identity";
-import { prepareCaldavSeriesWrite } from "./adapters/caldav";
+import { prepareCaldavSeriesDeletion, prepareCaldavSeriesWrite } from "./adapters/caldav";
 import { strongEventEtag, requireEventEtag } from "./event_write";
 import { ProviderAuthError } from "./errors";
 
@@ -176,6 +176,23 @@ async function prepare(
       reminderResolution: { desired: intent.reminders, remote: observed.state.reminders, stateVersion },
     };
     const proof: EventDeliveryResolutionProof = { context, ref: observed.ref, remoteExists: true, action: "update", patch: {}, deletion, reminder: { intent, state: observed.state, stateVersion } };
+    return { preview, proof };
+  }
+  if (row.payload.caldavSeriesDeletion) {
+    if (!config.api.eventTimeEditsEnabled || !adapter.readCaldavSeriesDeletionResolution || !context.caldavContext || !ref || !context.deleted)
+      throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const saved = row.payload.caldavSeriesDeletion.deletion;
+    const observed = await adapter.readCaldavSeriesDeletionResolution(row.userID, row.accountID, row.externalCalendarID, { ...saved.baseline, ref }, saved.before, signal);
+    const prepared = {
+      context: { ...context.caldavContext, mappings: context.caldavContext.mappings.map(item => ({ ...item, etag: requireEventEtag(observed.evidence.ref.etag) })) },
+      deletion: prepareCaldavSeriesDeletion(observed.evidence, observed.baseline),
+    };
+    const preview: EventDeliveryConflict = {
+      eventId: row.eventID, operationId: row.id, latestOperationId: context.latest.id, localRevision: null,
+      local: null, remote: { ...content(observed.baseline.master), timeModel: observed.baseline.master.timeModel ?? undefined },
+      remoteEtag: observed.evidence.ref.etag!, action: "delete", canResolve: true, reason: null, scopeResolution: { kind: "series-delete" },
+    };
+    const proof: EventDeliveryResolutionProof = { context, ref: observed.evidence.ref, remoteExists: true, action: "delete", patch: {}, deletion: await getEventOutboxDeletion(row, ref.externalEventId), caldavSeriesDeletion: prepared };
     return { preview, proof };
   }
   if (row.payload.caldavSeries) {
