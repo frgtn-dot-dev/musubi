@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { planEventScope } from "@musubi/calendar";
 import type { Task } from "@musubi/types";
 import type { NormalizedChange, NormalizedTask } from "../adapter";
+import type { CaldavSeriesIntent } from "./caldav_series";
 
 process.env.FEDERATION_ALLOW_PRIVATE_HOSTS ??= "true";
 process.env.CALDAV_ENC_KEY ??=
@@ -248,6 +250,24 @@ async function main() {
     assert.equal(cancelResult.master.title, occurrenceResult.master.title);
     assert.deepEqual(cancelResult.exceptions[0]!.timeModel, occurrenceResult.exceptions[0]!.timeModel);
     assert.equal((await caldavAdapter.writeCaldavSeries!(userID, account.id, collectionURL, cancelWrite)).ref.etag, cancelResult.ref.etag);
+    let generatedBaseline: CaldavSeriesIntent = { ...cancelBaseline, ref: cancelResult.ref, children: cancelBaseline.children.map(child => ({ ...child, isCanceled: true })) };
+    for (const cancellation of [false, true]) {
+      const definitionID = randomUUID();
+      const originalStart = { kind: "instant" as const, value: cancellation ? "2026-03-31T07:00:00.000Z" : "2026-03-30T07:00:00.000Z" };
+      const common = { operationID: definitionID, scope: "occurrence" as const, expectedRevision: generatedBaseline.master.revision!, originalStart, expectedOccurrenceRevision: null };
+      const patch = cancellation ? {} : { title: "New native definition" };
+      const request = cancellation ? { ...common, action: "delete" as const } : { ...common, action: "update" as const, patch, ensureDefinition: true };
+      const definition = planEventScope(generatedBaseline.master, generatedBaseline.children, request, () => definitionID).creates[0]!;
+      const evidence = await caldavAdapter.readCaldavSeries!(userID, account.id, collectionURL, generatedBaseline);
+      const prepared = prepareCaldavSeriesWrite(evidence, generatedBaseline, patch, definitionID, cancellation ? true : undefined, definition);
+      const result = await caldavAdapter.writeCaldavSeries!(userID, account.id, collectionURL, prepared);
+      const child = result.exceptions.find(item => JSON.stringify(item.originalStart) === JSON.stringify(originalStart))!;
+      assert.equal(child.isCanceled, cancellation);
+      assert.deepEqual(child.timeModel, definition.timeModel);
+      assert.equal(result.exceptions.length, generatedBaseline.children.length + 1);
+      assert.equal((await caldavAdapter.writeCaldavSeries!(userID, account.id, collectionURL, prepared)).ref.etag, result.ref.etag);
+      generatedBaseline = { ...generatedBaseline, ref: result.ref, children: [...generatedBaseline.children, { ...definition, revision: 1 }] };
+    }
     await put(moved, master); // Restore the synthetic fixture for the existing import regressions.
     await sync();
     console.log("Radicale complete series GET, accepted ETag, private-only evidence and concurrent-child CAS: OK");

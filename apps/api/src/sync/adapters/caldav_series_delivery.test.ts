@@ -1,3 +1,5 @@
+import { planEventScope } from "@musubi/calendar";
+import type { OccurrenceStart } from "@musubi/types";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
@@ -94,6 +96,31 @@ async function main() {
       assert.ok(cancelledResult.exceptions.every(item => item.isCanceled));
       assert.deepEqual(cancelledResult.exceptions.map(item => item.timeModel), evidence.exceptions.map(item => item.timeModel));
       assert.equal(puts, 1, "Cancellation recovers an applied 503 without another PUT");
+      const originalStart: OccurrenceStart = kind === "all-day" ? { kind: "date", value: "2026-03-31" } : kind === "floating" ? { kind: "floating", value: "2026-03-31T09:00:00.000" } : { kind: "instant", value: "2026-03-31T07:00:00.000Z" };
+      for (const cancelNew of [false, true]) {
+        const definitionID = randomUUID();
+        const patch = cancelNew ? {} : { title: "New detached definition", description: "Keep unknown data" };
+        const common = { operationID: randomUUID(), expectedRevision: baseline.master.revision!, scope: "occurrence" as const, expectedOccurrenceRevision: null, originalStart };
+        const request = cancelNew ? { ...common, action: "delete" as const } : { ...common, action: "update" as const, patch, ensureDefinition: true };
+        const definition = planEventScope(baseline.master, baseline.children, request, () => definitionID).creates[0]!;
+        assert.ok(definition);
+        const generatedWrite = prepareCaldavSeriesWrite(evidence, baseline, patch, definitionID, cancelNew ? true : undefined, definition);
+        assert.ok(generatedWrite.after.includes(master) && generatedWrite.after.includes(child) && generatedWrite.after.includes(cancelled));
+        assert.equal(generatedWrite.after.split("X-PRIVATE;LANGUAGE=cs:Folded\r\n extension").length, 3, "New definition retains inherited unknown bytes");
+        assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, patch, definitionID, cancelNew ? true : undefined, { ...definition, start: new Date(0) }));
+        assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, patch, definitionID, cancelNew ? true : undefined, { ...definition, originalStart: baseline.children[0]!.originalStart }));
+        reset("applied-503");
+        const deliverGenerated = () => deliverCaldavSeriesResource(collection, JSON.parse(JSON.stringify(generatedWrite)), "Basic Zml4dHVyZTpmaXh0dXJl", AbortSignal.timeout(5000));
+        await assert.rejects(deliverGenerated, (error: any) => error.outcome === "unconfirmed");
+        mode = "ok";
+        const generatedResult = await deliverGenerated();
+        assert.equal(generatedResult.exceptions.length, evidence.exceptions.length + 1);
+        const added = generatedResult.exceptions.find(item => JSON.stringify(item.originalStart) === JSON.stringify(originalStart))!;
+        assert.equal(added.isCanceled, cancelNew);
+        assert.equal(added.title, cancelNew ? baseline.master.title : patch.title);
+        assert.deepEqual(added.timeModel, definition.timeModel);
+        await deliverGenerated(); assert.equal(puts, 1, "Generated definition replay never appends a second VEVENT or repeats PUT");
+      }
       for (const failure of ["lost", "applied-503"]) {
         reset(failure);
         await assert.rejects(deliver, (error: any) => error.outcome === "unconfirmed");

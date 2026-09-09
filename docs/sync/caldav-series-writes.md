@@ -207,3 +207,20 @@ Fake HTTP and scoped DB tests cover zoned/all-day/floating cancellation,
 concurrent replay, lost response and native race. Local Radicale additionally
 verifies STATUS:CANCELLED, unchanged time and repeat delivery. No scheduling
 resources or real iCloud accounts are written by these tests.
+
+## Native generated occurrence definition
+
+The internal conditional writer can now append a detached definition for a generated
+occurrence. The shared scope planner proves membership and the exact permitted
+content change or cancellation before any transport. The new component clones the
+master's physical bytes, preserving alarms and unknown properties, then replaces
+DTSTART/DTEND and RECURRENCE-ID and removes recurrence generators. Zoned, all-day
+and floating identities are covered. Existing components remain byte-for-byte
+unchanged. Full-resource evidence and If-Match recovery prevent duplicate appends.
+
+Fake HTTP tests cover all three time models, applied-503 recovery and malformed or
+duplicate definition refusal. Radicale exercises new content and cancellation
+components with retry. This is an internal transport capability: public scope
+transactions still require an existing detached definition. Atomic creation of the
+local child and its external mapping is the next integration step. No provider
+flags or iCloud privilege requirements change.

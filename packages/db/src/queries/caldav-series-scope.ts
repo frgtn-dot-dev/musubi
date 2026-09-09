@@ -1,3 +1,4 @@
+import { planEventScope } from "@musubi/calendar";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { EventSchema, EventWriteError, type Event } from "@musubi/types";
 import { db } from "..";
@@ -20,6 +21,7 @@ export type CaldavSeriesWriteIntent = {
   patch: Pick<Partial<Event>, "title" | "description" | "location">;
   targetEventID?: string;
   cancelTarget?: true;
+  newDefinition?: Event;
   before: string;
   after: string;
 };
@@ -73,10 +75,19 @@ export async function appendCaldavSeries(tx: DbTransaction, actorID: string, ope
 }
 
 /** Reconstruct the only permitted canonical change from the private input. */
-export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseline" | "patch" | "targetEventID" | "cancelTarget">): CaldavSeriesWriteIntent["baseline"] {
+export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseline" | "patch" | "targetEventID" | "cancelTarget" | "newDefinition">): CaldavSeriesWriteIntent["baseline"] {
   if (!write.patch || typeof write.patch !== "object" || Array.isArray(write.patch) || Object.keys(write.patch).some(key => !["title", "description", "location"].includes(key))) throw unsupported();
   const { baseline, targetEventID } = write;
   if (write.cancelTarget !== undefined && (write.cancelTarget !== true || !targetEventID || Object.keys(write.patch).length)) throw unsupported();
+  if (write.newDefinition) {
+    const definition = EventSchema.parse(write.newDefinition);
+    if (targetEventID !== definition.id || !definition.originalStart || [baseline.master, ...baseline.children].some(item => item.id === definition.id)) throw unsupported();
+    const common = { operationID: definition.id, scope: "occurrence" as const, expectedRevision: baseline.master.revision!, originalStart: definition.originalStart, expectedOccurrenceRevision: null };
+    const request = write.cancelTarget ? { ...common, action: "delete" as const } : { ...common, action: "update" as const, patch: write.patch, ensureDefinition: true };
+    const plan = planEventScope(baseline.master, baseline.children, request, () => definition.id);
+    if (plan.creates.length !== 1 || plan.deletes.length || !sameCaldavScopeContext(plan.creates[0], definition)) throw unsupported();
+    return { ...baseline, children: [...baseline.children, definition] };
+  }
   if (!targetEventID) return { ...baseline, master: EventSchema.parse({ ...baseline.master, ...write.patch }) };
   const target = baseline.children.filter(child => child.id === targetEventID);
   if (target.length !== 1 || target[0]!.isCanceled || !target[0]!.originalStart) throw unsupported();
