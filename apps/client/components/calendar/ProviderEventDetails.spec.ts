@@ -13,6 +13,7 @@ vi.mock("@/constants/theme", () => ({ colors: {}, fonts: {}, styles: {} }));
 vi.mock("@/components/ui/Btn", () => ({ Btn: "Btn" }));
 vi.mock("./ProviderRsvpEditor", () => ({ ProviderRsvpEditor: "ProviderRsvpEditor" }));
 vi.mock("./ProviderReminderEditor", () => ({ ProviderReminderEditor: "ProviderReminderEditor" }));
+vi.mock("./ProviderOrganizerEditor", () => ({ ProviderOrganizerEditor: "ProviderOrganizerEditor" }));
 vi.mock("@/services/api", () => ({ useApi: () => ({ getProviderEventState: h.fetch }) }));
 vi.mock("@/services/federation", () => ({ remoteForCalendar: () => null }));
 vi.mock("@/contexts/ServerContext", () => ({ useServer: () => ({ apiUrl: "https://example.test" }) }));
