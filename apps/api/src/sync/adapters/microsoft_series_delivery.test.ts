@@ -61,6 +61,10 @@ async function main() {
     config.api.eventTimeEditsEnabled = false;
     await assert.rejects(write); assert.equal(reads + posts + permissions, 0);
     config.api.eventTimeEditsEnabled = true;
+    for (const recurrence of ["FREQ=DAILY", "FREQ=DAILY;COUNT=367", "FREQ=DAILY;UNTIL=20260330T070000Z"]) {
+      await assert.rejects(() => createGraphSeries("synthetic-series-token", calendar, { ...saved, recurrence }, identity, { uncertain: false, beforeWrite: async () => { attempts++; } }));
+      assert.equal(posts + reads + permissions + attempts, 0);
+    }
     for (const scenario of ["normal", "lost", "applied-503", "partial", "pending"]) {
       reset(); mode = scenario;
       const result = await write(); assert.equal(result.ref.externalEventId, native.id); assert.equal(result.recovered, scenario !== "normal");
