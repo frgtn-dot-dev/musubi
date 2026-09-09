@@ -4,6 +4,8 @@ Stav: K01–K06 implementovány, lokálně ověřeny a převzaty (2026-09-05). K
 
 Navazuje na [audit kalendářového jádra](calendar-core-audit.md), revize `60316a9`.
 
+Aktuální rozdělení implementovaných schopností, zbývající autonomní práce a vstupů vlastníka je v [přehledu zbývající práce](calendar-core-remaining-work.md). Historické checkpointy níže zachycují stav při daném řezu; pozdější implementace může jejich tehdejší omezení překonat.
+
 ## Cíl a hranice
 
 > Připojím pracovní, osobní a domácí kalendáře. Vidím správné události ve správný čas. Úprava nezničí původní data a vždy poznám, zda byla doručena.
