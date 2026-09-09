@@ -158,6 +158,27 @@ export function expandKnownTimeEvents<T extends ICalendarEventBase>(
         fail(event, "exception-time-kind-mismatch");
     }
     if (event.isCanceled || parent?.isCanceled) return;
+    // A detached timed definition may have exact instants without evidence of
+    // its current civil zone (for example a moved native Graph exception).
+    // Keep that uncertainty; never borrow the parent's zone or expand a legacy
+    // master. The explicit original instant still replaces its original slot.
+    const model = EventTimeModelSchema.parse(event.timeModel);
+    if (model.kind === "legacy-unknown") {
+      if (event.isAllDay !== false || event.originalStart!.kind !== "instant")
+        fail(event, "legacy-exception-time-kind-unresolved");
+      if (!Number.isFinite(event.start.getTime()) ||
+          !Number.isFinite(event.end.getTime()) || event.end < event.start)
+        fail(event, "invalid-event-range");
+      if (includeAllNonRecurring || overlaps(event.start, event.end))
+        result.push({
+          ...event,
+          occurrenceIdentity: {
+            seriesId: event.seriesID!,
+            originalStart: OccurrenceStartSchema.parse(event.originalStart),
+          },
+        });
+      return;
+    }
     const f = frame(event);
     if (
       includeAllNonRecurring ||

@@ -463,6 +463,52 @@ assert.ok(
       moved.originalStart!.value,
   ),
 );
+// Native exceptions may retain exact instants while their current civil zone
+// remains unknown. Read them without borrowing a parent or consumer zone.
+const unknownMoved: ICalendarEventBase = {
+  ...moved,
+  timeModel: { kind: "legacy-unknown" },
+  isAllDay: false,
+};
+const untouchedUnknown = JSON.stringify(unknownMoved);
+for (const zone of ["UTC", "Europe/Prague", "America/New_York", "Asia/Tokyo"]) {
+  for (const definitions of [[gapSeries, unknownMoved], [unknownMoved, gapSeries]]) {
+    const values = expand(definitions, undefined, undefined, zone);
+    assert.equal(values.length, 3);
+    const value = values.find(item => item.id === exceptionId)!;
+    assert.deepEqual(value.timeModel, { kind: "legacy-unknown" });
+    assert.equal(value.start.getTime(), unknownMoved.start.getTime());
+    assert.equal(value.end.getTime(), unknownMoved.end.getTime());
+    assert.deepEqual(value.occurrenceIdentity, { seriesId: id, originalStart: moved.originalStart });
+    assert.ok(!values.some(item => item.id !== exceptionId && item.occurrenceIdentity?.originalStart.value === moved.originalStart!.value));
+  }
+  assert.equal(expand([gapSeries, unknownMoved], "2026-04-02T00:00:00Z", "2026-04-03T00:00:00Z", zone)[0].id, exceptionId);
+  assert.equal(expand([gapSeries, unknownMoved], "2026-03-30T00:00:00Z", "2026-03-30T23:59:59Z", zone).length, 0);
+  assert.equal(expand([unknownMoved], undefined, undefined, zone)[0].id, exceptionId, "explicit detached instant works when the parent is outside the loaded range");
+  for (const start of ["2026-10-25T00:30:00Z", "2026-10-25T01:30:00Z"]) {
+    const fold = { ...unknownMoved, start: new Date(start), end: new Date("2026-10-25T03:00:00Z") };
+    const result = expand([gapSeries, fold], "2026-10-25T00:00:00Z", "2026-10-26T00:00:00Z", zone);
+    assert.equal(result.length, 1); assert.equal(result[0].start.getTime(), fold.start.getTime());
+    assert.deepEqual(result[0].timeModel, { kind: "legacy-unknown" });
+  }
+}
+assert.equal(JSON.stringify(unknownMoved), untouchedUnknown);
+assert.equal(expand([gapSeries, { ...unknownMoved, isCanceled: true }]).length, 2);
+assert.equal(expand([{ ...gapSeries, isCanceled: true }, unknownMoved]).length, 0);
+assert.throws(() => expand([{ ...gapSeries, timeModel: { kind: "legacy-unknown" } }, unknownMoved]), /legacy-exception-parent-unresolved/);
+for (const change of [
+  { isAllDay: true }, { isAllDay: undefined }, { timeModel: undefined }, { timeModel: null },
+  { start: new Date(NaN) }, { end: new Date(NaN) }, { end: new Date(unknownMoved.start.getTime() - 1) },
+  { originalStart: { kind: "date" as const, value: "2026-03-30" } },
+  { originalStart: { kind: "floating" as const, value: "2026-03-30T02:30:00.000" } },
+  { recurrence: "RRULE:FREQ=DAILY;COUNT=2" },
+]) assert.throws(() => expand([gapSeries, { ...unknownMoved, ...change }]));
+assert.throws(() => expand([gapSeries, unknownMoved, { ...unknownMoved, id: "another" }]), /duplicate-occurrence-identity/);
+assert.throws(() => expand([{ ...gapSeries, recurrence: null }, unknownMoved]), /exception-parent-not-recurring/);
+const unknownAgenda = expandRecurringEvents([gapSeries, unknownMoved], new Date("2026-03-01Z"), new Date("2026-03-31Z"), { consumerTimeZone: "UTC", includeAllNonRecurring: true });
+assert.ok(unknownAgenda.some(value => value.id === exceptionId));
+assert.ok(!unknownAgenda.some(value => value.id !== exceptionId && value.occurrenceIdentity?.originalStart.value === moved.originalStart!.value));
+
 console.log(
   `Known time expansion through public API: OK (host TZ=${process.env.TZ ?? "default"})`,
 );
