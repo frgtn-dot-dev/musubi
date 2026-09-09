@@ -30,3 +30,10 @@ export function civilToInstant(
     return null;
   return new Date(resolved.epochMilliseconds);
 }
+
+/** For provider contracts which do not prove how a gap or fold is resolved. */
+export function unambiguousCivilToInstant(civil: string, timeZone: string): Date {
+  const value = Temporal.PlainDateTime.from(CivilDateTimeSchema.parse(civil));
+  const zone = EventTimeZoneSchema.parse(timeZone);
+  return new Date(value.toZonedDateTime(zone, { disambiguation: "reject" }).epochMilliseconds);
+}

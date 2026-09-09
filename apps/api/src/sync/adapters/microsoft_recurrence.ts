@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import { civilToInstant, instantToCivil } from "@musubi/calendar";
 import { CivilDateTimeSchema, EventTimeModelSchema, EventWriteError, type Event } from "@musubi/types";
+import { graphTimeForEvent } from "./microsoft_time";
 
 const weekdays = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
 const tokens = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
@@ -22,6 +23,7 @@ const positive = (value: string | undefined, fallback?: number) => {
  * No DTSTART/EXDATE/RDATE or unknown RRULE term is silently discarded.
  */
 export function graphRecurrenceForEvent(event: Event): GraphRecurrence {
+  graphTimeForEvent(event);
   const model = EventTimeModelSchema.parse(event.timeModel);
   if (model.kind === "legacy-unknown" || model.kind === "floating" || event.seriesID || event.originalStart || !event.recurrence) return unsupported("Outlook recurrence needs an explicit zoned or all-day master.");
   const raw = event.recurrence.trim().replace(/^RRULE:/i, "").toUpperCase();

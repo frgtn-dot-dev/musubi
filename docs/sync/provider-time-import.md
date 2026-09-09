@@ -60,3 +60,32 @@ both endpoints through the start zone would erase a provider change and could
 falsely classify it as an in-flight reminder echo. Native reminder reads and PATCH
 evidence apply the same restriction; different equal-offset zone names are not
 interchangeable. These resources need an extended model before explicit support.
+
+## Graph master time candidates
+
+The recurring-create preparation now has a strict native master-time reader and
+a civil-time serializer in `microsoft_time.ts`. The reader requires a complete
+active `seriesMaster` time shape with an explicit UTC response projection. Timed
+masters require an IANA recurrence zone; supplied original endpoint zones must
+agree. Windows/custom zones and viewer-zone inference are not accepted. All-day
+masters currently require UTC date boundaries and convert Graph's exclusive end
+to Musubi's inclusive last date.
+
+The serializer verifies that canonical instants match their known civil anchors.
+Ambiguous folds and nonexistent gap anchors are rejected through Temporal's
+`reject` disambiguation, including non-hour transitions and skipped dates. Native
+seven-digit fractions are accepted only when digits beyond milliseconds are zero.
+The existing recurrence candidates now use this check before converting a rule,
+so an inconsistent master cannot produce an apparently valid pattern.
+
+Unit evidence includes independently specified native UTC payloads, Prague DST
+expansion under three host zones, multi-day/year-boundary all-day events, both
+sides of a fold, Lord Howe half-hour transitions, Apia's skipped day, malformed
+dates and precision loss. This is candidate evidence, not a complete native event
+or write-authority proof. Existing provider-expanded import and recurring-create
+refusal are unchanged; durable create recovery and master/instance echo handling
+remain required before enabling the capability.
+
+Sources: [Graph event](https://learn.microsoft.com/en-us/graph/api/resources/event?view=graph-rest-1.0),
+[dateTimeTimeZone](https://learn.microsoft.com/en-us/graph/api/resources/datetimetimezone?view=graph-rest-1.0),
+[create event](https://learn.microsoft.com/en-us/graph/api/user-post-events?view=graph-rest-1.0).
