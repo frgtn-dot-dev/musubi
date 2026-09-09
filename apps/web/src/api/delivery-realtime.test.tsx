@@ -37,6 +37,8 @@ it("refreshes delivery after reconnect and external sync only for the current ow
     "saved",
   ];
   const ownCalendars = queryKeys.calendars(getServerOrigin(), "owner");
+  const ownTasks = queryKeys.tasks(getServerOrigin(), "owner");
+  const otherTasks = queryKeys.tasks(getServerOrigin(), "other");
   const otherCalendars = queryKeys.calendars(getServerOrigin(), "other");
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -49,6 +51,8 @@ it("refreshes delivery after reconnect and external sync only for the current ow
         data: JSON.stringify({ type: "external_sync" }),
       }),
   ]) {
+    client.setQueryData(ownTasks, []);
+    client.setQueryData(otherTasks, []);
     client.setQueryData(ownCalendars, []);
     client.setQueryData(otherCalendars, []);
     client.setQueryData(own, "old");
@@ -58,6 +62,8 @@ it("refreshes delivery after reconnect and external sync only for the current ow
       expect(client.getQueryState(own)?.isInvalidated).toBe(true),
     );
     expect(client.getQueryState(other)?.isInvalidated).toBe(false);
+    expect(client.getQueryState(ownTasks)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(otherTasks)?.isInvalidated).toBe(false);
     expect(client.getQueryState(ownCalendars)?.isInvalidated).toBe(true);
     expect(client.getQueryState(otherCalendars)?.isInvalidated).toBe(false);
   }

@@ -1,7 +1,7 @@
 import { eventDeliveryExplanation } from "./event-delivery";
 import type { EventDeliveryTarget } from "@musubi/types";
 import assert from "node:assert/strict";
-import { organizerDraft, organizerRequest } from "./provider-organizer-draft";
+import { canManageProviderOrganizer, organizerDraft, organizerRequest } from "./provider-organizer-draft";
 import { ProviderOrganizerRequestSchema, EventSchema } from "@musubi/types";
 const identity = {
   operationID: "00000000-0000-4000-8000-000000000001",
@@ -89,3 +89,17 @@ assert.match(
   } as EventDeliveryTarget),
   /Google accepted/,
 );
+
+const boundObservation = { ...observation, organizerEdit: { ...observation.organizerEdit, scope: "occurrence" as const, instanceVersion: "b".repeat(64) } };
+const child = { ...legacy, revision: 2, originCalendarID: identity.calendarID, seriesID: "00000000-0000-4000-8000-000000000004", originalStart: { kind: "instant" as const, value: "2026-10-23T08:00:00.000Z" } };
+assert.equal(canManageProviderOrganizer(child, boundObservation), true);
+for (const invalid of [{ ...child, revision: 3 }, { ...child, recurrence: "RRULE:FREQ=DAILY;COUNT=4" }, { ...child, originalStart: null }, { ...child, seriesID: null }, { ...child, isCanceled: true }]) assert.equal(canManageProviderOrganizer(invalid, boundObservation), false);
+assert.equal(canManageProviderOrganizer(child, observation), false);
+const boundUpdate = organizerRequest("update", { ...draft, title: "This occurrence" }, ["title", "start"], identity, boundObservation);
+assert.equal(boundUpdate.action, "update");
+assert.deepEqual(boundUpdate.action === "update" && boundUpdate.patch, { title: "This occurrence" });
+assert.ok(boundUpdate.action !== "create");
+assert.equal(boundUpdate.scope, "occurrence");
+assert.equal(boundUpdate.expectedInstanceVersion, "b".repeat(64));
+for (const bad of [{ ...boundUpdate, expectedInstanceVersion: undefined }, { ...boundUpdate, scope: undefined }, { ...boundUpdate, patch: { time: { kind: "all-day", startDate: "2026-10-25", endDate: "2026-10-25" } } }]) assert.equal(ProviderOrganizerRequestSchema.safeParse(bad).success, false);
+console.log("Bound organizer draft and stored occurrence admission: OK");

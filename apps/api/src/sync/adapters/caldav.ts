@@ -62,6 +62,7 @@ import { appendEventComponent, eventComponentBytes, removeEventComponents, repla
 import {
   caldavAllows,
   caldavEventPrivileges,
+  caldavReadAccess,
   caldavOrganizerAddresses,
 } from "../caldav_privileges";
 
@@ -1335,6 +1336,28 @@ export async function deliverCaldavAlarmResource(intent: CaldavAlarmIntent, auth
   }
 }
 
+/** Final adapter classification consumes only explicit component evidence. */
+export function classifyCaldavCalendars(cals: DAVCalendar[]) {
+  if (cals.some(calendar => !calendar.components?.length)) throw new Error("CalDAV component classification is unknown.");
+  return cals
+      .filter(
+        (c) =>
+          !c.components ||
+          c.components.includes("VEVENT") ||
+          c.components.includes("VTODO"),
+      )
+      .map((c) => ({
+        externalId: c.url,
+        name: typeof c.displayName === "string" ? c.displayName : "Calendar",
+        color: (typeof c.calendarColor === "string"
+          ? c.calendarColor
+          : "#4285F4"
+        ).slice(0, 7),
+        supportsEvents: c.components?.includes("VEVENT") ?? true,
+        supportsTasks: c.components?.includes("VTODO") ?? false,
+      }));
+}
+
 export const caldavAdapter: CalendarAdapter = {
   caldavOrganizer: caldavOrganizerTransport(async (userID, accountID) => { const accounts = await getCaldavAccountsByUser(userID); if (!accounts.some(account => account.id === accountID)) throw new EventWriteError("organizer", "denied"); return basicAuthForAccount(accountID); }),
   async readCaldavAlarm(context, signal) {
@@ -1425,23 +1448,7 @@ export const caldavAdapter: CalendarAdapter = {
   ): Promise<CalendarDiscoveryResult> {
     const client = await clientForAccount(accountId);
     const cals = await client.fetchCalendars();
-    const calendars = cals
-      .filter(
-        (c) =>
-          !c.components ||
-          c.components.includes("VEVENT") ||
-          c.components.includes("VTODO"),
-      )
-      .map((c) => ({
-        externalId: c.url,
-        name: typeof c.displayName === "string" ? c.displayName : "Calendar",
-        color: (typeof c.calendarColor === "string"
-          ? c.calendarColor
-          : "#4285F4"
-        ).slice(0, 7),
-        supportsEvents: c.components?.includes("VEVENT") ?? true,
-        supportsTasks: c.components?.includes("VTODO") ?? false,
-      }));
+    const calendars = classifyCaldavCalendars(cals);
     const authorization = await basicAuthForAccount(accountId);
     for (const calendar of calendars) {
       const privileges = await caldavEventPrivileges(
@@ -1449,6 +1456,7 @@ export const caldavAdapter: CalendarAdapter = {
         authorization,
       );
       Object.assign(calendar, {
+        caldavAccess: caldavReadAccess(privileges),
         readOnly: !["create", "update", "delete"].some(
           (action) =>
             caldavAllows(
@@ -1482,7 +1490,7 @@ export const caldavAdapter: CalendarAdapter = {
         externalCalendarId,
         availableExternalCalendarIds: cals.map((c) => c.url),
       });
-      return { changes: [], nextCursor: null };
+      throw new Error("CalDAV collection disappeared after discovery; retry discovery before importing.");
     }
 
     if (cal.reports?.includes("syncCollection")) {
@@ -1782,9 +1790,10 @@ export const caldavAdapter: CalendarAdapter = {
     if (res.status !== 404) assertProviderEventMutationResponse(res);
   },
 
-  async pushTaskCreate(_userID, accountId, externalCalendarId, task: Task) {
+  async pushTaskCreate(_userID, accountId, externalCalendarId, task: Task, beforeMutation) {
     const client = await clientForAccount(accountId);
     const filename = `${task.id}.ics`;
+    await beforeMutation?.();
     const res = await client.createCalendarObject({
       calendar: { url: externalCalendarId } as any,
       filename,
@@ -1823,6 +1832,7 @@ export const caldavAdapter: CalendarAdapter = {
       ref,
       task,
     );
+    await ref?.beforeMutation?.();
     const res = await client.updateCalendarObject({ calendarObject });
     if (!res.ok) throw new Error(`CalDAV ${res.status} ${res.statusText}`);
     return {
@@ -1846,6 +1856,7 @@ export const caldavAdapter: CalendarAdapter = {
     if (!ref?.etag)
       throw new Error("CalDAV task has no ETag; refusing an unsafe delete");
     const client = await clientForAccount(accountId);
+    await ref.beforeMutation?.();
     const res = await client.deleteCalendarObject({
       calendarObject: { url: externalTaskId, etag: ref.etag },
     });

@@ -6,6 +6,7 @@ import {
 import { randomUUID } from "node:crypto";
 import { config } from "@musubi/config";
 import {
+  readProviderOrganizerInstanceVersion,
   prepareProviderOrganizer,
   readProviderOrganizerCalendar,
   matchesRsvpEventProjection,
@@ -123,7 +124,7 @@ export async function queueProviderOrganizer(actorID: string, input: unknown) {
     AbortSignal.timeout(10_000),
   );
   const baseline = context.mapping
-    ? await transport.read(context.mapping.externalEventID)
+    ? await transport.read(context.mapping.externalEventID, context.instance)
     : null;
   if (
     context.mapping &&
@@ -132,7 +133,8 @@ export async function queueProviderOrganizer(actorID: string, input: unknown) {
       !matchesRsvpEventProjection(
         "google",
         context.event!,
-        googleReminderEventEvidence(baseline),
+        organizerProjection(baseline, context.instance),
+        context.instance,
       ))
   )
     throw new BadRequestError("The provider meeting changed. Sync and reopen.");
@@ -173,7 +175,13 @@ export async function observeProviderOrganizer(
     const { getEventSnapshot } = await import("@musubi/db");
     const event = await getEventSnapshot(eventID);
     if (!event?.originCalendarID || !event.revision) return observation;
+    const instanceVersion = event.seriesID
+      ? await readProviderOrganizerInstanceVersion(actorID, eventID)
+      : undefined;
     const prepared = await prepareProviderOrganizer(actorID, {
+      ...(instanceVersion
+        ? { scope: "occurrence", expectedInstanceVersion: instanceVersion }
+        : {}),
       operationID: randomUUID(),
       eventID,
       calendarID: event.originCalendarID,
@@ -231,20 +239,27 @@ export async function observeProviderOrganizer(
       ctx.link.externalCalendarID,
       AbortSignal.timeout(10_000),
     );
-    const native = await transport.read(ctx.mapping!.externalEventID);
+    const native = await transport.read(
+      ctx.mapping!.externalEventID,
+      ctx.instance,
+    );
     if (
       !native ||
       native.etag !== ctx.mapping!.etag ||
       !matchesRsvpEventProjection(
         "google",
         ctx.event!,
-        googleReminderEventEvidence(native),
+        organizerProjection(native, ctx.instance),
+        ctx.instance,
       )
     )
       return observation;
     return {
       ...observation,
       organizerEdit: {
+        ...(ctx.instance
+          ? { scope: "occurrence" as const, instanceVersion }
+          : {}),
         provider: "google" as const,
         calendarID: ctx.request.calendarID,
         expectedRevision: event.revision,
@@ -253,4 +268,21 @@ export async function observeProviderOrganizer(
   } catch {
     return observation;
   }
+}
+
+function organizerProjection(
+  native: Record<string, unknown>,
+  instance?: import("@musubi/types").ProviderRsvpInstance,
+) {
+  if (!instance) return googleReminderEventEvidence(native);
+  const {
+    recurringEventId: _parent,
+    originalStartTime: _slot,
+    ...content
+  } = native;
+  return {
+    ...googleReminderEventEvidence(content),
+    externalSeriesID: instance.externalSeriesID,
+    originalStart: instance.originalStart,
+  };
 }

@@ -254,6 +254,8 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
       date={date}
       events={workspace.mergedEvents?.events ?? []}
       tasks={tasksQuery.data?.tasks ?? []}
+      calendarsResolved={workspace.calendars.isSuccess && !workspace.calendars.isFetching && !workspace.calendars.isPlaceholderData}
+      tasksResolved={tasksQuery.isSuccess && !tasksQuery.isFetching && !tasksQuery.isPlaceholderData}
       isAdmin={isAdmin}
       isRefreshing={queries.some((query) => query.isFetching)}
       newerServer={newerServer}
@@ -269,11 +271,13 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
         return created;
       }}
       onUpdateTask={async (id, task) => {
-        const updated = await updateTask(id, task);
-        await queryClient.invalidateQueries({
-          queryKey: queryKeys.tasks(getServerOrigin(), userId),
-        });
-        return updated;
+        try {
+          return await updateTask(id, task);
+        } finally {
+          await queryClient.invalidateQueries({
+            queryKey: queryKeys.tasks(getServerOrigin(), userId),
+          });
+        }
       }}
       onRemoveTask={async (task) => {
         await removeTask(task.id);

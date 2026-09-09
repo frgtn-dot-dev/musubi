@@ -323,6 +323,7 @@ export const tasks = pgTable(
     calendarID: uuid("calendar_id")
       .references(() => calendars.id, { onDelete: "cascade" })
       .notNull(),
+    providerReadRetiredGeneration: integer("provider_read_retired_generation"),
     title: text("title").notNull(),
     description: text("description"),
     status: text("status")

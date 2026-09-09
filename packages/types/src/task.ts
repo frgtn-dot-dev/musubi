@@ -9,6 +9,7 @@ export const TaskStatusSchema = z.enum([
 
 export const TaskSchema = z.object({
   id: z.string(),
+  providerReadRetiredGeneration: z.number().int().positive().nullish().transform((value): number | null | undefined => value ?? undefined).optional(),
   creatorID: z.string(),
   calendarID: z.string(),
   title: z.string(),
@@ -27,10 +28,11 @@ export const TaskSchema = z.object({
 });
 
 export const TaskCreateSchema = TaskSchema.omit({
+  providerReadRetiredGeneration: true,
   creatorID: true,
   sequence: true,
 });
-export const TaskUpdateSchema = TaskCreateSchema.omit({ id: true });
+export const TaskUpdateSchema = TaskCreateSchema.omit({ id: true }).extend({ expectedProviderReadRetiredGeneration: z.number().int().nonnegative().optional() });
 
 export type TaskStatus = z.infer<typeof TaskStatusSchema>;
 export type Task = z.infer<typeof TaskSchema>;

@@ -113,6 +113,8 @@ type WorkspaceProps = {
   onUpdateTask?: (id: string, task: TaskUpdate) => Promise<Task>;
   onRemoveTask?: (task: Task) => Promise<void>;
   tasks?: Task[];
+  tasksResolved?: boolean;
+  calendarsResolved?: boolean;
   onDateChange: (date: string) => void;
   onForkEvent?: (input: {
     calendarId: string;
@@ -279,6 +281,8 @@ export function Workspace({
   onUpdateTask = unavailableTaskWrite,
   onRemoveTask = unavailableTaskWrite,
   tasks = [],
+  tasksResolved = false,
+  calendarsResolved = false,
   onAdoptSettings = ignoreSettings,
   onDateChange,
   onExportCalendar = unavailableExport,
@@ -1077,6 +1081,10 @@ export function Workspace({
         >
           {activeView === "tasks" ? (
             <TaskList
+              sourceTasks={tasks}
+              sourceCalendars={calendars}
+              calendarsResolved={calendarsResolved}
+              tasksResolved={tasksResolved}
               calendars={calendars.filter(
                 (calendar) =>
                   calendar.supportsTasks !== false &&

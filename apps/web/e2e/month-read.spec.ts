@@ -3745,15 +3745,18 @@ test("joins a calendar from a pasted cross-server invite link", async ({
 
 	const inviteInput = page.getByRole("textbox", { name: "Invite link" });
 	const openInvite = page.getByRole("button", { name: "Open invite" });
-	const [inputBox, buttonBox] = await Promise.all([
-		inviteInput.boundingBox(),
-		openInvite.boundingBox(),
-	]);
-	expect(
-		Math.abs(
-			inputBox!.y + inputBox!.height / 2 - (buttonBox!.y + buttonBox!.height / 2),
-		),
-	).toBeLessThanOrEqual(1);
+	// The dialog translates/scales while opening. Measure both siblings in one
+	// browser frame: separate boundingBox calls can sample different transforms.
+	const centerDifference = await inviteInput.evaluate((input) => {
+		const button = input.closest("form")?.querySelector('button[type="submit"]');
+		if (!button) throw new Error("Invite submit button is missing");
+		const inputBox = input.getBoundingClientRect();
+		const buttonBox = button.getBoundingClientRect();
+		return Math.abs(
+			inputBox.y + inputBox.height / 2 - (buttonBox.y + buttonBox.height / 2),
+		);
+	});
+	expect(centerDifference).toBeLessThanOrEqual(1);
 
 	await inviteInput.fill(`https://friends.example/invite/${token}`);
 	await openInvite.click();
@@ -8901,7 +8904,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
   }
 }
 
-for (const provider of ["google", "microsoft"] as const) {
+for (const provider of ["google", "microsoft", "caldav"] as const) {
 for (const mode of ["compact", "generated", "full"] as const) {
   test(`${provider} editor privacy refresh preserves typed deltas (${mode})`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: mode === "generated" ? 390 : 1280, height: 900 });
@@ -8944,8 +8947,8 @@ for (const mode of ["compact", "generated", "full"] as const) {
     const emit = () => page.evaluate(() => {
       (window as unknown as { privacyStream: { onmessage: (event: { data: string }) => void } }).privacyStream.onmessage({ data: JSON.stringify({ type: "external_sync" }) });
     });
-    current = { ...current, title: provider === "microsoft" ? "Public permitted title" : "Busy", description: null, location: null, url: null, organizer: "", revision: 3, providerReadRetiredRevision: 2 };
-    source = { ...source, role: provider === "microsoft" ? "owner" : "viewer" };
+    current = { ...current, title: provider !== "google" ? "Public permitted title" : "Busy", description: null, location: null, url: null, organizer: "", revision: 3, providerReadRetiredRevision: 2 };
+    source = { ...source, role: provider !== "google" ? "owner" : "viewer" };
     await emit();
     if (provider === "google") {
       await expect(page.getByRole("textbox", { name: "Event title" })).toHaveCount(0);
@@ -8962,7 +8965,7 @@ for (const mode of ["compact", "generated", "full"] as const) {
     await page.screenshot({ path: testInfo.outputPath(`${provider}-editor-${mode}.png`), fullPage: false });
     if (mode !== "full") {
       await page.keyboard.press("Escape");
-      await expect(page.getByRole("button", { name: provider === "microsoft" ? /Public permitted title/ : /Busy/ }).first()).toBeFocused();
+      await expect(page.getByRole("button", { name: provider !== "google" ? /Public permitted title/ : /Busy/ }).first()).toBeFocused();
     }
     await expect(page.locator("vite-error-overlay")).toHaveCount(0);
     expect(errors).toEqual([]);
@@ -9617,3 +9620,86 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (con
     await expect(trigger).toBeFocused(); expect(errors).toEqual([]);
   });
 }
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (const action of ["update", "delete"] as const) {
+  test(`Google bound occurrence organizer ${action}: ${theme} ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 }); await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const calendarID = "00000000-0000-4000-8000-000000000391", eventID = "00000000-0000-4000-8000-000000000392", parentID = "00000000-0000-4000-8000-000000000393";
+    const saved = { ...event(eventID, "Bound organizer occurrence", calendarID, "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z"), revision: 4, seriesID: parentID, originalStart: { kind: "instant", value: "2026-07-25T09:00:00.000Z" }, timeModel: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-07-26T11:00:00.000", endLocal: "2026-07-26T12:00:00.000" } };
+    const master = { ...saved, id: parentID, title: "Organizer series", revision: 9, seriesID: null, originalStart: null, recurrence: "RRULE:FREQ=DAILY;COUNT=3" };
+    await mockAuthenticatedReads(page, { ...events, events: [master, saved] }, [{ ...calendars[0]!, id: calendarID, provider: "google", accountID: "fixture", accountLabel: "Fixture" }]);
+    await page.route(`**/api/v1/events/${eventID}/provider-state`, route => respond(route, { state: { provider: "google", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "accepted" }], attendeesComplete: true, ownResponse: null, reminders: { provider: "google", useDefault: true, overrides: [] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] }, version: "a".repeat(64), organizerEdit: { provider: "google", calendarID, expectedRevision: 4, scope: "occurrence", instanceVersion: "b".repeat(64) } }));
+    const writes: any[] = [], errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await page.route("**/api/v1/provider-organizer", route => { const body = route.request().postDataJSON(); writes.push(body); return respond(route, { operationID: body.operationID, eventID: body.eventID, replayed: false, status: "pending", localCommitted: true, notificationDelivery: "unknown" }, 202); });
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    await page.getByRole("button", { name: /Bound organizer occurrence/ }).first().click();
+    const trigger = page.getByRole("button", { name: "Manage this occurrence", exact: true }); await trigger.click();
+    const editor = page.getByRole("dialog", { name: "Manage this occurrence", exact: true });
+    await expect(editor.getByLabel("Start", { exact: true })).toHaveCount(0);
+    await expect(editor.getByLabel("All day", { exact: true })).toHaveCount(0);
+    await expect(editor.getByLabel("Guest email addresses")).toHaveCount(0);
+    await expectNoAccessibilityViolations(page);
+    expect(await editor.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    if (action === "update") {
+      await editor.getByRole("textbox", { name: "Title", exact: true }).fill("Changed occurrence");
+      await editor.getByRole("button", { name: "Save and notify guests" }).press("Enter");
+    } else {
+      await editor.getByRole("button", { name: "Cancel this occurrence and notify guests" }).click();
+      expect(writes).toHaveLength(0);
+      await page.getByRole("dialog", { name: "Cancel this occurrence", exact: true }).getByRole("button", { name: "Cancel this occurrence and notify guests" }).press("Enter");
+    }
+    await expect(editor.getByRole("status")).toContainText("Guest notification delivery remains unknown");
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({ eventID, calendarID, action, provider: "google", sendUpdates: "all", scope: "occurrence", expectedRevision: 4, expectedInstanceVersion: "b".repeat(64) });
+    if (action === "update") expect(writes[0].patch).toEqual({ title: "Changed occurrence" });
+    expect(writes[0]).not.toHaveProperty("originalStart"); expect(writes[0]).not.toHaveProperty("guests");
+    await editor.screenshot({ path: `/tmp/musubi-k12-live/google-organizer-instance-${action}-${theme}.png` });
+    await editor.getByRole("button", { name: "Close", exact: true }).press("Space");
+    await expect(trigger).toBeFocused(); expect(errors).toEqual([]);
+  });
+}
+
+
+test("CalDAV task editor retires coalesced baseline and preserves explicit clear", async ({ page }, testInfo) => {
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.addInitScript(() => {
+    class TaskPrivacyStream {
+      onmessage: ((event: { data: string }) => void) | null = null;
+      readyState = 1;
+      constructor() { (window as unknown as { taskPrivacyStream: TaskPrivacyStream }).taskPrivacyStream = this; }
+      close() { this.readyState = 2; }
+      addEventListener() {}
+      removeEventListener() {}
+    }
+    (window as unknown as { EventSource: unknown }).EventSource = TaskPrivacyStream;
+  });
+  await mockAuthenticatedReads(page, events, [{ ...calendars[0]!, provider: "caldav", supportsTasks: true, role: "owner" }]);
+  let current = { id: "11111111-1111-4111-8111-111111111111", creatorID: "alex", calendarID: "personal", title: "Private task baseline", description: "Private copied notes", status: "needs-action", isAllDay: false, sequence: 3, percentComplete: 0, priority: 0, providerReadRetiredGeneration: null as number | null };
+  await page.route("**/api/v1/tasks", route => respond(route, { tasks: [current] }));
+  const writes: Record<string, unknown>[] = [];
+  await page.route("**/api/v1/tasks/*", route => {
+    writes.push(route.request().postDataJSON());
+    return respond(route, { ...current, ...writes.at(-1) });
+  });
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/tasks?date=2026-07-26`);
+  await page.getByRole("button", { name: /Private task baseline/ }).click();
+  await page.getByRole("textbox", { name: "Notes", exact: true }).fill("");
+  const emit = () => page.evaluate(() => (window as unknown as { taskPrivacyStream: { onmessage: (event: { data: string }) => void } }).taskPrivacyStream.onmessage({ data: JSON.stringify({ type: "external_sync" }) }));
+  current = { ...current, title: "Fresh permitted task", description: "Fresh copied notes", providerReadRetiredGeneration: 1 };
+  await emit();
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Fresh permitted task");
+  await expect(page.getByRole("textbox", { name: "Notes", exact: true })).toHaveValue("");
+  current = { ...current, title: "Second permitted task", description: "Second copied notes", providerReadRetiredGeneration: 2 };
+  await emit();
+  await expect(page.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Second permitted task");
+  await expect(page.getByRole("textbox", { name: "Notes", exact: true })).toHaveValue("");
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath("caldav-task-retirement.png") });
+  await page.getByRole("button", { name: "Save task", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Edit task" })).toHaveCount(0);
+  expect(writes).toEqual([expect.objectContaining({ title: "Second permitted task", description: null, expectedProviderReadRetiredGeneration: 2 })]);
+  await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

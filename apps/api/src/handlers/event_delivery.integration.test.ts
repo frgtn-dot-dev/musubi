@@ -5,9 +5,12 @@ import { and, eq, inArray } from "drizzle-orm";
 import {
   db,
   account,
+  caldavAccounts,
   user,
   events,
   calendarMembers,
+  calendarEvents,
+  externalEvents,
   externalCalendars,
   eventOutbox,
   createCalendar,
@@ -147,13 +150,17 @@ async function main() {
           calendarID: calendar.id,
           userID: person.id,
           provider,
-          accountID: `private-account-${randomUUID()}`,
+          accountID: randomUUID(),
           externalCalendarID: `private-calendar-${randomUUID()}`,
         })
         .returning();
       // Receipt title projection requires a real current connected account,
       // including legacy links whose access discovery has not run yet.
-      await db.insert(account).values({ id: randomUUID(), accountId: link.accountID, providerId: provider, userId: person.id });
+      if (provider === "caldav") {
+        await db.insert(caldavAccounts).values({ id: link.accountID, userID: person.id, serverUrl: "https://fixture.invalid", username: person.id, encryptedPassword: "unused-fixture" });
+      } else {
+        await db.insert(account).values({ id: randomUUID(), accountId: link.accountID, providerId: provider, userId: person.id });
+      }
       return { calendar, link };
     };
     const google = await destination(owner, "Google", "google");
@@ -269,12 +276,45 @@ async function main() {
     ]) {
       assert.equal(JSON.stringify(otherInbox.body).includes(forbidden), false);
     }
-    // Discovery reads retained intent content, never a newer private event title.
+    // CalDAV projects current readable content, without rewriting accepted intent.
     await db
       .update(events)
       .set({ title: "New private content" })
       .where(eq(events.id, value.id));
-    assert.deepEqual((await inbox(other)).body, otherInbox.body);
+    assert.deepEqual((await inbox(other)).body.items, [
+      { eventId: value.id, savedTitle: "New private content" },
+    ]);
+    assert.equal((await db.select().from(eventOutbox).where(eq(eventOutbox.id, blocker.id)))[0]!.payload.event.title, value.title);
+
+    // The recipient's connected account and old native mapping survive unlink.
+    // Neither authorizes future changes to an event now private to its creator.
+    const [retainedMapping] = await db.insert(externalEvents).values({
+      provider: "caldav", eventID: value.id, calendarID: shared.calendar.id,
+      externalCalendarID: shared.link.externalCalendarID,
+      externalEventID: "retained-shared-resource", etag: '"retained"',
+    }).returning();
+    const [retainedReceipt] = await db.select().from(eventOutbox).where(eq(eventOutbox.id, blocker.id));
+    await db.delete(calendarEvents).where(and(
+      eq(calendarEvents.eventID, value.id),
+      inArray(calendarEvents.calendarID, [shared.calendar.id, hidden.calendar.id]),
+    ));
+    await db.update(events).set({ title: "Creator-only title after unlink" }).where(eq(events.id, value.id));
+    const [privateEvent] = await db.select().from(events).where(eq(events.id, value.id));
+    assert.equal(privateEvent!.providerReadRetiredRevision, null, "No provider read retirement is involved");
+    assert.equal((await db.select().from(caldavAccounts).where(eq(caldavAccounts.id, shared.link.accountID))).length, 1);
+    assert.deepEqual((await inbox(other)).body.items, [
+      { eventId: value.id, savedTitle: "Calendar event" },
+    ], "An unlinked recipient cannot discover subsequent private title changes");
+    assert.deepEqual((await db.select().from(externalEvents).where(eq(externalEvents.id, retainedMapping!.id)))[0], retainedMapping);
+    assert.deepEqual((await db.select().from(eventOutbox).where(eq(eventOutbox.id, blocker.id)))[0], retainedReceipt);
+    await db.insert(calendarEvents).values([
+      { eventID: value.id, calendarID: shared.calendar.id },
+      { eventID: value.id, calendarID: hidden.calendar.id },
+    ]);
+    assert.deepEqual((await inbox(other)).body.items, [
+      { eventId: value.id, savedTitle: "Creator-only title after unlink" },
+    ], "Restoring actual destination visibility permits current content again");
+
 
     assert.equal((await read(owner, value.id, false)).status, 401);
     assert.equal((await read(owner, "invalid")).status, 400);

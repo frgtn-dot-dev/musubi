@@ -231,7 +231,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     }
     for (const event of events) {
       const origin = event.originCalendarID ? calendarsByID.get(event.originCalendarID) : undefined;
-      if (origin && ["google", "microsoft"].includes(origin.provider ?? "")) {
+      if (origin && ["google", "microsoft", "caldav"].includes(origin.provider ?? "")) {
         googleEventOrigins.set(event.id, { calendarID: origin.id, revision: event.revision ?? 0 });
         // Only a reconciled newer canonical row can revive this identity. Old
         // opened snapshots retain their retirement cutoff and remain closed.
@@ -531,6 +531,6 @@ useEventsStore.subscribe(state => {
   const calendarsByID = new Map(useCalendarsStore.getState().calendars.map(calendar => [calendar.id, calendar]));
   for (const event of state.events) {
     const origin = event.originCalendarID ? calendarsByID.get(event.originCalendarID) : undefined;
-    if (origin && ["google", "microsoft"].includes(origin.provider ?? "")) googleEventOrigins.set(event.id, { calendarID: origin.id, revision: event.revision ?? 0 });
+    if (origin && ["google", "microsoft", "caldav"].includes(origin.provider ?? "")) googleEventOrigins.set(event.id, { calendarID: origin.id, revision: event.revision ?? 0 });
   }
 });

@@ -7,7 +7,7 @@ export type MicrosoftCalendarAccess = { canEdit: boolean | null; canViewPrivateI
 const flag = (value: boolean | null) => value === true ? "yes" : value === false ? "no" : "unknown";
 export function microsoftAccessRole(value: MicrosoftCalendarAccess) { return `microsoft:private=${flag(value.canViewPrivateItems)};edit=${flag(value.canEdit)}`; }
 export function microsoftPrivateAccess(role: string | null): boolean | null { return role?.startsWith("microsoft:private=yes;") ? true : role?.startsWith("microsoft:private=no;") ? false : null; }
-export function hasFullProviderReadAccess(provider: string, role: string | null) { return provider === "microsoft" ? microsoftPrivateAccess(role) === true : ["owner", "writer"].includes(role ?? ""); }
+export function hasFullProviderReadAccess(provider: string, role: string | null) { return provider === "caldav" ? role !== null && role.startsWith("caldav:read=") && !role.startsWith("caldav:read=no;") : provider === "microsoft" ? microsoftPrivateAccess(role) === true : ["owner", "writer"].includes(role ?? ""); }
 /** Successful discovery records write and private-read evidence independently.
  * Only explicit loss of private reads retires content; write loss is not privacy.
  */

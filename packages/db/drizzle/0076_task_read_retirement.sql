@@ -1,0 +1,1 @@
+ALTER TABLE "tasks" ADD COLUMN "provider_read_retired_generation" integer;

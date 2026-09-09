@@ -21,7 +21,7 @@ export type TaskMutation = Pick<
 export async function createTask(
   values: TaskMutation & Pick<NewTask, "id" | "creatorID">,
 ) {
-  const [task] = await db.insert(tasks).values(values).returning();
+  const [task] = await db.insert(tasks).values({ ...values, providerReadRetiredGeneration: null }).returning();
   return task;
 }
 
@@ -63,11 +63,11 @@ export async function getUserTasks(userID: string) {
   return rows.map(({ task }) => task);
 }
 
-export async function updateTask(id: string, values: TaskMutation) {
+export async function updateTask(id: string, values: TaskMutation, expectedProviderReadRetiredGeneration = 0) {
   const [task] = await db
     .update(tasks)
-    .set({ ...values, sequence: sql`${tasks.sequence} + 1` })
-    .where(and(eq(tasks.id, id), isNull(tasks.deletedAt)))
+    .set({ ...values, providerReadRetiredGeneration: sql`${tasks.providerReadRetiredGeneration}`, sequence: sql`${tasks.sequence} + 1` })
+    .where(and(eq(tasks.id, id), isNull(tasks.deletedAt), sql`coalesce(${tasks.providerReadRetiredGeneration}, 0) = ${expectedProviderReadRetiredGeneration}`, sql`not exists (select 1 from external_calendars source where source.calendar_id = ${tasks.calendarID} and source.provider = 'caldav' and source.provider_access_role like 'caldav:read=no;%')`))
     .returning();
   return task ?? null;
 }

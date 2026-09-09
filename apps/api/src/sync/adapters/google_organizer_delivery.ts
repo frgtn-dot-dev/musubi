@@ -6,6 +6,7 @@ import {
   GoogleOrganizerRequestSchema,
   OrganizerDispatchSchema,
   type ProviderOrganizerIntent,
+  type ProviderRsvpInstance,
 } from "@musubi/types";
 import {
   googleEventCreateID,
@@ -16,6 +17,7 @@ import {
   ProviderEventWriteError,
 } from "../event_write";
 import {
+  assertGoogleOrganizerInstanceIdentity,
   googleOrganizerNative,
   googleOrganizerBody,
   matchesGoogleOrganizer,
@@ -52,7 +54,7 @@ export function googleOrganizerTransport(
     if (primary.id.toLowerCase() !== calendar.toLowerCase())
       throw new EventWriteError("organizer", "denied");
     const url = `${root}/calendars/${encodeURIComponent(calendar)}/events`;
-    async function read(id: string) {
+    async function read(id: string, instance?: ProviderRsvpInstance) {
       const result = await fetch(`${url}/${encodeURIComponent(id)}`, {
         headers,
         redirect: "error",
@@ -63,8 +65,8 @@ export function googleOrganizerTransport(
       const raw = await result.json();
       if (raw?.id !== id)
         throw new ProviderEventWriteError("provider-conflict");
-      if (raw.status === "cancelled") return null;
-      return googleOrganizerNative(raw, primary.id);
+      if (raw.status === "cancelled") { if (instance) assertGoogleOrganizerInstanceIdentity(raw, instance); return null; }
+      return googleOrganizerNative(raw, primary.id, instance);
     }
     return {
       email: primary.id,
@@ -75,8 +77,9 @@ export function googleOrganizerTransport(
         accepted: () => Promise<void>,
       ) {
         const request = GoogleOrganizerRequestSchema.parse(saved.request);
+        if ((request.action !== "create" && request.scope === "occurrence") !== !!saved.instance) throw new ProviderEventWriteError("provider-conflict");
         const baseline = saved.baseline
-          ? googleOrganizerNative(saved.baseline, primary.id)
+          ? googleOrganizerNative(saved.baseline, primary.id, saved.instance)
           : null;
         const body = googleOrganizerBody(request, baseline, primary.id);
         if (!isDeepStrictEqual(body, saved.desired))
@@ -90,10 +93,10 @@ export function googleOrganizerTransport(
           request.action === "create"
             ? googleEventCreateID({ operationID: request.operationID })
             : baseline!.id;
-        const current = await read(id);
+        const current = await read(id, saved.instance);
         if (
           current &&
-          matchesGoogleOrganizer(current, request, baseline, primary.id)
+          matchesGoogleOrganizer(current, request, baseline, primary.id, saved.instance)
         )
           return { kind: "observed" as const, native: current };
         if (
@@ -154,12 +157,12 @@ export function googleOrganizerTransport(
           /* Authoritative read follows. */
         }
         await accepted();
-        const observed = await read(id);
+        const observed = await read(id, saved.instance);
         if (request.action === "delete" && !observed)
           return { kind: "deleted" as const };
         if (
           observed &&
-          matchesGoogleOrganizer(observed, request, baseline, primary.id)
+          matchesGoogleOrganizer(observed, request, baseline, primary.id, saved.instance)
         )
           return { kind: "observed" as const, native: observed };
         return {

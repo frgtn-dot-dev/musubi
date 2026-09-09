@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { readProviderRsvpInstance } from "./provider-rsvp-instance";
 import { isDeepStrictEqual } from "node:util";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { config } from "@musubi/config";
@@ -7,6 +9,8 @@ import {
   EventWriteError,
   OrganizerDispatchSchema,
   ProviderOrganizerRequestSchema,
+  ProviderRsvpInstanceSchema,
+  type ProviderRsvpInstance,
   type Event,
   type ProviderOrganizerIntent,
   type ProviderOrganizerRequest,
@@ -39,6 +43,7 @@ export type OrganizerContext = {
   link: typeof externalCalendars.$inferSelect;
   event: Event | null;
   mapping: typeof externalEvents.$inferSelect | null;
+  instance?: ProviderRsvpInstance;
 };
 function enabled(provider: string) {
   if (
@@ -133,6 +138,76 @@ async function source(
     throw new EventWriteError("organizer", "denied");
   return target.link;
 }
+function instanceVersion(instance: ProviderRsvpInstance) {
+  return createHash("sha256")
+    .update(JSON.stringify(ProviderRsvpInstanceSchema.parse(instance)))
+    .digest("hex");
+}
+/** Read-only observation helper; admission rechecks this opaque parent/slot token. */
+export async function readProviderOrganizerInstanceVersion(
+  actorID: string,
+  eventID: string,
+) {
+  return db.transaction(async (tx) => {
+    const [event] = await tx
+      .select()
+      .from(events)
+      .where(eq(events.id, eventID));
+    if (!event?.originCalendarID) return undefined;
+    await source(tx, actorID, event.originCalendarID);
+    const maps = await tx
+      .select()
+      .from(externalEvents)
+      .where(
+        and(
+          eq(externalEvents.eventID, eventID),
+          eq(externalEvents.calendarID, event.originCalendarID),
+        ),
+      );
+    if (maps.length !== 1) return undefined;
+    const instance = await readProviderRsvpInstance(
+      tx,
+      event,
+      maps[0]!,
+      actorID,
+    );
+    return instance ? instanceVersion(instance) : undefined;
+  });
+}
+/** Match the parent's generation before locking the child, consistently with scope writes. */
+async function lockOrganizerParent(
+  tx: DbTransaction,
+  eventID: string,
+  expectedParentID?: string,
+) {
+  const [before] = await tx
+    .select({ seriesID: events.seriesID })
+    .from(events)
+    .where(eq(events.id, eventID));
+  const parentID = expectedParentID ?? before?.seriesID;
+  if (parentID) {
+    await tx
+      .select({ id: events.id })
+      .from(events)
+      .where(eq(events.id, parentID))
+      .for("update");
+    // Retain the exact mapping/link generation through dispatch marker commit;
+    // a plain joined read alone would permit concurrent mapping replacement.
+    await tx
+      .select({ id: externalEvents.id })
+      .from(externalEvents)
+      .where(eq(externalEvents.eventID, parentID))
+      .orderBy(externalEvents.id)
+      .for("share");
+    await tx
+      .select({ calendarID: calendarEvents.calendarID })
+      .from(calendarEvents)
+      .where(eq(calendarEvents.eventID, parentID))
+      .orderBy(calendarEvents.calendarID)
+      .for("share");
+  }
+  return parentID;
+}
 export async function prepareProviderOrganizer(
   actorID: string,
   input: unknown,
@@ -179,6 +254,7 @@ export async function prepareProviderOrganizer(
         );
       return { kind: "saved", receipt: receipt(previous, true) };
     }
+    const lockedParentID = await lockOrganizerParent(tx, request.eventID);
     const [current] = await tx
       .select()
       .from(events)
@@ -186,6 +262,7 @@ export async function prepareProviderOrganizer(
       .for("update");
     let event: Event | null = null,
       mapping: typeof externalEvents.$inferSelect | null = null;
+    let instance: ProviderRsvpInstance | undefined;
     if (request.action === "create") {
       if (current)
         throw new BadRequestError("This event identity already exists.");
@@ -195,8 +272,8 @@ export async function prepareProviderOrganizer(
         current.deletedAt ||
         current.originCalendarID !== request.calendarID ||
         current.isCanceled ||
-        current.seriesID ||
-        current.originalStart ||
+        (current.seriesID !== lockedParentID &&
+          (current.seriesID || lockedParentID)) ||
         current.recurrence ||
         current.revision !== request.expectedRevision
       )
@@ -231,11 +308,18 @@ export async function prepareProviderOrganizer(
         !mapping?.etag ||
         mapping.provider !== request.provider ||
         mapping.externalCalendarID !== link.externalCalendarID ||
-        mapping.externalSeriesID ||
-        mapping.originalStart ||
         providerStateVersion(mapping) !== request.expectedStateVersion
       )
         throw new BadRequestError("Provider source changed. Sync and reopen.");
+      instance = await readProviderRsvpInstance(tx, current, mapping!, actorID);
+      if (
+        !!instance !== (request.provider === "google" && request.scope === "occurrence") ||
+        (instance &&
+          (request.provider !== "google" || instanceVersion(instance) !== request.expectedInstanceVersion))
+      )
+        throw new BadRequestError(
+          "The parent or occurrence binding changed. Sync and reopen.",
+        );
       const [pending] = await tx
         .select({ id: eventOutbox.id })
         .from(eventOutbox)
@@ -255,6 +339,7 @@ export async function prepareProviderOrganizer(
       link,
       event,
       mapping,
+      ...(instance ? { instance } : {}),
     };
     if (!prepared) return { kind: "prepared", context };
     if (!isDeepStrictEqual(context, prepared.context))
@@ -328,6 +413,7 @@ export async function prepareProviderOrganizer(
       desired: prepared.desired,
       mappingID: mapping?.id ?? null,
       sourceEvent: event ?? saved,
+      ...(instance ? { instance } : {}),
     };
     await appendEventOutbox(tx, saved, [
       {
@@ -431,6 +517,34 @@ async function activeSource(tx: DbTransaction, row: EventOutboxRow) {
       : maps.length !== 0
   )
     throw new BadRequestError("Organizer mapping changed.");
+  if (intent.instance) {
+    if (
+      !map ||
+      event.seriesID !== intent.instance.seriesID ||
+      !isDeepStrictEqual(event.originalStart, intent.instance.originalStart)
+    )
+      throw new BadRequestError("Organizer occurrence identity changed.");
+    // Only this exact own cancellation revision may retain the active slot proof
+    // after local cancellation. RSVP's active-child admission stays unchanged.
+    const bindingEvent =
+      row.action === "delete"
+        ? { ...event, isCanceled: false, deletedAt: null }
+        : event;
+    const currentInstance = await readProviderRsvpInstance(
+      tx,
+      bindingEvent,
+      map,
+      row.userID,
+    );
+    if (!isDeepStrictEqual(currentInstance, intent.instance))
+      throw new BadRequestError("Organizer parent changed.");
+  } else if (
+    event.seriesID ||
+    event.originalStart ||
+    map?.externalSeriesID ||
+    map?.originalStart
+  )
+    throw new BadRequestError("Organizer occurrence requires explicit scope.");
 }
 export async function withProviderOrganizerLease<T>(
   row: EventOutboxRow,
@@ -444,6 +558,11 @@ export async function withProviderOrganizerLease<T>(
     if (!identity)
       throw new BadRequestError("Organizer native identity is unavailable.");
     await lockExternalEventIdentity(tx, row.externalCalendarLinkID, identity);
+    await lockOrganizerParent(
+      tx,
+      row.eventID,
+      row.payload.organizer?.instance?.seriesID,
+    );
     await tx
       .select({ id: events.id })
       .from(events)

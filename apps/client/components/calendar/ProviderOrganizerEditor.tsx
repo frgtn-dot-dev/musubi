@@ -175,6 +175,7 @@ export function ProviderOrganizerEditor({
       setBusy(false);
     }
   }
+  const occurrence = provider === "google" && observation?.organizerEdit?.scope === "occurrence";
   const locked = busy || submitted || !canUpdate,
     copy = { fontFamily: fonts.sans, color: colors.fg2 };
   const fields: [keyof OrganizerDraft, string][] = [
@@ -235,7 +236,7 @@ export function ProviderOrganizerEditor({
           <View style={styles.modalHandle} />
           <View style={styles.modalTitleRow}>
             <Text accessibilityRole="header" style={styles.modalTitle}>
-              {`${event ? "Manage" : "Create"} ${provider === "caldav" ? "CalDAV" : "Google"} meeting`}
+              {occurrence ? "Manage this occurrence" : `${event ? "Manage" : "Create"} ${provider === "caldav" ? "CalDAV" : "Google"} meeting`}
             </Text>
           </View>
           <ScrollView
@@ -253,7 +254,7 @@ export function ProviderOrganizerEditor({
               </Text>
             ) : (
               <>
-                {fields.map(([key, label]) => (
+                {fields.filter(([key]) => !occurrence || ["title", "description", "location"].includes(key)).map(([key, label]) => (
                   <View key={key}>
                     <Text style={copy}>{label}</Text>
                     <TextInput
@@ -268,9 +269,9 @@ export function ProviderOrganizerEditor({
                     />
                   </View>
                 ))}
-                {provider === "caldav" && event ? (
+                {(provider === "caldav" && event) || occurrence ? (
                   <Text style={copy}>
-                    Meeting time and guests are preserved.
+                    {occurrence ? "Only this occurrence will change. Series timing and guests stay unchanged." : "Meeting time and guests are preserved."}
                   </Text>
                 ) : (
                   <>
@@ -307,13 +308,13 @@ export function ProviderOrganizerEditor({
                 {canDelete && !submitted && (
                   <Btn
                     variant="secondary"
-                    label="Cancel meeting and notify guests"
+                    label={occurrence ? "Cancel this occurrence and notify guests" : "Cancel meeting and notify guests"}
                     onPress={() =>
                       confirm(
                         {
-                          title: `Cancel ${provider === "caldav" ? "CalDAV" : "Google"} meeting`,
-                          message: `${provider === "caldav" ? "The CalDAV server" : "Google"} will be asked to cancel this meeting and notify all guests. Guest notification delivery cannot be verified.`,
-                          confirmLabel: "Cancel meeting and notify guests",
+                          title: occurrence ? "Cancel this occurrence" : `Cancel ${provider === "caldav" ? "CalDAV" : "Google"} meeting`,
+                          message: `${provider === "caldav" ? "The CalDAV server" : "Google"} will be asked to cancel ${occurrence ? "only this occurrence" : "this meeting"} and notify all guests. Guest notification delivery cannot be verified.`,
+                          confirmLabel: occurrence ? "Cancel this occurrence and notify guests" : "Cancel meeting and notify guests",
                         },
                         () => {
                           void send("delete");

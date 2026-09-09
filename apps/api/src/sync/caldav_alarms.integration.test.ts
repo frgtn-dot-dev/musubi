@@ -82,8 +82,8 @@ async function main() {
           config.api.caldavAlarmEditsEnabled = false; config.api.providerReminderEditsEnabled = false; config.api.eventTimeEditsEnabled = false;
           mode = "lookup-missing"; lookupReads = 0;
           // Discovery sees the collection; the real adapter's later authenticated
-          // WebDAV lookup sees no calendars and returns no authoritative reset.
-          await syncProvider({ ...caldavAdapter, listCalendars: async () => ({ calendars: [{ externalId: collection, name: "Fixture", color: "#7A8BA3", supportsEvents: true, supportsTasks: true }], taskListsComplete: true }) }, owner, { id: account.id, label: "Fixture" });
+          // WebDAV lookup is incomplete and must fail without an authoritative reset.
+          await assert.rejects(syncProvider({ ...caldavAdapter, listCalendars: async () => ({ calendars: [{ externalId: collection, name: "Fixture", color: "#7A8BA3", supportsEvents: true, supportsTasks: true }], taskListsComplete: true }) }, owner, { id: account.id, label: "Fixture" }), /CalDAV property response is incomplete or ambiguous/);
           assert.ok(lookupReads > 0, "Real CalDAV fetchChanges performs its missing collection lookup");
           assert.deepEqual(await snapshot(), before, "Nonauthoritative missing lookup cannot sweep events or tasks with a null cursor");
           assert.equal(puts, 0);

@@ -77,6 +77,7 @@ export type CreatedEventEvidence = {
 };
 
 export type ExternalTaskRef = {
+  beforeMutation?: () => Promise<void>;
   externalTaskId: string;
   etag?: string | null;
   icalUid?: string | null;
@@ -104,6 +105,7 @@ export type ExternalCalendarInfo = {
   // Provider says the user can't write (holidays, subscribed calendars, …) →
   // mirror becomes read-only even for its owner.
   readOnly?: boolean;
+  caldavAccess?: { read: boolean | null; readFreeBusy: boolean | null };
   microsoftAccess?: { canEdit: boolean | null; canViewPrivateItems: boolean | null };
   googleAccessRole?: "owner" | "writer" | "reader" | "writerWithoutPrivateAccess" | "unknown";
 };
@@ -239,6 +241,7 @@ export type CalendarAdapter = {
     accountId: string,
     externalCalendarId: string,
     task: Task,
+    beforeMutation?: () => Promise<void>,
   ): Promise<ExternalTaskRef>;
   pushTaskUpdate?(
     userID: string,

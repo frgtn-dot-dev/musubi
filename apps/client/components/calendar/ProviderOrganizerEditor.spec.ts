@@ -267,3 +267,25 @@ it("keeps exact cancellation-only retry available after an ambiguous response", 
   expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
   expect(h.save.mock.calls[1][0]).toMatchObject({ action: "delete", provider: "caldav", notificationPolicy: "server-invite" });
 });
+
+it("uses explicit bound-occurrence content scope and omits time controls", async () => {
+  h.save.mockResolvedValue({ status: "pending" });
+  const child = { ...event, seriesID: "00000000-0000-4000-8000-000000000002", originalStart: { kind: "instant" as const, value: "2026-09-09T09:00:00.000Z" } };
+  const observed = { ...observation, organizerEdit: { ...observation.organizerEdit!, scope: "occurrence" as const, instanceVersion: "b".repeat(64) } };
+  let tree = render(child, observed);
+  expect(nodes(tree).filter(node => node.type === "TextInput").map(node => node.props.accessibilityLabel)).toEqual(["Title", "Notes", "Location"]);
+  nodes(tree).find(node => node.type === "TextInput" && node.props.accessibilityLabel === "Title")!.props.onChangeText("Changed occurrence");
+  tree = render(child, observed);
+  button(tree, "Save and notify guests").onPress(); await settle();
+  expect(h.save.mock.calls[0][0]).toMatchObject({ eventID: child.id, expectedRevision: 7, scope: "occurrence", expectedInstanceVersion: "b".repeat(64), patch: { title: "Changed occurrence" } });
+  expect(h.save.mock.calls[0][0].patch).not.toHaveProperty("time");
+});
+it("confirms cancellation of only this occurrence before dispatching its bound request", async () => {
+  h.save.mockResolvedValue({ status: "pending" });
+  const observed = { ...observation, organizerEdit: { ...observation.organizerEdit!, scope: "occurrence" as const, instanceVersion: "b".repeat(64) } };
+  button(render(event, observed), "Cancel this occurrence and notify guests").onPress();
+  expect(h.save).not.toHaveBeenCalled();
+  expect(h.confirm.mock.calls[0][0].title).toBe("Cancel this occurrence");
+  h.confirm.mock.calls[0][1](); await settle();
+  expect(h.save.mock.calls[0][0]).toMatchObject({ action: "delete", scope: "occurrence", expectedInstanceVersion: "b".repeat(64) });
+});

@@ -113,10 +113,10 @@ async function main() {
         res.writeHead(status, { "content-type": "application/json" });
         res.end(JSON.stringify(value));
       };
-      const xml = (href: string, props: string, status = "200 OK") => {
+      const xml = (href: string, props: string, status = "200 OK", homeHref?: string) => {
         res.writeHead(207, { "content-type": "application/xml" });
         res.end(
-          `<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:response><d:href>${href}</d:href><d:propstat><d:prop>${props}</d:prop><d:status>HTTP/1.1 ${status}</d:status></d:propstat></d:response></d:multistatus>`,
+          `<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">${homeHref && homeHref !== href ? `<d:response><d:href>${homeHref}</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>` : ""}<d:response><d:href>${href}</d:href><d:propstat><d:prop>${props}</d:prop><d:status>HTTP/1.1 ${status}</d:status></d:propstat></d:response></d:multistatus>`,
         );
       };
       if (path.endsWith("/token")) {
@@ -230,6 +230,8 @@ async function main() {
           return xml(
             "/dav/cal/",
             '<d:resourcetype><d:collection/><c:calendar/></d:resourcetype><d:displayname>DAV fixture</d:displayname><c:supported-calendar-component-set><c:comp name="VEVENT"/></c:supported-calendar-component-set>',
+            "200 OK",
+            path, // Complete Depth:1 discovery includes the requested home itself.
           );
         return xml(
           path,

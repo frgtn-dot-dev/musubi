@@ -4,7 +4,7 @@ vi.mock("@/services/notifications", () => ({ cancelEventNotification: vi.fn().mo
 import { useEditComposerStore, useEventDetailStore, resetEventModalSnapshots } from "./useEventDetailStore";
 import { useEventsStore } from "./useEventsStore";
 import { useCalendarsStore } from "./useCalendarsStore";
-describe.each(["google", "microsoft"])("%s confirmed privacy retirement", provider => {
+describe.each(["google", "microsoft", "caldav"])("%s confirmed privacy retirement", provider => {
 const source = { id: "source", provider, role: "owner" } as any;
 const event = { creatorID: "owner", organizer: "owner", color: "red", start: new Date(), end: new Date(), isAllDay: false, isCanceled: false, id: "event", revision: 2, originCalendarID: "source", calendars: ["source"], title: "Private" } as any;
 beforeEach(() => { useEventsStore.getState().resetEvents(); useCalendarsStore.getState().loadCalendars([source]); });

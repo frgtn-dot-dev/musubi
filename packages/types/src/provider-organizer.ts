@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { EventTimeEditSchema } from "./event_time";
+import type { ProviderRsvpInstance } from "./provider-rsvp";
 import type { Event } from "./event";
 const time = EventTimeEditSchema.refine(
   (value) =>
@@ -25,44 +26,70 @@ const guest = z
     optional: z.boolean(),
   })
   .strict();
-export const GoogleOrganizerRequestSchema = z.discriminatedUnion("action", [
-  common
-    .extend({
-      action: z.literal("create"),
-      content: content.strict(),
-      time,
-      guests: z
-        .array(guest)
-        .min(1)
-        .max(100)
-        .refine(
-          (values) =>
-            new Set(values.map((value) => value.email)).size === values.length,
-          "Duplicate guest",
-        ),
-      color: z.string().max(64),
-    })
-    .strict(),
-  common
-    .extend({
-      action: z.literal("update"),
-      expectedRevision: z.number().int().positive(),
-      expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
-      patch: content
-        .partial()
-        .extend({ time: time.optional() })
-        .strict()
-        .refine((value) => Object.keys(value).length > 0, "Choose a change"),
-    })
-    .strict(),
-  common
-    .extend({
-      action: z.literal("delete"),
-      expectedRevision: z.number().int().positive(),
-      expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
-    })
-    .strict(),
-]);
+export const GoogleOrganizerRequestSchema = z
+  .discriminatedUnion("action", [
+    common
+      .extend({
+        action: z.literal("create"),
+        content: content.strict(),
+        time,
+        guests: z
+          .array(guest)
+          .min(1)
+          .max(100)
+          .refine(
+            (values) =>
+              new Set(values.map((value) => value.email)).size ===
+              values.length,
+            "Duplicate guest",
+          ),
+        color: z.string().max(64),
+      })
+      .strict(),
+    common
+      .extend({
+        action: z.literal("update"),
+        scope: z.literal("occurrence").optional(),
+        expectedInstanceVersion: z
+          .string()
+          .regex(/^[0-9a-f]{64}$/)
+          .optional(),
+        expectedRevision: z.number().int().positive(),
+        expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
+        patch: content
+          .partial()
+          .extend({ time: time.optional() })
+          .strict()
+          .refine((value) => Object.keys(value).length > 0, "Choose a change"),
+      })
+      .strict(),
+    common
+      .extend({
+        action: z.literal("delete"),
+        scope: z.literal("occurrence").optional(),
+        expectedInstanceVersion: z
+          .string()
+          .regex(/^[0-9a-f]{64}$/)
+          .optional(),
+        expectedRevision: z.number().int().positive(),
+        expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
+      })
+      .strict(),
+  ])
+  .superRefine((request, ctx) => {
+    if (request.action === "create") return;
+    if (
+      !!request.scope !== !!request.expectedInstanceVersion ||
+      (request.scope === "occurrence" &&
+        request.action === "update" &&
+        request.patch.time !== undefined)
+    )
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "A bound occurrence requires its exact observation and supports content changes only.",
+      });
+  });
 const caldavCommon = common
   .omit({ provider: true, sendUpdates: true })
   .extend({
@@ -149,6 +176,7 @@ export type ProviderOrganizerIntent = {
   desired: Record<string, unknown> | null;
   mappingID: string | null;
   sourceEvent: Event;
+  instance?: ProviderRsvpInstance;
   dispatch?: z.infer<typeof OrganizerDispatchSchema>;
 };
 export const ProviderOrganizerReceiptSchema = z

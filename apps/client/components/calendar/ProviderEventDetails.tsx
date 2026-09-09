@@ -4,7 +4,7 @@ import { ProviderReminderEditor } from "./ProviderReminderEditor";
 import { Btn } from "@/components/ui/Btn";
 import { remoteForCalendar } from "@/services/federation";
 import type { Event, ProviderEventStateResponse } from "@musubi/types";
-import { assertCaldavSeriesAlarmObservation, providerEventDetails } from "@musubi/calendar";
+import { assertCaldavSeriesAlarmObservation, canManageProviderOrganizer, providerEventDetails } from "@musubi/calendar";
 import { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { colors, fonts, styles } from "@/constants/theme";
@@ -41,6 +41,7 @@ export function ProviderEventDetailsBody({ event, userId, seriesMaster }: { seri
         if (!seriesMaster) throw new Error("Missing stored series master.");
         assertCaldavSeriesAlarmObservation(seriesMaster, observation);
       } else if (kind === "reminders" && observation.reminderEdit?.provider === "caldav" && observation.reminderEdit.scope === "series") throw new Error("Choose Series alarm settings explicitly.");
+      if (kind === "organizer" && (event.id !== targetID || !canManageProviderOrganizer(event, observation))) throw new Error("The stored meeting observation changed.");
       setResult({ key, ...observation });
       if ((kind === "organizer" ? observation.organizerEdit : kind === "reminders" ? observation.reminderEdit : observation.rsvpEdit) && observation.state && observation.version) setEditor({ kind, observation, ...(seriesAction ? { master: seriesMaster } : {}) });
       else setOpenError("This provider action is unavailable in the refreshed state.");
@@ -76,7 +77,7 @@ export function ProviderEventDetailsBody({ event, userId, seriesMaster }: { seri
     {current?.rsvpEdit && current.state && current.version && !event.recurrence ? <Btn label={event.seriesID ? "Respond to this occurrence" : current.rsvpEdit.provider === "microsoft" ? "Respond in Outlook" : current.rsvpEdit.provider === "caldav" ? "Respond in calendar" : "Respond in Google"} variant="secondary" loading={opening} onPress={() => void openEditor("rsvp")} /> : null}
     {editor?.kind === "reminders" ? <ProviderReminderEditor event={editor.master ?? { ...event, id: targetID }} observation={editor.observation} onClose={() => setEditor(undefined)} /> : null}
     {editor?.kind === "rsvp" ? <ProviderRsvpEditor event={editor.master ?? { ...event, id: targetID }} observation={editor.observation} onClose={() => setEditor(undefined)} /> : null}
-    {current?.organizerEdit && !event.seriesID && !event.recurrence && !remoteForCalendar(event.originCalendarID ?? event.calendars[0]) ? <Btn label={`Manage ${current.organizerEdit.provider === "caldav" ? "CalDAV" : "Google"} meeting`} variant="secondary" loading={opening} onPress={() => void openEditor("organizer")} /> : null}
+    {canManageProviderOrganizer(event, current) && event.id === targetID && !remoteForCalendar(event.originCalendarID ?? event.calendars[0]) ? <Btn label={current?.organizerEdit?.scope === "occurrence" ? "Manage this occurrence" : `Manage ${current?.organizerEdit?.provider === "caldav" ? "CalDAV" : "Google"} meeting`} variant="secondary" loading={opening} onPress={() => void openEditor("organizer")} /> : null}
     {editor?.kind === "organizer" && editor.observation.organizerEdit ? <ProviderOrganizerEditor event={event} calendarID={editor.observation.organizerEdit.calendarID} color={event.color} observation={editor.observation} onClose={() => setEditor(undefined)} /> : null}
   </View>;
 }
