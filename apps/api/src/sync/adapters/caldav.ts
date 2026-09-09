@@ -1,10 +1,11 @@
+import { restoreEventExdates } from "./caldav_event_ical";
 import { inspectCaldavAlarm, writeCaldavAlarm } from "./caldav_alarms";
 import type { CaldavAlarmIntent } from "@musubi/db";
 import { readCaldavRsvp, deliverCaldavRsvp } from "./caldav_rsvp_delivery";
 import { caldavEventState } from "./provider_event_state";
 import { caldavSeriesEvidence, caldavSeriesCreationEvidence, type CaldavSeriesSplit, caldavSeriesResolutionEvidence, caldavSeriesResourceURL, sameCaldavResource, type CaldavSeriesDeletion, type CaldavSeriesWrite, type CaldavSeriesEvidence, type CaldavSeriesIntent } from "./caldav_series";
 import ICAL from "ical.js";
-import { finiteSeriesFootprint, planEventScope } from "@musubi/calendar";
+import { caldavExdateRestoration, finiteSeriesFootprint, planEventScope } from "@musubi/calendar";
 import { randomUUID } from "crypto";
 import type { DAVCalendar, DAVCalendarObject, DAVResponse } from "tsdav";
 import {
@@ -952,7 +953,8 @@ export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baselin
   if (evidence.ref.externalEventId !== baseline.ref.externalEventId || evidence.ref.icalUid !== baseline.ref.icalUid || evidence.ref.etag !== baseline.ref.etag)
     throw new ProviderEventWriteError("provider-conflict");
   const cleanPatch = Object.fromEntries(Object.entries(patch).filter(([, item]) => item !== undefined));
-  if (typeof cleanPatch.recurrence === "string") {
+  const restoredDates = typeof cleanPatch.recurrence === "string" && /(?:^|\n)EXDATE/.test(baseline.master.recurrence ?? "") ? caldavExdateRestoration(baseline.master, cleanPatch.recurrence) : undefined;
+  if (typeof cleanPatch.recurrence === "string" && !restoredDates) {
     const canonical = "RRULE:" + ICAL.Recur.fromString(cleanPatch.recurrence.replace(/^RRULE:/i, "")).toString();
     if (!sameCaldavRecurrence(cleanPatch.recurrence, canonical)) throw new EventWriteError("event-write", "unsupported");
     cleanPatch.recurrence = canonical;
@@ -981,7 +983,10 @@ export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baselin
     }
   }
   let after: string;
-  if (followingDelete) {
+  if (restoredDates) {
+    const { index } = eventMaster(evidence.data, baseline.ref.icalUid);
+    after = restoreEventExdates(evidence.data, index, restoredDates);
+  } else if (followingDelete) {
     const { master, index } = eventMaster(evidence.data, baseline.ref.icalUid);
     const rule = new ICAL.Property("rrule");
     rule.setValue(ICAL.Recur.fromString(desired.master.recurrence!.replace(/^RRULE:/i, "")));

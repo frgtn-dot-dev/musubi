@@ -64,7 +64,7 @@ function ProviderEventDetailsBody({ eventId, userId, connectionId, series = fals
     {current?.reminderEdit && current.state && current.version && !series ? <>
       <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget)}>{current?.reminderEdit?.provider === "caldav" ? "Edit CalDAV event alarms" : occurrence ? "Edit reminders for this occurrence" : "Edit Google reminders"}</Button>
     </> : null}
-    {current?.rsvpEdit && current.state && current.version && !series ? <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget, "rsvp")}>{occurrence ? "Respond to this occurrence" : current.rsvpEdit.provider === "caldav" ? "Respond in calendar" : "Respond in Google"}</Button> : null}
+    {current?.rsvpEdit && current.state && current.version && !series ? <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget, "rsvp")}>{occurrence ? "Respond to this occurrence" : current.rsvpEdit.provider === "microsoft" ? "Respond in Outlook" : current.rsvpEdit.provider === "caldav" ? "Respond in calendar" : "Respond in Google"}</Button> : null}
     {editor?.kind === "reminders" ? <ProviderReminderEditor occurrence={occurrence} eventId={eventId} connectionId={connectionId} observation={editor.observation} returnFocus={editor.trigger} onClose={() => setEditor(undefined)} /> : null}
     {editor?.kind === "rsvp" ? <ProviderRsvpEditor occurrence={occurrence} eventId={eventId} connectionId={connectionId} observation={editor.observation} returnFocus={editor.trigger} onClose={() => setEditor(undefined)} /> : null}
   </section>;

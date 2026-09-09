@@ -59,3 +59,17 @@ it("sends a native CalDAV server reply with immutable retry and unknown organize
   expect(h.save.mock.calls[0][1]).not.toHaveProperty("sendUpdates");
   expect(nodes(render(event, caldav)).some(node => typeof node.props.children === "string" && node.props.children.includes("Your response is saved on the calendar server"))).toBe(true);
 });
+
+it("sends a native Outlook server reply with immutable retry and unknown organizer delivery", async () => {
+  const graph = { ...observation, rsvpEdit: { provider: "microsoft" as const, expectedRevision: 7 }, state: { ...observation.state!, provider: "microsoft" as const, reminders: { provider: "microsoft" as const, isOn: true, minutesBeforeStart: 15 } } };
+  h.save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "completed" });
+  let tree = render(event, graph);
+  expect(button(tree, "Send response to organizer").disabled).toBe(true);
+  nodes(tree).find(node => node.type === "OptionPicker")!.props.onSelect("accepted");
+  tree = render(event, graph); button(tree, "Send response to organizer").onPress(); await settle();
+  tree = render(event, graph); button(tree, "Send response to organizer").onPress(); await settle();
+  expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
+  expect(h.save.mock.calls[0][1]).toMatchObject({ provider: "microsoft", response: "accepted", notificationPolicy: "send-response" });
+  expect(h.save.mock.calls[0][1]).not.toHaveProperty("sendUpdates");
+  expect(nodes(render(event, graph)).some(node => typeof node.props.children === "string" && node.props.children.includes("Your response is observed in Outlook"))).toBe(true);
+});

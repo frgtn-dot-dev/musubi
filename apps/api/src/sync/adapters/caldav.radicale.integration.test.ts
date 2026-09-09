@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { planEventScope } from "@musubi/calendar";
+import { restoreAllDayExclusion, planEventScope } from "@musubi/calendar";
 import type { Task } from "@musubi/types";
 import type { NormalizedChange, NormalizedTask } from "../adapter";
 import type { CaldavSeriesIntent } from "./caldav_series";
@@ -603,6 +603,35 @@ async function main() {
       const [current] = await db.select().from(externalEvents).where(eq(externalEvents.eventID, local.id)); assert.equal(current!.id, mapping!.id);
       assert.equal((await applyLocalEventScope(local.id, userID, request, { prepareProvider: true })).status, "replayed");
       console.log("Radicale explicit UTC series: native conditional conflict/recovery, private preservation, stable ACK/echo and stale CAS refusal: OK");
+    }
+    {
+      const datedURL = new URL("restore-exdate.ics", collectionURL).href;
+      const native = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Musubi//DATE restore//EN", "BEGIN:VEVENT", "UID:restore-exdate", "DTSTART;VALUE=DATE:20260328", "DTEND;VALUE=DATE:20260329", "RRULE:FREQ=DAILY;COUNT=4", "EXDATE;VALUE=DATE:20260329,20260330", "SUMMARY:Imported exclusions", "X-PRESERVE:private extension", "BEGIN:VALARM", "ACTION:DISPLAY", "TRIGGER:-PT15M", "DESCRIPTION:Keep alarm", "END:VALARM", "END:VEVENT", "END:VCALENDAR", ""].join("\r\n");
+      assert.ok((await davFetch(datedURL, { method: "PUT", headers: { authorization: basicAuth, "content-type": "text/calendar", "if-none-match": "*" }, body: native })).ok);
+      await sync();
+      const [mapping] = await db.select().from(externalEvents).where(eq(externalEvents.externalEventID, datedURL));
+      const local = (await getEventSnapshot(mapping!.eventID))!;
+      const recurrence = restoreAllDayExclusion(local.recurrence!, "2026-03-29");
+      const request = { operationID: randomUUID(), scope: "series", action: "update", expectedRevision: local.revision, patch: { recurrence } };
+      const candidate = await applyLocalEventScope(local.id, userID, request, { prepareProvider: true });
+      if (candidate.status !== "caldav_required") throw new Error("Missing DATE native context");
+      const prepared = await prepareCaldavSeries(candidate.context, request);
+      assert.equal(prepared.write.after, prepared.write.before.replace("EXDATE;VALUE=DATE:20260329,20260330", "EXDATE;VALUE=DATE:20260330"));
+      assert.equal((await applyLocalEventScope(local.id, userID, request, { caldav: prepared })).status, "saved");
+      const operation = (await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, local.id)))[0]!;
+      const competing = await davFetch(datedURL, { method: "PUT", headers: { authorization: basicAuth, "content-type": "text/calendar", "if-match": mapping!.etag! }, body: prepared.write.before.replace("private extension", "fresh private extension") }); assert.ok(competing.ok);
+      assert.equal((await deliverEventOutbox(operation.id, () => caldavAdapter))?.status, "conflict");
+      const comparison = await prepareEventDeliveryResolution(userID, local.id, operation.id, () => caldavAdapter);
+      const replacement = await commitEventDeliveryResolution(userID, comparison.proof, { mutationId: randomUUID(), expectedLocalRevision: comparison.preview.localRevision, expectedLatestOperationId: operation.id, expectedRemoteExists: true, expectedRemoteEtag: comparison.preview.remoteEtag });
+      assert.equal((await deliverEventOutbox(replacement, () => caldavAdapter))?.status, "completed");
+      const settled = await rows();
+      const read = await davFetch(datedURL, { headers: { authorization: basicAuth } }); const bytes = await read.text();
+      assert.ok(bytes.includes("EXDATE;VALUE=DATE:20260330") && !bytes.includes("EXDATE;VALUE=DATE:20260329")); assert.ok(bytes.includes("X-PRESERVE:fresh private extension")); assert.ok(bytes.includes("DESCRIPTION:Keep alarm"));
+      const stale = await davFetch(datedURL, { method: "PUT", headers: { authorization: basicAuth, "content-type": "text/calendar", "if-match": mapping!.etag! }, body: prepared.write.before }); assert.equal(stale.status, 412);
+      await sync(); assert.deepEqual(await rows(), settled);
+      const [current] = await db.select().from(externalEvents).where(eq(externalEvents.eventID, local.id)); assert.equal(current!.id, mapping!.id);
+      assert.equal((await applyLocalEventScope(local.id, userID, request, { prepareProvider: true })).status, "replayed");
+      console.log("Radicale DATE restoration: selected native exclusion, immutable conflict recovery, private preservation, stable ACK/echo and stale CAS refusal: OK");
     }
     for (const kind of ["zoned", "floating", "all-day"]) {
       const removalURL = new URL(`remove-${kind}.ics`, collectionURL).href;

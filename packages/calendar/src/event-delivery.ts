@@ -2,6 +2,7 @@ import type { EventDeliveryTarget } from "@musubi/types";
 
 /** Shared language for the web and native clients; never aggregate receipts. */
 export function eventDeliveryLabel(target: EventDeliveryTarget): string {
+  if (target.graphRsvpPhase) return ({ queued: "Response request saved", dispatched: "Outlook response outcome unknown", accepted: "Outlook accepted the response action", observed: "Response observed in Outlook", absent: "Outlook meeting copy unavailable" })[target.graphRsvpPhase];
   if (target.graphCreateAdopted) return "Provider version accepted in Musubi";
   if (target.alarmDiscarded) return "Saved alarm change discarded";
   const labels: Record<EventDeliveryTarget["status"], string> = {
@@ -22,6 +23,7 @@ export function eventDeliveryLabel(target: EventDeliveryTarget): string {
 }
 
 export function eventDeliveryExplanation(target: EventDeliveryTarget): string {
+  if (target.graphRsvpPhase) return target.graphRsvpPhase === "queued" ? "Outlook will be asked to send your response to the organizer. Organizer delivery cannot be verified." : target.graphRsvpPhase === "observed" ? "The current Outlook response matches your choice. Organizer delivery cannot be verified." : "The response action will not be resent. Musubi can check the current copy, but a missing copy or accepted action does not prove organizer delivery. Check Outlook if this remains unresolved.";
   if (target.graphCreateAdopted) return "The observed provider family was accepted locally. The original request remains in history; this choice sent no provider write.";
   if (target.alarmDiscarded) return "This saved request was stopped. The current CalDAV event is read on the next sync; a change already accepted by the server is not undone.";
   if (!target.connected)
@@ -58,11 +60,9 @@ export function eventDeliveryActions(target: EventDeliveryTarget) {
   return {
     retry:
       available &&
-      ["retry", "unconfirmed", "not-written", "blocked"].includes(
-        target.status,
-      ),
+      (["retry", "unconfirmed", "not-written", "blocked"].includes(target.status) || target.status === "conflict" && !!target.graphRsvpPhase && target.graphRsvpPhase !== "queued"),
     review:
-      available &&
+      !target.graphRsvpPhase && available &&
       ["conflict", "blocked", "cancelled", "unconfirmed"].includes(
         target.status,
       ),

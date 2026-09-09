@@ -180,3 +180,41 @@ export function removeEventComponents(data: string, indexes: readonly number[]):
   ICAL.parse(result);
   return result;
 }
+
+/** Change only selected DATE exclusion lines, retaining every untouched span. */
+export function restoreEventExdates(data: string, masterIndex: number, dates: string[]): string {
+  replaceEventProperties(data, masterIndex, new Map());
+  const remaining = new Set(dates.map(date => date.replace(/-/g, "")));
+  if (remaining.size !== dates.length || !remaining.size) throw invalidResource();
+  const seen = new Set<string>();
+  let depth = 0, ordinal = -1, selected = false;
+  const output = calendarLines(data).map(line => {
+    const boundary = /^(BEGIN|END):([A-Z0-9-]+)$/i.exec(line.unfolded);
+    if (boundary) {
+      if (boundary[1]!.toUpperCase() === "BEGIN") {
+        if (depth === 1) selected = boundary[2]!.toLowerCase() === "vevent" && ++ordinal === masterIndex;
+        depth++;
+      } else { if (depth === 2) selected = false; depth--; }
+      return line.raw;
+    }
+    if (depth !== 2 || !selected || !/^EXDATE[;:]/i.test(line.unfolded)) return line.raw;
+    const match = /^(EXDATE;VALUE=DATE:)([0-9,]+)$/i.exec(line.unfolded);
+    if (!match) throw invalidResource();
+    const values = match[2]!.split(",");
+    // Check raw evidence before ICAL can normalize invalid DATE literals or
+    // projection comparison can collapse repeated properties during recovery.
+    for (const value of values) {
+      if (!/^\d{8}$/.test(value) || seen.has(value)) throw invalidResource();
+      const date = `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
+      const parsed = new Date(date + "T00:00:00Z");
+      if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) throw invalidResource();
+      seen.add(value);
+    }
+    const retained = values.filter(value => !remaining.delete(value));
+    if (retained.length === values.length) return line.raw;
+    return retained.length ? match[1]! + retained.join(",") + (line.raw.endsWith("\r\n") ? "\r\n" : "\n") : "";
+  }).join("");
+  if (remaining.size) throw invalidResource();
+  ICAL.parse(output);
+  return output;
+}

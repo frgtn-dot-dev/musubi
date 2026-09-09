@@ -29,9 +29,10 @@ export async function getOwnProviderEventObservation(actorID: string, eventID: s
     catch { personalScope = false; }
   }
   const caldavEligible = rsvpEditsEnabled && state.provider === "caldav" && ["owner", "editor"].includes(row.role) && !!row.etag && !row.etag.startsWith("W/") && !!row.mapping.icalUid && !event.recurrence && !event.isCanceled && ["zoned", "all-day"].includes(event.timeModel?.kind ?? "") && state.attendeesComplete && state.attendees.length > 0 && state.attendees.length <= 200 && !!state.organizer?.address;
-  const rsvpEditable = (rsvpEligible || caldavEligible) && personalScope;
+  const graphEligible = rsvpEditsEnabled && state.provider === "microsoft" && state.isOrganizer === false && state.eventType === "singleInstance" && state.status === "active" && !!row.mapping.icalUid && !!row.etag && ["owner", "editor"].includes(row.role) && !event.recurrence && !event.isCanceled && event.timeModel?.kind !== "floating" && state.attendeesComplete;
+  const rsvpEditable = (rsvpEligible || caldavEligible || graphEligible) && personalScope;
   const editable = reminderEligible && personalScope;
-  return { state, version: providerStateVersion(row), ...(rsvpEditable ? { rsvpEdit: { provider: state.provider === "caldav" ? "caldav" as const : "google" as const, expectedRevision: event.revision } } : {}), ...(editable ? { reminderEdit: { provider: "google" as const, expectedRevision: event.revision } } : {}) };
+  return { state, version: providerStateVersion(row), ...(rsvpEditable ? { rsvpEdit: { provider: state.provider === "microsoft" ? "microsoft" as const : state.provider === "caldav" ? "caldav" as const : "google" as const, expectedRevision: event.revision } } : {}), ...(editable ? { reminderEdit: { provider: "google" as const, expectedRevision: event.revision } } : {}) };
 
 }
 

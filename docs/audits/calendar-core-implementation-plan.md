@@ -834,3 +834,7 @@ přijme ověřený master i úplnou rodinu, teprve poté uvolní pending-import 
 Stale preview, změněná historie/zdroj, neúplná či duplicitní family, meetings,
 exceptions/cancellations a nepodporovaná recurrence se odmítají. Nejde o remote
 family CAS ani organizer delivery proof. [Kontrakt](../sync/graph-create-adoption.md).
+
+### K13: Graph one-off response actions
+
+Default-off Graph one-off RSVP nyní používá samostatné accept/tentativelyAccept/decline akce s explicitním sendResponse. Privátní marker před síťovým voláním zabrání automatickému opakování i po nejistém výsledku; 202, pozorovaná odpověď a neznámé doručení organizátorovi jsou oddělené. Žádný If-Match/CAS důkaz se netvrdí. Celá veřejná, web/native a durable cesta je pokrytá fake HTTP/PG/UI scénáři. [Kontrakt a hranice](../sync/microsoft-rsvp.md).

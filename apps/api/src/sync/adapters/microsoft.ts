@@ -1,3 +1,4 @@
+import { graphRsvpTime } from "./microsoft_rsvp";
 import { isDeepStrictEqual } from "node:util";
 import { findGraphCreatedSeriesAdoption } from "./microsoft_series_create";
 import { createGraphSeries } from "./microsoft_series_delivery";
@@ -136,7 +137,13 @@ export function toNormalized(item: any): NormalizedEvent {
     ? new Date(parseGraphDate(item.end.dateTime).getTime() - DAY_MS) // Graph all-day end is exclusive
     : parseGraphDate(item.end.dateTime);
 
+  let reminderTimeEvidence: NormalizedEvent["reminderTimeEvidence"];
+  if (item.type === "singleInstance" && !item.recurrence && !item.seriesMasterId) {
+    try { const native = graphRsvpTime(item); reminderTimeEvidence = { timeModel: native.timeModel!, start: native.start, end: native.end, isAllDay: native.isAllDay }; } catch { /* Legacy reads remain available without action evidence. */ }
+  }
   return {
+    ...(typeof item.iCalUId === "string" ? { icalUid: item.iCalUId } : {}),
+    ...(reminderTimeEvidence ? { reminderTimeEvidence } : {}),
     externalId: item.id,
     // Opaque provider metadata only. changeKey is NOT an If-Match guarantee.
     etag: typeof item["@odata.etag"] === "string" ? item["@odata.etag"] : null,
@@ -738,6 +745,28 @@ export const microsoftAdapter: CalendarAdapter = {
     return family;
   },
 
+  async readMicrosoftRsvp(user, account, calendar, ref, response, signal) {
+    if (!config.api.providerRsvpEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+    const token = await getAccessToken(user, account);
+    await assertOAuthEventWriteGrant(user, "microsoft", account);
+    const { graphRsvpSession } = await import("./microsoft_rsvp_delivery");
+    const evidence = await (await graphRsvpSession(token, account, calendar, signal)).read(ref.externalEventId, response);
+    if (!evidence || evidence.etag !== ref.etag || evidence.native.iCalUId !== ref.icalUid) throw new ProviderEventWriteError("provider-conflict");
+    return evidence;
+  },
+  async writeMicrosoftRsvp(user, account, calendar, evidence, dispatched, signal, beforeDispatch, accepted) {
+    if (!config.api.providerRsvpEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+    const token = await getAccessToken(user, account);
+    await assertOAuthEventWriteGrant(user, "microsoft", account);
+    const { graphRsvpSession } = await import("./microsoft_rsvp_delivery");
+    const session = await graphRsvpSession(token, account, calendar, signal);
+    return session.write(evidence, dispatched, async () => {
+      if (!config.api.providerRsvpEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+      await assertOAuthEventWriteGrant(user, "microsoft", account);
+      if (!(await getOAuthAccountIDs(user, "microsoft", account)).includes(account)) throw new ProviderEventWriteError("provider-conflict");
+      await beforeDispatch();
+    }, accepted);
+  },
   async readGraphCreateAdoption(userID, accountID, calendarID, event, identity) {
     if (!config.api.eventTimeEditsEnabled) throw new EventWriteError("event-write", "unsupported");
     const accessToken = await getAccessToken(userID, accountID);

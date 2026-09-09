@@ -962,3 +962,56 @@ Browser cases `K12 explicit UTC whole-series` exercise the existing input and
 explicit whole-series full editor in light desktop and dark narrow layouts. These are mocked API
 browser checks, not live iCloud or physical native acceptance. No live provider
 or production flag was activated for this batch.
+## Restore imported all-day exclusions
+
+A finite personal all-day series can restore selected dates already recorded in
+native EXDATE properties. This complements occurrence cancellation: adding a new
+exclusion remains the existing cancellation operation; an imported EXDATE has no
+visible occurrence or cancelled child to revive. Existing web and native
+recurrence editors list recognized excluded dates and stage a Restore action.
+The user saves the whole-series draft through the existing scope endpoint.
+
+This slice accepts one all-day VEVENT, one unchanged finite COUNT RRULE, and
+explicit `EXDATE;VALUE=DATE` values only. There may be multiple properties or
+comma-separated dates; duplicates, malformed dates, RDATE, unknown parameters,
+non-DATE exclusions, live/retired detached definitions, meetings, and simultaneous
+content, time or RRULE changes are refused. Every original exclusion must belong
+to the complete base footprint: at most 366 dates within 730 days. A save can
+remove only existing exclusions, with exact retained property/value ordering.
+It cannot add exclusions, invent slots or change DTSTART/DTEND/UID/addresses.
+The existing explicit time-edit feature flag remains default-off, and positive
+resource write privilege plus a strong accepted ETag remain required.
+
+The serializer validates every unfolded raw DATE as exactly eight digits and a
+real calendar date, including retained values, and rejects repeated dates across
+properties before initial preparation or a recovery confirmation. Canonical ICAL
+normalization or projection deduplication cannot substitute for that raw proof.
+The serializer changes only affected EXDATE property spans. Unchanged property
+bytes, including folded remaining exclusions, alarms and private extensions,
+never pass through serialization. A changed folded property may be refolded or
+unfolded; unrelated spans remain exact. The journal records the full before/after
+resource and typed recurrence patch. Existing local/source/lease fences, pending
+pull protection, same-address conditional PUT, uncertain-response replay, atomic
+ACK and stable echo apply. Explicit recovery retains the original selected-date
+intent and all original canonical content/time/rule/exclusion evidence. Fresh
+private extensions may be preserved; changed canonical native evidence, stale
+preview validators or a different selected subset cannot authorize a write.
+
+Evidence: `exdate-restoration.test.ts` checks strict syntax, selected subsets and
+finite date membership and restoration of an excluded DTSTART without COUNT
+replenishment; `caldav_exdates.test.ts` verifies physical byte preservation and
+rejects truncated, impossible and duplicated raw values. Registered scope HTTP/Postgres tests cover public admission, lost
+responses, conflicts, active/retired definitions, malformed/duplicate/foreign
+dates (including malformed retained tokens and newly duplicated native properties
+during recovery), excluded DTSTART restoration with stable family/mapping identity,
+changed RRULE, permissions, revision races, stale previews and modified private
+proof subsets. The real disposable Radicale scenario verifies imported
+DATE restoration, concurrent private edits, immutable conflict recovery, stable
+mapping/ACK/echo and stale ETag refusal. Native composer and web editor tests
+exercise existing actions and exact scope payloads; browser cases
+`K12 imported all-day exclusion restoration` cover desktop light and narrow dark
+layouts with keyboard focus returned to Repeat after a row disappears.
+
+This does not activate a live provider or prove physical native/iCloud
+acceptance. Timed exclusions, new EXDATE additions, RDATE changes and families
+with detached definitions remain separate work.

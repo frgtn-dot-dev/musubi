@@ -123,6 +123,9 @@ export async function getEventDeliveryStatus(
         updatedAt: eventOutbox.updatedAt,
         nextAttemptAt: eventOutbox.nextAttemptAt,
         errorCode: eventOutbox.errorCode,
+        graphRsvp: sql<boolean>`${eventOutbox.payload}->'rsvp'->'request'->>'provider' = 'microsoft'`,
+        graphDispatched: sql<boolean>`${eventOutbox.payload}->'rsvp'->'graphDispatch' is not null`,
+        graphAccepted: sql<boolean>`${eventOutbox.payload}->'rsvp'->'graphDispatch'->>'acceptedAt' is not null`,
         alarm: sql<boolean>`${eventOutbox.payload}->'caldavAlarm' is not null`,
       };
       const receipts = (unresolved: boolean) =>
@@ -178,9 +181,10 @@ export async function getEventDeliveryStatus(
       );
       for (const last of latest) {
         const first = blockers.get(last.targetId) ?? last;
-        const { nextAttemptAt, errorCode, alarm, ...display } = first;
+        const { nextAttemptAt, errorCode, alarm, graphRsvp, graphDispatched, graphAccepted, ...display } = first;
         targets.set(first.targetId, {
           ...display,
+          ...(graphRsvp ? { graphRsvpPhase: (["completed", "not-needed"].includes(first.status) ? "observed" : errorCode === "graph-rsvp-copy-absent" ? "absent" : graphAccepted ? "accepted" : graphDispatched ? "dispatched" : "queued") as NonNullable<EventDeliveryTarget["graphRsvpPhase"]> } : {}),
           ...(first.status === "not-needed" && errorCode === "adopted-provider-version" ? { graphCreateAdopted: true as const } : {}),
           ...(alarm && first.status === "not-needed" && errorCode === "alarm-discarded" ? { alarmDiscarded: true as const } : {}),
           ...(alarm && first.owned && first.connected && visibleEvent && ["conflict", "blocked", "unconfirmed"].includes(first.status) ? { alarmDiscardRevision: visibleEvent.revision } : {}),

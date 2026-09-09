@@ -1016,3 +1016,23 @@ it("converts the last generated COUNT occurrence without inventing a fold slot",
   expect(JSON.parse(mocks.request.mock.lastCall![1].body)).toMatchObject({ action: "update", scope: "series", expectedRevision: 1, patch: {}, time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-10-23T02:30:00.000", endLocal: "2026-10-23T03:30:00.000" } });
   expect(mocks.reminder).toHaveBeenCalledWith(expect.objectContaining({ revision: 2, start: new Date("2026-10-23T02:30:00.000Z") }), null);
 });
+
+it("restores an imported all-day exclusion through the native whole-series caller", async () => {
+  const { resolveEventTimeEdit } = await import("@musubi/calendar");
+  const recurrence = "RRULE:FREQ=DAILY;COUNT=4\nEXDATE;VALUE=DATE:20260329,20260330";
+  const series = EventSchema.parse({ ...master, id: "00000000-0000-4000-8000-000000000201", recurrence, ...resolveEventTimeEdit({ kind: "all-day", startDate: "2026-03-28", endDate: "2026-03-28" }) });
+  useEventsStore.setState({ events: [series] }); presentEventDetail([series], series);
+  useEditComposerStore.getState().open(useEventDetailStore.getState().event!);
+  const tree = renderComposer(true);
+  find(tree, props => props.label === "Restore 2026-03-29")!.onPress();
+  mocks.request.mockImplementationOnce(async (_url, options) => {
+    const body = JSON.parse(options.body); useEventsStore.setState({ events: [{ ...series, ...body.patch, revision: 2 }] });
+    return { error: null, data: { operationID: body.operationID, changed: true, events: [{ id: series.id, revision: 2 }], deleted: [], localCommitted: true, replayed: false } };
+  });
+  const saving = saveButton(renderComposer())!.onPress!();
+  await vi.waitFor(() => expect(mocks.alert).toHaveBeenCalledOnce()); scopeAnswer("All events"); await saving;
+  expect(mocks.request).toHaveBeenCalledOnce();
+  const body = JSON.parse(mocks.request.mock.lastCall![1].body);
+  expect(body).toMatchObject({ scope: "series", action: "update", expectedRevision: 1, patch: { recurrence: "RRULE:FREQ=DAILY;COUNT=4\nEXDATE;VALUE=DATE:20260330" } });
+  expect(body.time).toBeUndefined();
+});

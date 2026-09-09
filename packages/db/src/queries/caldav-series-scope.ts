@@ -1,4 +1,4 @@
-import { assertCaldavSeriesUTCConversion, planEventScope, resolveEventTimeEdit } from "@musubi/calendar";
+import { assertCaldavSeriesUTCConversion, caldavExdateRestoration, planEventScope, resolveEventTimeEdit } from "@musubi/calendar";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { EventSchema, EventWriteError, can, type Event, type EventScopeRequest, type EventTimeEdit, type OccurrenceStart } from "@musubi/types";
 import { db } from "..";
@@ -120,6 +120,11 @@ export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseli
     return { ...baseline, master: plan.updates[0]!, children: baseline.children.filter(child => !plan.deletes.includes(child.id)) };
   }
   if (write.cancelTarget !== undefined && (write.cancelTarget !== true || !targetEventID || Object.keys(write.patch).length)) throw unsupported();
+  if (typeof write.patch.recurrence === "string" && /(?:^|\n)EXDATE/.test(baseline.master.recurrence ?? "")) {
+    if (targetEventID || write.cancelTarget || write.newDefinition || write.time || baseline.children.length || Object.keys(write.patch).length !== 1) throw unsupported();
+    caldavExdateRestoration(baseline.master, write.patch.recurrence);
+    return { ...baseline, master: EventSchema.parse({ ...baseline.master, recurrence: write.patch.recurrence }) };
+  }
   const removesRecurrence = write.patch.recurrence === null;
   if (removesRecurrence && (targetEventID || write.time || write.newDefinition || write.cancelTarget || baseline.children.length)) throw unsupported();
   if (write.patch.recurrence !== undefined && (targetEventID || (!removesRecurrence && (!write.patch.recurrence || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(write.patch.recurrence))) || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(baseline.master.recurrence ?? ""))) throw unsupported();

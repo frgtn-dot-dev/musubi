@@ -218,7 +218,8 @@ function EditEventRoute() {
                     }
                     onSubmit={async (values: EventFormValues) => {
                         const edited = updateEventFromForm(event, values);
-                        if (event.recurrence && event.timeModel?.kind === "zoned" && edited.timeEdit?.kind === "zoned" && event.timeModel.timeZone !== edited.timeEdit.timeZone) {
+                        if ((event.recurrence && event.timeModel?.kind === "zoned" && edited.timeEdit?.kind === "zoned" && event.timeModel.timeZone !== edited.timeEdit.timeZone) ||
+                            (event.timeModel?.kind === "all-day" && /(?:^|\n)EXDATE/.test(event.recurrence ?? "") && edited.recurrence !== event.recurrence)) {
                             await eventMutations.applyEventScope(event, eventScopeRequest(event, event, "series", edited));
                         } else await eventMutations.updateEvent(edited);
                         back();
