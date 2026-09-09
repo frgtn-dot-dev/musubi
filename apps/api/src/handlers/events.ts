@@ -1,3 +1,4 @@
+import { queueProviderOrganizer, observeProviderOrganizer, observeOrganizerCalendar } from "../sync/provider_organizer";
 import { caldavAlarmObservation, queueCaldavAlarms } from "../sync/caldav_alarms";
 import { queueGoogleReminders } from "../sync/provider_reminders";
 import { resolveEventTimeEdit } from "@musubi/calendar";
@@ -34,6 +35,7 @@ import {
 } from "@musubi/db";
 import {
   BadRequestError,
+  OrganizerAdmissionRejectedError,
   type Event,
   EventSchema,
   EventTimeEditRequestSchema,
@@ -682,7 +684,7 @@ export async function handlerGetProviderEventState(req: Request, res: Response) 
   await assertCanViewEvent(req.user!.id, id);
   res.setHeader("Cache-Control", "private, no-store");
   const observation = await getOwnProviderEventObservation(req.user!.id, id, config.api.providerReminderEditsEnabled, config.api.providerRsvpEditsEnabled);
-  res.json(await observeMicrosoftRsvp(req.user!.id, id, await observeCaldavRsvp(req.user!.id, id, await caldavAlarmObservation(req.user!.id, id, observation))));
+  res.json(await observeProviderOrganizer(req.user!.id, id, await observeMicrosoftRsvp(req.user!.id, id, await observeCaldavRsvp(req.user!.id, id, await caldavAlarmObservation(req.user!.id, id, observation)))));
 }
 
 export async function handlerProviderReminderEdit(req: Request, res: Response) {
@@ -698,4 +700,16 @@ export async function handlerProviderRsvpEdit(req: Request, res: Response) {
   const receipt = await queueProviderRsvp(req.user!.id, id, req.body);
   res.setHeader("Cache-Control", "private, no-store");
   res.status(202).json({ ...receipt, localCommitted: true, notificationDelivery: "unknown" });
+}
+
+export async function handlerProviderOrganizer(req: Request, res: Response) {
+  let receipt;
+  try { receipt = await queueProviderOrganizer(req.user!.id, req.body); }
+  catch (error) { if (!(error instanceof OrganizerAdmissionRejectedError)) throw error; res.status(400).json({ error: error.message, organizerAdmissionRejected: true }); return; }
+  res.setHeader("Cache-Control", "private, no-store"); res.status(202).json(receipt);
+  if (!receipt.replayed) { const { getEventSnapshot } = await import("@musubi/db"); const event = await getEventSnapshot(receipt.eventID); if (event) await notifyEvent(event.calendars, "event_updated", event); }
+}
+export async function handlerOrganizerCalendar(req: Request, res: Response) {
+  const id = String(req.params.calendarId);
+  res.setHeader("Cache-Control", "private, no-store"); res.json(await observeOrganizerCalendar(req.user!.id, id));
 }

@@ -1,3 +1,4 @@
+import { OrganizerDispatchSchema, ProviderOrganizerRequestSchema } from "@musubi/types";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { GraphRsvpDispatchSchema, ProviderRsvpEditSchema, NotFoundError } from "@musubi/types";
 import { db } from "..";
@@ -102,7 +103,8 @@ export async function requestEventDeliveryRetry(
     const graphCheck = row.provider === "microsoft" && row.action === "update" && row.actorID === userID && graphRequest.success && graphRequest.data.provider === "microsoft" && GraphRsvpDispatchSchema.safeParse(row.payload.rsvp?.graphDispatch).success;
     // A dispatched Graph response can only be observed again. Keep its original
     // conflict snapshot and permanent marker; this never authorizes another POST.
-    if (!graphCheck && (
+    const organizerCheck = row.provider === "google" && row.actorID === userID && ProviderOrganizerRequestSchema.safeParse(row.payload.organizer?.request).success && OrganizerDispatchSchema.safeParse(row.payload.organizer?.dispatch).success;
+    if (!graphCheck && !organizerCheck && (
       row.status === "conflict" ||
       (row.remoteSnapshot && !row.remoteSnapshot.isEcho)
     ))
@@ -121,10 +123,10 @@ export async function requestEventDeliveryRetry(
       .update(eventOutbox)
       .set({
         status:
-          graphCheck || row.uncertain || row.status === "unconfirmed"
+          graphCheck || organizerCheck || row.uncertain || row.status === "unconfirmed"
             ? "unconfirmed"
             : "retry",
-        uncertain: graphCheck || row.uncertain || row.status === "unconfirmed",
+        uncertain: graphCheck || organizerCheck || row.uncertain || row.status === "unconfirmed",
         updatedAt: new Date(),
         // A manual click must not shorten a provider's persisted Retry-After.
         nextAttemptAt: sql`greatest(${eventOutbox.nextAttemptAt}, clock_timestamp())`,

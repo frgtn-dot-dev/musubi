@@ -805,6 +805,14 @@ async function upsertExternalEventInTransaction(
     const access = await assertExternalCalendarAccess(tx, provider, calendarID, accessContext);
     if (provider === "microsoft") await assertNoPendingGraphSeriesCreate(tx, calendarID);
     await lockExternalEventAddress(tx, provider, calendarID, externalEventID);
+    // A completed organizer cancellation must not be silently resurrected by
+    // an active late pull. Retain it for read-only reconciliation of the same
+    // permanently marked action; never recreate or send another cancellation.
+    if (provider === "google") {
+      const [cancelled] = await tx.select({ id: eventOutbox.id, eventID: eventOutbox.eventID }).from(eventOutbox).where(and(eq(eventOutbox.provider, provider), eq(eventOutbox.userID, userID), eq(eventOutbox.calendarID, calendarID), eq(eventOutbox.externalCalendarID, externalCalendarID), eq(eventOutbox.externalEventID, externalEventID), eq(eventOutbox.action, "delete"), eq(eventOutbox.status, "completed"), sql`${eventOutbox.payload}->'organizer'->'dispatch' is not null`)).limit(1);
+      if (cancelled) { await tx.select({ id: events.id }).from(events).where(eq(events.id, cancelled.eventID)).for("update"); await tx.update(eventOutbox).set({ status: "conflict", errorCode: "provider-conflict", remoteSnapshot: { externalEventId: externalEventID, etag, icalUid, deleted: false, observedAt: new Date().toISOString(), values: JSON.parse(JSON.stringify(values)), ...(state ? { providerState: state } : {}) } }).where(eq(eventOutbox.id, cancelled.id)); return false; }
+    }
+
     if (sourceSeriesID !== undefined) {
       if (provider !== "microsoft" || !sourceSeriesID.trim() || sourceSeriesID.trim() !== sourceSeriesID || sourceSeriesID === externalEventID)
         throw new Error("Invalid source series address.");
@@ -1082,10 +1090,21 @@ export async function deleteExternalEvent(
       await appendInboundEventFanout(tx, child.id, calendarID, "delete");
     }
     if (mapped.event.deletedAt !== null) return children.some(child => child.deletedAt === null);
+    // Record only this exact accepted cancellation's ordinary deletion transition.
+    // Later reconciliation may accept this tombstone, never unrelated edits/deletes.
+    const deletedAt = new Date();
+    if (provider === "google" && mapped.event.isCanceled) {
+      const cancellations = await tx.select().from(eventOutbox).where(and(eq(eventOutbox.eventID, mapped.event.id), eq(eventOutbox.calendarID, calendarID), eq(eventOutbox.provider, provider), eq(eventOutbox.externalEventID, externalEventID), eq(eventOutbox.revision, mapped.event.revision), eq(eventOutbox.status, "completed"), eq(eventOutbox.action, "delete"))).for("update");
+      for (const row of cancellations) {
+        const intent = row.payload.organizer;
+        if (!intent?.dispatch?.acceptedAt || intent.mappingID !== mapped.id || row.actorID !== row.userID || row.payload.event.originCalendarID !== calendarID || intent.sourceEvent.id !== mapped.event.id || intent.sourceEvent.creatorID !== mapped.event.creatorID) continue;
+        await tx.update(eventOutbox).set({ payload: { ...row.payload, organizer: { ...intent, dispatch: { ...intent.dispatch, cancellationTombstone: { revision: mapped.event.revision + 1, deletedAt: deletedAt.toISOString() } } } } }).where(eq(eventOutbox.id, row.id));
+      }
+    }
     // Retain authoritative mappings/links for tombstone deltas and revival.
     await tx
       .update(events)
-      .set({ deletedAt: new Date(), revision: sql`${events.revision} + 1` })
+      .set({ deletedAt, revision: sql`${events.revision} + 1` })
       .where(eq(events.id, mapped.event.id));
     await appendInboundEventFanout(tx, mapped.event.id, calendarID, "delete");
     return true;

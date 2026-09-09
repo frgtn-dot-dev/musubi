@@ -1,3 +1,4 @@
+import { ProviderOrganizerCalendarSchema, ProviderOrganizerReceiptSchema, type ProviderOrganizerRequest } from "@musubi/types";
 import { ProviderRsvpReceiptSchema, type ProviderRsvpEdit } from "@musubi/types";
 import { ProviderEventStateResponseSchema, ProviderReminderReceiptSchema, type AnyProviderReminderEdit } from "@musubi/types";
 import {
@@ -101,7 +102,7 @@ function throwOnError(
 }
 
 export class EventDeliveryRequestError extends Error {
-  constructor(readonly status: number, message: string) {
+  constructor(readonly status: number, message: string, readonly organizerAdmissionRejected = false) {
     super(message);
     this.name = "EventDeliveryRequestError";
   }
@@ -169,7 +170,7 @@ export function useApi() {
     });
     if (error) {
       if (error.status === 401) notifySessionExpired();
-      throw new EventDeliveryRequestError(Number(error.status), "Could not verify or change this delivery. Refresh the status and check the connection.");
+      throw new EventDeliveryRequestError(Number(error.status), "Could not verify or change this delivery. Refresh the status and check the connection.", Number(error.status) === 400 && (error as { organizerAdmissionRejected?: unknown }).organizerAdmissionRejected === true);
     }
     return data;
   }
@@ -195,6 +196,8 @@ export function useApi() {
     async discardEventAlarm(eventId: string, operationId: string, expectedRevision: number, connectionId?: string) {
       return EventDeliverySchema.parse(await deliveryRequest(`/api/v1/events/${eventId}/delivery/${operationId}/discard-alarm`, connectionId, { expectedRevision }));
     },
+    async getOrganizerCalendar(calendarID: string) { return ProviderOrganizerCalendarSchema.parse(await deliveryRequest(`/api/v1/calendars/${calendarID}/provider-organizer`)); },
+    async editProviderOrganizer(request: ProviderOrganizerRequest) { return ProviderOrganizerReceiptSchema.parse(await deliveryRequest("/api/v1/provider-organizer", undefined, request)); },
     async retryEventDelivery(eventId: string, operationId: string, connectionId?: string) {
       return EventDeliverySchema.parse(await deliveryRequest(`/api/v1/events/${eventId}/delivery/${operationId}/retry`, connectionId, {}));
     },

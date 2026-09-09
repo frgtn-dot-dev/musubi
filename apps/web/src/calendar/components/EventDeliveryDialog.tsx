@@ -242,7 +242,7 @@ export function EventDeliveryDialog({
                               })
                             }
                           >
-                            {target.graphRsvpPhase && target.graphRsvpPhase !== "queued" ? "Check response" : "Retry"}
+                            {target.graphRsvpPhase && target.graphRsvpPhase !== "queued" ? "Check response" : target.organizerPhase && target.organizerPhase !== "queued" ? "Check result" : "Retry"}
                           </Button>
                         ) : null}
                         {target.alarmDiscardRevision !== undefined ? <Button size="compact" variant="secondary" disabled={busy} onClick={event => { setError(""); discardReturnFocus.current = event.currentTarget; setDiscard({ id: target.operationId!, revision: target.alarmDiscardRevision!, trigger: event.currentTarget }); }}>Discard saved alarm change</Button> : null}

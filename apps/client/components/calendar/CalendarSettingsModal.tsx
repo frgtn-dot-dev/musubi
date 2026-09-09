@@ -1,3 +1,4 @@
+import { ProviderOrganizerCreateAction } from "./ProviderOrganizerEditor";
 import { colors, styles } from "@/constants/theme";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { Feather } from "@expo/vector-icons";
@@ -297,6 +298,7 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.container}>
+                {visible && calendar?.provider === "google" && calendar.role === "owner" ? <ProviderOrganizerCreateAction key={calendar.id} calendarID={calendar.id} color={calendar.color} /> : null}
                 <SettingRowAction
                   label="Remind Me"
                   value={

@@ -292,7 +292,7 @@ async function main() {
           start: { dateTime: event.start.toISOString() },
           end: { dateTime: event.end.toISOString() },
           organizer: { self: true },
-          attendees: [{ email: "preserve@example.test" }],
+          attendees: [{ email: "preserve@example.test", self: true, organizer: true }],
           extendedProperties: {
             private: { musubiOperationID: id, untouched: "keep" },
           },
@@ -344,6 +344,22 @@ async function main() {
       );
     };
 
+
+    // Legacy personal conflict resolution must not bypass the explicit meeting
+    // notification contract, including already-saved requests from older clients.
+    for (const action of ["update", "delete"] as const) {
+      const meeting = await seed(action);
+      remote.get(meeting.path)!.attendees = [{ email: "guest@example.test" }];
+      const beforeRows = await rows(meeting.event.id);
+      const beforeWrites = writes.length;
+      const observed = await call(meeting);
+      assert.equal(observed.status, 200);
+      const preview = EventDeliveryConflictSchema.parse(observed.body);
+      assert.equal(preview.canResolve, false, "A generic saved request cannot authorize notifying external guests");
+      assert.equal((await call(meeting, "POST", confirmation(preview))).status, 409);
+      assert.equal(writes.length, beforeWrites, "Legacy meeting confirmation performs no native writes");
+      assert.deepEqual(await rows(meeting.event.id), beforeRows, "Refusal preserves the original saved intent");
+    }
 
     const readOnly = await seed();
     const priorPreview = await prepareEventDeliveryResolution(owner, readOnly.event.id, readOnly.id);
@@ -407,7 +423,7 @@ async function main() {
     );
     assert.equal(remote.get(queued.path)!.summary, "Latest saved draft");
     assert.deepEqual(remote.get(queued.path)!.attendees, [
-      { email: "preserve@example.test" },
+      { email: "preserve@example.test", self: true, organizer: true },
     ]);
     assert.equal(
       remote.get(queued.path)!.extendedProperties.private.untouched,

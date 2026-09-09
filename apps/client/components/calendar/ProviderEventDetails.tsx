@@ -1,3 +1,4 @@
+import { ProviderOrganizerEditor } from "./ProviderOrganizerEditor";
 import { ProviderRsvpEditor } from "./ProviderRsvpEditor";
 import { ProviderReminderEditor } from "./ProviderReminderEditor";
 import { Btn } from "@/components/ui/Btn";
@@ -22,14 +23,14 @@ export function ProviderEventDetailsBody({ event, userId, seriesMaster }: { seri
   const targetID = event.id.replace(/_-?\d+$/, "");
   const key = JSON.stringify([targetID, userId, event.seriesID, event.originalStart]);
   const [result, setResult] = useState<({ key: string; failed?: boolean } & Partial<ProviderEventStateResponse>)>();
-  const [editor, setEditor] = useState<{ kind: "reminders" | "rsvp"; master?: Event; observation: ProviderEventStateResponse }>();
+  const [editor, setEditor] = useState<{ kind: "reminders" | "rsvp" | "organizer"; master?: Event; observation: ProviderEventStateResponse }>();
   const readSequence = useRef(0);
   const [opening, setOpening] = useState(false);
   const [openError, setOpenError] = useState("");
   const active = useRef(true);
   const refreshing = useRef(false);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
-  async function openEditor(kind: "reminders" | "rsvp" = "reminders", seriesAction = false) {
+  async function openEditor(kind: "reminders" | "rsvp" | "organizer" = "reminders", seriesAction = false) {
     if (refreshing.current) return;
     ++readSequence.current;
     refreshing.current = true; setOpening(true); setOpenError("");
@@ -41,7 +42,7 @@ export function ProviderEventDetailsBody({ event, userId, seriesMaster }: { seri
         assertCaldavSeriesAlarmObservation(seriesMaster, observation);
       } else if (kind === "reminders" && observation.reminderEdit?.provider === "caldav" && observation.reminderEdit.scope === "series") throw new Error("Choose Series alarm settings explicitly.");
       setResult({ key, ...observation });
-      if ((kind === "reminders" ? observation.reminderEdit : observation.rsvpEdit) && observation.state && observation.version) setEditor({ kind, observation, ...(seriesAction ? { master: seriesMaster } : {}) });
+      if ((kind === "organizer" ? observation.organizerEdit : kind === "reminders" ? observation.reminderEdit : observation.rsvpEdit) && observation.state && observation.version) setEditor({ kind, observation, ...(seriesAction ? { master: seriesMaster } : {}) });
       else setOpenError("This provider action is unavailable in the refreshed state.");
     } catch { if (active.current) setOpenError("Could not refresh provider details. Retry to load the current state."); }
     finally { refreshing.current = false; if (active.current) setOpening(false); }
@@ -75,5 +76,7 @@ export function ProviderEventDetailsBody({ event, userId, seriesMaster }: { seri
     {current?.rsvpEdit && current.state && current.version && !event.recurrence ? <Btn label={event.seriesID ? "Respond to this occurrence" : current.rsvpEdit.provider === "microsoft" ? "Respond in Outlook" : current.rsvpEdit.provider === "caldav" ? "Respond in calendar" : "Respond in Google"} variant="secondary" loading={opening} onPress={() => void openEditor("rsvp")} /> : null}
     {editor?.kind === "reminders" ? <ProviderReminderEditor event={editor.master ?? { ...event, id: targetID }} observation={editor.observation} onClose={() => setEditor(undefined)} /> : null}
     {editor?.kind === "rsvp" ? <ProviderRsvpEditor event={editor.master ?? { ...event, id: targetID }} observation={editor.observation} onClose={() => setEditor(undefined)} /> : null}
+    {current?.organizerEdit && !event.seriesID && !event.recurrence && !remoteForCalendar(event.originCalendarID ?? event.calendars[0]) ? <Btn label="Manage Google meeting" variant="secondary" loading={opening} onPress={() => void openEditor("organizer")} /> : null}
+    {editor?.kind === "organizer" && editor.observation.organizerEdit ? <ProviderOrganizerEditor event={event} calendarID={editor.observation.organizerEdit.calendarID} color={event.color} observation={editor.observation} onClose={() => setEditor(undefined)} /> : null}
   </View>;
 }

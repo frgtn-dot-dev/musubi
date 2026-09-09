@@ -1,3 +1,4 @@
+import { googleOrganizerTransport } from "./google_organizer_delivery";
 import { googleReminderInstanceTransport } from "./google_reminder_instance";
 import { googleRsvpMethods } from "./google_rsvp_delivery";
 import { googleOccurrenceMethods } from "./google_occurrence";
@@ -6,6 +7,7 @@ import { normalizeGoogleTime } from "./google_time";
 import { config, logger } from "@musubi/config";
 import {
   getOAuthAccountIDs,
+  getGoogleOrganizerTimeEventIDs,
   hasOAuthTaskScope,
   type EventContentPatch,
 } from "@musubi/db";
@@ -498,6 +500,7 @@ export async function fetchGoogleChanges(
     fetchImpl?: typeof fetch;
     baseUrl?: string;
     timeModels?: boolean;
+    organizerTimeEventIDs?: ReadonlySet<string>;
     reminderEvidence?: boolean;
     rsvpEvidence?: boolean;
   } = {},
@@ -560,6 +563,17 @@ export async function fetchGoogleChanges(
     }
   }
   for (const item of items.filter(item => !options.timeModels || !item.recurringEventId || masters.get(item.recurringEventId)?.status !== "cancelled")) changes.push({ kind: "event", data: options.timeModels ? normalizeGoogleTime(item, toNormalized({ ...item, recurrence: undefined }), masters.get(item.recurringEventId)) : toNormalized(item) });
+  if (options.organizerTimeEventIDs?.size && !options.timeModels) {
+    for (const change of changes) {
+      if (change.kind !== "event") continue;
+      const item = masters.get(change.data.externalId);
+      if (!item || item.status === "cancelled" || !options.organizerTimeEventIDs.has(item.id) || item.recurringEventId || item.originalStartTime || item.recurrence?.length) continue;
+      // Only exact persisted organizer sources carry this continuation proof.
+      // Never upgrade unrelated personal/secondary events merely because the
+      // organizer feature is enabled.
+      change.data = normalizeGoogleTime(item, change.data);
+    }
+  }
   if ((options.reminderEvidence || options.rsvpEvidence) && !options.timeModels) {
     for (const change of changes) {
       if (change.kind !== "event") continue;
@@ -587,6 +601,7 @@ export function googleReminderEventEvidence(data: any) {
 
 export const googleAdapter: CalendarAdapter = {
   provider: "google",
+  organizer: googleOrganizerTransport(async (user, account) => { const token = await getGoogleAccessToken(user, account); await assertOAuthEventWriteGrant(user, "google", account); return token; }),
   ...googleOccurrenceMethods(getGoogleAccessToken, toNormalized),
   ...googleRsvpMethods(async (user, account) => {
     const token = await getGoogleAccessToken(user, account);
@@ -701,7 +716,7 @@ export const googleAdapter: CalendarAdapter = {
       throw new TaskScopeMissingError();
     return taskListId
       ? fetchGoogleTaskChanges(accessToken, taskListId)
-      : fetchGoogleChanges(accessToken, externalCalendarId, cursor, { timeModels: config.api.eventTimeEditsEnabled, reminderEvidence: config.api.providerReminderEditsEnabled, rsvpEvidence: config.api.providerRsvpEditsEnabled });
+      : fetchGoogleChanges(accessToken, externalCalendarId, cursor, { timeModels: config.api.eventTimeEditsEnabled, organizerTimeEventIDs: new Set(await getGoogleOrganizerTimeEventIDs(userID, accountId, externalCalendarId)), reminderEvidence: config.api.providerReminderEditsEnabled, rsvpEvidence: config.api.providerRsvpEditsEnabled });
   },
 
   async assertEventWrite(userID, accountId, externalCalendarId, operation) {
@@ -744,6 +759,7 @@ export const googleAdapter: CalendarAdapter = {
               current.organizer.email
             ? false
             : undefined;
+      if (self === true && Array.isArray(current.attendees) && current.attendees.some((guest: { self?: boolean; organizer?: boolean }) => !guest.self && !guest.organizer)) throw new EventWriteError("organizer", "unsupported", "Use the explicit Google organizer action to notify guests.");
       assertEventWriteEvidence(
         operation.action === "delete" && self === false ? true : self,
         "organizer",

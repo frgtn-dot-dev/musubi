@@ -83,6 +83,7 @@ type APIConfig = {
   caldavAlarmEditsEnabled: boolean;
   googleAvailabilityEnabled: boolean;
   providerRsvpEditsEnabled: boolean;
+  providerOrganizerEditsEnabled: boolean;
   port: number;
   environment: Environment;
   url: string;
@@ -242,6 +243,7 @@ const apiConfig: APIConfig = {
   caldavAlarmEditsEnabled: process.env.CALDAV_ALARM_EDITS_ENABLED === "true",
   googleAvailabilityEnabled: process.env.GOOGLE_AVAILABILITY_ENABLED === "true",
   providerRsvpEditsEnabled: process.env.PROVIDER_RSVP_EDITS_ENABLED === "true",
+  providerOrganizerEditsEnabled: process.env.PROVIDER_ORGANIZER_EDITS_ENABLED === "true",
   port: Number(process.env.API_SERVER_PORT) || 7531,
   environment,
   url: envOrThrow("BETTER_AUTH_URL"),

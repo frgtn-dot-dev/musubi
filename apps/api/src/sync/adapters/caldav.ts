@@ -1,4 +1,5 @@
 import { caldavAlarmScope } from "@musubi/calendar";
+import { recurrenceDateValues } from "./caldav_recurrence_dates";
 import { restoreEventExdates } from "./caldav_event_ical";
 import { inspectCaldavAlarm, writeCaldavAlarm } from "./caldav_alarms";
 import type { CaldavAlarmIntent } from "@musubi/db";
@@ -127,12 +128,20 @@ function recurrenceDate(time: ICAL.Time) {
 
 function recurrenceFrom(component: ICAL.Component): string | null {
   const rrule = component.getFirstProperty("rrule")?.getFirstValue();
-  if (!rrule) return null;
+  if (!rrule) {
+    if (component.name === "vevent" && ["rdate", "exdate"].some(name => component.hasProperty(name))) throw new EventWriteError("recurrence", "unsupported", "Dated recurrence requires a representable recurrence rule.");
+    return null;
+  }
   const lines = new Set<string>([`RRULE:${rrule.toString()}`]);
   for (const propertyName of ["exdate", "rdate"] as const) {
     for (const property of component.getAllProperties(propertyName)) {
       for (const time of property.getValues() as ICAL.Time[]) {
-        lines.add(`${propertyName.toUpperCase()}:${recurrenceDate(time)}`);
+        if (component.name === "vevent" && time.isDate) {
+          if (!(component.getFirstPropertyValue("dtstart") as ICAL.Time)?.isDate) throw new EventWriteError("recurrence", "unsupported", "DATE recurrence requires an all-day event.");
+          const line = `${propertyName.toUpperCase()};VALUE=DATE:${time.toICALString()}`;
+          recurrenceDateValues(line);
+          lines.add(line);
+        } else lines.add(`${propertyName.toUpperCase()}:${recurrenceDate(time)}`);
       }
     }
   }
@@ -180,6 +189,10 @@ function addRecurrence(
         "rrule",
         ICAL.Recur.fromString(line.replace(/^RRULE:/, "")),
       );
+    } else if (/^(EXDATE|RDATE);VALUE=DATE:/i.test(line)) {
+      if (!isAllDay) throw new EventWriteError("recurrence", "unsupported", "DATE recurrence requires an all-day event.");
+      recurrenceDateValues(line);
+      component.addProperty(ICAL.Property.fromString(line));
     } else if (/^(EXDATE|RDATE):/.test(line)) {
       const [propertyName, values] = line.split(":", 2) as [
         "EXDATE" | "RDATE",
@@ -189,7 +202,7 @@ function addRecurrence(
         const match = value.match(
           /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?$/,
         );
-        if (!match) continue;
+        if (!match) throw new EventWriteError("recurrence", "unsupported", "Unsupported or invalid recurrence date.");
         const date = new Date(
           Date.UTC(
             +match[1],
@@ -200,11 +213,14 @@ function addRecurrence(
             +match[6],
           ),
         );
+        if (date.getUTCFullYear() !== +match[1] || date.getUTCMonth() + 1 !== +match[2] || date.getUTCDate() !== +match[3] || date.getUTCHours() !== +match[4] || date.getUTCMinutes() !== +match[5] || date.getUTCSeconds() !== +match[6]) throw new EventWriteError("recurrence", "unsupported", "Unsupported or invalid recurrence date.");
         component.addPropertyWithValue(
           propertyName.toLowerCase(),
           isAllDay ? allDayTime(date) : ICAL.Time.fromJSDate(date, true),
         );
       }
+    } else if (/^(EXDATE|RDATE)[;:]/i.test(line)) {
+      throw new EventWriteError("recurrence", "unsupported", "Unsupported or invalid recurrence date.");
     }
   }
 }

@@ -10,6 +10,7 @@ import { notifyAuthExpired } from "~/auth/auth-client";
 
 const ApiErrorEnvelopeSchema = z.object({
   error: z.string(),
+  organizerAdmissionRejected: z.literal(true).optional(),
   message: z.string().optional(),
   requestId: z.string().optional(),
   reason: z.enum(["unsupported", "denied", "unknown"]).optional(),
@@ -50,6 +51,7 @@ export class ApiError extends Error {
     status: number,
     requestId?: string,
     readonly reason?: EventWriteReason,
+    readonly organizerAdmissionRejected?: boolean,
   ) {
     super(message);
     this.name = "ApiError";
@@ -124,6 +126,7 @@ function throwApiError(response: Response, payload: unknown): never {
     response.status,
     correlationId,
     envelope.success ? envelope.data.reason : undefined,
+    response.status === 400 && envelope.success ? envelope.data.organizerAdmissionRejected : undefined,
   );
 }
 

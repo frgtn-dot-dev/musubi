@@ -838,3 +838,9 @@ family CAS ani organizer delivery proof. [Kontrakt](../sync/graph-create-adoptio
 ### K13: Graph one-off response actions
 
 Default-off Graph one-off RSVP nyní používá samostatné accept/tentativelyAccept/decline akce s explicitním sendResponse. Privátní marker před síťovým voláním zabrání automatickému opakování i po nejistém výsledku; 202, pozorovaná odpověď a neznámé doručení organizátorovi jsou oddělené. Žádný If-Match/CAS důkaz se netvrdí. Celá veřejná, web/native a durable cesta je pokrytá fake HTTP/PG/UI scénáři. [Kontrakt a hranice](../sync/microsoft-rsvp.md).
+K13 Google organizer one-off: separate default-off create/update/cancel path with
+explicit `sendUpdates: all`, stable create IDs, conditional changes, permanent
+possible-dispatch marker/read-only uncertain recovery and web/native callers.
+Guest lists remain provider-only; no second Musubi email. Guest-list editing,
+series/delegation and live two-account notification acceptance remain open.
+See [Google organizer contract](../sync/google-organizer.md).
