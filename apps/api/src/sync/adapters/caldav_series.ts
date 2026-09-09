@@ -14,6 +14,8 @@ export type CaldavSeriesIntent = {
 
 /** Internal evidence only. The full resource can contain private alarms and
  * extensions: never return this body through an API or log it. */
+export type CaldavSeriesDeletion = { baseline: CaldavSeriesIntent; before: string };
+
 export type CaldavSeriesEvidence = {
   ref: ExternalEventRef;
   data: string;

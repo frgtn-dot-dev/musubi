@@ -1,7 +1,7 @@
 import type { GoogleRsvpEvidence, GoogleRsvpResponse } from "./adapters/google_rsvp";
 import type { GoogleOccurrenceIntent } from "@musubi/db";
 import type { GoogleOccurrenceEvidence, GoogleSeriesEvidence } from "./adapters/google_occurrence";
-import type { CaldavSeriesIntent, CaldavSeriesEvidence, CaldavSeriesWrite, CaldavSeriesResolutionEvidence } from "./adapters/caldav_series";
+import type { CaldavSeriesDeletion, CaldavSeriesIntent, CaldavSeriesEvidence, CaldavSeriesWrite, CaldavSeriesResolutionEvidence } from "./adapters/caldav_series";
 import type { GoogleReminderWrite, ProviderEventState, Event, Task, TaskStatus, EventTimeModel, OccurrenceStart } from "@musubi/types";
 import type { EventContentPatch } from "@musubi/db";
 
@@ -122,6 +122,8 @@ export type CalendarAdapter = {
   writeRsvp?(user: string, account: string, calendar: string, evidence: GoogleRsvpEvidence, policy: { sendUpdates: "all" }, signal?: AbortSignal, beforeWrite?: () => Promise<void>): Promise<{ etag: string; recovered: boolean; notificationDelivery: "unknown" }>;
   readCaldavSeries?(user: string, account: string, calendar: string, intent: CaldavSeriesIntent, signal?: AbortSignal): Promise<CaldavSeriesEvidence>;
   readCaldavSeriesResolution?(user: string, account: string, calendar: string, intent: CaldavSeriesIntent, before: string, signal?: AbortSignal): Promise<CaldavSeriesResolutionEvidence>;
+  readCaldavSeriesForDelete?(user: string, account: string, calendar: string, intent: CaldavSeriesIntent, signal?: AbortSignal): Promise<CaldavSeriesEvidence>;
+  deleteCaldavSeries?(user: string, account: string, calendar: string, intent: CaldavSeriesDeletion, signal?: AbortSignal): Promise<ExternalEventRef>;
   writeCaldavSeries?(user: string, account: string, calendar: string, intent: CaldavSeriesWrite, signal?: AbortSignal): Promise<CaldavSeriesEvidence>;
   readSeries?(user: string, account: string, calendar: string, intent: Pick<GoogleOccurrenceIntent, "master" | "masterExternalID" | "masterEtag">, signal?: AbortSignal): Promise<GoogleSeriesEvidence>;
   readOccurrence?(user: string, account: string, calendar: string, intent: GoogleOccurrenceIntent, ref?: ExternalEventRef, signal?: AbortSignal): Promise<GoogleOccurrenceEvidence>;
