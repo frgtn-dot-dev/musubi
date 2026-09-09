@@ -76,7 +76,9 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
         if ((request.action === "update" && (Object.keys(request.patch).some(key => !["title", "description", "location", "recurrence"].includes(key)))))
           throw new EventWriteError("event-write", "unsupported", "CalDAV scope editing supports series content/time and occurrence content/time/cancellation. No changes were saved.");
         if (request.scope === "occurrence" && request.action === "delete" && childRows.some(child => !child.deletedAt && child.isCanceled && sameCaldavScopeContext(child.originalStart, request.originalStart))) throw new EventWriteError("event-write", "unsupported");
-        if (request.action === "update" && request.patch.recurrence !== undefined && (!request.patch.recurrence || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(request.patch.recurrence) || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(master.recurrence ?? ""))) throw new EventWriteError("event-write", "unsupported");
+        const removesRecurrence = request.action === "update" && request.patch.recurrence === null;
+        if (removesRecurrence && (request.scope !== "series" || request.time || childRows.length)) throw new EventWriteError("event-write", "unsupported");
+        if (request.action === "update" && request.patch.recurrence !== undefined && ((!removesRecurrence && (!request.patch.recurrence || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(request.patch.recurrence))) || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(master.recurrence ?? ""))) throw new EventWriteError("event-write", "unsupported");
         caldavContext = await caldavSeriesContext(tx, actorID, EventSchema.parse(master), childRows.filter(child => !child.deletedAt).map(child => EventSchema.parse(snapshot(child))));
         if (options.caldavSplit && (options.caldav || options.caldavDeletion || options.provider || !sameCaldavScopeContext(options.caldavSplit.split.request, request))) throw new EventWriteError("event-write", "unsupported");
         if (options.caldavSplit && !sameCaldavScopeContext(options.caldavSplit.context, caldavContext)) return { status: "conflict", current: EventSchema.parse(master) };
@@ -105,8 +107,8 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
     try {
       let plannedRequest = caldavContext ? normalizeCaldavScopeRequest(EventSchema.parse(master), request) : request;
       if (options.caldav && request.action === "update" && request.patch.recurrence !== undefined) {
-        const recurrence = options.caldav.write.patch.recurrence ?? (sameCaldavRecurrence(request.patch.recurrence, master.recurrence) ? master.recurrence : undefined);
-        if (!sameCaldavRecurrence(request.patch.recurrence, recurrence)) throw new EventWriteError("event-write", "unsupported");
+        const recurrence = options.caldav.write.patch.recurrence !== undefined ? options.caldav.write.patch.recurrence : (sameCaldavRecurrence(request.patch.recurrence, master.recurrence) ? master.recurrence : undefined);
+        if (request.patch.recurrence === null ? recurrence !== null : !sameCaldavRecurrence(request.patch.recurrence, recurrence)) throw new EventWriteError("event-write", "unsupported");
         plannedRequest = { ...request, patch: { ...request.patch, recurrence } };
       }
       plan = options.caldavSplit ? caldavSplitPlan(options.caldavSplit) : planEventScope(EventSchema.parse(master), liveChildren, plannedRequest, () => revival?.id ?? options.caldav?.write.newDefinition?.id ?? randomUUID());
@@ -218,7 +220,7 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
         // suffixes. Reserve temporary addresses inside this transaction first.
         for (const { mapping } of remapped) await tx.update(externalEvents).set({ externalEventID: mapping.externalSeriesID! + "#musubi-pending=" + randomUUID() }).where(eq(externalEvents.id, mapping.id));
         for (const { mapping, child } of remapped) await tx.update(externalEvents).set({ externalEventID: mapping.externalSeriesID! + "#musubi-original=" + encodeURIComponent(JSON.stringify(child.originalStart)), originalStart: child.originalStart }).where(eq(externalEvents.id, mapping.id));
-        const queuedContext = await caldavSeriesContext(tx, actorID, changedMaster, actualChildren);
+        const queuedContext = await caldavSeriesContext(tx, actorID, changedMaster, actualChildren, undefined, false, options.caldav.write.patch.recurrence === null);
         await appendCaldavSeries(tx, actorID, request.operationID, { ...options.caldav, context: queuedContext }, changedMaster);
       }
     }

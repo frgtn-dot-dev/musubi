@@ -101,3 +101,10 @@ const materializedFollowing = planEventScope(master, [], { ...occurrence, scope:
 assert.equal(materializedFollowing.creates.length, 1, "reminder-only following has its own head");
 assert.equal(materializedFollowing.creates[0]!.recurrence, "RRULE:FREQ=DAILY;COUNT=3");
 assert.equal(planEventScope(master, [], { ...occurrence, action: "update", patch: {} }, newID).creates.length, 0, "ordinary no-op remains a no-op");
+
+const removalRequest = { operationID, expectedRevision: master.revision, scope: "series", action: "update", patch: { recurrence: null } };
+const removal = planEventScope(master, [], removalRequest);
+assert.deepEqual(removal, { updates: [{ ...master, recurrence: null }], creates: [], deletes: [] });
+assert.equal(expand(apply(master, [], removal)).length, 1);
+assert.throws(() => planEventScope(master, cancelled.creates.map(child => ({ ...child, revision: 1 })), removalRequest));
+assert.deepEqual(master, before, "Removing recurrence preserves the immutable input");

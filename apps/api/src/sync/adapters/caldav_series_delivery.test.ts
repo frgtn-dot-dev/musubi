@@ -265,6 +265,28 @@ async function main() {
         assert.deepEqual(repeated.exceptions, evidence.exceptions.map(item => ({ ...item, etag: repeated.ref.etag })));
         await deliverRecurrence(); assert.equal(puts, 1);
       }
+      {
+        const alone = before.replace(child + "\r\n", "").replace(cancelled + "\r\n", "");
+        const aloneBaseline = { ...baseline, children: [] };
+        const remove = prepareCaldavSeriesWrite(caldavSeriesEvidence(alone, aloneBaseline), aloneBaseline, { recurrence: null });
+        assert.equal(remove.after, alone.replace(/RRULE:[^\r\n]+\r\n/, ""), "Only the RRULE physical line changes");
+        assert.equal(remove.baseline.master.recurrence, baseline.master.recurrence);
+        assert.equal(remove.patch.recurrence, null);
+        for (const outcome of ["ok", "applied-503"]) {
+          reset(outcome); data = alone;
+          const deliverRemoval = () => deliverCaldavSeriesResource(collection, JSON.parse(JSON.stringify(remove)), "Basic Zml4dHVyZTpmaXh0dXJl", AbortSignal.timeout(5000));
+          if (outcome !== "ok") { await assert.rejects(deliverRemoval, (error: any) => error.outcome === "unconfirmed"); mode = "ok"; }
+          const result = await deliverRemoval();
+          assert.equal(result.master.recurrence, null); assert.equal(result.exceptions.length, 0);
+          assert.deepEqual(result.master.timeModel, evidence.master.timeModel);
+          await deliverRemoval(); assert.equal(puts, 1);
+        }
+        assert.throws(() => prepareCaldavSeriesWrite(caldavSeriesEvidence(alone, aloneBaseline), aloneBaseline, { recurrence: null }, undefined, undefined, undefined, time as any));
+        for (const extra of ["RDATE:20260410T070000Z", "EXDATE:20260328T070000Z", "RRULE:FREQ=DAILY;COUNT=4"]) {
+          const malformed = alone.replace("SUMMARY:", extra + "\r\nSUMMARY:");
+          assert.throws(() => prepareCaldavSeriesWrite({ ...evidence, data: malformed }, aloneBaseline, { recurrence: null }));
+        }
+      }
       if (kind === "zoned") {
         const alone = before.replace(child + "\r\n", "").replace(cancelled + "\r\n", "");
         const aloneBaseline = { ...baseline, children: [] };

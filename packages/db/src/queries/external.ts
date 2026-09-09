@@ -685,6 +685,18 @@ async function assertNoPendingCaldavSplit(tx: DbTransaction, provider: string, u
 }
 
 /** A CalDAV GET replaces one whole resource, including omitted overrides. */
+async function isRetiredCaldavRecurrence(tx: DbTransaction, provider: string, userID: string, calendarID: string, externalCalendarID: string, resourceID: string, etag?: string | null): Promise<boolean> {
+  if (provider !== "caldav") return false;
+  const [retired] = await tx.select({ id: eventOutbox.id }).from(eventOutbox)
+    .innerJoin(externalCalendars, eq(externalCalendars.id, eventOutbox.externalCalendarLinkID))
+    .where(and(eq(eventOutbox.provider, provider), eq(eventOutbox.userID, userID), eq(eventOutbox.calendarID, calendarID),
+      eq(eventOutbox.externalCalendarID, externalCalendarID), eq(eventOutbox.externalEventID, resourceID),
+      eq(eventOutbox.status, "completed"), eq(eventOutbox.action, "update"),
+      sql`${eventOutbox.payload}->'caldavSeries'->'write'->'patch'->'recurrence' = 'null'::jsonb`,
+      ...(etag ? [eq(eventOutbox.expectedEtag, etag)] : []))).limit(1);
+  return !!retired;
+}
+
 export async function replaceExternalEventResource(
   provider: string, userID: string, calendarID: string, externalCalendarID: string,
   resourceID: string, observations: ExternalEventResourceObservation[],
@@ -697,6 +709,7 @@ export async function replaceExternalEventResource(
       throw new Error("Invalid complete event resource.");
     if (observations.some(item => item.icalUid !== master.icalUid || (item !== master && item.time.externalSeriesID !== resourceID)))
       throw new Error("Inconsistent event resource identity.");
+    if (await isRetiredCaldavRecurrence(tx, provider, userID, calendarID, externalCalendarID, resourceID, master.etag)) return false;
     // A snapshot fetched before a confirmed local DELETE must not resurrect
     // the same accepted resource version after its mappings have been removed.
     const [deletedVersion] = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(
@@ -799,6 +812,7 @@ async function upsertExternalEventInTransaction(
       if (tracked) return false;
     }
 
+    if (!deferFamilyValidation && await isRetiredCaldavRecurrence(tx, provider, userID, calendarID, externalCalendarID, time?.externalSeriesID ?? externalEventID, etag)) return false;
     if (!deferFamilyValidation) await assertNoPendingCaldavSplit(tx, provider, userID, calendarID, externalCalendarID, time?.externalSeriesID ?? externalEventID);
     const expandedIdentity = providerOccurrence ? {
       externalSeriesID: providerOccurrence.externalSeriesID,
