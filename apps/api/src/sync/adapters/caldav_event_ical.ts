@@ -155,3 +155,28 @@ export function appendEventComponent(data: string, component: string): string {
   ICAL.parse(output);
   return output;
 }
+
+/** Remove selected top-level VEVENT spans; every other physical byte survives. */
+export function removeEventComponents(data: string, indexes: readonly number[]): string {
+  for (const index of indexes) eventComponentBytes(data, index);
+  const selected = new Set(indexes);
+  const lines = calendarLines(data);
+  let depth = 0, ordinal = -1, removing = false;
+  const output: string[] = [];
+  for (const line of lines) {
+    const boundary = /^(BEGIN|END):([A-Z0-9-]+)$/i.exec(line.unfolded);
+    if (boundary?.[1]!.toUpperCase() === "BEGIN") {
+      if (depth === 1 && boundary[2]!.toLowerCase() === "vevent") removing = selected.has(++ordinal);
+      depth++;
+    }
+    if (!removing) output.push(line.raw);
+    if (boundary?.[1]!.toUpperCase() === "END") {
+      if (depth === 2 && boundary[2]!.toLowerCase() === "vevent") removing = false;
+      depth--;
+    }
+  }
+  const result = output.join("");
+  replaceEventProperties(result, 0, new Map());
+  ICAL.parse(result);
+  return result;
+}
