@@ -13,7 +13,8 @@ import { useApi } from "@/services/api";
 
 export function ProviderReminderEditor({ event, observation, onClose }: { event: Event; observation: ProviderEventStateResponse; onClose: () => void }) {
   const caldav = observation.reminderEdit?.provider === "caldav";
-  const label = caldav ? "CalDAV event alarms" : "Google reminders";
+  const series = observation.reminderEdit?.provider === "caldav" && observation.reminderEdit.scope === "series";
+  const label = caldav ? series ? "CalDAV series alarm" : "CalDAV event alarms" : "Google reminders";
   const api = useApi(); const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState(() => providerReminderDraft(observation));
   const [picker, setPicker] = useState<"mode" | number | null>(null);
@@ -42,7 +43,7 @@ export function ProviderReminderEditor({ event, observation, onClose }: { event:
       <View style={styles.modalHandle} />
       <View style={styles.modalTitleRow}><Text accessibilityRole="header" style={styles.modalTitle}>{caldav ? label : event.seriesID ? "Google reminders for this occurrence" : "Google reminders"}</Text></View>
       <ScrollView style={{ flexShrink: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: spacing[4], paddingBottom: spacing[4] + insets.bottom, gap: spacing[3] }}>
-        <Text style={copy}>{caldav ? "This alarm is stored on the CalDAV event and may be shared with other calendar users. Calendar apps deliver it. Musubi reminders are separate; both may notify you." : <>{event.seriesID ? "These Google reminders apply only to this occurrence. " : ""}Personal notifications from Google Calendar. Musubi reminders are separate; both apps may notify you.</>}</Text>
+        <Text style={copy}>{caldav ? `${series ? "This alarm applies to every occurrence in this series. " : ""}This alarm is stored on the CalDAV event and may be shared with other calendar users. Calendar apps deliver it. Musubi reminders are separate; both may notify you.` : <>{event.seriesID ? "These Google reminders apply only to this occurrence. " : ""}Personal notifications from Google Calendar. Musubi reminders are separate; both apps may notify you.</>}</Text>
         {notice ? <Text accessibilityLiveRegion="polite" style={copy}>{notice}</Text> : <>
           <Btn variant="secondary" label={`Reminder mode: ${modeLabels[draft.mode]}`} disabled={busy} onPress={() => setPicker("mode")} />
           {draft.mode === "custom" ? <>

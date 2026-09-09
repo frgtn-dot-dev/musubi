@@ -7,10 +7,11 @@ live iCloud activation is claimed.
 
 ## Supported resource
 
-The initial contract is one live personal, nonmeeting VEVENT in one native
+The contract is one live personal, nonmeeting VEVENT in one native
 resource, with one source mapping and one linked calendar. It requires a known
 zoned or all-day canonical time, exact native time/content/UID, and a fresh strong
-resource ETag. Floating/legacy time, recurrence, detached occurrences, METHOD,
+resource ETag. A finite master series is supported only through the explicit
+series contract below. Floating/legacy time, other recurrence, detached occurrences, METHOD,
 ORGANIZER and ATTENDEE are refused. A fresh `current-user-privilege-set` must
 positively grant `write-content` on the exact resource; absent or denied evidence
 never permits editing.
@@ -123,3 +124,59 @@ collection during the adapter lookup preserves cached events and tasks, includin
 when the cursor was cleared after a discard. Only an explicitly authoritative
 CalDAV reset may sweep missing objects. The HTTP/DB fixture exercises initial
 and post-discard missing lookups with all write flags disabled.
+
+
+## Explicit finite master-series alarms
+
+A personal master with one unchanged plain COUNT RRULE can use the same native
+alarm writer. The complete known-zoned/all-day family must contain 1–366
+unambiguous slots within 730 days. Overnight timed events are supported; the
+unchanged DTSTART/DTEND defines the exact elapsed duration for every occurrence.
+Civil starts are enumerated independently to reject skipped gaps/COUNT refill,
+and both actual endpoints must remain unambiguous, including across DST. This
+alarm-only proof does not relax Graph creation or timezone-conversion rules.
+Infinite/UNTIL rules, floating time, RDATE,
+EXDATE, meetings and active or retired detached definitions remain unsupported.
+Only one VEVENT and one mapping may exist. Raw master RRULE evidence is checked
+separately from untouched VTIMEZONE observance rules; a normalized projection
+cannot authorize duplicate/changed recurrence properties.
+
+The public request carries `scope: "series"`, retained in the private durable
+intent and conflict preview. Missing scope keeps the one-off contract and cannot
+change a recurring master. Admission, delivery/ACK and replacement confirmation
+recheck scope, exact revision, source/lease identity and the absence of detached
+history under the same master lock used by scope writers. A new retired child
+between preparation and delivery prevents a provider write. Recovery preserves
+the original series scope, recurrence and every nonalarm byte. A native RRULE
+change cannot be overwritten by alarm recovery. Discard remains an explicit
+local abandonment, not a native undo or successful-alarm receipt.
+
+Web and native details offer **Series alarm settings** as a separate explicit
+action. It receives the actual stored master from the parent calendar state and
+refreshes provider-state for that master separately. The response must prove
+series scope and match the stored master's exact revision before the editor can
+open. Displayed/generated occurrence times and normalized IDs are never used as
+that proof. A failed/stale lookup keeps the editor closed. The existing editor
+and conflict confirmation both say the alarm applies to every occurrence. The
+original occurrence context and focus return are retained on close.
+
+This is an elapsed START-relative resource alarm for each occurrence; DTSTART,
+DTEND, recurrence, future civil/instant slots, alarm DESCRIPTION and other raw
+properties remain unchanged. Calendar apps deliver these notifications. This
+path creates no Musubi reminder schedule or task and provides no per-user or
+calendar-default semantics; independently configured Musubi reminders may also
+notify.
+
+Registered adapter tests cover known zoned/all-day finite families, cross-DST
+slot preservation (including 23:00–01:00 overnight families), raw recurrence restrictions and unchanged nonalarm spans.
+The HTTP/Postgres alarm suite covers explicit/missing/wrong scope, detached and
+retired history, child races, unknown privilege/default-off gates, saved scope,
+conditional writes, lost responses, repeated conflict handling, scope tampering,
+changed native recurrence, discard and stable canonical identity. Disposable
+Radicale runs the complete one-off, zoned-series and all-day-series CAS and
+conflict/removal lifecycle, including server-provided VTIMEZONE data. Web/native
+component tests cover fresh-master admission and explicit conflict wording; the
+mocked browser cases `K14 explicit CalDAV series alarm` exercise a generated
+occurrence, stale-master refusal, public scope/revision payload and focus return
+in desktop light and narrow dark layouts. These checks do not claim physical
+native/iCloud notification delivery or production activation.

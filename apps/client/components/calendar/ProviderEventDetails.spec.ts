@@ -18,7 +18,7 @@ vi.mock("@/services/federation", () => ({ remoteForCalendar: () => null }));
 vi.mock("@/contexts/ServerContext", () => ({ useServer: () => ({ apiUrl: "https://example.test" }) }));
 const event = EventSchema.parse({ id: "00000000-0000-4000-8000-000000000001", revision: 7, title: "Meeting", start: new Date("2026-09-10T09:00:00Z"), end: new Date("2026-09-10T10:00:00Z"), isAllDay: false, organizer: "owner", creatorID: "owner", color: "red", calendars: ["source"], hasAttendees: false, isCanceled: false });
 const observation = { version: "a".repeat(64), reminderEdit: { provider: "google", expectedRevision: 7 }, state: { provider: "google", organizer: null, isOrganizer: false, attendees: [], attendeesComplete: true, ownResponse: null, reminders: { provider: "google", useDefault: true, overrides: [] }, availability: null, privacy: null, status: null, eventType: null, conferenceURLs: [] } };
-function render(value = event) { h.index = 0; const result = ProviderEventDetailsBody({ event: value, userId: "owner" }); for (const effect of h.effects.splice(0)) effect(); return result; }
+function render(value = event, seriesMaster?: typeof event) { h.index = 0; const result = ProviderEventDetailsBody({ event: value, userId: "owner", seriesMaster }); for (const effect of h.effects.splice(0)) effect(); return result; }
 function nodes(node: ReactNode): any[] { if (Array.isArray(node)) return node.flatMap(nodes); if (!isValidElement(node)) return []; const props = node.props as any; return [{ type: node.type, props }, ...nodes(props.children)]; }
 async function settle() { for (let i = 0; i < 8; i++) await Promise.resolve(); }
 beforeEach(() => { h.slots = []; h.index = 0; h.effects = []; vi.clearAllMocks(); });
@@ -77,4 +77,21 @@ it("invalidates a cached native editor from canonical observation revision witho
   h.slots = []; h.index = 0; h.effects = [];
   render({ ...event, title: "Busy" }); await settle();
   expect(render({ ...event, title: "Busy" })).toBeNull();
+});
+
+it("requires explicit series action with the stored master and a matching fresh revision", async () => {
+  const master = EventSchema.parse({ ...event, start: new Date("2026-03-28T22:00:00Z"), end: new Date("2026-03-29T00:00:00Z"), recurrence: "RRULE:FREQ=DAILY;COUNT=4", timeModel: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-28T23:00:00.000", endLocal: "2026-03-29T01:00:00.000" } });
+  const displayed = { ...master, start: new Date("2026-09-11T09:00:00Z"), end: new Date("2026-09-11T10:00:00Z") };
+  const seriesObservation = { ...observation, state: { ...observation.state, provider: "caldav", reminders: { provider: "caldav", alarms: [] } }, reminderEdit: { provider: "caldav", scope: "series", expectedRevision: 7, minutesBeforeStart: 15 } };
+  h.fetch.mockResolvedValue(seriesObservation);
+  render(displayed); await settle();
+  expect(nodes(render(displayed)).some(node => node.type === "Btn")).toBe(false);
+  const action = () => nodes(render(displayed, master)).find(node => node.type === "Btn" && node.props.label === "Series alarm settings")!;
+  action().props.onPress(); await settle();
+  expect(h.fetch.mock.calls[1][0]).toBe(master);
+  const editor = nodes(render(displayed, master)).find(node => node.type === "ProviderReminderEditor")!;
+  expect(editor.props.event).toBe(master); expect(editor.props.observation.reminderEdit.scope).toBe("series");
+  editor.props.onClose(); h.fetch.mockResolvedValue({ ...seriesObservation, reminderEdit: { ...seriesObservation.reminderEdit, expectedRevision: 8 } });
+  action().props.onPress(); await settle();
+  expect(nodes(render(displayed, master)).some(node => node.type === "ProviderReminderEditor")).toBe(false);
 });

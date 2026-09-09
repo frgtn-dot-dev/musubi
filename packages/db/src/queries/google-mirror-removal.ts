@@ -11,16 +11,17 @@ export async function removeGoogleCalendarMirrors(
   userID: string,
   accountID: string,
   candidates: { sourceID: string; calendarID: string; externalCalendarID: string }[],
+  provider: "google" | "microsoft" = "google",
 ) {
   if (!candidates.length) return { calendarIDs: [], userIDs: [] };
   return db.transaction(async tx => {
     await lockCalendarLifecycle(tx, candidates.map(source => source.calendarID), "exclusive");
     const sources = await tx.select().from(externalCalendars).where(and(
-      eq(externalCalendars.provider, "google"), eq(externalCalendars.userID, userID),
+      eq(externalCalendars.provider, provider), eq(externalCalendars.userID, userID),
       eq(externalCalendars.accountID, accountID), eq(externalCalendars.disabled, false),
       eq(externalCalendars.supportsEvents, true),
       sql`exists (select 1 from ${account} where ${account.userId} = ${userID}
-        and ${account.providerId} = 'google' and ${account.accountId} = ${accountID}
+        and ${account.providerId} = ${provider} and ${account.accountId} = ${accountID}
         and ${account.syncStatus} = 'active')`,
       or(...candidates.map(source => and(eq(externalCalendars.id, source.sourceID),
         eq(externalCalendars.calendarID, source.calendarID),
@@ -38,7 +39,7 @@ export async function removeGoogleCalendarMirrors(
     const members = await tx.select({ userID: calendarMembers.userID }).from(calendarMembers).where(inArray(calendarMembers.calendarID, affected));
     for (const source of sources) {
       if (!source.calendarID) continue;
-      await redactGoogleCalendarMirror(tx, source.calendarID, userID, source.id);
+      await redactGoogleCalendarMirror(tx, source.calendarID, userID, source.id, provider);
       await removeCalendarInTransaction(tx, source.calendarID);
     }
     // Return invalidation addresses, never a removed calendar's private DTO.

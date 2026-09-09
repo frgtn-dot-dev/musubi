@@ -21,7 +21,7 @@ export function providerReminderRequest(observation: ProviderEventStateResponse,
   if (draft.mode === "custom" && (!draft.overrides.length || draft.overrides.some(item => !/^\d+$/.test(item.minutes) || Number(item.minutes) > 40320))) throw new Error("Use whole minutes from 0 to 40320 for each reminder.");
   if (observation.reminderEdit.provider === "caldav") {
     if (draft.mode === "defaults" || draft.mode === "custom" && (draft.overrides.length !== 1 || draft.overrides[0].method !== "popup")) throw new Error("Use one display alarm or turn the event alarm off.");
-    return CaldavAlarmEditSchema.parse({ operationID, expectedRevision: observation.reminderEdit.expectedRevision, expectedStateVersion: observation.version, provider: "caldav", alarms: { minutesBeforeStart: draft.mode === "off" ? null : Number(draft.overrides[0].minutes) } });
+    return CaldavAlarmEditSchema.parse({ operationID, expectedRevision: observation.reminderEdit.expectedRevision, expectedStateVersion: observation.version, provider: "caldav", ...(observation.reminderEdit.scope ? { scope: observation.reminderEdit.scope } : {}), alarms: { minutesBeforeStart: draft.mode === "off" ? null : Number(draft.overrides[0].minutes) } });
   }
   return ProviderReminderEditSchema.parse({ operationID, expectedRevision: observation.reminderEdit.expectedRevision, expectedStateVersion: observation.version, provider: "google", reminders: draft.mode === "defaults" ? { useDefault: true } : { useDefault: false, overrides: draft.mode === "off" ? [] : draft.overrides.map(item => ({ method: item.method, minutes: Number(item.minutes) })) } });
 }

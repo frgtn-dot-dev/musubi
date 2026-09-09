@@ -657,3 +657,12 @@ it("checks a dispatched Graph pull conflict without offering a new response or r
   expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith("/retry"))).toHaveLength(1);
   expect(fetcher.mock.calls.some(([url]) => String(url).includes("/resolve") || String(url).includes("/provider-rsvp"))).toBe(false);
 });
+
+it("states the whole-series scope before applying a saved CalDAV alarm", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => json(url.endsWith("/conflict") ? { ...preview, caldavAlarmResolution: { scope: "series", desired: { minutesBeforeStart: 30 }, remote: { minutesBeforeStart: 20 }, stateVersion: "a".repeat(64) } } : receipt)));
+  mount(); fireEvent.click(await screen.findByRole("button", { name: "Review changes" }));
+  const comparison = await screen.findByRole("dialog", { name: "Review remote changes" });
+  expect(within(comparison).getByText(/This applies to every occurrence in the series/)).toBeTruthy();
+  expect(within(comparison).getByRole("button", { name: "Apply saved series alarm" })).toBeTruthy();
+  expect(within(comparison).queryByRole("button", { name: "Apply saved event alarm" })).toBeNull();
+});

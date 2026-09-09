@@ -106,7 +106,7 @@ export const EventDeliveryConflictSchema = z.object({
   remote: EventDeliveryContentSchema.nullable(),
   remoteEtag: z.string().nullable(),
   action: z.enum(["create", "update", "delete"]),
-  caldavAlarmResolution: z.object({ desired: CaldavAlarmWriteSchema, remote: CaldavAlarmWriteSchema, stateVersion: z.string().regex(/^[0-9a-f]{64}$/) }).strict().optional(),
+  caldavAlarmResolution: z.object({ scope: z.literal("series").optional(), desired: CaldavAlarmWriteSchema, remote: CaldavAlarmWriteSchema, stateVersion: z.string().regex(/^[0-9a-f]{64}$/) }).strict().optional(),
   reminderResolution: z.object({
     desired: GoogleReminderWriteSchema,
     remote: ProviderEventStateSchema.shape.reminders,

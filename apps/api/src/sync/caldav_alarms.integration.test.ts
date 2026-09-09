@@ -50,8 +50,10 @@ async function main() {
   const apiOrigin = `http://127.0.0.1:${(api.address() as any).port}`;
   const flags = [config.api.caldavAlarmEditsEnabled, config.api.providerReminderEditsEnabled, config.api.eventTimeEditsEnabled];
   try {
-    for (const scenario of ["lookup-missing-initial", "discard-lookup-missing", "zoned", "all-day", "off", "create", "flag", "no-privilege", "unsupported", "stale-editor", "concurrent", "lost", "race", "lease", "delete-during", "grant", "generic-ack", "tamper", "resolve", "resolve-stale", "resolve-grant", "resolve-unknown", "resolve-content", "resolve-repeated", "discard", "discard-grant", "discard-lease", "discard-local", "discard-newer", "storage-failure"]) {
-      console.log(`CalDAV event alarm scenario: ${scenario}`);
+    for (const scenarioName of ["series-overnight", "series-zoned", "series-all-day", "series-off", "series-create", "series-lost", "series-race", "series-resolve", "series-resolve-content", "series-resolve-rule", "series-resolve-scope", "series-discard", "series-flag", "series-no-privilege", "series-lease", "series-child", "series-retired", "series-child-race", "series-missing-scope", "wrong-scope", "lookup-missing-initial", "discard-lookup-missing", "zoned", "all-day", "off", "create", "flag", "no-privilege", "unsupported", "stale-editor", "concurrent", "lost", "race", "lease", "delete-during", "grant", "generic-ack", "tamper", "resolve", "resolve-stale", "resolve-grant", "resolve-unknown", "resolve-content", "resolve-repeated", "discard", "discard-grant", "discard-lease", "discard-local", "discard-newer", "storage-failure"]) {
+      const series = scenarioName.startsWith("series-");
+      const scenario = series ? scenarioName.slice(7) : scenarioName;
+      console.log(`CalDAV event alarm scenario: ${scenarioName}`);
       const owner = `alarm-${randomUUID()}`, credential = issueMemberToken();
       await db.insert(user).values({ id: owner, name: "Fixture", email: `${owner}@example.test`, isExternal: true }); await replaceMemberToken(owner, credential.tokenHash);
       config.api.caldavAlarmEditsEnabled = true; config.api.providerReminderEditsEnabled = false; config.api.eventTimeEditsEnabled = false;
@@ -60,6 +62,8 @@ async function main() {
         const collection = origin + "/collection/", resource = collection + "one.ics";
         const calendar = await importExternalCalendar("caldav", owner, account.id, "Fixture", { externalId: collection, name: "Fixture", color: "#7A8BA3", supportsEvents: true });
         data = ["BEGIN:VCALENDAR", "VERSION:2.0", "BEGIN:VEVENT", "UID:one", scenario === "all-day" ? "DTSTART;VALUE=DATE:20260329" : "DTSTART;TZID=Europe/Prague:20260329T090000", scenario === "all-day" ? "DTEND;VALUE=DATE:20260330" : "DTEND;TZID=Europe/Prague:20260329T100000", "SUMMARY:One", "X-PRIVATE:Never disclose", "BEGIN:VALARM", "ACTION:DISPLAY", "TRIGGER:-PT15M", "DESCRIPTION:Private alarm", "END:VALARM", "END:VEVENT", "END:VCALENDAR", ""].join("\r\n");
+        if (series) data = data.replace("SUMMARY:One", "RRULE:FREQ=DAILY;COUNT=4\r\nSUMMARY:One").replace(/20260329T/g, "20260328T");
+        if (scenario === "overnight") data = data.replace("20260328T090000", "20260328T230000").replace("20260328T100000", "20260329T010000");
         if (scenario === "create") data = withoutCaldavAlarm(data);
         etag = '"before"'; puts = 0; allowed = true; mode = "ok"; onPut = undefined;
         const persist = (accessContext?: import("@musubi/db").ExternalCalendarAccessContext) => replaceExternalEventResource("caldav", owner, calendar.id, collection, resource, normalizeCaldavResource({ url: resource, etag, data }).map(event => ({ externalId: event.externalId, etag, icalUid: "one", values: { title: event.title, start: event.start, end: event.end, color: "#7A8BA3", isAllDay: event.isAllDay, description: event.description, location: event.location, organizer: "", recurrence: event.recurrence, url: event.url }, providerState: event.providerState, time: { timeModel: event.timeModel! } })), accessContext);
@@ -85,15 +89,21 @@ async function main() {
           assert.equal(puts, 0);
         };
         if (scenario === "lookup-missing-initial") { await assertMissingLookupPreservesMirror(); continue; }
+        if (["child", "retired"].includes(scenario)) await db.insert(events).values({ ...local, id: randomUUID(), seriesID: local.id, originalStart: { kind: "instant", value: local.start.toISOString() }, recurrence: null, deletedAt: scenario === "retired" ? new Date() : null });
         if (scenario === "flag") config.api.caldavAlarmEditsEnabled = false;
         if (scenario === "no-privilege") allowed = false;
         if (scenario === "unsupported") data = data.replace("DESCRIPTION:Private alarm", "REPEAT:2\r\nDURATION:PT5M\r\nDESCRIPTION:Private alarm");
         const observationResponse = await fetch(`${apiOrigin}/events/${local.id}/provider-state`, { headers });
         assert.equal(observationResponse.status, 200); const observation = await observationResponse.json() as any;
         assert.ok(!JSON.stringify(observation).includes("Private alarm") && !JSON.stringify(observation).includes("Never disclose"));
-        if (["flag", "no-privilege", "unsupported"].includes(scenario)) { assert.equal(observation.reminderEdit, undefined); assert.equal(puts, 0); continue; }
+        if (["flag", "no-privilege", "unsupported", "child", "retired"].includes(scenario)) { assert.equal(observation.reminderEdit, undefined); assert.equal(puts, 0); continue; }
         assert.equal(observation.reminderEdit?.provider, "caldav");
-        const request = { provider: "caldav", operationID: randomUUID(), expectedRevision: local.revision, expectedStateVersion: observation.version, alarms: { minutesBeforeStart: scenario === "off" ? null : 30 } };
+        assert.equal(observation.reminderEdit.scope, series ? "series" : undefined);
+        const request = { ...(series ? { scope: "series" } : {}), provider: "caldav", operationID: randomUUID(), expectedRevision: local.revision, expectedStateVersion: observation.version, alarms: { minutesBeforeStart: scenario === "off" ? null : 30 } };
+        if (scenario === "missing-scope" || scenario === "wrong-scope") {
+          await assert.rejects(() => queueCaldavAlarms(owner, local.id, { ...request, scope: series ? undefined : "series" }));
+          assert.equal((await outbox()).length, 0); assert.equal(puts, 0); continue;
+        }
         if (scenario === "stale-editor") { etag = '"fresh"'; await assert.rejects(() => queueCaldavAlarms(owner, local.id, request)); assert.equal((await outbox()).length, 0); continue; }
         if (scenario === "storage-failure") {
           await db.execute(sql.raw("CREATE FUNCTION musubi_alarm_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic alarm storage failure'; END $$"));
@@ -114,6 +124,12 @@ async function main() {
         await assert.rejects(() => queueCaldavAlarms(owner, local.id, { ...request, alarms: { minutesBeforeStart: 10 } }));
         assert.equal(await persist(), false, "Full pull skips only the pending resource");
         assert.deepEqual(await getEventSnapshot(local.id), original);
+        assert.equal((await outbox())[0].payload.caldavAlarm!.request.scope, series ? "series" : undefined);
+        if (scenario === "child-race") {
+          await db.insert(events).values({ ...local, id: randomUUID(), seriesID: local.id, originalStart: { kind: "instant", value: local.start.toISOString() }, recurrence: null, deletedAt: new Date() });
+          const refused = await deliverEventOutbox(operationID, () => caldavAdapter);
+          assert.notEqual(refused?.status, "completed"); assert.equal(puts, 0); continue;
+        }
         if (scenario === "concurrent") await assert.rejects(() => queueCaldavAlarms(owner, local.id, { ...request, operationID: randomUUID() }));
         if (scenario === "grant") await db.update(calendarMembers).set({ role: "viewer" }).where(and(eq(calendarMembers.calendarID, calendar.id), eq(calendarMembers.userID, owner)));
         if (scenario === "generic-ack") {
@@ -180,9 +196,16 @@ async function main() {
         if (scenario.startsWith("resolve")) {
           assert.equal(delivered?.status, "conflict"); assert.equal(puts, 0);
           if (scenario === "resolve-unknown") data = data.replace("DESCRIPTION:Private alarm", "X-UNKNOWN:yes\r\nDESCRIPTION:Private alarm");
+          if (scenario === "resolve-rule") data = data.replace("COUNT=4", "COUNT=5");
           if (scenario === "resolve-content") data = data.replace("SUMMARY:One", "SUMMARY:Remote");
-          if (["resolve-unknown", "resolve-content"].includes(scenario)) { await assert.rejects(() => prepareEventDeliveryResolution(owner, local.id, operationID, () => caldavAdapter)); continue; }
+          if (["resolve-unknown", "resolve-content", "resolve-rule"].includes(scenario)) { await assert.rejects(() => prepareEventDeliveryResolution(owner, local.id, operationID, () => caldavAdapter)); continue; }
           const prepared = await prepareEventDeliveryResolution(owner, local.id, operationID, () => caldavAdapter);
+          if (scenario === "resolve-scope") {
+            const tampered = structuredClone(prepared.proof); delete tampered.caldavAlarm!.next.request.scope;
+            await assert.rejects(() => commitEventDeliveryResolution(owner, tampered, { mutationId: randomUUID(), expectedLocalRevision: local.revision, expectedLatestOperationId: operationID, expectedRemoteExists: true, expectedRemoteEtag: etag, expectedReminderStateVersion: prepared.preview.caldavAlarmResolution!.stateVersion }));
+            assert.equal((await outbox()).length, 1); assert.equal(puts, 0); continue;
+          }
+          assert.equal(prepared.preview.caldavAlarmResolution?.scope, series ? "series" : undefined);
           assert.equal(prepared.preview.caldavAlarmResolution?.remote.minutesBeforeStart, 20);
           assert.ok(!JSON.stringify(prepared.preview).includes("Private alarm"));
           const confirmation = { mutationId: randomUUID(), expectedLocalRevision: local.revision, expectedLatestOperationId: operationID, expectedRemoteExists: true, expectedRemoteEtag: etag, expectedReminderStateVersion: prepared.preview.caldavAlarmResolution!.stateVersion };
@@ -205,11 +228,12 @@ async function main() {
         assert.equal(withoutCaldavAlarm(data), withoutCaldavAlarm(initialData));
         if (scenario !== "off") assert.ok(data.includes(scenario === "create" ? "DESCRIPTION:Calendar reminder" : "DESCRIPTION:Private alarm"));
         assert.equal((await maps())[0].etag, etag);
+        assert.equal((await db.select().from(tasks).where(eq(tasks.creatorID, owner))).length, 0, "Provider alarm changes do not create Musubi tasks");
         assert.equal(await confirmCaldavAlarm(finalID, randomUUID()), false);
         await persist();
       } finally { await db.delete(user).where(eq(user.id, owner)); }
     }
-    console.log("CalDAV event alarm: all 30 scenarios passed");
+    console.log("CalDAV event and explicit finite series alarms: all scenarios passed");
   } finally {
     [config.api.caldavAlarmEditsEnabled, config.api.providerReminderEditsEnabled, config.api.eventTimeEditsEnabled] = flags;
     fixture.closeAllConnections(); api.closeAllConnections();

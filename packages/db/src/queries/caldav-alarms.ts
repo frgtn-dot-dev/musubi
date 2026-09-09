@@ -1,3 +1,4 @@
+import { caldavAlarmScope } from "@musubi/calendar";
 import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { CaldavAlarmEditSchema, EventSchema, EventWriteError, type CaldavAlarmEdit, type Event, type ProviderEventState, type ResolveEventDeliveryRequest } from "@musubi/types";
@@ -41,8 +42,14 @@ export async function readCaldavAlarmContext(tx: DbTransaction, actorID: string,
   const eventQuery = tx.select().from(events).where(eq(events.id, eventID));
   const [row] = lock ? await eventQuery.for("update") : await eventQuery;
   const links = await tx.select({ calendarID: calendarEvents.calendarID }).from(calendarEvents).where(eq(calendarEvents.eventID, eventID));
-  if (!row || row.deletedAt || row.creatorID !== actorID || row.originCalendarID !== initial.calendarID || links.length !== 1 || links[0].calendarID !== initial.calendarID || row.recurrence || row.seriesID || row.originalStart || row.isCanceled || !["zoned", "all-day"].includes(row.timeModel?.kind ?? "")) throw refuse();
+  if (!row || row.deletedAt || row.creatorID !== actorID || row.originCalendarID !== initial.calendarID || links.length !== 1 || links[0].calendarID !== initial.calendarID || row.seriesID || row.originalStart || row.isCanceled || !["zoned", "all-day"].includes(row.timeModel?.kind ?? "")) throw refuse();
   const event = EventSchema.parse({ ...row, calendars: links.map(item => item.calendarID) });
+  caldavAlarmScope(event);
+  // Include retired definitions: a removed mapping is not proof that this has
+  // always been a master-only family. Scope writers lock this same master first.
+  const childQuery = tx.select({ id: events.id }).from(events).where(eq(events.seriesID, eventID));
+  const children = lock ? await childQuery.for("update") : await childQuery;
+  if (children.length) throw refuse();
   const grantQuery = tx.select().from(calendarMembers).where(and(eq(calendarMembers.calendarID, initial.calendarID), eq(calendarMembers.userID, actorID)));
   const [grant] = lock ? await grantQuery.for("share") : await grantQuery;
   const [currentLink] = lock ? await sourceQuery.for("share") : sources;
@@ -82,7 +89,7 @@ export async function commitCaldavAlarm(intent: CaldavAlarmIntent) {
       return { operationID: replay.id, replayed: true, status: replay.status };
     }
     const current = await readCaldavAlarmContext(tx, context.link.userID, context.event.id, undefined, true);
-    if (!same(current, context) || request.expectedRevision !== current.event.revision || request.expectedStateVersion !== caldavAlarmVersion(context, intent.before)) throw refuse();
+    if (request.scope !== caldavAlarmScope(current.event) || !same(current, context) || request.expectedRevision !== current.event.revision || request.expectedStateVersion !== caldavAlarmVersion(context, intent.before)) throw refuse();
     const id = randomUUID();
     await insertAlarm(tx, id, intent, request.operationID);
     return { operationID: id, replayed: false, status: "pending" as const };
@@ -100,7 +107,7 @@ export async function readCaldavAlarmResolution(tx: DbTransaction, actorID: stri
   const intent = address?.payload.caldavAlarm;
   if (!address || !intent || address.payload.reminderEdit || address.payload.reminderInstance || address.payload.rsvp || address.payload.caldavSplit || address.payload.caldavSeries || address.payload.caldavSeriesDeletion || address.payload.googleOccurrence || address.payload.graphSeriesCreate || address.userID !== actorID || address.actorID !== actorID || address.provider !== "caldav" || address.action !== "update" || address.position !== 0 || !(attempting ? address.status === "attempting" : ["conflict", "blocked", "unconfirmed"].includes(address.status))) throw refuse();
   const context = await readCaldavAlarmContext(tx, actorID, address.eventID, address.id, lock);
-  if (!same(context, intent.context) || !same(address.payload.event, context.event) || address.revision !== context.event.revision || address.expectedEtag !== context.mapping.ref.etag || address.externalEventID !== context.mapping.ref.externalEventId || address.icalUid !== context.mapping.ref.icalUid || address.externalCalendarLinkID !== context.link.id || address.accountID !== context.link.accountID || address.calendarID !== context.link.calendarID || address.externalCalendarID !== context.link.externalCalendarID || intent.request.expectedRevision !== context.event.revision || intent.request.expectedStateVersion !== caldavAlarmVersion(context, intent.before)) throw refuse();
+  if (intent.request.scope !== caldavAlarmScope(context.event) || !same(context, intent.context) || !same(address.payload.event, context.event) || address.revision !== context.event.revision || address.expectedEtag !== context.mapping.ref.etag || address.externalEventID !== context.mapping.ref.externalEventId || address.icalUid !== context.mapping.ref.icalUid || address.externalCalendarLinkID !== context.link.id || address.accountID !== context.link.accountID || address.calendarID !== context.link.calendarID || address.externalCalendarID !== context.link.externalCalendarID || intent.request.expectedRevision !== context.event.revision || intent.request.expectedStateVersion !== caldavAlarmVersion(context, intent.before)) throw refuse();
   const [latest] = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(eq(eventOutbox.eventID, address.eventID), eq(eventOutbox.externalCalendarLinkID, context.link.id))).orderBy(desc(eventOutbox.revision), desc(eventOutbox.createdAt), desc(eventOutbox.position), desc(eventOutbox.id)).limit(1);
   if (latest?.id !== address.id) throw refuse();
   if (lock) {
@@ -112,7 +119,7 @@ export async function readCaldavAlarmResolution(tx: DbTransaction, actorID: stri
 export type CaldavAlarmResolution = Awaited<ReturnType<typeof readCaldavAlarmResolution>>;
 export async function replaceCaldavAlarm(tx: DbTransaction, actorID: string, before: CaldavAlarmResolution, next: CaldavAlarmIntent, request: ResolveEventDeliveryRequest) {
   const current = await readCaldavAlarmResolution(tx, actorID, before.row.id, true);
-  if (!same(current, before) || !same(next.context.event, before.intent.context.event) || !same(next.context.link, before.intent.context.link) || next.context.mapping.id !== before.intent.context.mapping.id || next.context.mapping.ref.externalEventId !== before.intent.context.mapping.ref.externalEventId || next.context.mapping.ref.icalUid !== before.intent.context.mapping.ref.icalUid || !strong(next.context.mapping.ref.etag) || !same(next.request.alarms, before.intent.request.alarms) || next.request.expectedStateVersion !== caldavAlarmVersion(next.context, next.before) || request.expectedReminderStateVersion !== next.request.expectedStateVersion || request.expectedLocalRevision !== before.row.revision || request.expectedLatestOperationId !== before.row.id || !request.expectedRemoteExists || request.expectedRemoteEtag !== next.context.mapping.ref.etag || request.expectedScopeResolution || request.expectedMasterRevision !== undefined || request.expectedRsvpBaselineVersion !== undefined) throw refuse();
+  if (next.request.scope !== before.intent.request.scope || next.request.scope !== caldavAlarmScope(next.context.event) || !same(current, before) || !same(next.context.event, before.intent.context.event) || !same(next.context.link, before.intent.context.link) || next.context.mapping.id !== before.intent.context.mapping.id || next.context.mapping.ref.externalEventId !== before.intent.context.mapping.ref.externalEventId || next.context.mapping.ref.icalUid !== before.intent.context.mapping.ref.icalUid || !strong(next.context.mapping.ref.etag) || !same(next.request.alarms, before.intent.request.alarms) || next.request.expectedStateVersion !== caldavAlarmVersion(next.context, next.before) || request.expectedReminderStateVersion !== next.request.expectedStateVersion || request.expectedLocalRevision !== before.row.revision || request.expectedLatestOperationId !== before.row.id || !request.expectedRemoteExists || request.expectedRemoteEtag !== next.context.mapping.ref.etag || request.expectedScopeResolution || request.expectedMasterRevision !== undefined || request.expectedRsvpBaselineVersion !== undefined) throw refuse();
   const replaced = [...new Set([before.row.id, ...(before.row.payload.resolution?.replacedOperationIDs ?? [])])];
   try { await tx.update(externalEvents).set({ etag: next.context.mapping.ref.etag, providerState: next.context.mapping.state, providerStateObservedAt: new Date() }).where(eq(externalEvents.id, next.context.mapping.id)); } catch { throw new Error("CalDAV alarm persistence failed; transaction was rolled back."); }
   await tx.update(eventOutbox).set({ status: "cancelled", errorCode: "superseded-by-resolution", leaseToken: null, leaseUntil: null, updatedAt: new Date() }).where(inArray(eventOutbox.id, replaced));

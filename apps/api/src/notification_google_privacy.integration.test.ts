@@ -7,19 +7,19 @@ import {
 } from "@musubi/db";
 import { planDeliveries } from "./notification_dispatch";
 
-async function main() {
+async function run(provider: "google" | "microsoft") {
   assert.equal(process.env.ENVIRONMENT, "test");
   const owner = `notification-privacy-${randomUUID()}`;
   const recipient = `${owner}-guest`;
   await db.insert(user).values([owner, recipient].map(id => ({ id, name: id, email: `${id}@example.test` })));
   try {
-    await db.insert(account).values({ id: randomUUID(), userId: owner, providerId: "google", accountId: owner });
+    await db.insert(account).values({ id: randomUUID(), userId: owner, providerId: provider, accountId: owner });
     const calendar = await createCalendar({ creatorID: owner, name: "Native", color: "red" });
-    const [source] = await db.insert(externalCalendars).values({ userID: owner, provider: "google", accountID: owner, calendarID: calendar.id, externalCalendarID: "native" }).returning();
+    const [source] = await db.insert(externalCalendars).values({ userID: owner, provider, accountID: owner, calendarID: calendar.id, externalCalendarID: "native" }).returning();
     const eventID = randomUUID();
     await db.insert(events).values({ id: eventID, creatorID: owner, originCalendarID: calendar.id, title: "Private appointment", organizer: owner, color: "red", start: new Date(), end: new Date() });
     await db.insert(eventUsers).values({ eventID, userID: recipient });
-    const [mapping] = await db.insert(externalEvents).values({ eventID, calendarID: calendar.id, provider: "google", externalCalendarID: "native", externalEventID: "event" }).returning();
+    const [mapping] = await db.insert(externalEvents).values({ eventID, calendarID: calendar.id, provider, externalCalendarID: "native", externalEventID: "event" }).returning();
     await queuePendingNotification({ userID: recipient, subjectID: eventID, kind: "event_changed", dueAt: new Date(0), payload: { kind: "cancelled", title: "Private appointment", start: new Date().toISOString(), isAllDay: false } });
     const check = async (eligible: boolean) => {
       const rows = (await getDuePendingNotifications(new Date())).filter(row => row.userID === recipient);
@@ -28,11 +28,11 @@ async function main() {
       assert.equal(planDeliveries(rows).deliveries.length, eligible ? 1 : 0);
     };
     await check(true); // deliberate revision-zero legacy behavior; guest has no calendar membership
-    for (const role of ["reader", "unknown", "writerWithoutPrivateAccess"]) {
+    for (const role of provider === "google" ? ["reader", "unknown", "writerWithoutPrivateAccess"] : ["microsoft:private=no;edit=yes", "microsoft:private=unknown;edit=yes"]) {
       await db.update(externalCalendars).set({ providerAccessRole: role, providerAccessRevision: 1, cursor: "accepted" }).where(eq(externalCalendars.id, source.id));
       await check(false);
     }
-    await db.update(externalCalendars).set({ providerAccessRole: "writer", cursor: null }).where(eq(externalCalendars.id, source.id));
+    await db.update(externalCalendars).set({ providerAccessRole: provider === "google" ? "writer" : "microsoft:private=yes;edit=no", cursor: null }).where(eq(externalCalendars.id, source.id));
     await check(false);
     await db.update(externalCalendars).set({ cursor: "accepted" }).where(eq(externalCalendars.id, source.id));
     await check(true);
@@ -63,5 +63,9 @@ async function main() {
     await db.delete(user).where(eq(user.id, owner));
     await db.delete(user).where(eq(user.id, recipient));
   }
+}
+async function main() {
+  await run("google");
+  await run("microsoft");
 }
 main().then(() => { console.log("notification_google_privacy.integration.test.ts ok"); process.exit(0); }).catch(error => { console.error(error); process.exit(1); });

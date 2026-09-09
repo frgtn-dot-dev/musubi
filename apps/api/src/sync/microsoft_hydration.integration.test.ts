@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { eq } from "drizzle-orm";
 import {
   account, db, events, getUserExternalCalendars, importExternalCalendar,
-  setCursor, upsertExternalEvent, user,
+  reconcileMicrosoftCalendarAccess, setCursor, upsertExternalEvent, user,
 } from "@musubi/db";
 import { microsoftAdapter } from "./adapters/microsoft";
 import { syncProvider } from "./engine";
@@ -28,7 +28,7 @@ async function main() {
     assert.equal(req.headers.authorization, "Bearer fixture-access");
     res.setHeader("content-type", "application/json");
     const json = (body: unknown) => res.end(JSON.stringify(body));
-    if (url.pathname === "/v1.0/me/calendars") return json({ value: [{ id: calendar, name: "Shared", canEdit: false }] });
+    if (url.pathname === "/v1.0/me/calendars") return json({ value: [{ id: calendar, name: "Shared", canEdit: false, canViewPrivateItems: true }] });
     if (url.pathname === "/v1.0/me/todo/lists") return json({ value: [] });
     if (url.pathname.startsWith("/v1.0/delta-")) {
       deltaPaths.push(url.pathname);
@@ -70,6 +70,7 @@ async function main() {
     });
     const { id: calendarID } = await importExternalCalendar("microsoft", userID, "account", "Fixture", { externalId: calendar, name: "Shared", color: "#7A8BA3" });
     const oldCursor = JSON.stringify({ link: "https://graph.microsoft.com/v1.0/delta-original", windowEnd: Date.now() + 730 * 86400_000 });
+    await reconcileMicrosoftCalendarAccess(userID, "account", calendarID, { canEdit: false, canViewPrivateItems: true });
     await setCursor(calendarID, oldCursor);
     for (const id of ["occurrence-1", "old-removed"]) await upsertExternalEvent("microsoft", userID, calendarID, calendar, id, {
       title: "Original", color: "#7A8BA3", start: new Date("2026-09-10T00:00:00Z"), end: new Date("2026-09-11T00:00:00Z"),

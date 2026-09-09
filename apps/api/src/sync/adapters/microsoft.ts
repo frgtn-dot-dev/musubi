@@ -619,6 +619,7 @@ type GraphCalendar = {
   name: string;
   hexColor?: string | null;
   canEdit?: boolean;
+  canViewPrivateItems?: boolean;
 };
 
 export function microsoftEventPath(
@@ -635,6 +636,7 @@ export function toExternalCalendar(c: GraphCalendar): ExternalCalendarInfo {
     // Graph must explicitly grant writes. Missing permission data is not a safe
     // reason to expose actions that can only fail later.
     readOnly: c.canEdit !== true,
+    microsoftAccess: { canEdit: typeof c.canEdit === "boolean" ? c.canEdit : null, canViewPrivateItems: typeof c.canViewPrivateItems === "boolean" ? c.canViewPrivateItems : null },
     // hexColor is "" when the calendar uses the "auto" preset
     color: c.hexColor || "#0078D4",
     supportsEvents: true,
@@ -678,7 +680,7 @@ export const microsoftAdapter: CalendarAdapter = {
     const accessToken = await getAccessToken(userID, accountId);
     const calendars: ExternalCalendarInfo[] = [];
     let url: string | null =
-      `${GRAPH}/me/calendars?$select=id,name,hexColor,canEdit&$top=${PAGE_SIZE}`;
+      `${GRAPH}/me/calendars?$select=id,name,hexColor,canEdit,canViewPrivateItems&$top=${PAGE_SIZE}`;
     while (url) {
       const res = await graphGet(accessToken, url);
       if (!res.ok) throw await graphError(res);

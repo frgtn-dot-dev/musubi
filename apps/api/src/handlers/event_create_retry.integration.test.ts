@@ -34,6 +34,8 @@ async function main() {
       const request = kind === "legacy" ? { ...event, start: "2026-07-30T07:30:00Z", end: "2026-07-30T08:30:00Z", isAllDay: false } : { event, time: kind === "all-day" ? { kind, startDate: "2026-07-30", endDate: "2026-07-30" } : { kind, timeZone: "Europe/Prague", startLocal: "2026-07-30T09:30:00", endLocal: "2026-07-30T10:30:00" } };
       const [first, racing] = await Promise.all([send(path, request), send(path, request)]);
       assert.deepEqual([first.status, racing.status].sort(), [201, 202]);
+      assert.equal(Object.prototype.hasOwnProperty.call(first.body, "providerReadRetiredRevision"), false, "new identities omit absent retirement metadata on first acceptance");
+      assert.equal(Object.prototype.hasOwnProperty.call(racing.body, "providerReadRetiredRevision"), false, "racing acceptance uses the same wire shape");
       const baseline = EventSchema.parse(first.body);
       assert.deepEqual(EventSchema.parse(racing.body), baseline);
       const retry = await send(path, request); assert.equal(retry.status, 202); assert.equal(retry.body.localCommitted, true); assert.equal(retry.cache, "private, no-store"); assert.deepEqual(EventSchema.parse(retry.body), baseline);

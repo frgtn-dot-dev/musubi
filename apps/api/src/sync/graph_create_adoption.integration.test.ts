@@ -10,7 +10,7 @@ import { eq } from "drizzle-orm";
 import { config } from "@musubi/config";
 import { EventSchema } from "@musubi/types";
 import { resolveEventTimeEdit } from "@musubi/calendar";
-import { account, db, user, events, eventOutbox, externalEvents, externalCalendars, calendarMembers, externalEventTombstones, importExternalCalendar, queueGraphSeriesCreate, claimEventOutbox, adoptGraphCreatedFamily, graphCreateAdoptionReplay, assertNoPendingGraphSeriesCreate, readGraphSeriesCreateReceipt, requestEventDeliveryRetry, readGraphFamilyContext, replaceGraphFamily, findGraphSeriesCreateReplay, replaceMemberToken } from "@musubi/db";
+import { account, db, user, events, eventOutbox, externalEvents, externalCalendars, calendarMembers, externalEventTombstones, importExternalCalendar, queueGraphSeriesCreate, claimEventOutbox, adoptGraphCreatedFamily, graphCreateAdoptionVersion, graphCreateAdoptionReplay, assertNoPendingGraphSeriesCreate, readGraphSeriesCreateReceipt, requestEventDeliveryRetry, readGraphFamilyContext, replaceGraphFamily, findGraphSeriesCreateReplay, replaceMemberToken } from "@musubi/db";
 import { prepareGraphCreateAdoption } from "./graph_create_adoption";
 import { graphAdoptionFixture } from "./adapters/microsoft_create_adoption.fixture";
 import { microsoftAdapter } from "./adapters/microsoft";
@@ -58,6 +58,9 @@ async function main() {
           assert.ok(EventDeliveryConflictSchema.parse(await preview.json()).graphCreateAdoption);
         }
         const prepared = await prepare(); assert.ok(prepared);
+        const oldContext = structuredClone(prepared.context);
+        delete (oldContext.event as Partial<typeof oldContext.event>).providerReadRetiredRevision;
+        assert.equal(graphCreateAdoptionVersion(oldContext, prepared.observation), graphCreateAdoptionVersion(prepared.context, prepared.observation), "Pre-0075 absent provenance preserves exact adoption fingerprint");
         assert.equal(prepared.preview.local!.title, saved.title); assert.equal(prepared.preview.remote!.title, "Provider title");
         const request = { kind: "graph-create-adoption" as const, mutationID: randomUUID(), expectedRevision: saved.revision!, stateVersion: prepared.preview.graphCreateAdoption!.stateVersion };
         if (mode === "stale-native") { fixture.state.event.title = "Changed again"; const refreshed = await prepare(); assert.ok(refreshed); await assert.rejects(() => adoptGraphCreatedFamily(refreshed.context, refreshed.observation, request)); continue; }

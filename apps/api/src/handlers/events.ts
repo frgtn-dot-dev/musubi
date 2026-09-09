@@ -266,7 +266,7 @@ export async function handlerCreateEvent(req: Request, res: Response) {
     throw error;
   }
 
-  const result = { ...created, calendars: event.calendars };
+  const result = { ...created, providerReadRetiredRevision: created.providerReadRetiredRevision ?? undefined, calendars: event.calendars };
 
   return sendCommitted(res, deliver, result, result, 201, () =>
     notifyEvent(event.calendars, "event_created", result));
@@ -303,7 +303,10 @@ export async function handlerCreateEventTime(req: Request, res: Response) {
     }
   }
   let result;
-  try { result = await createLocalEventWithTime(request, req.user!.id); }
+  try {
+    const created = await createLocalEventWithTime(request, req.user!.id);
+    result = { ...created, providerReadRetiredRevision: created.providerReadRetiredRevision ?? undefined };
+  }
   catch (error) {
     if (await sendExistingCreate(res, req.user!.id, expected)) return;
     throw error;

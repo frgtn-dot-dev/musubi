@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { EventSchema } from "@musubi/types";
+import { EventSchema, type Calendar } from "@musubi/types";
 import { privateEditorRefresh, refreshedPrivateField } from "./eventEditorPrivacy";
 import { liveEventDetail } from "./liveEvent";
 const event = EventSchema.parse({ id: "event", isAllDay: false, isCanceled: false, revision: 3, creatorID: "owner", organizer: "Private organizer", title: "Private", description: "Note", location: "Room", url: "https://private.example", color: "red", start: "2026-09-10T09:00:00Z", end: "2026-09-10T10:00:00Z", calendars: ["source"], originCalendarID: "source", recurrence: "FREQ=DAILY", timeModel: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-09-10T11:00:00.000", endLocal: "2026-09-10T12:00:00.000" } });
@@ -19,7 +19,7 @@ it("refreshes one-off and generated known-occurrence privacy without rebasing te
 it("requires canonical privacy evidence and retains each explicit field delta", () => {
   expect(privateEditorRefresh(event, { ...event, title: "Busy" }, calendars)).toBeUndefined();
   expect(privateEditorRefresh(event, { ...event, revision: 4, title: "Renamed" }, [{ id: "source", role: "owner", provider: "google" }] as any)).toBeUndefined();
-  expect(privateEditorRefresh(event, redacted, [{ id: "source", role: "viewer", provider: "microsoft" }] as any)).toBeUndefined();
+  expect(privateEditorRefresh(event, redacted, [{ id: "source", role: "viewer", provider: "caldav" }] as any)).toBeUndefined();
   expect(privateEditorRefresh(event, undefined, [])).toBeUndefined();
   expect(privateEditorRefresh(event, undefined, [], true)).toMatchObject({ title: "Busy", revision: 3 });
   expect(refreshedPrivateField("Note", "Note", null)).toBe("");
@@ -39,4 +39,21 @@ it("a previously refreshed snapshot follows newer full reads without rebasing it
   expect(restored.start).toBe(event.start); expect(restored.timeModel).toBe(event.timeModel);
   expect(privateEditorRefresh(restored, { ...redacted, revision: 4 }, calendars)).toBeUndefined();
   expect(privateEditorRefresh(event, { ...event, revision: 5 }, owner)).toBeUndefined(); // an ordinary draft still stays frozen
+});
+
+it("Graph confirmed redaction and fresh regain retire generated snapshots without changing write authority", () => {
+  const graph = [{ id: "source", provider: "microsoft", role: "owner" }] as any;
+  const snapshot = { ...event, start: new Date("2026-09-11T09:00:00Z"), end: new Date("2026-09-11T10:00:00Z") };
+  expect(privateEditorRefresh(snapshot, { ...event, revision: 4 }, [{ ...graph[0], role: "viewer" }])).toBeUndefined();
+  const hidden = privateEditorRefresh(snapshot, redacted, graph)!;
+  expect(hidden.title).toBe("Busy"); expect(hidden.revision).toBe(snapshot.revision); expect(hidden.start).toBe(snapshot.start);
+  expect(privateEditorRefresh(hidden, { ...event, revision: 4 }, graph)).toBeUndefined();
+  expect(privateEditorRefresh(hidden, { ...event, revision: 5 }, graph)).toMatchObject({ title: "Private", revision: 3, start: snapshot.start });
+});
+
+it("observes durable retirement even when the Busy response was coalesced", () => {
+  const snapshot = { ...event, id: "e", revision: 4, title: "Private", description: "Private notes", originCalendarID: "c" };
+  const current = { ...snapshot, revision: 6, providerReadRetiredRevision: 5, title: "Public", description: null };
+  const refreshed = privateEditorRefresh(snapshot, current, [{ id: "c", provider: "microsoft", role: "owner" } as Calendar]);
+  expect(refreshed?.title).toBe("Public"); expect(refreshed?.description).toBeNull(); expect(refreshed?.revision).toBe(4);
 });

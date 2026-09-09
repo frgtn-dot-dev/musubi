@@ -18,7 +18,8 @@ vi.mock("./EventDeliveryDialog", () => ({ EventDeliveryDialog: () => null }));
 import { Route } from "~/routes/app/p.$pageId.$view.event.$eventId";
 
 const EditRoute = Route.options.component!;
-const calendar: Calendar = { id: "calendar", creatorID: "owner", color: "#112233", name: "Google", provider: "google", role: "owner", members: [] };
+describe.each(["google", "microsoft"] as const)("%s privacy editor", provider => {
+const calendar: Calendar = { id: "calendar", creatorID: "owner", color: "#112233", name: provider, provider, role: "owner", members: [] };
 const event: Event = { id: "event", creatorID: "owner", originCalendarID: "calendar", calendars: ["calendar"], revision: 4, title: "Private appointment", description: "Private notes", location: "Private room", url: "https://private.example.test", organizer: "private@example.test", color: "#112233", start: new Date("2026-07-08T09:00:00Z"), end: new Date("2026-07-08T10:00:00Z"), isAllDay: false, isCanceled: false, hasAttendees: false };
 const busy: Event = { ...event, revision: 5, title: "Busy", description: undefined, location: undefined, url: undefined, organizer: "" };
 const viewer = { ...calendar, role: "viewer" };
@@ -69,6 +70,25 @@ describe("Google private editor refresh", () => {
     workspace(busy); view.rerender(<EditRoute />);
     expect((screen.getByRole("textbox", { name: "Event title" }) as HTMLInputElement).value).toBe("My draft");
     expect(screen.queryByDisplayValue("Private notes")).toBeNull();
+  });
+
+  it("retires a coalesced limited response without observing Busy", async () => {
+    workspace(event); mocks.search = eventEditorSearchSchema.parse({}); handoffEventEditor(event);
+    const view = render(<EditRoute />); const user = userEvent.setup();
+    await user.clear(screen.getByRole("textbox", { name: "Event title" }));
+    await user.type(screen.getByRole("textbox", { name: "Event title" }), "Authored title");
+    workspace({ ...event, revision: 6, providerReadRetiredRevision: 5, title: "Public title", description: null, location: null, url: null });
+    view.rerender(<EditRoute />);
+    expect(screen.queryByDisplayValue("Private notes")).toBeNull();
+    expect(screen.getByDisplayValue("Authored title")).toBeTruthy();
+  });
+
+  it("does not promote copied legacy URL fields to authored after a coalesced retirement", () => {
+    mocks.search = eventEditorSearchSchema.parse({ title: "Authored title", draftFields: ["title"], description: event.description, location: event.location, url: event.url });
+    workspace({ ...event, revision: 6, providerReadRetiredRevision: 5, title: "Public title", description: null, location: null, url: null });
+    render(<EditRoute />);
+    expect(screen.queryByDisplayValue("Private notes")).toBeNull();
+    expect(screen.getByDisplayValue("Authored title")).toBeTruthy();
   });
 
   it("handles a batched regained role plus Busy without a rendered viewer state", () => {
@@ -217,4 +237,6 @@ describe("Google private editor refresh", () => {
     expect((screen.getByRole("textbox", { name: "Event title" }) as HTMLInputElement).value).toBe("Local draft");
     expect(screen.getByDisplayValue("Private notes")).toBeTruthy();
   });
+});
+
 });

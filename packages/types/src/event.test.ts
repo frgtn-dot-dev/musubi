@@ -9,6 +9,7 @@ import {
   EventForkRequestSchema,
   EventUnlinkRequestSchema,
   eventCreateRequest,
+  eventCreateOperation,
   eventPatchRequest,
   editedEvent,
 } from "./event";
@@ -126,3 +127,20 @@ for (const field of ["timeModel", "seriesID", "originalStart"] as const) {
 assert.throws(() => eventCreateRequest(known), /time-model-aware copy/);
 assert.deepEqual(eventCreateRequest({ ...event, timeModel: null, seriesID: null, originalStart: null }), eventCreateRequest(event));
 assert.deepEqual(eventPatchRequest(editedEvent(known, { ...known, title: "New title" })).patch, { title: "New title" });
+
+const retired = EventSchema.parse({ ...event, providerReadRetiredRevision: 3 });
+assert.equal(retired.providerReadRetiredRevision, 3);
+assert.equal(EventSchema.parse(event).providerReadRetiredRevision, undefined);
+for (const value of [null, 0, 3]) {
+  assert.equal(EventPatchSchema.safeParse({ providerReadRetiredRevision: value }).success, false);
+  assert.equal(EventCreateRequestSchema.safeParse({ ...eventCreateRequest(event), providerReadRetiredRevision: value }).success, false);
+}
+assert.equal("providerReadRetiredRevision" in eventCreateRequest(retired), false);
+
+for (const providerReadRetiredRevision of [undefined, null, 3]) {
+  assert.equal("providerReadRetiredRevision" in eventCreateRequest({ ...event, providerReadRetiredRevision }), false);
+  const draft = { ...event, providerReadRetiredRevision, timeEdit: { kind: "all-day" as const, startDate: "2026-09-01", endDate: "2026-09-02" } };
+  assert.equal("providerReadRetiredRevision" in (eventCreateOperation(draft).body as { event: object }).event, false);
+}
+
+assert.equal(JSON.stringify(EventSchema.parse({ ...event, providerReadRetiredRevision: null })), JSON.stringify(EventSchema.parse(event)), "Absent pre-migration event metadata and nullable DB metadata have the same serialized snapshot");

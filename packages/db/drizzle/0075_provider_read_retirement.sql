@@ -1,0 +1,1 @@
+ALTER TABLE "events" ADD COLUMN "provider_read_retired_revision" integer;

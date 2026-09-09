@@ -11,6 +11,7 @@ export const EventSchema = z.object({
   id: z.string(),
   // Optional only for old disk caches. Absence never grants a writable revision.
   revision: EventRevisionSchema.optional(),
+  providerReadRetiredRevision: EventRevisionSchema.nullish().transform((value): number | null | undefined => value ?? undefined).optional(),
   timeModel: EventTimeModelSchema.nullish(),
   seriesID: z.string().uuid().transform(value => value.toLowerCase()).nullish(),
   originalStart: OccurrenceStartSchema.nullish(),
@@ -36,11 +37,12 @@ export type Event = z.infer<typeof EventSchema>;
 const eventWriteDate = z
   .union([z.date(), z.iso.datetime({ offset: true })])
   .pipe(z.coerce.date());
-export const EventCreateRequestSchema = EventSchema.omit({ revision: true, timeModel: true, seriesID: true, originalStart: true })
+export const EventCreateRequestSchema = EventSchema.omit({ providerReadRetiredRevision: true, revision: true, timeModel: true, seriesID: true, originalStart: true })
   .extend({ start: eventWriteDate, end: eventWriteDate })
   .strict();
 export const EventPatchSchema = EventSchema.omit({
   id: true,
+  providerReadRetiredRevision: true,
   revision: true,
   creatorID: true,
   originCalendarID: true,
@@ -105,7 +107,7 @@ export function eventCreateOperation(event: EventWriteRequest) {
   if (!event.timeEdit) return { path: "/events" as const, body: eventCreateRequest(event) };
   if (event.seriesID || event.originalStart || event.scopeEdit)
     throw new Error("This draft requires an occurrence-aware create. No changes were saved.");
-  const { start, end, isAllDay, revision, timeModel, seriesID, originalStart, ...content } = EventSchema.parse(event);
+  const { providerReadRetiredRevision, start, end, isAllDay, revision, timeModel, seriesID, originalStart, ...content } = EventSchema.parse(event);
   return { path: "/events/time" as const, body: EventTimeCreateRequestSchema.parse({ event: content, time: event.timeEdit }) };
 }
 
@@ -212,7 +214,7 @@ export function eventCreateRequest(
 ): z.infer<typeof EventCreateRequestSchema> {
   if (hasKnownEventTime(event))
     throw new Error("This event requires a time-model-aware copy. No changes were saved.");
-  const { revision: _revision, timeModel: _timeModel, seriesID: _seriesID, originalStart: _originalStart, ...create } = EventSchema.parse(event);
+  const { providerReadRetiredRevision: _retiredRevision, revision: _revision, timeModel: _timeModel, seriesID: _seriesID, originalStart: _originalStart, ...create } = EventSchema.parse(event);
   return EventCreateRequestSchema.parse(create);
 }
 

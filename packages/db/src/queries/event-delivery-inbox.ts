@@ -24,7 +24,7 @@ export async function getEventDeliveryInbox(
       // Explicit outer qualification survives Drizzle's single-table SELECT
       // normalization; bare column interpolation would bind inside EXISTS.
       savedTitle: sql<string>`case
-        when event_outbox.provider <> 'google' or exists (
+        when event_outbox.provider not in ('google', 'microsoft') or exists (
           select 1 from external_calendars source
           inner join calendar_members member
             on member.calendar_id = source.calendar_id
@@ -34,15 +34,16 @@ export async function getEventDeliveryInbox(
             and connected.provider_id = source.provider
             and connected.user_id = source.user_id
           where source.id = event_outbox.external_calendar_link_id
-            and source.provider = 'google'
+            and source.provider = event_outbox.provider
             and source.user_id = event_outbox.user_id
             and source.account_id = event_outbox.account_id
             and source.external_calendar_id = event_outbox.external_calendar_id
             and source.calendar_id = event_outbox.calendar_id
             and source.disabled = false and source.supports_events = true
             and connected.sync_status = 'active'
-            and member.role in ('owner', 'editor')
-            and (source.provider_access_role in ('owner', 'writer')
+            and (member.role in ('owner', 'editor') or (source.provider = 'microsoft' and member.role = 'viewer'))
+            and ((source.provider = 'google' and source.provider_access_role in ('owner', 'writer'))
+              or (source.provider = 'microsoft' and source.provider_access_role like 'microsoft:private=yes;%')
               or (source.provider_access_role is null and source.provider_access_revision = 0))
             and (source.provider_access_revision = 0 or nullif(source.cursor, '') is not null)
         ) then event_outbox.payload->'event'->>'title'

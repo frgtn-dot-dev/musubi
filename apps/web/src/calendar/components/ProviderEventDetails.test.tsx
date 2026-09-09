@@ -2,7 +2,7 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ProviderEventDetails } from "./ProviderEventDetails";
 import { providerEventDetails } from "@musubi/calendar";
-import type { ProviderEventState } from "@musubi/types";
+import { EventSchema, type ProviderEventState } from "@musubi/types";
 const fetchState = vi.hoisted(() => vi.fn());
 vi.mock("~/api/resources", () => ({ getProviderEventState: fetchState }));
 const state: ProviderEventState = { provider: "microsoft", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [], attendeesComplete: false, ownResponse: "notResponded", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 0 }, availability: "workingElsewhere", privacy: "confidential", status: null, eventType: "singleInstance", conferenceURLs: [] };
@@ -105,4 +105,24 @@ it("retires private details and an open editor when the event revision changes",
   expect(screen.queryByText("Google details")).toBeNull();
   await act(async () => complete({ state: null }));
   expect(screen.queryByText("Provider details")).toBeNull();
+});
+
+it("opens only explicit series alarm settings from a stored master and refuses a stale refresh", async () => {
+  const master = EventSchema.parse({ id: "00000000-0000-4000-8000-000000000301", revision: 7, isCanceled: false, title: "Series", creatorID: "owner", organizer: "", color: "red", calendars: [], start: new Date("2026-03-28T00:00:00Z"), end: new Date("2026-03-28T00:00:00Z"), isAllDay: true, timeModel: { kind: "all-day" }, recurrence: "RRULE:FREQ=DAILY;COUNT=4" });
+  const observation = { state: { ...state, provider: "caldav", reminders: { provider: "caldav", alarms: [] } }, version: "a".repeat(64), reminderEdit: { provider: "caldav", scope: "series", expectedRevision: 7, minutesBeforeStart: 15 } };
+  fetchState.mockResolvedValue(observation);
+  const view = render(<ProviderEventDetails eventId={master.id} userId="owner" series />);
+  await screen.findByText("CalDAV details");
+  expect(screen.queryByRole("button", { name: "Edit CalDAV event alarms" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Series alarm settings" })).toBeNull();
+  view.rerender(<ProviderEventDetails eventId={master.id} userId="owner" series seriesMaster={master} />);
+  const action = await screen.findByRole("button", { name: "Series alarm settings" });
+  await act(async () => action.click());
+  expect(await screen.findByRole("dialog", { name: "CalDAV series alarm" })).toBeTruthy();
+  expect(screen.getByText(/applies to every occurrence in this series/)).toBeTruthy();
+  await act(async () => screen.getByRole("button", { name: "Close CalDAV series alarm" }).click());
+  fetchState.mockResolvedValue({ ...observation, reminderEdit: { ...observation.reminderEdit, expectedRevision: 8 } });
+  await act(async () => action.click());
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(await screen.findByText(/Could not refresh provider details/)).toBeTruthy();
 });

@@ -9,12 +9,12 @@ export const privateEditorFields = ["title", "description", "location", "url"] a
  * never render the intermediate viewer role. No private recovery DTO is needed. */
 export function isGoogleEditorPrivacyRefresh(baseline: Event, current: Event | undefined, calendars: Calendar[]) {
   if (!current || current.id !== baseline.id || (current.revision ?? 0) <= (baseline.revision ?? 0)) return false;
-  return isGoogleEditorRestricted(current, calendars);
+  return (current.providerReadRetiredRevision ?? 0) > (baseline.revision ?? 0) || isGoogleEditorRestricted(current, calendars) || (getEventHomeCalendar(current, calendars)?.provider === "microsoft" && baseline.title === "Busy" && !baseline.description && !baseline.location && !baseline.url && !baseline.organizer);
 }
 
 export function isGoogleEditorRestricted(current: Event, calendars: Calendar[]) {
   const home = getEventHomeCalendar(current, calendars);
-  return home?.provider === "google" && (home.role === "viewer" || (
+  return !!home && ["google", "microsoft"].includes(home.provider ?? "") && ((home.provider === "google" && home.role === "viewer") || (
     current.title === "Busy" && !current.description && !current.location && !current.url && !current.organizer
   ));
 }
@@ -32,7 +32,7 @@ export function refreshPrivateEditorValues(values: EventFormValues, baseline: Ev
 
 /** Keep the accepted write revision and occurrence geometry frozen. */
 export function refreshPrivateEditorBaseline(baseline: Event, current: Event): Event {
-  return { ...baseline, title: current.title, description: current.description, location: current.location, url: current.url, organizer: current.organizer, color: current.color };
+  return { ...baseline, providerReadRetiredRevision: current.providerReadRetiredRevision, title: current.title, description: current.description, location: current.location, url: current.url, organizer: current.organizer, color: current.color };
 }
 
 export type PrivateEditorField = typeof privateEditorFields[number];

@@ -26,3 +26,6 @@ assert.equal(providerReminderReceiptMessage("not-needed", "google"), "Google rem
 assert.deepEqual(providerReminderDraft(caldav), { mode: "custom", overrides: [{ method: "popup", minutes: "15" }] });
 assert.deepEqual(providerReminderRequest(caldav, { mode: "off", overrides: [] }, id), { provider: "caldav", operationID: id, expectedRevision: 7, expectedStateVersion: "a".repeat(64), alarms: { minutesBeforeStart: null } });
 for (const invalid of [{ mode: "defaults" as const, overrides: [] }, { mode: "custom" as const, overrides: [{ method: "email" as const, minutes: "15" }] }, { mode: "custom" as const, overrides: [{ method: "popup" as const, minutes: "15" }, { method: "popup" as const, minutes: "30" }] }]) assert.throws(() => providerReminderRequest(caldav, invalid, id));
+
+const series: ProviderEventStateResponse = { ...caldav, reminderEdit: { provider: "caldav", scope: "series", expectedRevision: 7, minutesBeforeStart: 15 } };
+assert.deepEqual(providerReminderRequest(series, { mode: "off", overrides: [] }, id), { provider: "caldav", scope: "series", operationID: id, expectedRevision: 7, expectedStateVersion: "a".repeat(64), alarms: { minutesBeforeStart: null } });

@@ -137,7 +137,7 @@ async function prepare(
       local: { ...content(context.local), timeModel: context.local.timeModel ?? undefined },
       remote: { ...content(observed.event), timeModel: observed.event.timeModel }, remoteEtag: observed.ref.etag,
       action: "update", canResolve: true, reason: null,
-      caldavAlarmResolution: { desired: saved.request.alarms, remote: observed.alarms, stateVersion },
+      caldavAlarmResolution: { ...(saved.request.scope ? { scope: saved.request.scope } : {}), desired: saved.request.alarms, remote: observed.alarms, stateVersion },
     };
     const proof: EventDeliveryResolutionProof = { context, ref: observed.ref, remoteExists: true, action: "update", patch: {}, deletion: undefined, caldavAlarm: { before, next } };
     return { preview, proof };

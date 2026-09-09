@@ -188,3 +188,11 @@ The separate [CalDAV RSVP contract](caldav-rsvp.md) adds fresh scheduling and
 self-identity proof before exposing the existing editor for a personal one-off
 meeting. The public action uses an explicit server-reply policy. Private native
 resources remain in the journal, and organizer delivery remains unknown.
+
+## Microsoft private-read changes
+
+[Graph calendar access](./microsoft-calendar-access.md) treats confirmed
+`canViewPrivateItems` loss separately from write permission. Retirement clears
+private observations before the next read and fences late ordinary/family imports,
+retained receipts, notifications and open client drafts. A fresh limited read may
+restore authorized content; unknown evidence cannot restore retired details.

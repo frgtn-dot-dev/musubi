@@ -66,6 +66,7 @@ export const CaldavAlarmEditSchema = z.object({
   expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
   provider: z.literal("caldav"),
   alarms: CaldavAlarmWriteSchema,
+  scope: z.literal("series").optional(),
 }).strict();
 export type CaldavAlarmWrite = z.infer<typeof CaldavAlarmWriteSchema>;
 export type CaldavAlarmEdit = z.infer<typeof CaldavAlarmEditSchema>;
