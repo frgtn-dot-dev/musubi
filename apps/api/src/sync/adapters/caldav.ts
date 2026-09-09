@@ -1041,7 +1041,7 @@ export function prepareCaldavSeriesDeletion(evidence: CaldavSeriesEvidence, base
 }
 
 /** Absence after a conditional DELETE is evidence; a successful status alone is not. */
-export async function deleteCaldavSeriesResource(externalCalendarId: string, deletion: CaldavSeriesDeletion, authorization: string, signal?: AbortSignal): Promise<ExternalEventRef> {
+export async function deleteCaldavSeriesResource(externalCalendarId: string, deletion: CaldavSeriesDeletion, authorization: string, signal?: AbortSignal, beforeMutation?: () => Promise<void>): Promise<ExternalEventRef> {
   if (!config.api.eventTimeEditsEnabled) throw new EventWriteError("event-write", "unsupported");
   const { baseline, before } = deletion;
   caldavSeriesEvidence(before, baseline);
@@ -1058,6 +1058,7 @@ export async function deleteCaldavSeriesResource(externalCalendarId: string, del
   const current = await read();
   if (!current) return baseline.ref;
   if (current.etag !== baseline.ref.etag || !sameCaldavResource(current.data, before)) throw new ProviderEventWriteError("provider-conflict");
+  await beforeMutation?.();
   signal?.throwIfAborted();
   let accepted = false;
   try {
@@ -1073,7 +1074,7 @@ export async function deleteCaldavSeriesResource(externalCalendarId: string, del
   }
 }
 
-export async function deliverCaldavSeriesResource(externalCalendarId: string, write: CaldavSeriesWrite, authorization: string, signal?: AbortSignal): Promise<CaldavSeriesEvidence> {
+export async function deliverCaldavSeriesResource(externalCalendarId: string, write: CaldavSeriesWrite, authorization: string, signal?: AbortSignal, beforeMutation?: () => Promise<void>): Promise<CaldavSeriesEvidence> {
   if (!config.api.eventTimeEditsEnabled) throw new EventWriteError("event-write", "unsupported");
   const { baseline } = write;
   const rebuilt = prepareCaldavSeriesWrite(caldavSeriesEvidence(write.before, baseline), baseline, write.patch, write.targetEventID, write.cancelTarget, write.newDefinition, write.time);
@@ -1088,6 +1089,7 @@ export async function deliverCaldavSeriesResource(externalCalendarId: string, wr
   if (sameCaldavResource(current.data, write.after)) return evidence(current);
   if (current.etag !== baseline.ref.etag || !sameCaldavResource(current.data, write.before))
     throw new ProviderEventWriteError("provider-conflict");
+  await beforeMutation?.();
   signal?.throwIfAborted();
   let accepted = false;
   try {
@@ -1130,13 +1132,13 @@ export const caldavAdapter: CalendarAdapter = {
     const current = await readEventResource(authorization, resource.href, intent.ref, signal, "error");
     return caldavSeriesEvidence(current.data, intent);
   },
-  async deleteCaldavSeries(userID, accountId, externalCalendarId, deletion, signal) {
+  async deleteCaldavSeries(userID, accountId, externalCalendarId, deletion, signal, beforeMutation) {
     const { authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, deletion.baseline, signal, "delete");
-    return deleteCaldavSeriesResource(externalCalendarId, deletion, authorization, signal);
+    return deleteCaldavSeriesResource(externalCalendarId, deletion, authorization, signal, beforeMutation);
   },
-  async writeCaldavSeries(userID, accountId, externalCalendarId, write, signal) {
+  async writeCaldavSeries(userID, accountId, externalCalendarId, write, signal, beforeMutation) {
     const { authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, write.baseline, signal);
-    return deliverCaldavSeriesResource(externalCalendarId, write, authorization, signal);
+    return deliverCaldavSeriesResource(externalCalendarId, write, authorization, signal, beforeMutation);
   },
   projectEvent(event) { return icalToNormalized({ url: event.id, data: toIcal(event) })!; },
 

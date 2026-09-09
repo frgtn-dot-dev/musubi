@@ -153,7 +153,9 @@ export async function deliverEventOutbox(
         if (!(await confirmCaldavSeriesOutbox(row.id, token))) throw new ProviderEventWriteError("provider-conflict");
         expectedRef = row.payload.caldavSeries.write.baseline.ref;
         mutationStarted = true; // The resource executor reconciles before every conditional PUT.
-        const observed = await adapter.writeCaldavSeries(row.userID, row.accountID, row.externalCalendarID, row.payload.caldavSeries.write, signal);
+        const observed = await adapter.writeCaldavSeries(row.userID, row.accountID, row.externalCalendarID, row.payload.caldavSeries.write, signal, async () => {
+          if (!(await checkDestination()) || !(await confirmCaldavSeriesOutbox(row.id, token))) throw new ProviderEventWriteError("provider-conflict");
+        });
         resultRef = observed.ref;
         signal.throwIfAborted();
         if (!(await checkDestination())) return;

@@ -339,3 +339,17 @@ resources, unavailable readback, malformed/stale baseline and the disabled flag.
 Radicale confirms collection permission, conditional deletion and retry. This is
 transport evidence only: public series deletion and atomic local tombstone/outbox
 ACK wiring are the next slice. No flags or production capabilities are enabled.
+
+## Worker authority recheck
+
+Every CalDAV family context now requires the actor's current local edit grant,
+including the worker's preflight and final ACK transactions. The native PUT/DELETE
+executors expose a pre-mutation checkpoint after remote reads. The resource worker
+uses it to recheck destination, family, local grant and active lease immediately
+before PUT. A revoked grant blocks that mutation; revocation after PUT prevents
+ACK and leaves the accepted validators unchanged. The deletion checkpoint is ready
+for its upcoming durable worker integration.
+
+DB HTTP regressions revoke the grant during GET and after PUT. The first sends no
+PUT, and neither case advances validators. A transport regression also verifies
+that a failed deletion checkpoint sends no DELETE.
