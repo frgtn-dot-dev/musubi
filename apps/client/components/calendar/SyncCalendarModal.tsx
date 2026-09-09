@@ -1,4 +1,5 @@
 import { GOOGLE_AVAILABILITY_SCOPE, parseInviteLink } from "@musubi/types";
+import AvailabilityModal from "./AvailabilityModal";
 import EventDeliveryModal from "./EventDeliveryModal";
 import { colors, fonts, styles } from "@/constants/theme";
 import { useServer } from "@/contexts/ServerContext";
@@ -45,6 +46,8 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
   const { authClient, apiUrl } = useServer();
   const api = useApi();
   const [deliveryVisible, setDeliveryVisible] = useState(false);
+  const [availabilityVisible, setAvailabilityVisible] = useState(false);
+  if (!visible && availabilityVisible) setAvailabilityVisible(false);
   if (!visible && deliveryVisible) setDeliveryVisible(false);
 
   // Which providers this server can actually sync (same pattern as the welcome
@@ -260,6 +263,7 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
             <ScrollView showsVerticalScrollIndicator={false}>
               {step === "providers" && (
                 <View style={styles.modalButtonsColumn}>
+                  {availability?.origin === apiUrl && availability.enabled ? <Btn label="Check availability" variant="secondary" onPress={() => setAvailabilityVisible(true)} /> : null}
                   <Btn label="Unfinished deliveries" variant="secondary" onPress={() => setDeliveryVisible(true)} />
                   {(shows("google") || shows("microsoft")) && (
                     <>
@@ -510,6 +514,7 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
           </Animated.View>
         </GestureDetector>
       </GestureHandlerRootView>
+      <AvailabilityModal visible={visible && availabilityVisible} onClose={() => setAvailabilityVisible(false)} onReconnect={startGoogle} />
       <EventDeliveryModal visible={visible && deliveryVisible} onClose={() => setDeliveryVisible(false)} />
     </Modal>
   );
