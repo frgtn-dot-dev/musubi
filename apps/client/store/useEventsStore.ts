@@ -15,13 +15,17 @@ import {
 } from "@/services/notifications";
 import { cacheDeleteEvents, cacheUpsertEvents } from "@/services/eventsCache";
 
+import { useCalendarsStore } from "./useCalendarsStore";
+
 type EventsStore = {
+  retiredGoogleEventIDs: Set<string>;
+  retiredGoogleEventRevisions: Map<string, number>;
   events: Event[];
   applyEventScope: (event: Event, request: EventScopeRequest, api: ReturnType<typeof useApi>) => Promise<Event | undefined>;
   resetEvents: () => void;
   addEvent: (event: Event, api: ReturnType<typeof useApi>) => Promise<void>;
   localAddEvent: (event: Event) => Promise<void>;
-  loadEvents: (events: Event[]) => void;
+  loadEvents: (events: Event[], options?: { reconciled: boolean }) => void;
   removeEvent: (
     event: Event,
     api: ReturnType<typeof useApi>,
@@ -54,6 +58,8 @@ type ReceiptFence = {
 };
 const pendingReceipts = new Set<ReceiptFence>();
 let eventLifecycle = 0;
+// Source identity must survive a calendar being removed before its events refresh.
+const googleEventOrigins = new Map<string, { calendarID: string; revision: number }>();
 export function getEventLifecycle() {
   return eventLifecycle;
 }
@@ -100,11 +106,14 @@ function supersededReceipt() {
 
 export const useEventsStore = create<EventsStore>((set, get) => ({
   events: [],
+  retiredGoogleEventIDs: new Set(),
+  retiredGoogleEventRevisions: new Map(),
   resetEvents: () => {
     eventLifecycle++;
     for (const fence of pendingReceipts) fence.reset = true;
     pendingReceipts.clear();
-    set({ events: [] });
+    googleEventOrigins.clear();
+    set({ events: [], retiredGoogleEventIDs: new Set(), retiredGoogleEventRevisions: new Map() });
   },
   addEvent: async (event, api) => {
     const fence = captureReceiptFence();
@@ -207,8 +216,28 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       pendingReceipts.delete(fence);
     }
   },
-  loadEvents: (events) => {
-    const next = new Map(events.map((event) => [event.id, event]));
+  loadEvents: (events, options) => {
+    const calendarsByID = new Map(useCalendarsStore.getState().calendars.map(calendar => [calendar.id, calendar]));
+    const next = new Map(events.map(event => [event.id, event]));
+    const retiredGoogleEventIDs = new Set(get().retiredGoogleEventIDs);
+    const retiredGoogleEventRevisions = new Map(get().retiredGoogleEventRevisions);
+    if (options?.reconciled) {
+      for (const [id, origin] of googleEventOrigins) {
+        if (!next.has(id) || !calendarsByID.has(origin.calendarID)) {
+          retiredGoogleEventIDs.add(id);
+          retiredGoogleEventRevisions.set(id, Math.max(retiredGoogleEventRevisions.get(id) ?? 0, origin.revision));
+        }
+      }
+    }
+    for (const event of events) {
+      const origin = event.originCalendarID ? calendarsByID.get(event.originCalendarID) : undefined;
+      if (origin?.provider === "google") {
+        googleEventOrigins.set(event.id, { calendarID: origin.id, revision: event.revision ?? 0 });
+        // Only a reconciled newer canonical row can revive this identity. Old
+        // opened snapshots retain their retirement cutoff and remain closed.
+        if (options?.reconciled && (event.revision ?? 0) > (retiredGoogleEventRevisions.get(event.id) ?? Infinity)) retiredGoogleEventIDs.delete(event.id);
+      }
+    }
     for (const current of get().events) {
       const incoming = next.get(current.id);
       if (
@@ -224,7 +253,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
         if (!next.has(id)) fence.removals.set(id, undefined);
       }
     }
-    set({ events });
+    set({ events, retiredGoogleEventIDs, retiredGoogleEventRevisions });
   },
   removeEvent: async (event, api, unlinkCalendarID) => {
     const fence = captureReceiptFence();
@@ -262,6 +291,8 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     if ((current?.revision ?? 0) > (event.revision ?? 0)) return;
     recordRemoval(event.id, event.revision);
     set((state) => ({
+      retiredGoogleEventIDs: googleEventOrigins.has(event.id) ? new Set([...state.retiredGoogleEventIDs, event.id]) : state.retiredGoogleEventIDs,
+      retiredGoogleEventRevisions: googleEventOrigins.has(event.id) ? new Map([...state.retiredGoogleEventRevisions, [event.id, Math.max(state.retiredGoogleEventRevisions.get(event.id) ?? 0, event.revision ?? 0, current?.revision ?? 0)]]) : state.retiredGoogleEventRevisions,
       events: [...state.events.filter((e) => e.id !== event.id)],
     }));
     await cacheDeleteEvents([event.id]).catch((e) =>
@@ -365,6 +396,12 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   // don't linger until sign-out.
   localRemoveCalendarEvents: async (calendarID) => {
     const lifecycle = eventLifecycle;
+    const retiredGoogleEventIDs = new Set(get().retiredGoogleEventIDs);
+    const retiredGoogleEventRevisions = new Map(get().retiredGoogleEventRevisions);
+    for (const [id, origin] of googleEventOrigins) if (origin.calendarID === calendarID) {
+      retiredGoogleEventIDs.add(id);
+      retiredGoogleEventRevisions.set(id, Math.max(retiredGoogleEventRevisions.get(id) ?? 0, origin.revision));
+    }
     // A pending link/fork may not have echoed its target calendar or new ID.
     // Keep access-loss evidence on those requests, not just known event rows.
     for (const fence of pendingReceipts) fence.removedCalendars.add(calendarID);
@@ -386,7 +423,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       kept.push(updated);
       changed.push(updated);
     }
-    set({ events: kept });
+    set({ events: kept, retiredGoogleEventIDs, retiredGoogleEventRevisions });
     await cacheDeleteEvents(dropped).catch((e) =>
       console.warn("Event cache delete failed:", e),
     );
@@ -487,3 +524,13 @@ async function acceptMutationFailure(
       .getState()
       .localUpdateEvent(EventSchema.parse(error.current));
 }
+
+// SSE/imports can introduce a Google row before the next full reconciliation.
+// Keep provenance for those rows as well as launch-cache rows.
+useEventsStore.subscribe(state => {
+  const calendarsByID = new Map(useCalendarsStore.getState().calendars.map(calendar => [calendar.id, calendar]));
+  for (const event of state.events) {
+    const origin = event.originCalendarID ? calendarsByID.get(event.originCalendarID) : undefined;
+    if (origin?.provider === "google") googleEventOrigins.set(event.id, { calendarID: origin.id, revision: event.revision ?? 0 });
+  }
+});

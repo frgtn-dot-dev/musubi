@@ -57,10 +57,8 @@ vi.mock("@/lib/confirm", () => ({
   confirm: mocks.confirm,
 }));
 vi.mock("@/store/useCalendarsStore", () => ({
-  useCalendarsStore: () => ({
-    calendars: [
-      { id: "calendar", creatorID: "owner", role: "owner", name: "Calendar" },
-    ],
+  useCalendarsStore: Object.assign(() => ({ calendars: [{ id: "calendar", creatorID: "owner", role: "owner", name: "Calendar" }] }), {
+    getState: () => ({ calendars: [{ id: "calendar", creatorID: "owner", role: "owner", name: "Calendar" }] }),
   }),
 }));
 vi.mock("@/store/useSettingsStore", () => ({

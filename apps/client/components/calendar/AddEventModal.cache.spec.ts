@@ -1052,3 +1052,24 @@ it("membership filtering strips stale target links but preserves unrelated offli
     );
   }
 });
+
+it("failed Google membership refresh keeps the modal source; confirmed removal retires it", async () => {
+  useEventsStore.getState().resetEvents();
+  fetchedCalendars = [{ ...calendar, provider: "google" } as any];
+  await useRefreshData()({ providerSync: false, full: true });
+  const loaded = useEventsStore.getState().events[0];
+  expect(loaded).toBeDefined();
+  const request = mocks.request.getMockImplementation()!;
+  mocks.request.mockImplementation((url, options) => {
+    if (url.includes("/calendars")) throw new Error("offline membership read");
+    return request(url, options);
+  });
+  fetched = [];
+  await expect(useRefreshData()({ providerSync: false, full: true })).rejects.toThrow("offline membership read");
+  expect(useEventsStore.getState().retiredGoogleEventIDs.has(loaded.id)).toBe(false);
+  expect(useEventsStore.getState().events.some(event => event.id === loaded.id)).toBe(true);
+  mocks.request.mockImplementation(request);
+  fetchedCalendars = [];
+  await useRefreshData()({ providerSync: false, full: true });
+  expect(useEventsStore.getState().retiredGoogleEventIDs.has(loaded.id)).toBe(true);
+});

@@ -53,6 +53,7 @@ import { userFacingError } from "@/lib/network";
 
 type Props = {
 	event: Event | null;
+	observationRevision?: number;
 	visible: boolean;
 	onClose: () => void;
 	onEdit: (event: Event) => void;
@@ -66,6 +67,7 @@ const openMaps = (location: string) => {
 
 export default function EventDetailModal({
 	event,
+	observationRevision,
 	visible,
 	onClose,
 	onEdit,
@@ -451,7 +453,7 @@ export default function EventDetailModal({
 									</View>
 								</View>
 							)}
-							{visible && event && userID && calendars.find(calendar => calendar.id === (event.originCalendarID ?? event.calendars[0]))?.provider ? <ProviderEventDetails event={event} userId={userID} /> : null}
+							{visible && event && userID && calendars.find(calendar => calendar.id === (event.originCalendarID ?? event.calendars[0]))?.provider ? <ProviderEventDetails event={event} userId={userID} observationRevision={observationRevision} /> : null}
 							{event?.hasAttendees && attendees && (
 								// paddingHorizontal 26 (not the container's 16) — optically lines
 								// up with the title block above; circles at 16 read wider than text.

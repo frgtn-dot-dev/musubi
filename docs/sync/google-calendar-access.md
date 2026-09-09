@@ -84,7 +84,27 @@ read again immediately before transport, and successful delivery only removes an
 unchanged payload. This cannot revoke an email already handed to SMTP. Tests use
 local PostgreSQL and an injected transport; no real email is sent.
 
-This still does not close every privacy path. Broader free/busy modeling, full-editor
-and generated-occurrence cache coverage, old clients and physical/native acceptance
-require follow-up. No production writer flag, release version or client minimum
+Native open details and composers now consume confirmed privacy refreshes. A newer
+canonical Google restricted event replaces only untouched copied title, note,
+location and URL values; explicit draft deltas, including clearing a field, remain. Field ownership survives successive provider
+refreshes even when an edited value temporarily matches the new baseline. A
+previously refreshed snapshot also follows newer confirmed full reads; its private
+observation revision is separate from the accepted write revision. Role-only
+restoration cannot reveal an old copy.
+The composer keeps its accepted revision and occurrence time tuple. Provider detail
+instances use a separate current observation revision, so a generated known
+occurrence can retire cached native settings without rebasing its time-edit intent.
+
+Confirmed membership reconciliation and source-removal frames retain the prior
+Google origin identity long enough to retire missing-event modal snapshots, including
+shared survivors. Initial cache loads and failed/offline membership reads do not
+prove source removal. Removed-source composers keep explicit drafts and refuse
+save. A newer reconciled canonical revival permits a newly opened detail while
+old snapshots remain retired by their revision cutoff. Delayed older deletion
+frames cannot lower that cutoff. Account reset clears both
+modal snapshots and removal evidence. Pure native
+store/component tests cover these cases; no native provider writes were added.
+
+This still does not close every privacy path. Broader free/busy modeling, old
+clients and physical/native acceptance require follow-up. No production writer flag, release version or client minimum
 changes here.

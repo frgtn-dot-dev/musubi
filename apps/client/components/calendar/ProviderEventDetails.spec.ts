@@ -1,4 +1,4 @@
-import { ProviderEventDetailsBody } from "./ProviderEventDetails";
+import { ProviderEventDetails, ProviderEventDetailsBody } from "./ProviderEventDetails";
 import { beforeEach, expect, it, vi } from "vitest";
 import { isValidElement, type ReactNode } from "react";
 import { EventSchema } from "@musubi/types";
@@ -59,4 +59,22 @@ it("refreshes the child reminder capability and passes its exact UUID to the nat
   expect(editor.props.observation.version).toBe("b".repeat(64));
   editor.props.onClose(); action().props.onPress(); await settle();
   expect(nodes(render(child)).some(node => node.type === "ProviderReminderEditor")).toBe(false);
+});
+
+
+it("invalidates a cached native editor from canonical observation revision without rebasing a known occurrence", async () => {
+  const known = { ...event, recurrence: "FREQ=DAILY", timeModel: { kind: "zoned" as const, timeZone: "Europe/Prague", startLocal: "2026-09-10T11:00:00.000", endLocal: "2026-09-10T12:00:00.000" } };
+  const before = ProviderEventDetails({ event: known, userId: "owner", observationRevision: 7 });
+  const after = ProviderEventDetails({ event: { ...known, title: "Busy" }, userId: "owner", observationRevision: 8 });
+  expect(after.key).not.toBe(before.key);
+  expect(after.props.event.revision).toBe(7);
+  expect(after.props.event.timeModel).toBe(known.timeModel);
+  h.fetch.mockResolvedValueOnce(observation).mockResolvedValueOnce(observation).mockResolvedValueOnce({ state: null });
+  // A one-off permits opening its native editor; a new wrapper key unmounts it.
+  render(); await settle();
+  nodes(render()).find(node => node.type === "Btn")!.props.onPress(); await settle();
+  expect(nodes(render()).some(node => node.type === "ProviderReminderEditor")).toBe(true);
+  h.slots = []; h.index = 0; h.effects = [];
+  render({ ...event, title: "Busy" }); await settle();
+  expect(render({ ...event, title: "Busy" })).toBeNull();
 });
