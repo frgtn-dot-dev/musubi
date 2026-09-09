@@ -1,3 +1,4 @@
+import { retimeCaldavOrganizer } from "./caldav_organizer_time";
 import ICAL from "ical.js";
 import { isDeepStrictEqual } from "node:util";
 import { resolveEventTimeEdit } from "@musubi/calendar";
@@ -171,6 +172,7 @@ export type CaldavOrganizerDesired = {
   data: string;
   proof: CaldavSchedulingProof;
   stamp: string;
+  rescheduled?: true;
 };
 export function caldavOrganizerDesired(
   collection: string,
@@ -265,8 +267,13 @@ export function caldavOrganizerDesired(
     if (value !== undefined)
       changes.set(name, value === null ? [] : [property(name, value)]);
   }
-  const data = replaceEventProperties(baseline.data, 0, changes);
+  const content = replaceEventProperties(baseline.data, 0, changes);
+  const result = request.patch.time
+    ? retimeCaldavOrganizer(content, request.patch.time, stamp(timestamp))
+    : { data: content, rescheduled: false };
+  const data = result.data;
   return {
+    ...(result.rescheduled ? { rescheduled: true as const } : {}),
     id: baseline.id,
     iCalUID: baseline.iCalUID,
     data,
@@ -328,7 +335,20 @@ export function matchesCaldavOrganizer(
           .getFirstSubcomponent("vevent")!
           .getFirstPropertyValue("sequence") ?? 0,
       );
-    if (sequence(current.data) < sequence(baseline?.data ?? desired.data))
+    if (
+      sequence(current.data) <
+      Math.max(sequence(baseline?.data ?? desired.data), sequence(desired.data))
+    )
+      return false;
+    if (
+      desired.rescheduled &&
+      (!baseline ||
+        current.etag === baseline.etag ||
+        current.scheduleTag === baseline.scheduleTag ||
+        !new ICAL.Component(ICAL.parse(current.data))
+          .getFirstSubcomponent("vevent")!
+          .hasProperty("dtstamp"))
+    )
       return false;
     return isDeepStrictEqual(
       comparable(current.data),

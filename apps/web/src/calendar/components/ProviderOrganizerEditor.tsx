@@ -112,7 +112,9 @@ export function ProviderOrganizerEditor({
     [notice, setNotice] = useState(""),
     [confirm, setConfirm] = useState(false),
     [submitted, setSubmitted] = useState(false),
-    [frozenAction, setFrozenAction] = useState<ProviderOrganizerRequest["action"] | null>(null);
+    [frozenAction, setFrozenAction] = useState<
+      ProviderOrganizerRequest["action"] | null
+    >(null);
   function patch<K extends keyof OrganizerDraft>(
     key: K,
     value: OrganizerDraft[K],
@@ -121,6 +123,10 @@ export function ProviderOrganizerEditor({
     changed.current = [...new Set([...changed.current, key])];
     setDraft((old) => ({ ...old, [key]: value }));
   }
+  const canEditTime =
+    !event ||
+    provider !== "caldav" ||
+    observation?.organizerEdit?.timeEdit === true;
   const canUpdate =
     !event ||
     provider !== "caldav" ||
@@ -255,17 +261,23 @@ export function ProviderOrganizerEditor({
                 />
               </Field>
             )}
-            {(provider === "caldav" && event) || occurrence ? (
+            {(provider === "caldav" && event && !canEditTime) || occurrence ? (
               <p>{occurrence ? "Only this occurrence will change. Series timing and guests stay unchanged." : "Meeting time and guests are preserved."}</p>
             ) : (
               <>
-                {provider === "caldav" && !draft.allDay ? (
+                {provider === "caldav" && event ? (
+                  <p>
+                    Changing time asks guests to respond again. Their existing
+                    responses will reset.
+                  </p>
+                ) : null}
+                {provider === "caldav" && !event && !draft.allDay ? (
                   <p>New timed CalDAV meetings use UTC.</p>
                 ) : null}
                 <Checkbox
                   label="All day"
                   checked={draft.allDay}
-                  disabled={locked}
+                  disabled={locked || (provider === "caldav" && !!event)}
                   onChange={(event) => patch("allDay", event.target.checked)}
                 />
                 <Field label="Start">

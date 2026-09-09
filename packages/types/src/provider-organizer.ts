@@ -126,6 +126,7 @@ export const CaldavOrganizerRequestSchema = z.discriminatedUnion("action", [
       expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
       patch: content
         .partial()
+        .extend({ time: time.optional() })
         .strict()
         .refine(
           (value) => Object.keys(value).length > 0,

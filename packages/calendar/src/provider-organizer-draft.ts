@@ -132,11 +132,13 @@ export function organizerRequest(
     if (changed.includes(key))
       patch[key] = draft[key] || (key === "title" ? "" : null);
   if (
-    provider === "google" &&
     observation?.organizerEdit?.scope !== "occurrence" &&
     changed.some((key) => ["start", "end", "timeZone", "allDay"].includes(key))
-  )
+  ) {
+    if (provider === "caldav" && !observation?.organizerEdit?.timeEdit)
+      throw new Error("Time editing is not available for this meeting.");
     patch.time = time;
+  }
   return ProviderOrganizerRequestSchema.parse({
     ...common,
     action,

@@ -863,3 +863,12 @@ The bounded collection read-retirement slice is implemented in
 family/task generation fences, task admission and public editor refresh. It does
 not complete all K14 or establish iCloud resource write grants; live account and
 physical-device acceptance remain separate from the locally tested behavior.
+
+**K13 CalDAV organizer rescheduling slice:** the default-off organizer contract
+now includes same-type, same-zone one-off time updates after complete native
+endpoint/VTIMEZONE proof. The private request fixes the required non-organizer
+NEEDS-ACTION reset and sequence increment; full native ACK and permanent no-resend
+recovery remain strict. Web/native expose locked-zone/type time controls only
+with this proof. Zone/type conversion, named-zone creation, meeting recurrence
+and live notification acceptance remain open. See
+[CalDAV organizer rescheduling](../sync/caldav-organizer.md#explicit-rescheduling).

@@ -99,7 +99,9 @@ export function ProviderOrganizerEditor({
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [submitted, setSubmitted] = useState(false),
-    [frozenAction, setFrozenAction] = useState<ProviderOrganizerRequest["action"] | null>(null);
+    [frozenAction, setFrozenAction] = useState<
+      ProviderOrganizerRequest["action"] | null
+    >(null);
   const pending = useRef(false),
     frozen = useRef<ProviderOrganizerRequest | null>(null),
     changed = useRef<(keyof OrganizerDraft)[]>([]),
@@ -121,6 +123,10 @@ export function ProviderOrganizerEditor({
     changed.current = [...new Set([...changed.current, key])];
     setDraft((previous) => ({ ...previous, [key]: value }));
   }
+  const canEditTime =
+    !event ||
+    provider !== "caldav" ||
+    observation?.organizerEdit?.timeEdit === true;
   const canUpdate =
     !event ||
     provider !== "caldav" ||
@@ -185,7 +191,7 @@ export function ProviderOrganizerEditor({
     ...(!event
       ? [["guests", "Guest email addresses"] as [keyof OrganizerDraft, string]]
       : []),
-    ...(provider === "caldav" && event
+    ...(provider === "caldav" && event && !canEditTime
       ? []
       : ([
           [
@@ -269,13 +275,19 @@ export function ProviderOrganizerEditor({
                     />
                   </View>
                 ))}
-                {(provider === "caldav" && event) || occurrence ? (
+                {(provider === "caldav" && event && !canEditTime) || occurrence ? (
                   <Text style={copy}>
                     {occurrence ? "Only this occurrence will change. Series timing and guests stay unchanged." : "Meeting time and guests are preserved."}
                   </Text>
                 ) : (
                   <>
-                    {provider === "caldav" && !draft.allDay ? (
+                    {provider === "caldav" && event ? (
+                      <Text style={copy}>
+                        Changing time asks guests to respond again. Their
+                        existing responses will reset.
+                      </Text>
+                    ) : null}
+                    {provider === "caldav" && !event && !draft.allDay ? (
                       <Text style={copy}>
                         New timed CalDAV meetings use UTC.
                       </Text>
@@ -283,7 +295,7 @@ export function ProviderOrganizerEditor({
                     <Btn
                       variant="secondary"
                       label={`All day: ${draft.allDay ? "yes" : "no"}`}
-                      disabled={locked}
+                      disabled={locked || (provider === "caldav" && !!event)}
                       onPress={() => patch("allDay", !draft.allDay)}
                     />
                   </>

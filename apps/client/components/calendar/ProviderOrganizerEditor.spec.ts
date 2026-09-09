@@ -289,3 +289,17 @@ it("confirms cancellation of only this occurrence before dispatching its bound r
   h.confirm.mock.calls[0][1](); await settle();
   expect(h.save.mock.calls[0][0]).toMatchObject({ action: "delete", scope: "occurrence", expectedInstanceVersion: "b".repeat(64) });
 });
+it("reschedules only within the observed zone and freezes the exact time request", async () => {
+ h.save.mockRejectedValueOnce(new Error("Response lost")).mockResolvedValue({ status: "pending" });
+ const observed = { ...observation, organizerEdit: { ...observation.organizerEdit!, provider: "caldav" as const, actions: ["update"] as ("update")[], timeEdit: true as const } };
+ const source = { ...event, timeModel: { kind: "zoned" as const, timeZone: "Europe/Prague", startLocal: "2026-09-10T11:00:00.000", endLocal: "2026-09-10T12:00:00.000" } };
+ const tree = render(source, observed);
+ const fields = nodes(tree).filter(node => node.type === "TextInput");
+ expect(fields.find(node => node.props.accessibilityLabel === "Event time zone")!.props.editable).toBe(false);
+ fields.find(node => node.props.accessibilityLabel === "Start (YYYY-MM-DDTHH:mm:ss)")!.props.onChangeText("2026-09-11T11:00:00");
+ fields.find(node => node.props.accessibilityLabel === "End (YYYY-MM-DDTHH:mm:ss)")!.props.onChangeText("2026-09-11T12:00:00");
+ button(render(source, observed), "Save and notify guests").onPress(); await settle();
+ button(render(source, observed), "Retry saved meeting action").onPress(); await settle();
+ expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
+ expect(h.save.mock.calls[0][0].patch.time).toMatchObject({ kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-09-11T11:00:00.000" });
+});

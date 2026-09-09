@@ -9703,3 +9703,36 @@ test("CalDAV task editor retires coalesced baseline and preserves explicit clear
   await expect(page.locator("vite-error-overlay")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (const kind of ["zoned", "all-day"] as const) {
+  test(`CalDAV organizer retime ${kind}: ${theme} ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const calendarID = "00000000-0000-4000-8000-000000000311", eventID = "00000000-0000-4000-8000-000000000312";
+    const saved = { ...event(eventID, "Retime meeting", calendarID, "red", kind === "all-day" ? "2026-07-26T00:00:00Z" : "2026-07-26T09:00:00Z", kind === "all-day" ? "2026-07-26T00:00:00Z" : "2026-07-26T10:00:00Z"), revision: 4, isAllDay: kind === "all-day", timeModel: kind === "all-day" ? { kind } : { kind, timeZone: "Europe/Prague", startLocal: "2026-07-26T11:00:00.000", endLocal: "2026-07-26T12:00:00.000" } };
+    await mockAuthenticatedReads(page, { ...events, events: [saved] }, [{ ...calendars[0]!, id: calendarID, provider: "caldav", accountID: "fixture", accountLabel: "Fixture" }]);
+    await page.route(`**/api/v1/events/${eventID}/provider-state`, route => respond(route, { state: { provider: "caldav", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "ACCEPTED" }], attendeesComplete: true, ownResponse: null, reminders: { provider: "caldav", alarms: [] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] }, version: "a".repeat(64), organizerEdit: { provider: "caldav", calendarID, expectedRevision: 4, actions: ["update"], timeEdit: true } }));
+    const writes: any[] = [], errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await page.route("**/api/v1/provider-organizer", route => { const body = route.request().postDataJSON(); writes.push(body); return writes.length === 1 ? respond(route, { error: "Response lost" }, 503) : respond(route, { operationID: body.operationID, eventID, replayed: true, status: "pending", localCommitted: true, notificationDelivery: "unknown" }, 202); });
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    await page.getByRole("button", { name: /Retime meeting/ }).first().click();
+    const trigger = page.getByRole("button", { name: "Manage CalDAV meeting", exact: true }); await trigger.click();
+    const editor = page.getByRole("dialog", { name: "Manage CalDAV meeting", exact: true });
+    await expect(editor.getByRole("checkbox", { name: "All day" })).toBeDisabled();
+    if (kind === "zoned") { await expect(editor.getByRole("textbox", { name: "Event time zone" })).toHaveValue("Europe/Prague"); await expect(editor.getByRole("textbox", { name: "Event time zone" })).toBeDisabled(); }
+    await editor.getByLabel("Start", { exact: true }).fill(kind === "all-day" ? "2026-07-27" : "2026-07-27T11:00");
+    await editor.getByLabel("End", { exact: true }).fill(kind === "all-day" ? "2026-07-28" : "2026-07-27T12:00");
+    await expect(editor).toContainText("Their existing responses will reset");
+    await expectNoAccessibilityViolations(page); expect(await editor.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await editor.screenshot({ path: `/tmp/musubi-k12-live/caldav-organizer-retime-${kind}-${theme}.png` });
+    await editor.getByRole("button", { name: "Save and notify guests" }).press("Enter");
+    await expect(editor.getByRole("alert")).toContainText("Response lost");
+    await expect(editor.getByLabel("Start", { exact: true })).toBeDisabled();
+    await editor.getByRole("button", { name: "Retry saved meeting action" }).press("Enter");
+    await expect(editor.getByRole("status")).toContainText("Guest notification delivery remains unknown");
+    expect(writes).toHaveLength(2); expect(writes[1]).toEqual(writes[0]);
+    expect(writes[0].patch).toEqual({ time: kind === "all-day" ? { kind, startDate: "2026-07-27", endDate: "2026-07-28" } : { kind, timeZone: "Europe/Prague", startLocal: "2026-07-27T11:00:00.000", endLocal: "2026-07-27T12:00:00.000" } });
+    await editor.getByRole("button", { name: "Close", exact: true }).press("Space"); await expect(trigger).toBeFocused(); expect(errors).toEqual([]);
+  });
+}
