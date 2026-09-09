@@ -1,3 +1,4 @@
+import { validateCalendarImportDates } from "../sync/adapters/caldav_recurrence_dates";
 import { eventMutationIdentity } from "./event_mutation";
 import { committedFailure } from "./event_commit";
 import type { Request, Response } from "express";
@@ -349,6 +350,7 @@ export async function handlerImportCalendar(req: Request, res: Response) {
 
 	let vcal: ICAL.Component;
 	try {
+		validateCalendarImportDates(ics);
 		vcal = new ICAL.Component(ICAL.parse(ics));
 	} catch {
 		throw new BadRequestError("That file isn't valid iCalendar data...");
@@ -369,8 +371,11 @@ export async function handlerImportCalendar(req: Request, res: Response) {
 
 	// Detached import fidelity remains K11. Inspect every accepted master before
 	// creating a destination, so known unsupported content cannot partially import.
-	const fields = vevents.filter((event) => !event.getFirstPropertyValue("recurrence-id"))
-		.map(veventToFields).filter((event) => event !== null);
+	let fields: NonNullable<ReturnType<typeof veventToFields>>[];
+	try {
+		fields = vevents.filter((event) => !event.getFirstPropertyValue("recurrence-id"))
+			.map(veventToFields).filter((event) => event !== null);
+	} catch { throw new BadRequestError("That file contains unsupported or invalid recurrence dates."); }
 	if (provider === "microsoft" && fields.some((event) => event.recurrence)) {
 		throw new EventWriteError("recurrence", "unsupported",
 			"Outlook recurring import is not supported yet. No calendar or events were created.");
