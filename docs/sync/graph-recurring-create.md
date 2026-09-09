@@ -68,6 +68,32 @@ and exceptions, returned-ID mismatch and read failure after POST. The callback
 is mocked; durable family delivery/ACK and real Outlook acceptance are still
 required. This step does not establish Graph event If-Match enforcement.
 
+## Finite original-slot preparation
+
+The private native transport now additionally requires an explicit COUNT with at
+most 366 occurrences, with the complete series (including the final endpoint)
+inside 730 days from its start. Timed occurrences must have a positive fixed
+duration within one civil date. The standalone recurrence/body converters retain
+their broader candidate forms; this tighter boundary applies before native create
+I/O and prepares a full-family importer, not a calendarView absence heuristic.
+
+`graphSeriesFootprint` returns original occurrence identities and exact known
+time values without inventing native event IDs. Zoned COUNT civil slots are
+first enumerated as floating values in UTC, so the existing expander cannot hide
+a DST gap by replenishing COUNT with a later valid occurrence. Each original
+start/end must be unambiguous in the native zone with the accepted duration.
+The actual zoned expansion must match these original slots and endpoints. All-day
+end bounds account for Graph's exclusive end. Returned values do not mutate the
+saved master.
+
+Tests cover all six candidate patterns, exact COUNT/horizon limits, one occurrence,
+366 daily occurrences, year-boundary all-day durations, independent expected DST
+instants under three host zones, future gap/fold and Lord Howe half-hour changes,
+changed duration, cross-midnight and zero-duration timed refusal. The native HTTP
+test proves unsupported infinite/UNTIL/oversized series stop before permission
+requests, lookup or POST. No missing slot is classified as cancelled by this
+helper; a later native family reader must provide complete independent evidence.
+
 ## Remaining before activation
 
 The durable create operation, permission checks, uncertain POST recovery and

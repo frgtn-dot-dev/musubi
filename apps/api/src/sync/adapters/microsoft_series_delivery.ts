@@ -1,3 +1,4 @@
+import { graphSeriesFootprint } from "./microsoft_series_footprint";
 import { config } from "@musubi/config";
 import { EventWriteError, type Event } from "@musubi/types";
 import type { CreatedEventEvidence, EventCreateIdentity } from "../adapter";
@@ -23,6 +24,7 @@ export async function createGraphSeries(
     throw new EventWriteError("event-write", "unsupported", "Outlook recurring creation is not enabled. No changes were saved.");
   const saved = structuredClone(event);
   const frozen = { operationID: eventCreateOperationID(identity), signal: identity.signal };
+  graphSeriesFootprint(saved);
   const body = graphSeriesCreateBody(saved, frozen);
   const uncertain = state.uncertain, beforeWrite = state.beforeWrite;
   if (typeof uncertain !== "boolean" || typeof beforeWrite !== "function" || typeof calendarID !== "string" || !calendarID || calendarID.trim() !== calendarID || calendarID === "." || calendarID === "..")
