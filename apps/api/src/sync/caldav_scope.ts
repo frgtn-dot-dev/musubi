@@ -1,19 +1,20 @@
 import { randomUUID } from "node:crypto";
 import { planEventScope } from "@musubi/calendar";
-import { sameCaldavScopeContext } from "@musubi/db";
-import type { CaldavSeriesContext, CaldavSeriesPrepared, CaldavSeriesDeletionPrepared } from "@musubi/db";
+import { sameCaldavScopeContext, normalizeCaldavScopeRequest } from "@musubi/db";
+import type { CaldavSeriesContext, CaldavSeriesPrepared, CaldavSeriesDeletionPrepared, CaldavSplitPrepared } from "@musubi/db";
 import { EventScopeRequestSchema, EventWriteError } from "@musubi/types";
-import { caldavAdapter, prepareCaldavSeriesWrite, prepareCaldavSeriesDeletion } from "./adapters/caldav";
+import { caldavAdapter, prepareCaldavSeriesWrite, prepareCaldavSeriesDeletion, prepareCaldavSeriesSplit } from "./adapters/caldav";
 import { ProviderEventWriteError } from "./event_write";
 
 export async function prepareCaldavSeries(context: CaldavSeriesContext, input: unknown): Promise<CaldavSeriesPrepared> {
-  const request = EventScopeRequestSchema.parse(input);
-  if (!["series", "occurrence", "following"].includes(request.scope) || (request.scope === "series" && request.action !== "update") || (request.scope === "following" && request.action !== "delete") || (request.action === "update" && (Object.keys(request.patch).some(key => !["title", "description", "location", "recurrence"].includes(key)))))
+  const request = normalizeCaldavScopeRequest(context.master, EventScopeRequestSchema.parse(input));
+  if (!["series", "occurrence", "following"].includes(request.scope) || (request.scope === "series" && request.action !== "update") || (request.action === "update" && (Object.keys(request.patch).some(key => !["title", "description", "location", "recurrence"].includes(key)))))
     throw new EventWriteError("event-write", "unsupported");
   const target = request.scope === "occurrence" ? context.children.find(child => sameCaldavScopeContext(child.originalStart, request.originalStart)) : undefined;
   if (request.scope === "occurrence" && ((target?.isCanceled && request.action === "delete") || (target?.revision ?? null) !== request.expectedOccurrenceRevision)) throw new EventWriteError("event-write", "unsupported");
   const newDefinition = request.scope === "occurrence" && !target ? planEventScope(context.master, context.children, request, () => context.retiredDefinitions?.find(item => sameCaldavScopeContext(item.originalStart, request.originalStart))?.id ?? randomUUID()).creates[0] : undefined;
   const planned = planEventScope(context.master, context.children, request, () => newDefinition?.id ?? randomUUID());
+  if (request.scope === "following" && request.action === "update" && (planned.creates.length || planned.deletes.length)) throw new EventWriteError("event-write", "unsupported");
   if ([...planned.updates, ...planned.creates].some(next => next.seriesID === context.master.id && context.retiredDefinitions?.some(old => old.id !== next.id && sameCaldavScopeContext(old.originalStart, next.originalStart))))
     throw new EventWriteError("event-write", "unsupported", "This change collides with a retired occurrence identity. No changes were saved.");
   const root = context.mappings.find(item => item.eventID === context.master.id)!;
@@ -24,7 +25,10 @@ export async function prepareCaldavSeries(context: CaldavSeriesContext, input: u
       const mapping = context.mappings.find(item => item.externalEventID === observed.externalId);
       if (!mapping || !sameCaldavScopeContext(mapping.originalStart, observed.originalStart ?? null)) throw new ProviderEventWriteError("provider-conflict");
     }
-    return { context, write: prepareCaldavSeriesWrite(evidence, baseline, request.action === "update" ? request.patch : {}, target?.id ?? newDefinition?.id, request.action === "delete" && request.scope === "occurrence" ? true : undefined, newDefinition, request.action === "update" ? request.time : undefined, request.scope === "following" ? { originalStart: request.originalStart!, expectedOccurrenceRevision: request.expectedOccurrenceRevision! } : undefined) };
+    const family = [context.master, ...context.children];
+    if (!planned.creates.length && !planned.deletes.length && planned.updates.every(next => sameCaldavScopeContext(next, family.find(old => old.id === next.id))))
+      return { context, write: { baseline, patch: {}, before: evidence.data, after: evidence.data } };
+    return { context, write: prepareCaldavSeriesWrite(evidence, baseline, request.action === "update" ? request.patch : {}, target?.id ?? newDefinition?.id, request.action === "delete" && request.scope === "occurrence" ? true : undefined, newDefinition, request.action === "update" ? request.time : undefined, request.scope === "following" && request.action === "delete" ? { originalStart: request.originalStart!, expectedOccurrenceRevision: request.expectedOccurrenceRevision! } : undefined) };
   } catch (error) {
     if (error instanceof ProviderEventWriteError || error instanceof EventWriteError) throw error;
     // Parser/decryption/transport exceptions can contain raw resource lines.
@@ -45,6 +49,29 @@ export async function prepareCaldavSeriesDelete(context: CaldavSeriesContext, in
       if (!mapping || !sameCaldavScopeContext(mapping.originalStart, observed.originalStart ?? null)) throw new ProviderEventWriteError("provider-conflict");
     }
     return { context, deletion: prepareCaldavSeriesDeletion(evidence, baseline) };
+  } catch (error) {
+    if (error instanceof ProviderEventWriteError || error instanceof EventWriteError) throw error;
+    throw new ProviderEventWriteError("provider-write-failed");
+  }
+}
+
+
+/** Complete permission and native preflight. No provider or local mutation. */
+export async function prepareCaldavSplit(context: CaldavSeriesContext, input: unknown): Promise<CaldavSplitPrepared> {
+  const request = EventScopeRequestSchema.parse(input);
+  if (request.scope !== "following" || request.action !== "update") throw new EventWriteError("event-write", "unsupported");
+  const root = context.mappings.find(item => item.eventID === context.master.id)!;
+  const baseline = { master: context.master, children: context.children, ref: { externalEventId: root.externalEventID, etag: root.etag, icalUid: root.icalUid } };
+  try {
+    const signal = AbortSignal.timeout(10_000);
+    const evidence = await caldavAdapter.readCaldavSeries!(context.link.userID, context.link.accountID, context.link.externalCalendarID, baseline, signal);
+    for (const observed of [evidence.master, ...evidence.exceptions]) {
+      const mapping = context.mappings.find(item => item.externalEventID === observed.externalId);
+      if (!mapping || !sameCaldavScopeContext(mapping.originalStart, observed.originalStart ?? null)) throw new ProviderEventWriteError("provider-conflict");
+    }
+    const split = prepareCaldavSeriesSplit(evidence, baseline, request);
+    await caldavAdapter.assertCaldavSplitCreation!(context.link.userID, context.link.accountID, context.link.externalCalendarID, split, signal);
+    return { context, split };
   } catch (error) {
     if (error instanceof ProviderEventWriteError || error instanceof EventWriteError) throw error;
     throw new ProviderEventWriteError("provider-write-failed");

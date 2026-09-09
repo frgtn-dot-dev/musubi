@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { planEventScope } from "@musubi/calendar";
-import { EventSchema, EventScopeRequestSchema, EventWriteError, type Event, type EventScopeRequest } from "@musubi/types";
+import { EventSchema, EventScopeRequestSchema, EventWriteError, OccurrenceStartSchema, type Event, type EventScopeRequest } from "@musubi/types";
 import { eq } from "drizzle-orm";
 import { eventOutbox } from "../schema";
 import type { DbTransaction } from "./calendars";
@@ -22,6 +22,12 @@ export type CaldavSplitJournal = {
 };
 function refuse(): never { throw new EventWriteError("event-write", "unsupported", "CalDAV split preparation no longer matches the complete family."); }
 
+/** Use canonical recurrence identity ordering for locks and synthetic hrefs. */
+export function caldavSplitCreationAddresses(split: CaldavSeriesSplitIntent): string[] {
+  const root = split.creation.ref.externalEventId;
+  return [root, ...split.creation.children.map(child => root + "#musubi-original=" + encodeURIComponent(JSON.stringify(OccurrenceStartSchema.parse(child.originalStart))))];
+}
+
 /** Reconstruct canonical intent independently of the native serialization. */
 export function caldavSplitPlan(prepared: CaldavSplitPrepared) {
   const { context, split } = prepared;
@@ -29,7 +35,7 @@ export function caldavSplitPlan(prepared: CaldavSplitPrepared) {
   const request = EventScopeRequestSchema.parse(split.request);
   const id = split.creation.master.id;
   const root = context.mappings.find(item => item.eventID === context.master.id);
-  if (!root || request.scope !== "following" || request.action !== "update" ||
+  if (!root || id === baseline.ref.icalUid || request.scope !== "following" || request.action !== "update" ||
       Object.keys(request.patch).some(key => !["title", "description", "location", "recurrence"].includes(key)) ||
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id) ||
       [context.master, ...context.children, ...(context.retiredDefinitions ?? [])].some(item => item.id === id) ||

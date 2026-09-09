@@ -542,3 +542,34 @@ private native tampering, stable echo identities and independent old-family edit
 Radicale covers both conditional writes with synchronization between their ACKs.
 Public following update and its preflight bridge still remain closed; flags and
 versions are unchanged.
+
+
+## Public following-update scope
+
+With the default-off time-edit capability enabled, the authenticated scope endpoint
+now accepts a personal CalDAV following update. Complete source evidence and
+resource write permission are checked first; a real split additionally requires
+collection bind and a checked, frozen destination. The local commit repeats its
+full context and address checks under locks. A newly observed deletion, existing
+destination mapping, reused identity or stale family prevents saving either half.
+The source UID cannot be reused for the new resource.
+
+A later cut queues the two-step journal. The first occurrence uses the existing
+single-resource series update; a real no-op records only its replay receipt.
+Concurrent HTTP retries may prepare different UUIDs, but exactly one scope receipt
+wins and freezes both outbox steps. Responses report local commitment, never
+provider delivery. Existing cancellation/content preservation and same-kind,
+same-zone time restrictions remain in force; meeting scheduling stays unsupported.
+
+Authenticated HTTP/DB coverage includes zoned/all-day/floating, first-slot and no-op,
+time and bare/default recurrence patches, concurrent replay, bind/write unknown or
+denied, grant/local races, target collision and root/child deletion observations
+before commit. Radicale exercises the same preflight bridge and both durable ACKs
+with an intervening sync. Live iCloud unknown resource privilege is still refused;
+no flag, product version or compatibility minimum is changed.
+
+Equivalent supported RRULE spelling/defaults are normalized consistently before
+routing and commit. An unchanged following occurrence time keeps the empty plan
+after complete evidence validation; it never becomes a master time shift. HTTP
+regressions cover default-clause no-ops and an unchanged time on an UNTIL-bounded
+series with a late exception. Both record a receipt without outbox rows or PUTs.

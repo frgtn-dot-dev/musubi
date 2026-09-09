@@ -126,6 +126,10 @@ async function main() {
       assert.throws(() => prepareCaldavSeriesWrite(evidence, baseline, {}, undefined, undefined, undefined, undefined, { ...followingDelete, expectedOccurrenceRevision: 999 }));
       const splitCut = baseline.children.find(item => !item.isCanceled)!;
       const splitRequest = { operationID: randomUUID(), scope: "following", action: "update", expectedRevision: baseline.master.revision, originalStart: splitCut.originalStart, expectedOccurrenceRevision: splitCut.revision, patch: { title: "Future series" } };
+      const reusedUID = randomUUID();
+      const reusedBaseline = { ...baseline, ref: { ...baseline.ref, icalUid: reusedUID } };
+      const reusedEvidence = caldavSeriesEvidence(evidence.data.split("UID:family").join("UID:" + reusedUID), reusedBaseline);
+      assert.throws(() => prepareCaldavSeriesSplit(reusedEvidence, reusedBaseline, splitRequest, reusedUID));
       const split = prepareCaldavSeriesSplit(evidence, baseline, splitRequest);
       assert.ok(split.source.after.includes("COUNT=1")); assert.ok(!split.source.after.includes(child) && !split.source.after.includes(cancelled));
       assert.equal(split.creation.children.length, 2); assert.equal(split.creation.ref.etag, undefined);
