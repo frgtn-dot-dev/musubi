@@ -74,7 +74,7 @@ async function main() {
   const apiOrigin = `http://127.0.0.1:${(api.address() as any).port}`;
   const enabled = config.api.eventTimeEditsEnabled;
   try {
-    for (const scenario of ["resolve-occurrence-repeated", "resolve-occurrence-zoned", "resolve-occurrence-all-day", "resolve-occurrence-floating", "resolve-occurrence-http", "resolve-occurrence-lost", "resolve-occurrence-stale", "resolve-occurrence-local-race", "resolve-occurrence-grant", "resolve-occurrence-target-tamper", "resolve-occurrence-native-time", "resolve-occurrence-native-slot", "resolve-occurrence-other-content", "resolve-occurrence-timezone", "public-split-noop-rule", "public-split-noop-time", "public-split-generated-zoned", "public-split-generated-all-day", "public-split-generated-floating", "public-split-first-time", "public-split-first-recurrence", "public-split-zoned", "public-split-all-day", "public-split-floating", "public-split-time", "public-split-recurrence", "public-split-first-zoned", "public-split-first-all-day", "public-split-first-floating", "public-split-noop", "public-split-off", "public-split-no-bind", "public-split-bind-unknown", "public-split-write-unknown", "public-split-grant-race", "public-split-local-race", "public-split-root-tombstone", "public-split-child-tombstone", "public-split-collision", "split-create-child-delete", "split-pair-tamper", "split-source-lost", "split-source-race", "split-source-grant-before", "split-source-grant-after", "split-source-local-race", "split-source-lease-race", "split-source-collision", "split-no-bind", "split-native-tamper", "split-create-lost", "split-create-grant-before", "split-create-grant-after", "split-create-local-race", "split-create-lease-race", "split-edit-source", "series-sweep", "split-sweep", "split-rollback", "split-delete-fence", "split-zoned", "split-all-day", "split-floating", "split-time", "split-recurrence", "split-race", "split-tamper", "following-sweep-echo", "delete-sweep-echo", "following-content-conflict", "following-shift-collision", "following-regenerate", "following-recancel", "following-zoned", "following-all-day", "following-floating", "following-lost", "following-race", "following-grant-before", "following-grant-after", "following-local-race", "following-lease-race", "following-cleanup", "following-restore", "following-first", "delete-recreate", "delete-cleanup", "delete-zoned", "delete-all-day", "delete-floating", "delete-lost", "delete-race", "delete-prepare-race", "delete-grant-before", "delete-grant-after", "delete-local-race", "delete-lease-race", "grant-before", "grant-after", "recurrence-zoned", "recurrence-all-day", "recurrence-floating", "recurrence-lost", "recurrence-race", "recurrence-orphan", "recurrence-bare", "recurrence-order", "series-time-zoned", "series-time-all-day", "series-time-floating", "series-time-lost", "series-time-race", "series-time-tombstone", "generated-time-zoned", "generated-time-all-day", "generated-time-floating", "generated-time-lost", "generated-time-race", "time-zoned", "time-all-day", "time-floating", "time-lost", "time-race", "revive-zoned", "revive-all-day", "revive-floating", "revive-lost", "revive-race", "generated-zoned", "generated-all-day", "generated-floating", "generated-cancel-zoned", "generated-cancel-all-day", "generated-cancel-floating", "generated-lost", "generated-race", "generated-prepare-race", "generated-tombstone", "cancel-zoned", "cancel-all-day", "cancel-floating", "cancel-lost", "cancel-race", "occurrence-zoned", "occurrence-all-day", "occurrence-floating", "occurrence-lost", "occurrence-race", "zoned", "all-day", "floating", "no-children", "malformed-private", "meeting", "copied", "lost", "race", "local-race", "mapping-race", "lease-race", "tombstone", "prepare-race", "no-op", "resolve", "resolve-all-day", "resolve-floating", "resolve-delete-observation", "resolve-twice", "resolve-http", "resolve-timezone", "resolve-stale", "resolve-local-race", "resolve-child-race"]) {
+    for (const scenario of ["structure-series-time-zoned", "structure-series-time-all-day", "structure-series-time-floating", "structure-occurrence-time-zoned", "structure-occurrence-time-all-day", "structure-occurrence-time-floating", "structure-recurrence-zoned", "structure-recurrence-all-day", "structure-recurrence-floating", "structure-combined-zoned", "structure-stale", "structure-local-race", "structure-grant", "structure-lease", "structure-proof-time", "structure-proof-rule", "structure-native-time", "structure-native-rule", "structure-native-child", "structure-lost", "structure-repeated", "structure-native-after", "resolve-occurrence-repeated", "resolve-occurrence-zoned", "resolve-occurrence-all-day", "resolve-occurrence-floating", "resolve-occurrence-http", "resolve-occurrence-lost", "resolve-occurrence-stale", "resolve-occurrence-local-race", "resolve-occurrence-grant", "resolve-occurrence-target-tamper", "resolve-occurrence-native-time", "resolve-occurrence-native-slot", "resolve-occurrence-other-content", "resolve-occurrence-timezone", "public-split-noop-rule", "public-split-noop-time", "public-split-generated-zoned", "public-split-generated-all-day", "public-split-generated-floating", "public-split-first-time", "public-split-first-recurrence", "public-split-zoned", "public-split-all-day", "public-split-floating", "public-split-time", "public-split-recurrence", "public-split-first-zoned", "public-split-first-all-day", "public-split-first-floating", "public-split-noop", "public-split-off", "public-split-no-bind", "public-split-bind-unknown", "public-split-write-unknown", "public-split-grant-race", "public-split-local-race", "public-split-root-tombstone", "public-split-child-tombstone", "public-split-collision", "split-create-child-delete", "split-pair-tamper", "split-source-lost", "split-source-race", "split-source-grant-before", "split-source-grant-after", "split-source-local-race", "split-source-lease-race", "split-source-collision", "split-no-bind", "split-native-tamper", "split-create-lost", "split-create-grant-before", "split-create-grant-after", "split-create-local-race", "split-create-lease-race", "split-edit-source", "series-sweep", "split-sweep", "split-rollback", "split-delete-fence", "split-zoned", "split-all-day", "split-floating", "split-time", "split-recurrence", "split-race", "split-tamper", "following-sweep-echo", "delete-sweep-echo", "following-content-conflict", "following-shift-collision", "following-regenerate", "following-recancel", "following-zoned", "following-all-day", "following-floating", "following-lost", "following-race", "following-grant-before", "following-grant-after", "following-local-race", "following-lease-race", "following-cleanup", "following-restore", "following-first", "delete-recreate", "delete-cleanup", "delete-zoned", "delete-all-day", "delete-floating", "delete-lost", "delete-race", "delete-prepare-race", "delete-grant-before", "delete-grant-after", "delete-local-race", "delete-lease-race", "grant-before", "grant-after", "recurrence-zoned", "recurrence-all-day", "recurrence-floating", "recurrence-lost", "recurrence-race", "recurrence-orphan", "recurrence-bare", "recurrence-order", "series-time-zoned", "series-time-all-day", "series-time-floating", "series-time-lost", "series-time-race", "series-time-tombstone", "generated-time-zoned", "generated-time-all-day", "generated-time-floating", "generated-time-lost", "generated-time-race", "time-zoned", "time-all-day", "time-floating", "time-lost", "time-race", "revive-zoned", "revive-all-day", "revive-floating", "revive-lost", "revive-race", "generated-zoned", "generated-all-day", "generated-floating", "generated-cancel-zoned", "generated-cancel-all-day", "generated-cancel-floating", "generated-lost", "generated-race", "generated-prepare-race", "generated-tombstone", "cancel-zoned", "cancel-all-day", "cancel-floating", "cancel-lost", "cancel-race", "occurrence-zoned", "occurrence-all-day", "occurrence-floating", "occurrence-lost", "occurrence-race", "zoned", "all-day", "floating", "no-children", "malformed-private", "meeting", "copied", "lost", "race", "local-race", "mapping-race", "lease-race", "tombstone", "prepare-race", "no-op", "resolve", "resolve-all-day", "resolve-floating", "resolve-delete-observation", "resolve-twice", "resolve-http", "resolve-timezone", "resolve-stale", "resolve-local-race", "resolve-child-race"]) {
       const owner = `caldav-scope-${randomUUID()}`;
       const credential = issueMemberToken();
       await db.insert(user).values({ id: owner, name: "Fixture", email: `${owner}@example.test`, isExternal: true });
@@ -101,6 +101,82 @@ async function main() {
         const outbox = () => db.select().from(eventOutbox).where(eq(eventOutbox.userID, owner));
         const original = await rows(), mappings = await maps();
         const root = original.find(event => !event.seriesID)!;
+        if (scenario.startsWith("structure-")) {
+          const occurrence = scenario.includes("-occurrence-");
+          const recurrenceEdit = scenario.includes("-recurrence-") || scenario.includes("-combined-");
+          const target = occurrence ? original.find(item => item.seriesID && !item.isCanceled)! : root;
+          const time = scenario.includes("-recurrence-") ? undefined : scenario.endsWith("all-day")
+            ? { kind: "all-day", startDate: "2026-04-02", endDate: "2026-04-03" }
+            : { kind: scenario.endsWith("floating") ? "floating" : "zoned", ...(scenario.endsWith("floating") ? {} : { timeZone: "Europe/Prague" }), startLocal: "2026-04-02T12:00:00.000", endLocal: "2026-04-03T13:00:00.000" };
+          const request = { operationID: randomUUID(), scope: occurrence ? "occurrence" : "series", action: "update", expectedRevision: root.revision, ...(occurrence ? { originalStart: target.originalStart, expectedOccurrenceRevision: target.revision } : {}), patch: recurrenceEdit ? { recurrence: "RRULE:FREQ=DAILY;COUNT=5" } : {}, ...(time ? { time } : {}) };
+          const headers = { authorization: `Bearer ${credential.raw}`, "content-type": "application/json", [CLIENT_VERSION_HEADER]: PRODUCT_VERSION };
+          const response = await fetch(`${apiOrigin}/events/${root.id}/scope`, { method: "POST", headers, body: JSON.stringify(request) });
+          assert.equal(response.status, 200, await response.text());
+          const [operation] = await outbox(); assert.equal((await outbox()).length, 1);
+          const savedRows = await rows(), savedMaps = await maps();
+          const savedTarget = savedRows.find(item => item.id === target.id)!;
+          data = data.replace(`SUMMARY:${target.title}`, "SUMMARY:Remote selected").replace("X-PRIVATE:Never disclose", "X-PRIVATE:Fresh structural extension"); etag = '"remote-v2"';
+          assert.equal((await deliverEventOutbox(operation.id, () => caldavAdapter))?.status, "conflict"); assert.equal(puts, 0);
+          if (scenario === "structure-native-time") data = data.replace(stamp("DTSTART", "28", "09"), stamp("DTSTART", "27", "09"));
+          if (scenario === "structure-native-rule") data = data.replace("COUNT=4", "COUNT=5");
+          if (scenario === "structure-native-child") data = data.replace("SUMMARY:Cancelled", "SUMMARY:Another child");
+          const previewResponse = await fetch(`${apiOrigin}/events/${root.id}/delivery/${operation.id}/conflict`, { headers });
+          if (["structure-native-time", "structure-native-rule", "structure-native-child"].includes(scenario)) {
+            assert.equal(previewResponse.status, 409); assert.deepEqual(await rows(), savedRows); assert.deepEqual(await maps(), savedMaps); assert.equal((await outbox()).length, 1); continue;
+          }
+          const text = await previewResponse.text(); assert.equal(previewResponse.status, 200, text);
+          const publicPreview = JSON.parse(text);
+          assert.equal(publicPreview.local.title, target.title); assert.equal(publicPreview.remote.title, "Remote selected");
+          assert.deepEqual(publicPreview.local.timeModel, savedTarget.timeModel); assert.deepEqual(publicPreview.remote.timeModel, target.timeModel);
+          assert.equal(publicPreview.local.recurrence, savedTarget.recurrence); assert.equal(publicPreview.remote.recurrence, target.recurrence);
+          if (occurrence) assert.deepEqual(publicPreview.local.originalStart, target.originalStart);
+          assert.ok(!text.includes("Fresh structural extension") && !text.includes("BEGIN:VCALENDAR"));
+          const { preview, proof } = await prepareEventDeliveryResolution(owner, root.id, operation.id, () => caldavAdapter);
+          const confirm = { mutationId: randomUUID(), expectedLocalRevision: preview.localRevision, expectedLatestOperationId: preview.latestOperationId, expectedRemoteExists: true, expectedRemoteEtag: preview.remoteEtag };
+          if (scenario === "structure-stale") {
+            etag = '"remote-v3"';
+            const rejected = await fetch(`${apiOrigin}/events/${root.id}/delivery/${operation.id}/resolve`, { method: "POST", headers, body: JSON.stringify(confirm) });
+            assert.equal(rejected.status, 409); assert.deepEqual(await maps(), savedMaps); assert.equal((await outbox()).length, 1); continue;
+          }
+          if (scenario === "structure-local-race") await db.update(events).set({ revision: sql`${events.revision} + 1` }).where(eq(events.id, original.find(item => item.seriesID)!.id));
+          if (scenario === "structure-grant") await db.update(calendarMembers).set({ role: "viewer" }).where(and(eq(calendarMembers.calendarID, calendar.id), eq(calendarMembers.userID, owner)));
+          if (scenario === "structure-lease") await db.update(eventOutbox).set({ status: "attempting", leaseToken: randomUUID(), leaseUntil: new Date(Date.now() + 60000) }).where(eq(eventOutbox.id, operation.id));
+          if (scenario === "structure-proof-time") proof.caldavSeries!.write.time = { kind: "all-day", startDate: "2026-04-04", endDate: "2026-04-04" };
+          if (scenario === "structure-proof-rule") proof.caldavSeries!.write.patch.recurrence = "RRULE:FREQ=DAILY;COUNT=9";
+          if (["structure-local-race", "structure-grant", "structure-lease", "structure-proof-time", "structure-proof-rule"].includes(scenario)) {
+            await assert.rejects(() => commitEventDeliveryResolution(owner, proof, confirm));
+            assert.deepEqual(await maps(), savedMaps); assert.equal((await outbox()).length, 1); assert.equal(puts, 0); continue;
+          }
+          const ids = await Promise.all([commitEventDeliveryResolution(owner, proof, confirm), commitEventDeliveryResolution(owner, proof, confirm)]);
+          assert.equal(ids[0], ids[1]); let replacement = ids[0]!;
+          assert.equal(await getEventDeliveryResolutionReplay(owner, root.id, operation.id, confirm), replacement);
+          if (scenario === "structure-repeated") {
+            data = data.replace("SUMMARY:Remote selected", "SUMMARY:Changed again"); etag = '"remote-v3"';
+            assert.equal((await deliverEventOutbox(replacement, () => caldavAdapter))?.status, "conflict");
+            const again = await prepareEventDeliveryResolution(owner, root.id, replacement, () => caldavAdapter);
+            replacement = await commitEventDeliveryResolution(owner, again.proof, { ...confirm, mutationId: randomUUID(), expectedLatestOperationId: again.preview.latestOperationId, expectedRemoteEtag: again.preview.remoteEtag });
+          }
+          if (scenario === "structure-lost") mode = "lost";
+          if (scenario === "structure-native-after") onPut = async () => { data = data.replace("SUMMARY:Cancelled", "SUMMARY:Changed after PUT"); etag = '"after-race"'; };
+          let delivery = await deliverEventOutbox(replacement, () => caldavAdapter);
+          if (scenario === "structure-lost") {
+            assert.equal(delivery?.status, "unconfirmed"); assert.equal(puts, 1); mode = "ok";
+            await db.update(eventOutbox).set({ nextAttemptAt: new Date(0) }).where(eq(eventOutbox.id, replacement));
+            delivery = await deliverEventOutbox(replacement, () => caldavAdapter);
+          }
+          if (scenario === "structure-native-after") {
+            assert.equal(delivery?.status, "conflict"); assert.equal(delivery?.uncertain, true); assert.equal(puts, 1); assert.deepEqual(await rows(), savedRows);
+            assert.ok((await maps()).every(item => item.etag === '"remote-v2"')); assert.ok(data.includes("SUMMARY:Changed after PUT"));
+            await assert.rejects(() => prepareEventDeliveryResolution(owner, root.id, replacement, () => caldavAdapter)); continue;
+          }
+          assert.equal(delivery?.status, "completed", delivery?.errorCode ?? "no delivery"); assert.equal(puts, 1);
+          assert.ok((await outbox()).filter(item => item.id !== replacement).every(item => item.status === "not-needed"));
+          assert.deepEqual(await rows(), savedRows); assert.ok((await maps()).every(item => item.etag === '"after"'));
+          assert.ok(data.includes("X-PRIVATE:Fresh structural extension") && data.includes("DESCRIPTION:Private alarm"));
+          assert.ok(!data.includes("SUMMARY:Remote selected") && !data.includes("SUMMARY:Changed again"));
+          await persist(); assert.deepEqual(await rows(), savedRows); assert.equal((await maps()).length, mappings.length);
+          console.log(`CalDAV saved structural conflict ${scenario}: exact time/rule intent, full family ACK and echo OK`); continue;
+        }
         if (scenario.startsWith("public-split-")) {
           const firstSlot = scenario.includes("-first-");
           const generatedSlot = scenario.includes("-generated-");
@@ -863,7 +939,7 @@ async function main() {
           for (const map of await maps()) if (!(scenario === "mapping-race" && map.eventID !== root.id && map.etag === '"newer-map"')) assert.equal(map.etag, '"before"');
           const preview = await fetch(`${apiOrigin}/events/${root.id}/delivery/${operation.id}/conflict`, { headers });
           const text = await preview.text();
-          if (scenario === "occurrence-race") {
+          if (scenario === "occurrence-race" || scenario === "time-race") {
             assert.equal(preview.status, 200); assert.equal(JSON.parse(text).remote.title, "Remote child");
             assert.deepEqual(JSON.parse(text).local.originalStart, moved.originalStart);
           } else {

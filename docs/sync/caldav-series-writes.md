@@ -603,3 +603,33 @@ already display the original occurrence identity through the unchanged DTO.
 Generated definitions, revival/cancellation, time/RRULE, following and split
 conflict reconciliation remain separate work. iCloud's unknown resource
 privileges and all activation/version gates are unchanged.
+
+
+## Saved time and RRULE conflict confirmation
+
+The same explicit comparison also supports a saved series time/RRULE intent or
+an existing active occurrence time intent. Native evidence starts from the
+original committed baseline rather than comparing the old provider time with
+the already-updated local draft. The fresh read may adopt selected content; its
+time, rule, original identities and all other definitions must still match that
+baseline. A competing native structural edit remains unavailable for this flow.
+
+Preparation reapplies the exact saved time and recurrence patch to that fresh
+baseline. Confirmation checks those fields against the original journal as
+well as retaining the selected target. It cannot substitute another civil time,
+zone, rule or scope. The complete planned family, including rekeyed original
+identities, must still match the locked canonical state before delivery/ACK.
+The preview shows saved and native time/recurrence through the existing DTO;
+confirmation changes no canonical draft or revision.
+
+HTTP/DB fixtures cover series/occurrence time and series RRULE in all three time
+kinds, combined edits, repeated/concurrent confirmation, lost response recovery,
+stale validator, local revision/grant/lease races, time/rule proof tampering and
+native structure/other-child refusal. A change to another child after PUT stays
+an uncertain conflict with no ACK or automatic overwrite. Full echo checks
+preserve canonical IDs/revisions and accepted component mapping identities.
+Local Radicale additionally verifies a combined time/RRULE conflict on a
+previously split family, complete worker ACK and unchanged identities after sync.
+Generated/revival/cancellation, following/split reconciliation and adoption of
+competing provider time/rule changes remain separate work. Flags, versions and
+iCloud resource privilege requirements are unchanged.

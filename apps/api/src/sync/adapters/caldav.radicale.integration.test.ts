@@ -496,6 +496,27 @@ async function main() {
     assert.equal(journalMaps.find(item => item.eventID === journalSplit.creation.master.id)!.icalUid, journalSplit.creation.master.id);
     assert.equal((await applyLocalEventScope(journalRoot.id, userID, journalRequest, { prepareProvider: true })).status, "replayed");
     console.log("Radicale durable split source/create ACK and interleaved sync: OK");
+    const structuralRoot = (await getEventSnapshot(journalSplit.creation.master.id))!;
+    const structuralRequest = { operationID: randomUUID(), scope: "series", action: "update", expectedRevision: structuralRoot.revision, patch: { recurrence: "RRULE:FREQ=DAILY;COUNT=5" }, time: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-04-02T12:00:00.000", endLocal: "2026-04-02T13:00:00.000" } };
+    const structuralCandidate = await applyLocalEventScope(structuralRoot.id, userID, structuralRequest, { prepareProvider: true });
+    if (structuralCandidate.status !== "caldav_required") throw new Error("Missing structural resolution context");
+    const structuralPrepared = await prepareCaldavSeries(structuralCandidate.context, structuralRequest);
+    assert.equal((await applyLocalEventScope(structuralRoot.id, userID, structuralRequest, { caldav: structuralPrepared })).status, "saved");
+    const structuralOperation = (await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, structuralRoot.id))).find(item => item.mutationID === structuralRequest.operationID)!;
+    const structuralURL = journalSplit.creation.ref.externalEventId;
+    const structuralRead = await davFetch(structuralURL, { headers: { authorization: basicAuth } });
+    const structuralBody = (await structuralRead.text()).replace("SUMMARY:Durable future family", "SUMMARY:Concurrent structural title");
+    assert.ok((await davFetch(structuralURL, { method: "PUT", headers: { authorization: basicAuth, "content-type": "text/calendar", "If-Match": structuralRead.headers.get("etag")! }, body: structuralBody })).ok);
+    assert.equal((await deliverEventOutbox(structuralOperation.id, () => caldavAdapter))?.status, "conflict");
+    const structuralComparison = await prepareEventDeliveryResolution(userID, structuralRoot.id, structuralOperation.id, () => caldavAdapter);
+    assert.equal(structuralComparison.preview.remote?.title, "Concurrent structural title");
+    assert.deepEqual(structuralComparison.preview.remote?.timeModel, structuralRoot.timeModel);
+    const beforeStructuralConfirm = await rows();
+    const structuralReplacement = await commitEventDeliveryResolution(userID, structuralComparison.proof, { mutationId: randomUUID(), expectedLocalRevision: structuralComparison.preview.localRevision, expectedLatestOperationId: structuralComparison.preview.latestOperationId, expectedRemoteExists: true, expectedRemoteEtag: structuralComparison.preview.remoteEtag });
+    assert.equal((await deliverEventOutbox(structuralReplacement, () => caldavAdapter))?.status, "completed");
+    assert.deepEqual(await rows(), beforeStructuralConfirm);
+    await sync(); assert.deepEqual(await rows(), beforeStructuralConfirm);
+    console.log("Radicale saved series time/RRULE conflict: complete rekeyed family confirmation and stable echo OK");
     console.log("Radicale scoped transaction, durable worker and atomic family ACK: OK");
     console.log("Radicale VTODO create/update/delete interop: OK");
   } finally {
