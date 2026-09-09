@@ -573,3 +573,33 @@ routing and commit. An unchanged following occurrence time keeps the empty plan
 after complete evidence validation; it never becomes a master time shift. HTTP
 regressions cover default-clause no-ops and an unchanged time on an UNTIL-bounded
 series with a late exception. Both record a receipt without outbox rows or PUTs.
+
+
+## Existing occurrence content conflict resolution
+
+An existing active detached occurrence's content-only journal can now use the
+public fresh preview/confirm flow. The server derives the selected child from
+the saved scope intent. The preview shows that child's saved/current content,
+original slot and civil time; the resource root revision still versions the
+journal. No client-supplied native target or new DTO field is accepted.
+
+The native read may adopt content only for that child. Master content, other
+children, time, recurrence, cancellation, original identity and embedded
+VTIMEZONE definitions must still match. Fresh unknown native properties remain
+private and are preserved in the full replacement. Confirmation locks the root,
+children and mappings, rechecks the accepted family and permissions, and
+atomically replaces the journal while advancing all resource validators. The
+selected child cannot change between the saved intent and the replacement.
+The canonical draft and its revisions do not change during confirmation.
+
+HTTP/DB evidence covers zoned, all-day and floating children, authenticated
+preview/confirmation, concurrent replay, repeated conflict, stale validator,
+local child revision and permission races, target tampering, changed native
+identity/time/other content, complete ACK/echo and lost-response recovery without
+a second PUT. Pure native fixtures additionally verify preserved child/master
+projections and unknown properties. Local Radicale also executes a real
+resource conflict, the explicit replacement, worker ACK and stable echo. Existing web/native comparison renderers
+already display the original occurrence identity through the unchanged DTO.
+Generated definitions, revival/cancellation, time/RRULE, following and split
+conflict reconciliation remain separate work. iCloud's unknown resource
+privileges and all activation/version gates are unchanged.

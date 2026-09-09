@@ -743,3 +743,6 @@ Import při nezávisle zapnutých připomínkách nese časový důkaz pouze pro
 
 
 **K12 Graph — nativní recurrence kandidát:** striktní zpětný převod podporovaných pattern/range ověřuje přijatý začátek a zónu masteru, nedělní Graph default i inclusive endDate. [Samostatné expanzní regrese](../sync/event-scope-operations.md#native-graph-recurrence-evidence-candidate) pokrývají šest vzorů, all-day a DST ve dvou zónách; neznámá či nejednoznačná data se neodhadují. Jde o čistou přípravu: calendarView zůstává provider-expanded, recurring create stále odmítnutý. Nativní master identity, create/echo dedup a HTTP/DB integrace následují; Graph update/delete dále vyžaduje živý důkaz conditional-write kontraktu.
+
+
+**K12 CalDAV — konflikt obsahu existující výjimky:** veřejný náhled/confirm odvozuje vybraný child z uloženého záměru a ukazuje jeho původní slot a uložený/aktuální obsah. Celý resource se znovu ověří; commit zachová cíl a pod family zámky atomicky nahradí journal bez změny kanonického draftu. [HTTP/DB a nativní regrese](../sync/caldav-series-writes.md#existing-occurrence-content-conflict-resolution) pokrývají tři časové typy, stale/repeated konflikty, oprávnění, identity, souběh, 503 a echo. Generated/revival/cancel/time/RRULE/following/split konfliktové operace následují; iCloud privileges a produkční flagy/verze zůstávají beze změny.

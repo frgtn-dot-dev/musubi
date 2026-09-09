@@ -163,7 +163,7 @@ async function resolutionContext(
   let caldavContext: CaldavSeriesContext | undefined;
   if (row.payload.caldavSplit || row.payload.caldavSeriesDeletion) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   if (row.payload.caldavSeries) {
-    if (row.payload.caldavSeries.write.followingDelete || row.payload.caldavSeries.write.targetEventID || row.payload.caldavSeries.write.time || row.payload.caldavSeries.write.patch.recurrence !== undefined) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    if (row.payload.caldavSeries.write.followingDelete || row.payload.caldavSeries.write.newDefinition || row.payload.caldavSeries.write.cancelTarget || row.payload.caldavSeries.write.time || row.payload.caldavSeries.write.patch.recurrence !== undefined) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
     if (row.provider !== "caldav" || row.action !== "update" || !linked || latest.id !== row.id || pending.some(item => item.id !== row.id))
       throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
     const childRows = await tx.query.events.findMany({ where: eq(events.seriesID, eventID), with: { calendarEvents: true }, orderBy: events.id });
@@ -174,6 +174,13 @@ async function resolutionContext(
     } catch (error) {
       if (error instanceof EventWriteError) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
       throw error;
+    }
+    const targetID = row.payload.caldavSeries.write.targetEventID;
+    if (targetID) {
+      const original = row.payload.caldavSeries.write.baseline.children.find(child => child.id === targetID);
+      const target = caldavContext.children.find(child => child.id === targetID);
+      if (!original || original.isCanceled || !target || target.isCanceled || !sameCaldavScopeContext(original.originalStart, target.originalStart))
+        throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
     }
     const expected = { ...row.payload.caldavSeries.context, master: EventSchema.parse(row.payload.event) };
     if (!sameCaldavScopeContext(caldavContext, expected)) throw new EventDeliveryResolutionError("delivery-state-changed");
@@ -535,6 +542,8 @@ export async function commitEventDeliveryResolution(
       if (proof.caldavSeries) {
         const family = current.caldavContext;
         if (!family || !proof.ref || !proof.remoteExists || proof.action !== "update" ||
+            proof.caldavSeries.write.targetEventID !== current.row.payload.caldavSeries?.write.targetEventID ||
+            proof.caldavSeries.write.newDefinition || proof.caldavSeries.write.cancelTarget || proof.caldavSeries.write.time || proof.caldavSeries.write.followingDelete || proof.caldavSeries.write.patch.recurrence !== undefined ||
             !sameCaldavScopeContext(proof.caldavSeries.context, { ...family, mappings: family.mappings.map(item => ({ ...item, etag: proof.ref!.etag })) }) ||
             !sameCaldavScopeContext(proof.caldavSeries.write.baseline.ref, proof.ref))
           throw new EventDeliveryResolutionError("delivery-state-changed");

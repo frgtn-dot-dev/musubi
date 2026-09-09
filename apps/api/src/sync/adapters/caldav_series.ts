@@ -30,10 +30,10 @@ export type CaldavSeriesResolutionEvidence = {
   evidence: CaldavSeriesEvidence;
 };
 
-/** A fresh conflict comparison may adopt master content, but never silently
- * accept changed time/recurrence or child definitions. Unknown resource data
+/** A fresh conflict comparison may adopt content of the selected master or
+ * existing active child, never changed time/recurrence or another definition. Unknown resource data
  * stays in the private evidence and must be preserved by the eventual write. */
-export function caldavSeriesResolutionEvidence(data: string, intent: CaldavSeriesIntent, ref: ExternalEventRef, before: string): CaldavSeriesResolutionEvidence {
+export function caldavSeriesResolutionEvidence(data: string, intent: CaldavSeriesIntent, ref: ExternalEventRef, before: string, targetEventID?: string): CaldavSeriesResolutionEvidence {
   if (ref.externalEventId !== intent.ref.externalEventId || ref.icalUid !== intent.ref.icalUid)
     throw new ProviderEventWriteError("provider-conflict");
   // The civil model uses IANA rules and does not encode embedded VTIMEZONE
@@ -53,12 +53,21 @@ export function caldavSeriesResolutionEvidence(data: string, intent: CaldavSerie
   if (JSON.stringify(timezones(data)) !== JSON.stringify(timezones(before)))
     throw new ProviderEventWriteError("provider-conflict");
   const etag = requireEventEtag(ref.etag);
-  const [observed] = normalizeCaldavResource({ url: ref.externalEventId, etag, data });
-  if (!observed) throw new ProviderEventWriteError("provider-conflict");
+  if (targetEventID !== undefined && (typeof targetEventID !== "string" || !targetEventID)) throw new ProviderEventWriteError("provider-conflict");
+  const normalized = normalizeCaldavResource({ url: ref.externalEventId, etag, data });
+  const target = targetEventID ? intent.children.find(child => child.id === targetEventID) : intent.master;
+  if (!target || target.isCanceled || (targetEventID && !target.originalStart)) throw new ProviderEventWriteError("provider-conflict");
+  const candidates = normalized.filter(item => targetEventID
+    ? JSON.stringify(item.originalStart) === JSON.stringify(target.originalStart)
+    : !item.originalStart);
+  if (candidates.length !== 1) throw new ProviderEventWriteError("provider-conflict");
+  const observed = candidates[0]!;
+  const refreshed = EventSchema.parse({ ...target, title: observed.title, description: observed.description ?? null, location: observed.location ?? null });
   const baseline = {
     ...intent,
     ref,
-    master: EventSchema.parse({ ...intent.master, title: observed.title, description: observed.description ?? null, location: observed.location ?? null }),
+    master: targetEventID ? intent.master : refreshed,
+    children: targetEventID ? intent.children.map(child => child.id === targetEventID ? refreshed : child) : intent.children,
   };
   return { baseline, evidence: caldavSeriesEvidence(data, baseline) };
 }

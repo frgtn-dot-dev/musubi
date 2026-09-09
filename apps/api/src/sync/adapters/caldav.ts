@@ -1220,10 +1220,10 @@ export async function deliverCaldavSeriesResource(externalCalendarId: string, wr
 
 export const caldavAdapter: CalendarAdapter = {
   provider: "caldav",
-  async readCaldavSeriesResolution(userID, accountId, externalCalendarId, intent, before, signal) {
+  async readCaldavSeriesResolution(userID, accountId, externalCalendarId, intent, before, signal, targetEventID) {
     const { resource, authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, intent, signal);
     const current = await readEventResource(authorization, resource.href, intent.ref, signal, "error", true);
-    return caldavSeriesResolutionEvidence(current.data, intent, { ...intent.ref, etag: current.etag }, before);
+    return caldavSeriesResolutionEvidence(current.data, intent, { ...intent.ref, etag: current.etag }, before, targetEventID);
   },
   async readCaldavSeries(userID, accountId, externalCalendarId, intent, signal) {
     const { resource, authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, intent, signal);
