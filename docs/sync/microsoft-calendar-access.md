@@ -49,3 +49,9 @@ calendar changes and physical native acceptance remain separate verification;
 no OAuth, feature flag or version change is part of this slice. Migration 0075 adds only nullable numeric retirement provenance.
 
 Primary protocol reference: [Microsoft Graph calendar resource](https://learn.microsoft.com/en-us/graph/api/resources/calendar?view=graph-rest-1.0).
+
+The combined RSVP regression exercises real access reconciliation between the
+worker read and dispatch, after dispatch before acknowledgment, and a
+true–false–true access change. Retirement prevents stale acknowledgment and
+preserves the original private intent. An explicitly re-admitted Check response
+is actually claimed and does not dispatch a second POST or restore old details.
