@@ -107,8 +107,8 @@ export function graphSeriesFamilyEvidence(native: unknown, listed: unknown[], te
 const fields = "id,iCalUId,type,isAllDay,isCancelled,seriesMasterId,originalStart,start,end,originalStartTimeZone,originalEndTimeZone,recurrence,subject,body,location,attendees,isOrganizer,organizer,isDraft,isOnlineMeeting,onlineMeeting,onlineMeetingUrl,isReminderOn,reminderMinutesBeforeStart,showAs,sensitivity,responseStatus";
 const page = z.object({ value: z.array(z.unknown()), "@odata.nextLink": opaque.optional(), "@odata.count": z.number().int().nonnegative().optional() });
 
-/** Read-only candidate, intentionally not connected to normal sync. A second
- * expanded master detects changed rule/cancellation/exception observations;
+/** Complete read for tracked known families. A second expanded master detects
+ * changed rule/cancellation/exception observations;
  * neither it nor an unchanged master ETag constitutes an atomic family read. */
 export async function readGraphSeriesFamily(accessToken: string, calendarID: string, template: Event, ref: ExternalEventRef, signal?: AbortSignal): Promise<GraphSeriesFamily> {
   template = structuredClone(template); ref = { ...ref };

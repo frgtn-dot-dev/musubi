@@ -1,3 +1,4 @@
+import { readGraphSeriesFamily } from "./microsoft_series_family";
 import { microsoftEventState } from "./provider_event_state";
 import { config, logger } from "@musubi/config";
 import { getOAuthAccountIDs, hasOAuthTaskScope } from "@musubi/db";
@@ -496,12 +497,16 @@ export async function fetchMicrosoftChanges(
     graphBase?: string;
     now?: number;
     timeModels?: boolean;
+    excludedEventIDs?: readonly string[];
+    excludedSeriesIDs?: readonly string[];
   } = {},
 ): Promise<FetchChangesResult> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const graphBase = options.graphBase ?? GRAPH;
   const now = options.now ?? Date.now();
   const changes: NormalizedChange[] = [];
+  const excludedEvents = new Set(options.excludedEventIDs ?? []);
+  const excludedSeries = new Set(options.excludedSeriesIDs ?? []);
 
   let parsed = parseCursor(cursor);
   // Window edge approaching → start over with a fresh window.
@@ -536,6 +541,9 @@ export async function fetchMicrosoftChanges(
 
     const data = await res.json();
     for (let item of data.value ?? []) {
+      // A complete native family is reconciled separately. Filter before
+      // hydration, including stale/removed IDs and the flag-off read path.
+      if (excludedEvents.has(item.id) || excludedSeries.has(item.seriesMasterId)) continue;
       if (item.type === "seriesMaster") continue; // definition only; occurrences carry the instances
       // Occurrences/exceptions inherit subject, isAllDay, body, … from their
       // master; backfill them (the occurrence's own start/end/id win on spread).
@@ -689,7 +697,9 @@ export const microsoftAdapter: CalendarAdapter = {
     accountId,
     externalCalendarId,
     cursor,
+    options,
   ): Promise<FetchChangesResult> {
+    const exclusions = { excludedEventIDs: [...(options?.excludedEventIDs ?? [])], excludedSeriesIDs: [...(options?.excludedSeriesIDs ?? [])] };
     const accessToken = await getAccessToken(userID, accountId);
     const taskListId = microsoftTaskListId(externalCalendarId);
     if (
@@ -699,7 +709,13 @@ export const microsoftAdapter: CalendarAdapter = {
       throw new TaskScopeMissingError();
     return taskListId
       ? fetchMicrosoftTaskChanges(accessToken, taskListId, cursor)
-      : fetchMicrosoftChanges(accessToken, externalCalendarId, cursor, { timeModels: config.api.eventTimeEditsEnabled });
+      : fetchMicrosoftChanges(accessToken, externalCalendarId, cursor, { timeModels: config.api.eventTimeEditsEnabled, ...exclusions });
+  },
+
+  async readGraphFamily(userID, accountId, externalCalendarId, template, ref, signal) {
+    const timeout = AbortSignal.timeout(60_000);
+    const bounded = signal ? AbortSignal.any([signal, timeout]) : timeout;
+    return readGraphSeriesFamily(await getAccessToken(userID, accountId), externalCalendarId, template, ref, bounded);
   },
 
   async assertEventWrite(userID, accountId, externalCalendarId, operation) {

@@ -1,3 +1,4 @@
+import type { GraphSeriesFamily } from "./adapters/microsoft_series_family";
 import type { GoogleRsvpEvidence, GoogleRsvpResponse, GoogleRsvpOccurrence } from "./adapters/google_rsvp";
 import type { GoogleOccurrenceIntent } from "@musubi/db";
 import type { GoogleOccurrenceEvidence, GoogleSeriesEvidence } from "./adapters/google_occurrence";
@@ -117,6 +118,7 @@ export type FetchChangesResult = {
 // never talks to Google/Graph/CalDAV directly — only through an adapter.
 export type CalendarAdapter = {
   provider: string;
+  readGraphFamily?(userID: string, accountID: string, calendarID: string, template: Event, ref: ExternalEventRef, signal?: AbortSignal): Promise<GraphSeriesFamily>;
   readRsvp?(user: string, account: string, calendar: string, ref: ExternalEventRef, response: GoogleRsvpResponse, signal?: AbortSignal, occurrence?: GoogleRsvpOccurrence): Promise<GoogleRsvpEvidence>;
   readRsvpResolution?(user: string, account: string, calendar: string, ref: ExternalEventRef, response: GoogleRsvpResponse, signal?: AbortSignal, occurrence?: GoogleRsvpOccurrence): Promise<GoogleRsvpEvidence>;
   writeRsvp?(user: string, account: string, calendar: string, evidence: GoogleRsvpEvidence, policy: { sendUpdates: "all" }, signal?: AbortSignal, beforeWrite?: () => Promise<void>): Promise<{ etag: string; recovered: boolean; notificationDelivery: "unknown" }>;
@@ -157,6 +159,7 @@ export type CalendarAdapter = {
     accountId: string,
     externalCalendarId: string,
     cursor: string | null,
+    options?: { excludedEventIDs?: readonly string[]; excludedSeriesIDs?: readonly string[] },
   ): Promise<FetchChangesResult>;
 
   // Read current provider evidence before any local mutation or provider write.
