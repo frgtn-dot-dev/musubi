@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
-import { EventWriteError } from "@musubi/types";
+import { OccurrenceStartSchema, EventWriteError } from "@musubi/types";
 import { requireEventEtag, ProviderEventWriteError } from "../event_write";
 
 export const GoogleRsvpResponseSchema = z.enum(["accepted", "tentative", "declined"]);
@@ -11,19 +11,26 @@ const endpoint = z.union([
   z.object({ date: z.iso.date(), dateTime: z.never().optional() }).passthrough(),
   z.object({ dateTime: z.iso.datetime({ offset: true }), date: z.never().optional() }).passthrough(),
 ]);
+export const GoogleRsvpOccurrenceSchema = z.object({
+  externalSeriesID: z.string().min(1),
+  originalStart: OccurrenceStartSchema.refine(value => value.kind !== "floating"),
+}).strict();
+/** Derived from accepted server mapping, never from the RSVP request. */
+export type GoogleRsvpOccurrence = z.infer<typeof GoogleRsvpOccurrenceSchema>;
 const nativeEvent = z.object({
   id: z.string().min(1), etag: z.string(), status: z.enum(["confirmed", "tentative"]),
   organizer: z.object({ email, self: z.literal(false).optional() }).passthrough(),
   attendees: z.array(attendee).min(1).max(200), attendeesOmitted: z.literal(false).optional(),
   privateCopy: z.literal(false).optional(), locked: z.literal(false).optional(),
   eventType: z.literal("default").optional(),
-  recurrence: z.never().optional(), recurringEventId: z.never().optional(), originalStartTime: z.never().optional(),
+  recurrence: z.never().optional(), recurringEventId: z.string().min(1).optional(), originalStartTime: endpoint.optional(),
   start: endpoint, end: endpoint,
 }).passthrough();
 type NativeEvent = z.infer<typeof nativeEvent>;
 export type GoogleRsvpEvidence = {
   /** Private native baseline: never expose it through the public event DTO. */
   baseline: NativeEvent;
+  occurrence?: GoogleRsvpOccurrence;
   selfEmail: string;
   response: GoogleRsvpResponse;
   patch: { attendeesOmitted: true; attendees: [{ email: string; responseStatus: GoogleRsvpResponse }] };
@@ -32,7 +39,7 @@ export type GoogleRsvpEvidence = {
 /** Pure evidence only, not a grant or a live write. The caller must derive
  * authenticatedCopyEmail from the connected provider identity, never request JSON.
  * Calendar ownership and Musubi social attendance do not establish this identity. */
-export function googleRsvpEvidence(input: unknown, expected: { eventId: string; etag: string; authenticatedCopyEmail: string }, response: GoogleRsvpResponse): GoogleRsvpEvidence {
+export function googleRsvpEvidence(input: unknown, expected: { eventId: string; etag: string; authenticatedCopyEmail: string; occurrence?: GoogleRsvpOccurrence }, response: GoogleRsvpResponse): GoogleRsvpEvidence {
   const parsed = nativeEvent.safeParse(input);
   if (!parsed.success || !email.safeParse(expected.authenticatedCopyEmail).success)
     throw new EventWriteError("event-write", "unsupported");
@@ -43,13 +50,33 @@ export function googleRsvpEvidence(input: unknown, expected: { eventId: string; 
     throw new EventWriteError("event-write", "unsupported");
   if (baseline.id !== expected.eventId || requireEventEtag(baseline.etag) !== requireEventEtag(expected.etag))
     throw new ProviderEventWriteError("provider-conflict");
+  let occurrence: GoogleRsvpOccurrence | undefined;
+  if (expected.occurrence !== undefined) {
+    const binding = GoogleRsvpOccurrenceSchema.safeParse(expected.occurrence);
+    if (!binding.success || !baseline.originalStartTime || baseline.recurringEventId !== binding.data.externalSeriesID || baseline.id === binding.data.externalSeriesID)
+      throw new EventWriteError("event-write", "unsupported");
+    const original = baseline.originalStartTime;
+    if (typeof original.dateTime === "string" && /\.\d{4}/.test(original.dateTime))
+      throw new EventWriteError("event-write", "unsupported");
+    // Identity follows the original slot, not a moved instance's DTSTART. Require
+    // an explicit offset; ambiguous local-time strings cannot bind an instance.
+    const identity = OccurrenceStartSchema.safeParse(typeof original.date === "string"
+      ? { kind: "date", value: original.date }
+      : { kind: "instant", value: new Date(String(original.dateTime)).toISOString() });
+    if (!identity.success || !isDeepStrictEqual(identity.data, binding.data.originalStart) ||
+        startsAllDay !== (identity.data.kind === "date"))
+      throw new EventWriteError("event-write", "unsupported");
+    occurrence = structuredClone(binding.data);
+  } else if (baseline.recurringEventId !== undefined || baseline.originalStartTime !== undefined) {
+    throw new EventWriteError("event-write", "unsupported");
+  }
   const self = baseline.attendees.filter(item => item.self === true);
   const matches = baseline.attendees.filter(item => item.email.toLowerCase() === expected.authenticatedCopyEmail.toLowerCase());
   if (self.length !== 1 || matches.length !== 1 || self[0] !== matches[0] || self[0]!.organizer === true || self[0]!.resource === true || baseline.organizer.email.toLowerCase() === expected.authenticatedCopyEmail.toLowerCase())
     throw new EventWriteError("event-write", "unsupported");
   const desired = GoogleRsvpResponseSchema.parse(response);
   const selfEmail = self[0]!.email;
-  return { baseline, selfEmail, response: desired, patch: { attendeesOmitted: true, attendees: [{ email: selfEmail, responseStatus: desired }] } };
+  return { baseline, ...(occurrence ? { occurrence } : {}), selfEmail, response: desired, patch: { attendeesOmitted: true, attendees: [{ email: selfEmail, responseStatus: desired }] } };
 }
 
 /** Complete GET/response evidence after a future conditional write. This does

@@ -229,3 +229,29 @@ policy, retaining the exact preview and mutation identity on retry. Tests cover
 private HTTP preview, same-ETag unprojected change, role loss, replay, conditional
 replacement preserving another attendee and recovery without duplicate PATCH.
 No live invitations or production capability activation are included.
+
+## Bound instance evidence and conditional transport
+
+The private native RSVP adapter can verify an existing instance only when its
+caller supplies an accepted external parent ID and original occurrence identity.
+Both must match the full Google response. A moved start does not redefine the
+original slot; explicit offsets distinguish the repeated DST hour. Missing,
+ambiguous or sub-millisecond identity, masters and unbound instances are refused.
+The frozen evidence retains this binding and the writer rebuilds it before I/O.
+
+Only the instance URL receives the minimal self-response PATCH with its own
+If-Match validator. Full readback preserves the parent, original identity, actual
+time and all other native fields. Recovery after an applied 503 or lost response
+does not resend the PATCH. This proves neither whole-series protection nor
+exactly-once notification delivery. The existing default-off flag still applies.
+
+`google_rsvp.test.ts` covers all three responses, moved all-day/zoned instances,
+DST folds, identity refusal and complete preservation. The real fake-HTTP
+`google_rsvp_delivery.test.ts` covers binding, minimal conditional PATCH,
+recovery, races and fresh conflict-preview reads. These are local evidence,
+not organizer-visible live acceptance. The public queue and capabilities still
+reject recurring events until their accepted parent/child binding, durable ACK
+and conflict resolution are connected and tested.
+
+Provider references: [event identity and attendee response fields](https://developers.google.com/workspace/calendar/api/v3/reference/events)
+and [PATCH method](https://developers.google.com/workspace/calendar/api/v3/reference/events/patch).

@@ -57,3 +57,42 @@ allDay.summary = "Changed after capture";
 assert.equal(frozen.baseline.summary, "Meeting");
 assert.equal(original.attendees[0]!.responseStatus, "needsAction");
 console.log("Google RSVP evidence: own identity, minimal patch, full preservation, stale/unsupported refusal: OK");
+
+// A caller must bind both accepted parent and original slot. Moved DTSTART is
+// deliberately different, including the repeated hour at the autumn DST fold.
+for (const originalStartTime of [
+  { date: "2026-10-24" },
+  { dateTime: "2026-10-25T02:30:00+02:00", timeZone: "Europe/Prague" },
+]) {
+  const originalStart = "date" in originalStartTime
+    ? { kind: "date" as const, value: originalStartTime.date! }
+    : { kind: "instant" as const, value: "2026-10-25T00:30:00.000Z" };
+  const occurrence = { externalSeriesID: "series", originalStart };
+  const instance = { ...original, ...(originalStart.kind === "date" ? { start: { date: "2026-10-26" }, end: { date: "2026-10-27" } } : {}), recurringEventId: "series", originalStartTime };
+  const bound = { ...expected, occurrence };
+  for (const response of ["accepted", "tentative", "declined"] as const) {
+    const proof = googleRsvpEvidence(instance, bound, response);
+    const after = structuredClone(instance); after.etag = '\"instance-v2\"'; after.attendees[0]!.responseStatus = response;
+    assert.deepEqual(confirmGoogleRsvp(after, proof), { etag: after.etag });
+    assert.deepEqual(proof.occurrence, occurrence);
+    assert.throws(() => confirmGoogleRsvp({ ...after, recurringEventId: "different" }, proof));
+    assert.throws(() => confirmGoogleRsvp({ ...after, originalStartTime: after.start }, proof));
+    assert.throws(() => confirmGoogleRsvp({ ...after, originalStartTime: undefined }, proof));
+    assert.throws(() => confirmGoogleRsvp({ ...after, recurrence: ["RRULE:FREQ=DAILY"] }, proof));
+  }
+  assert.throws(() => googleRsvpEvidence(instance, expected, "accepted"));
+  assert.throws(() => googleRsvpEvidence(original, bound, "accepted"));
+  for (const changed of [
+    { ...instance, recurringEventId: undefined }, { ...instance, originalStartTime: undefined },
+    { ...instance, recurringEventId: "different" }, { ...instance, recurringEventId: instance.id },
+    { ...instance, recurrence: ["RRULE:FREQ=DAILY"] },
+    { ...instance, originalStartTime: instance.start },
+    { ...instance, originalStartTime: { dateTime: "2026-10-25T02:30:00" } },
+    { ...instance, originalStartTime: { dateTime: "2026-10-25T00:30:00.0001Z" } },
+    { ...instance, originalStartTime: { date: "2026-10-25", dateTime: "2026-10-25T00:30:00Z" } },
+  ]) assert.throws(() => googleRsvpEvidence(changed, bound, "accepted"));
+  const proof = googleRsvpEvidence(instance, bound, "accepted");
+  occurrence.externalSeriesID = "mutated";
+  assert.equal(proof.occurrence?.externalSeriesID, "series");
+}
+console.log("Google instance RSVP evidence: accepted parent/original identity, DST fold and moved-time preservation: OK");
