@@ -451,3 +451,36 @@ truncation. Retired definitions remain private history, while a newly deleted ac
 child still invalidates that preview. A series time shift that would collide with
 another retired original identity is explicitly refused before provider preparation
 and again during the final transaction, rather than failing a uniqueness constraint.
+
+## Native split preparation and conditional creation
+
+The private following/update builder derives two resource bodies from one accepted
+complete family. Its source step is the existing conditional truncation. The new
+resource has a frozen UUID-derived URL/UID, a new recurring master and the future
+exceptions reparented by original identity. Content/time changes apply to the new
+master; exception content, actual time, cancellation and unknown bytes survive.
+When the new master moves, only those exceptions' RECURRENCE-ID changes. COUNT/UNTIL
+partitioning uses the shared planner. First-slot/no-op edits, changed time kind/zone,
+unsupported patch fields and non-VEVENT/VTIMEZONE components require another path.
+
+Creation content is validated without inventing an accepted ETag. Before IO the
+executor reconstructs the whole preparation and rejects changed private input. It
+uses If-None-Match: * and confirms a complete matching GET with a real strong ETag.
+An already matching resource recovers an ambiguous create without another PUT;
+foreign content, races and transformed/unreadable readback cannot become success.
+The adapter requires the connected account, imported calendar ownership, positive
+collection bind permission and the disabled-by-default write flag. A pre-mutation
+checkpoint lets the future worker recheck its local authority and lease.
+
+Fake HTTP covers all three time kinds, time shifts, COUNT/UNTIL, preserved private
+bytes, JSON roundtrip, lost/503 responses, address races, weak/unreadable readback,
+tampered input and disabled/checkpoint refusals. Radicale confirms actual bind,
+conditional creation, recovery and cleanup. This is private transport only: no
+public following update, distributed atomicity, canonical reparenting or durable
+multi-step completion is claimed. Those are the next integration slice.
+
+Recurrence patches are canonicalized before split planning, after validating that
+prefix/clause ordering and omitted known defaults preserve the same rule. A direct
+RED/GREEN regression and independent review caught the former mismatch between the
+planned recurrence string and ICAL serialization; bare editor syntax and INTERVAL=1
+now produce a matching planned/native family without dropping unknown clauses.

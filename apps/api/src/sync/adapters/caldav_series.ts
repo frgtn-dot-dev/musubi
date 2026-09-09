@@ -1,10 +1,16 @@
 import ICAL from "ical.js";
 import { matchesEventProviderProjection } from "@musubi/db";
-import { EventSchema, EventTimeModelSchema, EventWriteError, OccurrenceStartSchema, type Event } from "@musubi/types";
+import { EventSchema, EventTimeModelSchema, EventWriteError, OccurrenceStartSchema, type Event, type EventScopeRequest } from "@musubi/types";
 import type { ExternalEventRef, NormalizedEvent } from "../adapter";
 import { ProviderEventWriteError, requireEventEtag } from "../event_write";
 import { replaceEventProperties } from "./caldav_event_ical";
 import { normalizeCaldavResource } from "./caldav_time";
+
+export type CaldavSeriesSplit = {
+  source: CaldavSeriesWrite;
+  request: EventScopeRequest;
+  creation: CaldavSeriesIntent & { data: string };
+};
 
 export type CaldavSeriesIntent = {
   ref: ExternalEventRef;
@@ -120,6 +126,16 @@ export function caldavSeriesResourceURL(collectionID: string, resourceID: string
  * A future PUT must still use that exact ETag, never one from a projected REPORT.
  */
 export function caldavSeriesEvidence(data: string, intent: CaldavSeriesIntent): CaldavSeriesEvidence {
+  return inspectSeriesContent(data, intent, true);
+}
+
+/** Validate a not-yet-created resource without inventing an accepted validator. */
+export function caldavSeriesCreationEvidence(data: string, intent: CaldavSeriesIntent): CaldavSeriesEvidence {
+  if (intent.ref.etag != null) throw new ProviderEventWriteError("provider-conflict");
+  return inspectSeriesContent(data, intent, false);
+}
+
+function inspectSeriesContent(data: string, intent: CaldavSeriesIntent, requireAcceptedValidator: boolean): CaldavSeriesEvidence {
   const conflict = () => new ProviderEventWriteError("provider-conflict");
   const master = EventSchema.parse(intent.master);
   const children = intent.children.map(child => EventSchema.parse(child));
@@ -142,8 +158,8 @@ export function caldavSeriesEvidence(data: string, intent: CaldavSeriesIntent): 
   const masterIndex = components.findIndex(component => !component.hasProperty("recurrence-id"));
   if (masterIndex < 0) throw conflict();
   replaceEventProperties(data, masterIndex, new Map()); // Validate physical structure without serializing untouched bytes.
-  const ref = { ...intent.ref, etag: requireEventEtag(intent.ref.etag) };
-  const [observedMaster, ...exceptions] = normalizeCaldavResource({ url: ref.externalEventId, etag: ref.etag, data });
+  const ref = requireAcceptedValidator ? { ...intent.ref, etag: requireEventEtag(intent.ref.etag) } : { ...intent.ref };
+  const [observedMaster, ...exceptions] = normalizeCaldavResource({ url: ref.externalEventId, etag: ref.etag ?? undefined, data });
   const original = (value: unknown) => JSON.stringify(OccurrenceStartSchema.parse(value));
   const matches = (expected: Event, actual: NormalizedEvent) =>
     actual.status === "active" && !!expected.isCanceled === !!actual.isCanceled &&

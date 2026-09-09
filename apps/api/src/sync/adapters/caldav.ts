@@ -1,11 +1,12 @@
 import { caldavEventState } from "./provider_event_state";
-import { caldavSeriesEvidence, caldavSeriesResolutionEvidence, caldavSeriesResourceURL, sameCaldavResource, type CaldavSeriesDeletion, type CaldavSeriesWrite, type CaldavSeriesEvidence, type CaldavSeriesIntent } from "./caldav_series";
+import { caldavSeriesEvidence, caldavSeriesCreationEvidence, type CaldavSeriesSplit, caldavSeriesResolutionEvidence, caldavSeriesResourceURL, sameCaldavResource, type CaldavSeriesDeletion, type CaldavSeriesWrite, type CaldavSeriesEvidence, type CaldavSeriesIntent } from "./caldav_series";
 import ICAL from "ical.js";
 import { planEventScope } from "@musubi/calendar";
 import { randomUUID } from "crypto";
 import type { DAVCalendar, DAVCalendarObject, DAVResponse } from "tsdav";
 import {
   EventWriteError,
+  EventScopeRequestSchema,
   EventSchema,
   EventTimeModelSchema,
   type EventTimeEdit,
@@ -20,6 +21,7 @@ import {
   getExternalLinkForCalendar,
   caldavSeriesDesired,
   sameCaldavRecurrence,
+  sameCaldavScopeContext,
   getCaldavAccountById,
   getCaldavAccountsByUser,
   getUserExternalCalendars,
@@ -1029,7 +1031,86 @@ export function prepareCaldavSeriesWrite(evidence: CaldavSeriesEvidence, baselin
   return { baseline, patch: cleanPatch, ...(targetEventID ? { targetEventID } : {}), ...(cancelTarget ? { cancelTarget } : {}), ...(newDefinition ? { newDefinition } : {}), ...(time ? { time } : {}), ...(followingDelete ? { followingDelete } : {}), before: evidence.data, after };
 }
 
-async function seriesAuthorization(userID: string, accountId: string, externalCalendarId: string, intent: CaldavSeriesIntent, signal?: AbortSignal, action: "update" | "delete" = "update") {
+/** Pure split preparation. It does not promise atomicity across two resources. */
+export function prepareCaldavSeriesSplit(evidence: CaldavSeriesEvidence, baseline: CaldavSeriesIntent, input: unknown, newRootID: string = randomUUID()): CaldavSeriesSplit {
+  const request = EventScopeRequestSchema.parse(input);
+  if (request.scope !== "following" || request.action !== "update" || Object.keys(request.patch).some(key => !["title", "description", "location", "recurrence"].includes(key)) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(newRootID)) throw new EventWriteError("event-write", "unsupported");
+  caldavSeriesEvidence(evidence.data, baseline);
+  if (evidence.ref.externalEventId !== baseline.ref.externalEventId || evidence.ref.icalUid !== baseline.ref.icalUid || evidence.ref.etag !== baseline.ref.etag) throw new ProviderEventWriteError("provider-conflict");
+  let plannedRequest = request;
+  if (typeof request.patch.recurrence === "string") {
+    const recurrence = "RRULE:" + ICAL.Recur.fromString(request.patch.recurrence.replace(/^RRULE:/i, "")).toString();
+    if (!sameCaldavRecurrence(request.patch.recurrence, recurrence)) throw new EventWriteError("event-write", "unsupported");
+    plannedRequest = { ...request, patch: { ...request.patch, recurrence } };
+  }
+  const plan = planEventScope(baseline.master, baseline.children, plannedRequest, () => newRootID);
+  if (plan.creates.length !== 1 || plan.deletes.length || plan.creates[0]!.seriesID || !plan.updates.some(item => item.id === baseline.master.id)) throw new EventWriteError("event-write", "unsupported", "A first-slot or unchanged edit does not require a split.");
+  const master = plan.creates[0]!;
+  if (master.timeModel?.kind !== baseline.master.timeModel?.kind || master.timeModel?.kind === "zoned" && (baseline.master.timeModel?.kind !== "zoned" || master.timeModel.timeZone !== baseline.master.timeModel.timeZone)) throw new EventWriteError("event-write", "unsupported");
+  const children = plan.updates.filter(item => item.seriesID === newRootID);
+  const parsed = new ICAL.Component(ICAL.parse(evidence.data));
+  if (parsed.getAllSubcomponents().some(item => !["vevent", "vtimezone"].includes(item.name))) throw new EventWriteError("event-write", "unsupported");
+  const components = parsed.getAllSubcomponents("vevent");
+  const index = components.findIndex(item => !item.hasProperty("recurrence-id"));
+  let data = removeEventComponents(evidence.data, components.flatMap((_, ordinal) => ordinal === index ? [] : [ordinal]));
+  const uid = new ICAL.Property("uid"); uid.setValue(newRootID);
+  const rule = new ICAL.Property("rrule"); rule.setValue(ICAL.Recur.fromString(master.recurrence!.replace(/^RRULE:/i, "")));
+  Object.assign(rule.toJSON()[1], structuredClone(components[index]!.getFirstProperty("rrule")!.toJSON()[1]));
+  const { start, end } = eventTimeProperties(master);
+  const replacements = new Map<string, ICAL.Property[]>([["uid", [uid]], ["rrule", [rule]], ["dtstart", [start]], ["dtend", [end]], ["duration", []]]);
+  for (const [field, name] of [["title", "summary"], ["description", "description"], ["location", "location"]] as const) {
+    if (request.patch[field] === undefined) continue;
+    const value = new ICAL.Component("vevent"); if (request.patch[field] !== null) value.addPropertyWithValue(name, request.patch[field]);
+    replacements.set(name, value.getAllProperties(name));
+  }
+  data = replaceEventProperties(data, 0, replacements);
+  const nativeChildren = components.filter(item => item.hasProperty("recurrence-id"));
+  for (const [ordinal, observed] of evidence.exceptions.entries()) {
+    const old = baseline.children.find(item => JSON.stringify(item.originalStart) === JSON.stringify(observed.originalStart))!;
+    const next = children.find(item => item.id === old.id); if (!next) continue;
+    const newline = evidence.data.includes("\r\n") ? "\r\n" : "\n";
+    const wrapper = `BEGIN:VCALENDAR${newline}${eventComponentBytes(evidence.data, components.indexOf(nativeChildren[ordinal]!))}END:VCALENDAR${newline}`;
+    const changes = new Map<string, ICAL.Property[]>([["uid", [uid]]]);
+    if (JSON.stringify(old.originalStart) !== JSON.stringify(next.originalStart)) changes.set("recurrence-id", [occurrenceIdentityProperty({ ...master, revision: 1 }, next.originalStart!, next.id)]);
+    data = appendEventComponent(data, eventComponentBytes(replaceEventProperties(wrapper, 0, changes), 0));
+  }
+  const creation = { ref: { externalEventId: new URL(`musubi-${newRootID}.ics`, baseline.ref.externalEventId).href, icalUid: newRootID }, master, children, data };
+  caldavSeriesCreationEvidence(data, creation);
+  const source = prepareCaldavSeriesWrite(evidence, baseline, {}, undefined, undefined, undefined, undefined, { originalStart: request.originalStart!, expectedOccurrenceRevision: request.expectedOccurrenceRevision! });
+  return { source, request, creation };
+}
+
+/** A future durable split journal owns ordering; this step creates only its new resource. */
+export async function createCaldavSplitResource(externalCalendarId: string, split: CaldavSeriesSplit, authorization: string, signal?: AbortSignal, beforeMutation?: () => Promise<void>): Promise<CaldavSeriesEvidence> {
+  if (!config.api.eventTimeEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+  const rebuilt = prepareCaldavSeriesSplit(caldavSeriesEvidence(split.source.before, split.source.baseline), split.source.baseline, split.request, split.creation.master.id);
+  if (!sameCaldavScopeContext(rebuilt, split)) throw new ProviderEventWriteError("provider-conflict");
+  const resource = caldavSeriesResourceURL(externalCalendarId, rebuilt.creation.ref.externalEventId);
+  const read = async () => {
+    const response = await caldavFetch(resource.href, { signal, redirect: "error", method: "GET", headers: { authorization, accept: "text/calendar", "Cache-Control": "no-cache" } });
+    if (response.status === 404) { await response.body?.cancel().catch(() => {}); return null; }
+    assertEventWriteResponse(response);
+    if (response.status !== 200 || response.headers.has("content-range")) throw new ProviderEventWriteError("provider-write-failed");
+    const etag = requireEventEtag(response.headers.get("etag"));
+    const data = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(await response.arrayBuffer());
+    if (!sameCaldavResource(data, rebuilt.creation.data)) throw new ProviderEventWriteError("provider-conflict");
+    return caldavSeriesEvidence(data, { ...rebuilt.creation, ref: { ...rebuilt.creation.ref, etag } });
+  };
+  const existing = await read(); if (existing) return existing;
+  await beforeMutation?.(); signal?.throwIfAborted();
+  let accepted = false;
+  try {
+    const response = await caldavFetch(resource.href, { signal, redirect: "error", method: "PUT", headers: { authorization, "Content-Type": "text/calendar; charset=utf-8", "If-None-Match": "*" }, body: rebuilt.creation.data });
+    assertProviderEventMutationResponse(response); accepted = true;
+    const result = await read(); if (!result) throw new ProviderEventWriteError("provider-conflict", "unconfirmed");
+    return result;
+  } catch (error) {
+    if (!accepted && error instanceof ProviderEventWriteError && error.providerStatus !== undefined) throw error;
+    throw new ProviderEventWriteError("provider-write-failed", "unconfirmed", error instanceof ProviderEventWriteError ? error.providerStatus : undefined);
+  }
+}
+
+async function seriesAuthorization(userID: string, accountId: string, externalCalendarId: string, intent: CaldavSeriesIntent, signal?: AbortSignal, action: "update" | "delete" | "create" = "update") {
   if (!config.api.eventTimeEditsEnabled)
     throw new EventWriteError("event-write", "unsupported");
   const accounts = await getCaldavAccountsByUser(userID);
@@ -1043,7 +1124,7 @@ async function seriesAuthorization(userID: string, accountId: string, externalCa
     throw new EventWriteError("event-write", "denied");
   const resource = caldavSeriesResourceURL(externalCalendarId, intent.ref.externalEventId);
   const authorization = await basicAuthForAccount(accountId);
-  assertEventWriteEvidence(caldavAllows(await caldavEventPrivileges(action === "delete" ? externalCalendarId : resource.href, authorization, signal, "error"), action), "event-write");
+  assertEventWriteEvidence(caldavAllows(await caldavEventPrivileges(action !== "update" ? externalCalendarId : resource.href, authorization, signal, "error"), action), "event-write");
   return { resource, authorization };
 }
 
@@ -1148,6 +1229,10 @@ export const caldavAdapter: CalendarAdapter = {
   async deleteCaldavSeries(userID, accountId, externalCalendarId, deletion, signal, beforeMutation) {
     const { authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, deletion.baseline, signal, "delete");
     return deleteCaldavSeriesResource(externalCalendarId, deletion, authorization, signal, beforeMutation);
+  },
+  async createCaldavSeries(userID, accountId, externalCalendarId, split, signal, beforeMutation) {
+    const { authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, split.creation, signal, "create");
+    return createCaldavSplitResource(externalCalendarId, split, authorization, signal, beforeMutation);
   },
   async writeCaldavSeries(userID, accountId, externalCalendarId, write, signal, beforeMutation) {
     const { authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, write.baseline, signal);
