@@ -12,7 +12,7 @@ import {
   EventWriteError,
   NotFoundError,
   type ResolveEventDeliveryRequest,
-  type ProviderReminderEdit,
+  type ProviderReminderEdit, type ProviderReminderInstanceIntent, ProviderReminderEditSchema, providerReminderDesiredState,
   type ProviderRsvpIntent, type ProviderRsvpInstance,
   ProviderRsvpEditSchema, providerRsvpDesiredState,
   type ProviderEventState,
@@ -139,27 +139,27 @@ async function resolutionContext(
   if (mappings.length > 1)
     throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   const [mapping] = mappings;
-  if (row.payload.reminderInstance || latest.payload.reminderInstance || pending.some(item => item.payload.reminderInstance)) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+  if (!row.payload.reminderInstance && (latest.payload.reminderInstance || pending.some(item => item.payload.reminderInstance))) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   if (row.payload.graphSeriesCreate || latest.payload.graphSeriesCreate || pending.some(item => item.payload.graphSeriesCreate)) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   if (!row.payload.rsvp && (latest.payload.rsvp || pending.some(item => item.payload.rsvp))) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
-  let rsvpInstance: ProviderRsvpInstance | undefined;
-  if (row.payload.rsvp) {
+  let providerInstance: ProviderRsvpInstance | undefined;
+  if (row.payload.rsvp || row.payload.reminderInstance) {
     if (row.payload.reminderEdit || row.payload.googleOccurrence || row.payload.caldavSeries || row.payload.caldavSplit || row.payload.caldavSeriesDeletion || local.recurrence || local.isCanceled || local.timeModel?.kind === "floating")
       throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
-    const saved = row.payload.rsvp.instance;
+    const saved = (row.payload.rsvp ?? row.payload.reminderInstance)!.instance;
     if (saved) {
       // An explicit refresh may adopt a newer parent revision, never another
       // canonical parent or original slot. This check precedes parent reads.
       if (!linked || !current || !mapping || local.seriesID !== saved.seriesID || !isDeepStrictEqual(local.originalStart, saved.originalStart))
         throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
-      try { rsvpInstance = await readProviderRsvpInstance(tx, current, mapping, userID); }
+      try { providerInstance = await readProviderRsvpInstance(tx, current, mapping, userID); }
       catch { throw new EventDeliveryResolutionError("delivery-resolution-unavailable"); }
-      if (!rsvpInstance || rsvpInstance.externalSeriesID !== saved.externalSeriesID) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+      if (!providerInstance || providerInstance.externalSeriesID !== saved.externalSeriesID) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
     } else if (local.seriesID || local.originalStart) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   }
-  if (row.payload.reminderEdit || row.payload.rsvp) {
+  if (row.payload.reminderEdit || row.payload.rsvp || row.payload.reminderInstance) {
     const [membership] = await tx.select({ role: calendarMembers.role }).from(calendarMembers).where(and(eq(calendarMembers.calendarID, row.calendarID), eq(calendarMembers.userID, userID)));
-    if (row.provider !== "google" || row.action !== "update" || row.actorID !== userID || !linked || current.originCalendarID !== row.calendarID || latest.id !== row.id || pending.some(item => item.id !== row.id) || !membership || !["owner", "editor"].includes(membership.role) || !mapping || mapping.externalEventID !== row.externalEventID || mapping.externalCalendarID !== row.externalCalendarID || !mapping.providerState || local.revision !== row.revision || !(row.payload.rsvp ? matchesRsvpEventProjection("google", EventSchema.parse(row.payload.event), local, rsvpInstance) : matchesReminderEventProjection("google", EventSchema.parse(row.payload.event), local)))
+    if (row.provider !== "google" || row.action !== "update" || row.actorID !== userID || !linked || current.originCalendarID !== row.calendarID || latest.id !== row.id || pending.some(item => item.id !== row.id) || !membership || !["owner", "editor"].includes(membership.role) || !mapping || mapping.externalEventID !== row.externalEventID || mapping.externalCalendarID !== row.externalCalendarID || !mapping.providerState || local.revision !== row.revision || !((row.payload.rsvp || row.payload.reminderInstance) ? matchesRsvpEventProjection("google", EventSchema.parse(row.payload.event), local, providerInstance) : matchesReminderEventProjection("google", EventSchema.parse(row.payload.event), local)))
       throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   } else if (latest.payload.reminderEdit || pending.some(item => item.payload.reminderEdit)) {
     throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
@@ -169,7 +169,7 @@ async function resolutionContext(
     let split: CaldavSplitResolutionSnapshot;
     try { split = await readCaldavSplitResolution(tx, userID, row.id); }
     catch (error) { if (error instanceof EventWriteError) throw new EventDeliveryResolutionError("delivery-resolution-unavailable"); throw error; }
-    return { masterRevision: undefined, caldavContext: undefined, rsvpInstance: undefined,
+    return { masterRevision: undefined, caldavContext: undefined, providerInstance: undefined,
       caldavSplitSnapshot: split, row: split.source, latest: split.source, pending: [split.source, split.creation],
       local: split.journal.after.source, localRevision: split.journal.after.source.revision!, deleted: false, mapping: split.mapping };
   }
@@ -284,7 +284,7 @@ async function resolutionContext(
     masterRevision,
     caldavSplitSnapshot: undefined,
     caldavContext,
-    rsvpInstance,
+    providerInstance,
     row,
     latest,
     pending: pending.length ? pending : [row],
@@ -324,7 +324,7 @@ export type EventDeliveryResolutionProof = {
   caldavSeries?: CaldavSeriesPrepared;
   caldavSeriesDeletion?: CaldavSeriesDeletionPrepared;
   rsvp?: { intent: ProviderRsvpIntent; baselineVersion: string };
-  reminder?: { intent: ProviderReminderEdit; state: ProviderEventState; stateVersion: string };
+  reminder?: { intent: ProviderReminderEdit; state: ProviderEventState; stateVersion: string; instance?: ProviderReminderInstanceIntent };
   deletion: typeof externalEventTombstones.$inferSelect | undefined;
 };
 
@@ -421,8 +421,9 @@ export async function commitEventDeliveryResolution(
           row.externalCalendarLinkID,
           proof.ref.externalEventId,
         );
-      if (row.payload.rsvp?.instance)
-        await tx.select({ id: events.id }).from(events).where(eq(events.id, row.payload.rsvp.instance.seriesID)).for("update");
+      const savedInstance = row.payload.rsvp?.instance ?? row.payload.reminderInstance?.instance;
+      if (savedInstance)
+        await tx.select({ id: events.id }).from(events).where(eq(events.id, savedInstance.seriesID)).for("update");
       if (row.payload.googleOccurrence)
         await tx
           .select({ id: events.id })
@@ -438,7 +439,7 @@ export async function commitEventDeliveryResolution(
         await tx.select({ id: events.id }).from(events).where(eq(events.seriesID, row.eventID)).orderBy(events.id).for("update");
         await tx.select({ id: externalEvents.id }).from(externalEvents).where(and(eq(externalEvents.calendarID, row.calendarID), or(eq(externalEvents.externalEventID, row.externalEventID!), eq(externalEvents.externalSeriesID, row.externalEventID!)))).orderBy(externalEvents.eventID, externalEvents.id).for("update");
       }
-      if (row.payload.reminderEdit || row.payload.rsvp) {
+      if (row.payload.reminderEdit || row.payload.rsvp || row.payload.reminderInstance) {
         await tx.select({ role: calendarMembers.role }).from(calendarMembers).where(and(eq(calendarMembers.calendarID, row.calendarID), eq(calendarMembers.userID, userID))).for("share");
         await tx.select({ id: externalEvents.id }).from(externalEvents).where(and(eq(externalEvents.eventID, row.eventID), eq(externalEvents.calendarID, row.calendarID), eq(externalEvents.provider, row.provider))).for("update");
       }
@@ -476,9 +477,10 @@ export async function commitEventDeliveryResolution(
         );
       if (
         !!current.row.payload.rsvp !== !!proof.rsvp ||
-        !isDeepStrictEqual(current.rsvpInstance, proof.context.rsvpInstance) ||
+        !isDeepStrictEqual(current.providerInstance, proof.context.providerInstance) ||
         proof.rsvp?.baselineVersion !== request.expectedRsvpBaselineVersion ||
-        !!current.row.payload.reminderEdit !== !!proof.reminder ||
+        !!(current.row.payload.reminderEdit || current.row.payload.reminderInstance) !== !!proof.reminder ||
+        !!current.row.payload.reminderInstance !== !!proof.reminder?.instance ||
         proof.reminder?.stateVersion !== request.expectedReminderStateVersion ||
         !sameCaldavScopeContext(request.expectedScopeResolution, current.row.payload.caldavSeries?.write.followingDelete
           ? { kind: "following-delete", originalStart: current.row.payload.caldavSeries.write.followingDelete.originalStart } : current.row.payload.caldavSeriesDeletion ? { kind: "series-delete" } : undefined) ||
@@ -516,8 +518,20 @@ export async function commitEventDeliveryResolution(
             intent.baseline.id !== proof.ref.externalEventId || intent.baseline.etag !== proof.ref.etag ||
             !intent.nativeTime || !isDeepStrictEqual(ProviderRsvpEditSchema.parse(intent.request), ProviderRsvpEditSchema.parse(current.row.payload.rsvp!.request)) ||
             providerRsvpBaselineVersion(current.mapping.id, intent.baseline, intent.instance) !== baselineVersion ||
-            !isDeepStrictEqual(intent.instance, current.rsvpInstance) ||
+            !isDeepStrictEqual(intent.instance, current.providerInstance) ||
             !isDeepStrictEqual(providerRsvpDesiredState(intent.baselineState, row.externalCalendarID, intent.request.response), intent.desiredState))
+          throw new EventDeliveryResolutionError("delivery-state-changed");
+      }
+      if (proof.reminder?.instance) {
+        const intent = proof.reminder.instance;
+        if (!current.mapping || !proof.ref || intent.mappingID !== current.mapping.id ||
+            intent.baseline.id !== proof.ref.externalEventId || intent.baseline.etag !== proof.ref.etag ||
+            !isDeepStrictEqual(intent.nativeTime, current.local.timeModel) ||
+            !isDeepStrictEqual(ProviderReminderEditSchema.parse(intent.request), ProviderReminderEditSchema.parse(current.row.payload.reminderInstance!.request)) ||
+            !isDeepStrictEqual(intent.request, proof.reminder.intent) || !isDeepStrictEqual(intent.baselineState, proof.reminder.state) ||
+            providerRsvpBaselineVersion(current.mapping.id, intent.baseline, intent.instance) !== proof.reminder.stateVersion ||
+            !isDeepStrictEqual(intent.instance, current.providerInstance) ||
+            !isDeepStrictEqual(providerReminderDesiredState(intent.baselineState, intent.request.reminders), intent.desiredState))
           throw new EventDeliveryResolutionError("delivery-state-changed");
       }
       if (proof.ref) {
@@ -662,7 +676,8 @@ export async function commitEventDeliveryResolution(
           event: current.local,
           patch: proof.patch,
           ...(proof.rsvp ? { rsvp: { ...proof.rsvp.intent, request: { ...proof.rsvp.intent.request, operationID: request.mutationId, expectedRevision: current.localRevision!, expectedStateVersion: providerStateVersion({ id: current.mapping!.id, etag: proof.ref!.etag ?? null, providerState: proof.rsvp.intent.baselineState })! } } } : {}),
-          ...(proof.reminder ? { reminderEdit: { ...proof.reminder.intent, operationID: request.mutationId, expectedRevision: current.localRevision!, expectedStateVersion: proof.reminder.stateVersion } } : {}),
+          ...(proof.reminder?.instance ? { reminderInstance: { ...proof.reminder.instance, request: { ...proof.reminder.instance.request, operationID: request.mutationId, expectedRevision: current.localRevision!, expectedStateVersion: providerStateVersion({ id: current.mapping!.id, etag: proof.ref!.etag ?? null, providerState: proof.reminder.state })! } } } : {}),
+          ...(proof.reminder && !proof.reminder.instance ? { reminderEdit: { ...proof.reminder.intent, operationID: request.mutationId, expectedRevision: current.localRevision!, expectedStateVersion: proof.reminder.stateVersion } } : {}),
           ...(proof.caldavSeries ? { caldavSeries: proof.caldavSeries } : {}),
           ...(proof.caldavSeriesDeletion ? { caldavSeriesDeletion: proof.caldavSeriesDeletion } : {}),
           ...(proof.googleOccurrence

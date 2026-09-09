@@ -97,6 +97,12 @@ export function googleReminderInstanceTransport(getAuthorizedToken: (user: strin
       const ctx = await context(user, account, calendar, frozen.eventID, signal);
       return googleReminderInstanceEvidence(await ctx.read(), frozen, desired);
     },
+    async readResolution(user: string, account: string, calendar: string, eventID: string, occurrence: GoogleRsvpOccurrence, reminders: GoogleReminderWrite, signal?: AbortSignal) {
+      const frozen = structuredClone(occurrence), desired = GoogleReminderWriteSchema.parse(reminders);
+      const ctx = await context(user, account, calendar, eventID, signal);
+      const current = await ctx.read();
+      return googleReminderInstanceEvidence(current, { eventID, etag: requireEventEtag(current?.etag), occurrence: frozen }, desired);
+    },
     async write(user: string, account: string, calendar: string, input: GoogleReminderInstanceEvidence, beforeWrite: () => Promise<void>, signal?: AbortSignal) {
       const intent = googleReminderInstanceEvidence(input.baseline, { eventID: input.baseline.id, etag: input.baseline.etag, occurrence: input.occurrence }, input.reminders);
       const ctx = await context(user, account, calendar, intent.baseline.id, signal);
