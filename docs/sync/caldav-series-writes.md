@@ -1,5 +1,10 @@
 # CalDAV series: complete resource evidence and conditional delivery
 
+This document records incremental implementation and test evidence. Later sections
+supersede earlier “next step” or slice-specific unsupported notes. For the current
+supported scope and remaining boundaries, see the
+[core remaining-work matrix](../audits/calendar-core-remaining-work.md).
+
 The default-off `EVENT_TIME_EDITS_ENABLED` capability has an internal
 `readCaldavSeries` adapter method. It reads the complete calendar object with its
 accepted strong ETag and retains the original UTF-8 body, including detached
@@ -738,3 +743,26 @@ snapshots and new-resource recreation; disposable Radicale DELETE conflict and
 dark Chromium keyboard/focus, accessibility and request checks. No physical
 native or live-account acceptance is implied. Split conflict resolution remains
 open, and production flags and client versions are unchanged.
+
+
+### Split operation identity and native identity
+
+A split's new canonical master UUID and native resource URL/UID stay frozen in
+its prepared journal. The source and creation delivery rows now each have their
+own operation UUID. The worker verifies the paired journal, event identity,
+explicit native address, action/position and dependency; it no longer requires
+the creation operation UUID to equal the new master UUID. Existing journals using
+the older shared UUID remain valid.
+
+An unmapped native deletion recognizes the creation row through its exact saved
+CalDAV split address and matching journal creation-operation ID, independently
+of the row-ID-derived legacy URL. Root and detached-child deletion observations
+still prevent ACK; full-resource and component pulls still cannot import an
+unacknowledged split family. The native URL never changes across retries.
+
+HTTP/DB coverage exercises independent IDs throughout both phases, legacy journal
+compatibility, root deletion before delivery and during CREATE, child deletion,
+lost responses, interleaved pulls and complete mapping ACK. The disposable
+Radicale split round trip uses the independent operation IDs. This is groundwork
+for replacing a conflicted pair while preserving its family identity; it does
+not enable split conflict confirmation by itself.

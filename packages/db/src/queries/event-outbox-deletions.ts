@@ -88,7 +88,10 @@ export async function retainUnmappedEventDeletion(
         sql`(${eventOutbox.resultRef}->>'externalEventId' = ${externalEventID}
       or ${eventOutbox.remoteSnapshot}->>'externalEventId' = ${externalEventID}
       or (${eventOutbox.provider} = 'google' and 'musubi' || replace(${eventOutbox.id}::text, '-', '') = ${externalEventID})
-      or (${eventOutbox.provider} = 'caldav' and rtrim(${eventOutbox.externalCalendarID}, '/') || '/musubi-' || ${eventOutbox.id}::text || '.ics' = ${externalEventID}))`,
+      or (${eventOutbox.provider} = 'caldav' and rtrim(${eventOutbox.externalCalendarID}, '/') || '/musubi-' || ${eventOutbox.id}::text || '.ics' = ${externalEventID})
+      or (${eventOutbox.provider} = 'caldav' and ${eventOutbox.externalEventID} = ${externalEventID}
+        and ${eventOutbox.payload}->'caldavSplit'->>'creationOperationID' = ${eventOutbox.id}::text
+        and ${eventOutbox.payload}->'caldavSplit'->'prepared'->'split'->'creation'->'ref'->>'externalEventId' = ${externalEventID}))`,
       ),
     );
   // A delayed delta for our confirmed resource deletion is already represented
