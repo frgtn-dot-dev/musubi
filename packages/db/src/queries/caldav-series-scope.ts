@@ -80,9 +80,9 @@ export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseli
   if (!write.patch || typeof write.patch !== "object" || Array.isArray(write.patch) || Object.keys(write.patch).some(key => !["title", "description", "location"].includes(key))) throw unsupported();
   const { baseline, targetEventID } = write;
   if (write.cancelTarget !== undefined && (write.cancelTarget !== true || !targetEventID || Object.keys(write.patch).length)) throw unsupported();
-  if (write.time !== undefined && (!targetEventID || write.cancelTarget)) throw unsupported();
+  if (write.time !== undefined && write.cancelTarget) throw unsupported();
   const time = write.time === undefined ? undefined : resolveEventTimeEdit(write.time);
-  const currentModel = write.newDefinition ? baseline.master.timeModel : baseline.children.find(child => child.id === targetEventID)?.timeModel;
+  const currentModel = write.newDefinition || !targetEventID ? baseline.master.timeModel : baseline.children.find(child => child.id === targetEventID)?.timeModel;
   if (time && (time.timeModel.kind !== currentModel?.kind || time.timeModel.kind === "zoned" && (currentModel?.kind !== "zoned" || time.timeModel.timeZone !== currentModel.timeZone))) throw unsupported();
   if (write.newDefinition) {
     const definition = EventSchema.parse(write.newDefinition);
@@ -93,7 +93,12 @@ export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseli
     if (plan.creates.length !== 1 || plan.deletes.length || !sameCaldavScopeContext(plan.creates[0], definition)) throw unsupported();
     return { ...baseline, children: [...baseline.children, definition] };
   }
-  if (!targetEventID) return { ...baseline, master: EventSchema.parse({ ...baseline.master, ...write.patch }) };
+  if (!targetEventID) {
+    if (!time) return { ...baseline, master: EventSchema.parse({ ...baseline.master, ...write.patch }) };
+    const plan = planEventScope(baseline.master, baseline.children, { operationID: baseline.master.id, scope: "series", action: "update", expectedRevision: baseline.master.revision, patch: write.patch, time: write.time });
+    if (plan.creates.length || plan.deletes.length) throw unsupported();
+    return { ...baseline, master: plan.updates.find(item => item.id === baseline.master.id) ?? baseline.master, children: baseline.children.map(child => plan.updates.find(item => item.id === child.id) ?? child) };
+  }
   const target = baseline.children.filter(child => child.id === targetEventID);
   if (target.length !== 1 || (target[0]!.isCanceled && write.cancelTarget) || !target[0]!.originalStart) throw unsupported();
   return { ...baseline, children: baseline.children.map(child => child.id === targetEventID ? EventSchema.parse({ ...child, ...write.patch, ...time, isCanceled: write.cancelTarget === true }) : child) };

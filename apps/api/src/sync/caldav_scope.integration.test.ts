@@ -1,4 +1,4 @@
-import { resolveEventTimeEdit } from "@musubi/calendar";
+import { planEventScope, resolveEventTimeEdit } from "@musubi/calendar";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
@@ -52,7 +52,7 @@ async function main() {
   const apiOrigin = `http://127.0.0.1:${(api.address() as any).port}`;
   const enabled = config.api.eventTimeEditsEnabled;
   try {
-    for (const scenario of ["generated-time-zoned", "generated-time-all-day", "generated-time-floating", "generated-time-lost", "generated-time-race", "time-zoned", "time-all-day", "time-floating", "time-lost", "time-race", "revive-zoned", "revive-all-day", "revive-floating", "revive-lost", "revive-race", "generated-zoned", "generated-all-day", "generated-floating", "generated-cancel-zoned", "generated-cancel-all-day", "generated-cancel-floating", "generated-lost", "generated-race", "generated-prepare-race", "generated-tombstone", "cancel-zoned", "cancel-all-day", "cancel-floating", "cancel-lost", "cancel-race", "occurrence-zoned", "occurrence-all-day", "occurrence-floating", "occurrence-lost", "occurrence-race", "zoned", "all-day", "floating", "no-children", "malformed-private", "meeting", "copied", "lost", "race", "local-race", "mapping-race", "lease-race", "tombstone", "prepare-race", "no-op", "resolve", "resolve-all-day", "resolve-floating", "resolve-twice", "resolve-http", "resolve-timezone", "resolve-stale", "resolve-local-race", "resolve-child-race"]) {
+    for (const scenario of ["series-time-zoned", "series-time-all-day", "series-time-floating", "series-time-lost", "series-time-race", "series-time-tombstone", "generated-time-zoned", "generated-time-all-day", "generated-time-floating", "generated-time-lost", "generated-time-race", "time-zoned", "time-all-day", "time-floating", "time-lost", "time-race", "revive-zoned", "revive-all-day", "revive-floating", "revive-lost", "revive-race", "generated-zoned", "generated-all-day", "generated-floating", "generated-cancel-zoned", "generated-cancel-all-day", "generated-cancel-floating", "generated-lost", "generated-race", "generated-prepare-race", "generated-tombstone", "cancel-zoned", "cancel-all-day", "cancel-floating", "cancel-lost", "cancel-race", "occurrence-zoned", "occurrence-all-day", "occurrence-floating", "occurrence-lost", "occurrence-race", "zoned", "all-day", "floating", "no-children", "malformed-private", "meeting", "copied", "lost", "race", "local-race", "mapping-race", "lease-race", "tombstone", "prepare-race", "no-op", "resolve", "resolve-all-day", "resolve-floating", "resolve-twice", "resolve-http", "resolve-timezone", "resolve-stale", "resolve-local-race", "resolve-child-race"]) {
       const owner = `caldav-scope-${randomUUID()}`;
       const credential = issueMemberToken();
       await db.insert(user).values({ id: owner, name: "Fixture", email: `${owner}@example.test`, isExternal: true });
@@ -78,6 +78,53 @@ async function main() {
         const outbox = () => db.select().from(eventOutbox).where(eq(eventOutbox.userID, owner));
         const original = await rows(), mappings = await maps();
         const root = original.find(event => !event.seriesID)!;
+        if (scenario.startsWith("series-time-")) {
+          const time = scenario.endsWith("all-day") ? { kind: "all-day", startDate: "2026-03-29", endDate: "2026-03-30" } : { kind: scenario.endsWith("floating") ? "floating" : "zoned", ...(scenario.endsWith("floating") ? {} : { timeZone: "Europe/Prague" }), startLocal: "2026-03-29T09:00:00.000", endLocal: "2026-03-30T10:00:00.000" };
+          const request = { operationID: randomUUID(), scope: "series", action: "update", expectedRevision: root.revision, patch: {}, time };
+          const candidate = await applyLocalEventScope(root.id, owner, request, { prepareProvider: true });
+          if (candidate.status !== "caldav_required") throw new Error("Missing series time context");
+          const prepared = await prepareCaldavSeries(candidate.context, request);
+          const plan = planEventScope(candidate.context.master, candidate.context.children, request);
+          if (scenario.endsWith("tombstone")) {
+            const next = plan.updates.find(item => item.seriesID)!;
+            await db.insert(externalEventTombstones).values({ externalCalendarLinkID: prepared.context.link.id, externalEventID: resource + "#musubi-original=" + encodeURIComponent(JSON.stringify(next.originalStart)) });
+            await assert.rejects(() => applyLocalEventScope(root.id, owner, request, { caldav: prepared }));
+            assert.deepEqual(await rows(), original); assert.deepEqual(await maps(), mappings); assert.equal((await outbox()).length, 0); continue;
+          }
+          assert.equal((await applyLocalEventScope(root.id, owner, request, { caldav: prepared })).status, "saved");
+          const savedRows = await rows(), savedMaps = await maps();
+          assert.equal(savedRows.length, original.length);
+          for (const previous of original.filter(item => item.seriesID)) {
+            const current = savedRows.find(item => item.id === previous.id)!;
+            assert.deepEqual(current.timeModel, previous.timeModel); assert.equal(current.title, previous.title); assert.equal(current.isCanceled, previous.isCanceled);
+            assert.deepEqual(current.originalStart, plan.updates.find(item => item.id === current.id)!.originalStart);
+            assert.equal(current.revision, previous.revision + 1);
+            const mapping = savedMaps.find(item => item.eventID === current.id)!;
+            assert.deepEqual(mapping.originalStart, current.originalStart); assert.equal(mapping.id, mappings.find(item => item.eventID === current.id)!.id);
+            assert.ok(mapping.externalEventID.endsWith(encodeURIComponent(JSON.stringify(current.originalStart))));
+          }
+          assert.ok(savedMaps.every(item => item.etag === '"before"' && !item.externalEventID.includes("musubi-pending")));
+          await assert.rejects(persist); assert.deepEqual(await rows(), savedRows); assert.deepEqual(await maps(), savedMaps);
+          const [operation] = await outbox(); assert.equal((await outbox()).length, 1);
+          mode = scenario.endsWith("lost") ? "lost" : scenario.endsWith("race") ? "race" : "ok";
+          let result = await deliverEventOutbox(operation.id, () => caldavAdapter);
+          if (mode === "lost") {
+            assert.equal(result?.status, "unconfirmed"); assert.deepEqual(await maps(), savedMaps); mode = "ok";
+            await db.update(eventOutbox).set({ nextAttemptAt: new Date(0) }).where(eq(eventOutbox.id, operation.id));
+            result = await deliverEventOutbox(operation.id, () => caldavAdapter);
+          }
+          assert.equal(puts, 1);
+          if (scenario.endsWith("race")) {
+            assert.equal(result?.status, "conflict"); assert.deepEqual(await maps(), savedMaps);
+            await assert.rejects(() => prepareEventDeliveryResolution(owner, root.id, operation.id, () => caldavAdapter), (error: any) => error.code === "delivery-resolution-unavailable");
+          } else {
+            assert.equal(result?.status, "completed", JSON.stringify(result?.errorCode));
+            assert.ok((await maps()).every(item => item.etag === '"after"'));
+            await persist(); assert.deepEqual(await rows(), savedRows); assert.equal((await maps()).length, mappings.length);
+            assert.equal((await applyLocalEventScope(root.id, owner, request, { prepareProvider: true })).status, "replayed");
+          }
+          continue;
+        }
         if (scenario.startsWith("generated-")) {
           const cancellation = scenario.includes("cancel");
           const generatedTime = scenario.startsWith("generated-time-") ? scenario.endsWith("all-day") ? { kind: "all-day", startDate: "2026-04-02", endDate: "2026-04-03" } : { kind: scenario.endsWith("floating") ? "floating" : "zoned", ...(scenario.endsWith("floating") ? {} : { timeZone: "Europe/Prague" }), startLocal: "2026-04-02T12:00:00.000", endLocal: "2026-04-02T13:00:00.000" } : undefined;
