@@ -26,6 +26,7 @@ import {
   setExternalEventSyncData,
   setExternalTaskSyncData,
   setMemberRole,
+  reconcileGoogleCalendarAccess,
   sweepExternalEvents,
   sweepExternalTasks,
   upsertExternalEvent,
@@ -255,7 +256,9 @@ export async function syncProvider(
     };
     const link = links.find((l) => l.externalCalendarID === cal.externalId);
     if (link) {
-      await setMemberRole(userID, link.calendarID, desiredRole);
+      if (provider === "google" && cal.googleAccessRole && capabilities.supportsEvents)
+        await reconcileGoogleCalendarAccess(userID, accountId, link.calendarID, cal.googleAccessRole);
+      else await setMemberRole(userID, link.calendarID, desiredRole);
       await setExternalCalendarCapabilities(
         provider,
         userID,
@@ -264,7 +267,7 @@ export async function syncProvider(
         capabilities,
       );
     } else {
-      await importExternalCalendar(
+      const imported = await importExternalCalendar(
         provider,
         userID,
         accountId,
@@ -272,6 +275,8 @@ export async function syncProvider(
         cal,
         desiredRole,
       );
+      if (provider === "google" && cal.googleAccessRole && capabilities.supportsEvents)
+        await reconcileGoogleCalendarAccess(userID, accountId, imported.id, cal.googleAccessRole);
     }
   }
 
@@ -284,6 +289,7 @@ export async function syncProvider(
     userID,
     accountId,
   )) {
+    const accessContext = provider === "google" && link.supportsEvents && link.providerAccessRole !== null ? { linkID: link.sourceID, revision: link.providerAccessRevision, userID, accountID: accountId, externalCalendarID: link.externalCalendarID } : undefined;
     const taskOnly = link.supportsTasks && !link.supportsEvents;
     if (taskOnly && !remoteIDs.has(link.externalCalendarID)) continue;
     const calendarStartedAt = performance.now();
@@ -337,7 +343,10 @@ export async function syncProvider(
       });
       continue;
     }
-    const { changes, nextCursor, reset } = fetched;
+    const { changes, nextCursor } = fetched;
+    // A grant-invalidated Google cursor requires authoritative reconciliation
+    // even when known-time editing is disabled. The adapter fully pages this list.
+    const reset = fetched.reset || (!!accessContext && link.cursor === null);
 
     const unlinkedEventIDs: { id: string; revision: number }[] = [];
     const onUnlink = (id: string, revision: number) => {
@@ -357,7 +366,7 @@ export async function syncProvider(
           return { providerState: event.providerState, externalId: event.externalId, values: toEventValues(event, link.calColor), etag: event.etag ?? null, icalUid: event.icalUid, time: { timeModel: event.timeModel, externalSeriesID: event.externalSeriesID, originalStart: event.originalStart, isCanceled: event.isCanceled } };
         })),
         deleteEvent: (externalID) =>
-          deleteExternalEvent(provider, link.calendarID, externalID, onUnlink),
+          deleteExternalEvent(provider, link.calendarID, externalID, onUnlink, accessContext),
         deleteTask: (externalID) =>
           deleteExternalTask(provider, link.calendarID, externalID),
         upsertEvent: (event) =>
@@ -376,6 +385,7 @@ export async function syncProvider(
             event.providerState,
             event.reminderTimeEvidence,
             event.sourceSeriesID,
+            accessContext,
           ),
         upsertTask: (task) =>
           upsertExternalTask(
@@ -394,6 +404,7 @@ export async function syncProvider(
             link.calendarID,
             [...new Set([...seenExternalIDs, ...retainedGraphIDs])],
             onUnlink,
+            accessContext,
           ),
         sweepTasks: (seenExternalIDs) =>
           sweepExternalTasks(provider, link.calendarID, seenExternalIDs),
@@ -404,7 +415,7 @@ export async function syncProvider(
     }
 
     if (changed > 0) changedCalendarIDs.push(link.calendarID);
-    await setCursor(link.calendarID, nextCursor);
+    await setCursor(link.calendarID, nextCursor, accessContext);
     logger.debug("sync.calendar.completed", {
       provider,
       userId: userID,

@@ -1,3 +1,4 @@
+import { assertExternalCalendarAccess, type ExternalCalendarAccessContext } from "./external-access";
 import { assertNoPendingGraphSeriesCreate } from "./graph-series-create";
 import { caldavSeriesDesired } from "./caldav-series-scope";
 import { expandRecurringEvents } from "@musubi/calendar";
@@ -85,6 +86,9 @@ export async function getUserExternalCalendars(
       calendarID: calendars.id,
       externalCalendarID: externalCalendars.externalCalendarID,
       cursor: externalCalendars.cursor,
+      sourceID: externalCalendars.id,
+      providerAccessRole: externalCalendars.providerAccessRole,
+      providerAccessRevision: externalCalendars.providerAccessRevision,
       supportsEvents: externalCalendars.supportsEvents,
       supportsTasks: externalCalendars.supportsTasks,
       calColor: calendars.color,
@@ -278,7 +282,12 @@ export async function setExternalCalendarCapabilities(
     );
 }
 
-export async function setCursor(calendarID: string, cursor: string | null) {
+export async function setCursor(calendarID: string, cursor: string | null, context?: ExternalCalendarAccessContext) {
+  if (context) return db.transaction(async tx => {
+    await lockCalendarLifecycle(tx, [calendarID], "shared");
+    await assertExternalCalendarAccess(tx, "google", calendarID, context);
+    await tx.update(externalCalendars).set({ cursor }).where(eq(externalCalendars.calendarID, calendarID));
+  });
   await db
     .update(externalCalendars)
     .set({ cursor })
@@ -769,10 +778,12 @@ async function upsertExternalEventInTransaction(
   providerState?: ProviderEventState,
   reminderTimeEvidence?: EventTimeModel,
   sourceSeriesID?: string,
+  accessContext?: ExternalCalendarAccessContext,
 ): Promise<boolean> {
     const state = providerState === undefined ? undefined : ProviderEventStateSchema.parse(providerState);
     if (state && state.provider !== provider) throw new Error("Provider state does not match its destination.");
     await lockCalendarLifecycle(tx, [calendarID], "shared");
+    await assertExternalCalendarAccess(tx, provider, calendarID, accessContext);
     if (provider === "microsoft") await assertNoPendingGraphSeriesCreate(tx, calendarID);
     await lockExternalEventAddress(tx, provider, calendarID, externalEventID);
     if (sourceSeriesID !== undefined) {
@@ -960,10 +971,12 @@ export async function deleteExternalEvent(
   calendarID: string,
   externalEventID: string,
   onUnlink?: (eventID: string, revision: number) => void,
+  accessContext?: ExternalCalendarAccessContext,
 ): Promise<boolean> {
   let unlinked: { id: string; revision: number } | undefined;
   const changed = await db.transaction(async (tx) => {
     await lockCalendarLifecycle(tx, [calendarID], "shared");
+    await assertExternalCalendarAccess(tx, provider, calendarID, accessContext);
     // Resource writers lock the root before components. A missing child from a
     // reset must use the same fence even after a split reparents it locally.
     const [address] = provider === "caldav" ? await tx.select({ resource: externalEvents.externalSeriesID }).from(externalEvents).where(and(eq(externalEvents.provider, provider), eq(externalEvents.calendarID, calendarID), eq(externalEvents.externalEventID, externalEventID))) : [];
@@ -1050,7 +1063,12 @@ export async function sweepExternalEvents(
   calendarID: string,
   seenExternalEventIDs: string[],
   onUnlink?: (eventID: string, revision: number) => void,
+  accessContext?: ExternalCalendarAccessContext,
 ): Promise<number> {
+  if (accessContext) await db.transaction(async tx => {
+    await lockCalendarLifecycle(tx, [calendarID], "shared");
+    await assertExternalCalendarAccess(tx, provider, calendarID, accessContext);
+  });
   const mappings = await db
     .select({
       externalEventID: externalEvents.externalEventID,
@@ -1074,6 +1092,7 @@ export async function sweepExternalEvents(
         calendarID,
         mapping.externalEventID,
         onUnlink,
+        accessContext,
       ))
     )
       changed++;

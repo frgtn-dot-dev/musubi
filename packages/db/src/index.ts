@@ -50,3 +50,5 @@ export * from "./queries/graph-series-create";
 export * from "./queries/event-create-receipt";
 
 export * from "./queries/provider-reminder-instance";
+
+export * from "./queries/external-access";

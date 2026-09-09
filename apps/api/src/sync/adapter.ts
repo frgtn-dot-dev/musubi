@@ -102,6 +102,7 @@ export type ExternalCalendarInfo = {
   // Provider says the user can't write (holidays, subscribed calendars, …) →
   // mirror becomes read-only even for its owner.
   readOnly?: boolean;
+  googleAccessRole?: "owner" | "writer" | "reader" | "writerWithoutPrivateAccess" | "unknown";
 };
 
 export type CalendarDiscoveryResult = {

@@ -791,6 +791,9 @@ export const externalCalendars = pgTable(
     }),
     externalCalendarID: text("external_calendar_id").notNull(),
     cursor: text("cursor"),
+    // Locally ordered discovery grant; invalidates in-flight reads and cursors.
+    providerAccessRole: text("provider_access_role"),
+    providerAccessRevision: integer("provider_access_revision").notNull().default(0),
     supportsEvents: boolean("supports_events").notNull().default(true),
     supportsTasks: boolean("supports_tasks").notNull().default(false),
     disabled: boolean("disabled").notNull().default(false),
