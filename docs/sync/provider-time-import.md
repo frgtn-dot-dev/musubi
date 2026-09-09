@@ -89,3 +89,22 @@ remain required before enabling the capability.
 Sources: [Graph event](https://learn.microsoft.com/en-us/graph/api/resources/event?view=graph-rest-1.0),
 [dateTimeTimeZone](https://learn.microsoft.com/en-us/graph/api/resources/datetimetimezone?view=graph-rest-1.0),
 [create event](https://learn.microsoft.com/en-us/graph/api/user-post-events?view=graph-rest-1.0).
+
+## Exact instants on detached definitions with an unknown zone
+
+The shared recurrence reader can display a non-recurring timed child whose
+`timeModel` is explicitly `legacy-unknown`, provided it has valid ordered UTC
+instants and an explicit original instant identity. It keeps the child's UUID,
+content, exact endpoints and unknown zone. The original identity suppresses the
+corresponding generated slot even when the child moved outside the visible range;
+moved-in and agenda reads retain the same identity. A loaded parent must remain
+a known zoned recurring root. A separately loaded detached definition can be read
+from its explicit instant identity without inferring a parent zone.
+
+This does not resolve a legacy master, infer missing/null models, support unknown
+all-day/floating identities, or grant a provider write capability. Existing
+parent/cancellation, duplicate-original and nested-definition guards still apply.
+Public expansion regressions cover definition order, cancellation, agenda,
+moved-in/out, malformed ranges and both fall-back instants under multiple viewer
+and host zones. This prepares consumption of the private Graph finite reader;
+its database import and create ACK remain separate integration work.
