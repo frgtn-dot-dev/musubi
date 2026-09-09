@@ -1,4 +1,5 @@
-import { readGraphSeriesFamilyOrMissing } from "./microsoft_series_family";
+import { createGraphSeries } from "./microsoft_series_delivery";
+import { readGraphSeriesFamily, readGraphSeriesFamilyOrMissing } from "./microsoft_series_family";
 import { microsoftEventState } from "./provider_event_state";
 import { config, logger } from "@musubi/config";
 import { getOAuthAccountIDs, hasOAuthTaskScope } from "@musubi/db";
@@ -717,6 +718,22 @@ export const microsoftAdapter: CalendarAdapter = {
     return taskListId
       ? fetchMicrosoftTaskChanges(accessToken, taskListId, cursor)
       : fetchMicrosoftChanges(accessToken, externalCalendarId, cursor, { timeModels: config.api.eventTimeEditsEnabled, ...exclusions });
+  },
+
+  async createGraphFamily(userID, accountId, externalCalendarId, event, identity, state) {
+    const accessToken = await getAccessToken(userID, accountId);
+    const created = await createGraphSeries(accessToken, externalCalendarId, event, identity, state);
+    let family;
+    try {
+      family = await readGraphSeriesFamily(accessToken, externalCalendarId, event, created.ref, identity.signal);
+    } catch (error) {
+      // An incomplete or changing family observation is not a confirmed saved
+      // intent conflict. Recover the existing transaction and retry the read.
+      throw new ProviderEventWriteError("provider-write-failed", "unconfirmed", error instanceof ProviderEventWriteError ? error.providerStatus : undefined, error instanceof ProviderEventWriteError ? error.retryAfterMs : undefined);
+    }
+    if (family.master.externalId !== created.ref.externalEventId || family.master.icalUid !== created.ref.icalUid || family.master.creationOperationID !== identity.operationID)
+      throw new ProviderEventWriteError("provider-conflict", "unconfirmed");
+    return family;
   },
 
   async readGraphFamily(userID, accountId, externalCalendarId, template, ref, signal) {

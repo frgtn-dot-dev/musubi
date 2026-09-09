@@ -312,3 +312,31 @@ changed proof, duplicate identities, tombstones/collisions, concurrent one-winne
 ACK, deterministic lease expiry during family writes, and subsequent sync no-op.
 Native HTTP delivery/recovery and public create admission still need composition;
 this private transaction alone is not production recurring creation.
+
+
+## Default-off create worker composition
+
+The specialized Microsoft adapter/worker now connects the frozen create journal,
+current local and native write permission, stable transaction recovery, one POST,
+strict full-family read and atomic ACK. The ordinary legacy create path still
+refuses recurring writes. Public known-time create admission remains separate.
+
+Transient database failures during authority checks remain retryable before POST;
+failures during ACK preserve uncertainty and roll back all family writes. They
+are not misclassified as terminal intent conflicts.
+A failed/incomplete/changing full-family read stays unconfirmed: retry recovers
+the same native transaction and repeats the complete read without another POST.
+A definitive initial read failure before mutation can retry creation later;
+uncertain absence cannot. The worker preserves uncertainty even when a recovery
+attempt sent no new POST. It stores no master-only resultRef on failed family
+ACK. Local authority/lease checks run again immediately before mutation, and the
+complete transaction validates them at acknowledgement. Worker cancellation and
+lease recovery apply to this path as to other durable operations.
+
+Actual adapter, fake HTTP and PostgreSQL tests cover concurrent claims, zoned and
+all-day creation, lost POST responses, initial failures, initially invisible
+creates, incomplete families, timeout, late lease expiry, flag/native denial and
+local/permission/lease races. Every successful recovery has one POST, five stable
+canonical definitions/mappings for the four-slot family, and a flag-off ordinary
+sync no-op. Uncertain absence never reposts; changed native intent remains a
+conflict. No live Outlook acceptance or production activation is implied.
