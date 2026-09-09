@@ -893,6 +893,7 @@ export const eventOutbox = pgTable(
         googleOccurrence?: GoogleOccurrenceIntent;
         caldavSeries?: CaldavSeriesPrepared;
         caldavSplit?: CaldavSplitJournal;
+        caldavAlarm?: import("./queries/caldav-alarms").CaldavAlarmIntent;
         caldavSeriesDeletion?: CaldavSeriesDeletionPrepared;
         graphSeriesCreate?: GraphSeriesCreateJournal;
         createIdentityVersion?: 1;

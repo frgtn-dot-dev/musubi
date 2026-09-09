@@ -8,6 +8,7 @@ import {
   eventDeliveryExplanation,
   eventDeliveryLabel,
   providerReminderDescription,
+  caldavAlarmDescription,
   providerRsvpNotice,
   providerRsvpResponseLabel,
 } from "@musubi/calendar";
@@ -184,7 +185,7 @@ export function DeliveryBody({
     if (!busyRef.current) onClose();
   }
   const confirmLabel =
-    comparison?.preview.scopeResolution ? (comparison.preview.scopeResolution.kind === "following-delete" ? "Delete following occurrences" : comparison.preview.scopeResolution.kind === "following-create" ? "Finish future series" : comparison.preview.scopeResolution.kind === "following-update" ? "Apply following changes" : "Delete entire series") : comparison?.preview.rsvpResolution ? "Send saved response" : comparison?.preview.reminderResolution ? "Apply saved reminders" : comparison?.preview.action === "delete"
+    comparison?.preview.caldavAlarmResolution ? "Apply saved event alarm" : comparison?.preview.scopeResolution ? (comparison.preview.scopeResolution.kind === "following-delete" ? "Delete following occurrences" : comparison.preview.scopeResolution.kind === "following-create" ? "Finish future series" : comparison.preview.scopeResolution.kind === "following-update" ? "Apply following changes" : "Delete entire series") : comparison?.preview.rsvpResolution ? "Send saved response" : comparison?.preview.reminderResolution ? "Apply saved reminders" : comparison?.preview.action === "delete"
       ? "Delete remote copy"
       : comparison?.preview.action === "create"
         ? "Recreate remote copy"
@@ -197,7 +198,7 @@ export function DeliveryBody({
       {
         title: confirmLabel,
         confirmLabel,
-        message: saved.preview.scopeResolution ? (saved.preview.scopeResolution.kind === "following-delete" ? `Delete the occurrence originally starting ${saved.preview.scopeResolution.originalStart.value} and all later occurrences from the remote series? Earlier occurrences remain. The saved deletion in Musubi remains.` : saved.preview.scopeResolution.kind === "following-create" ? "Finish only the saved future series at its original destination? The earlier series is already saved. An already present matching future series is confirmed without another write." : saved.preview.scopeResolution.kind === "following-update" ? "Apply the saved following changes in two steps: shorten the earlier series, then create the saved future series? Delivery may finish one step at a time; retry keeps the same future series identity." : "Delete the entire remote series, including all occurrences and exceptions? The saved deletion in Musubi remains.") : saved.preview.rsvpResolution ? `Apply only your saved response and preserve the other current Google fields? ${providerRsvpNotice}` : saved.preview.reminderResolution ? "Replace your personal Google Calendar reminders with the saved settings? Event time, participants and Musubi reminders stay unchanged." :
+        message: saved.preview.caldavAlarmResolution ? "Replace only the supported alarm on the CalDAV event with the saved setting? Calendar apps deliver it. Musubi reminders are separate; both may notify you." : saved.preview.scopeResolution ? (saved.preview.scopeResolution.kind === "following-delete" ? `Delete the occurrence originally starting ${saved.preview.scopeResolution.originalStart.value} and all later occurrences from the remote series? Earlier occurrences remain. The saved deletion in Musubi remains.` : saved.preview.scopeResolution.kind === "following-create" ? "Finish only the saved future series at its original destination? The earlier series is already saved. An already present matching future series is confirmed without another write." : saved.preview.scopeResolution.kind === "following-update" ? "Apply the saved following changes in two steps: shorten the earlier series, then create the saved future series? Delivery may finish one step at a time; retry keeps the same future series identity." : "Delete the entire remote series, including all occurrences and exceptions? The saved deletion in Musubi remains.") : saved.preview.rsvpResolution ? `Apply only your saved response and preserve the other current Google fields? ${providerRsvpNotice}` : saved.preview.reminderResolution ? "Replace your personal Google Calendar reminders with the saved settings? Event time, participants and Musubi reminders stay unchanged." :
           "Apply the version shown in this comparison? Remote differences may be replaced. Unsaved form edits are not sent.",
       },
       () => {
@@ -269,6 +270,9 @@ export function DeliveryBody({
                 <Text style={copy}>{providerRsvpNotice}</Text>
                 <Text style={copy}>Saved Google response: {providerRsvpResponseLabel(comparison.preview.rsvpResolution.desired)}</Text>
                 <Text style={copy}>Current Google response: {providerRsvpResponseLabel(comparison.preview.rsvpResolution.remote)}</Text>
+              </> : comparison.preview.caldavAlarmResolution ? <>
+                <Text style={copy}>Saved CalDAV event alarm: {caldavAlarmDescription(comparison.preview.caldavAlarmResolution.desired)}</Text>
+                <Text style={copy}>Current CalDAV event alarm: {caldavAlarmDescription(comparison.preview.caldavAlarmResolution.remote)}</Text>
               </> : comparison.preview.reminderResolution ? (
                 <>
                   <Text style={copy}>Google Calendar sends these notifications; other apps may notify separately.</Text>
@@ -388,6 +392,7 @@ export function DeliveryBody({
                             }
                           />
                         ) : null}
+                        {target.alarmDiscardRevision !== undefined ? <Btn label="Discard saved alarm change" variant="secondary" disabled={busy || loading} onPress={() => confirm({ title: "Discard saved alarm change", confirmLabel: "Discard saved alarm change", message: "Stop trying to apply this saved alarm? The current CalDAV event will be read on the next sync. This does not undo a change the server may already have accepted." }, () => { if (!active.current) return; void run(async () => { await api.discardEventAlarm(receipt.eventId, target.operationId!, target.alarmDiscardRevision!, connectionId); if (active.current) setNotice("Saved alarm change discarded. The current CalDAV event will be read on the next sync."); }); })} /> : null}
                         {actions.review ? (
                           <Btn
                             label="Review changes"
@@ -415,7 +420,7 @@ export function DeliveryBody({
                                       expectedRemoteEtag: preview.remoteEtag,
                                       ...(preview.scopeResolution ? { expectedScopeResolution: preview.scopeResolution } : {}),
                                       ...(preview.rsvpResolution ? { expectedRsvpBaselineVersion: preview.rsvpResolution.baselineVersion } : {}),
-                                      ...(preview.reminderResolution ? { expectedReminderStateVersion: preview.reminderResolution.stateVersion } : {}),
+                                      ...(preview.caldavAlarmResolution ? { expectedReminderStateVersion: preview.caldavAlarmResolution.stateVersion } : preview.reminderResolution ? { expectedReminderStateVersion: preview.reminderResolution.stateVersion } : {}),
                                       ...(preview.masterRevision !== undefined
                                         ? {
                                             expectedMasterRevision:

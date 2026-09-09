@@ -4,7 +4,7 @@ import { ProviderEventWriteError } from "../event_write";
 const invalidResource = () =>
   new ProviderEventWriteError("provider-write-failed");
 
-function calendarLines(data: string) {
+export function calendarLines(data: string) {
   const lines: { raw: string; unfolded: string }[] = [];
   for (const raw of data.match(/[^\r\n]*(?:\r\n|\n|$)/g) ?? []) {
     if (!raw) continue;

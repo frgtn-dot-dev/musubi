@@ -1,3 +1,6 @@
+import { caldavAlarmVersion } from "@musubi/db";
+import { prepareCaldavAlarmIntent } from "./caldav_alarms";
+import { sameCaldavAlarmEvent } from "./adapters/caldav_alarms";
 import { googleReminderInstanceProjection } from "./adapters/google_reminder_instance";
 import { providerReminderDesiredState } from "@musubi/types";
 import { planEventScope } from "@musubi/calendar";
@@ -121,6 +124,24 @@ async function prepare(
   signal: AbortSignal,
 ) {
   const { row } = context;
+  if (context.caldavAlarmSnapshot) {
+    if (!config.api.caldavAlarmEditsEnabled || !adapter.readCaldavAlarm) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const before = context.caldavAlarmSnapshot, saved = before.intent;
+    const observed = await adapter.readCaldavAlarm(saved.context, signal);
+    if (!sameCaldavAlarmEvent(observed.data, saved.before)) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+    const current = { ...saved.context, mapping: { ...saved.context.mapping, ref: observed.ref, state: observed.state } };
+    const stateVersion = caldavAlarmVersion(current, observed.data);
+    const next = prepareCaldavAlarmIntent(current, observed, { ...saved.request, expectedStateVersion: stateVersion });
+    const preview: EventDeliveryConflict = {
+      eventId: row.eventID, operationId: row.id, latestOperationId: row.id, localRevision: context.localRevision,
+      local: { ...content(context.local), timeModel: context.local.timeModel ?? undefined },
+      remote: { ...content(observed.event), timeModel: observed.event.timeModel }, remoteEtag: observed.ref.etag,
+      action: "update", canResolve: true, reason: null,
+      caldavAlarmResolution: { desired: saved.request.alarms, remote: observed.alarms, stateVersion },
+    };
+    const proof: EventDeliveryResolutionProof = { context, ref: observed.ref, remoteExists: true, action: "update", patch: {}, deletion: undefined, caldavAlarm: { before, next } };
+    return { preview, proof };
+  }
   if (context.caldavSplitFutureSnapshot) {
     if (!config.api.eventTimeEditsEnabled || !adapter.readCaldavSplitFuture) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
     const before = context.caldavSplitFutureSnapshot, { journal } = before;

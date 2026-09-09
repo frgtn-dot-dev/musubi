@@ -54,3 +54,5 @@ export * from "./queries/provider-reminder-instance";
 export * from "./queries/external-access";
 
 export * from "./queries/google-mirror-removal";
+
+export * from "./queries/caldav-alarms";

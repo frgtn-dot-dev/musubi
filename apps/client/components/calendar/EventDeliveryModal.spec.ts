@@ -813,3 +813,15 @@ it("confirms future-only recovery without repeating the completed source step", 
   expect(bodies).toHaveLength(0); acceptNative(); await settle();
   expect(bodies[0]).toMatchObject({ expectedScopeResolution: scopeResolution, expectedRemoteExists: false, expectedRemoteEtag: null });
 });
+
+it("requires native confirmation before discarding only the saved alarm intent", async () => {
+  const bodies: any[] = [];
+  h.request.mockImplementation(async (url: string, options: any) => {
+    if (url.endsWith("/discard-alarm")) bodies.push(JSON.parse(options.body));
+    return reply({ ...receipt, targets: [{ ...receipt.targets[0], provider: "caldav", alarmDiscardRevision: 2 }] });
+  });
+  render(); await settle(); const tree = render();
+  buttons(tree, "Discard saved alarm change")[0].onPress();
+  expect(bodies).toHaveLength(0); acceptNative(); await settle();
+  expect(bodies).toEqual([{ expectedRevision: 2 }]);
+});

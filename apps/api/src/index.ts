@@ -50,7 +50,7 @@ import {
   handlerProviderReminderEdit,
   handlerProviderRsvpEdit,
 } from "./handlers/events";
-import { handlerGetEventDeliveryInbox, handlerGetEventDelivery, handlerRetryEventDelivery, handlerGetEventDeliveryConflict, handlerResolveEventDelivery } from "./handlers/event_delivery";
+import { handlerDiscardEventAlarm, handlerGetEventDeliveryInbox, handlerGetEventDelivery, handlerRetryEventDelivery, handlerGetEventDeliveryConflict, handlerResolveEventDelivery } from "./handlers/event_delivery";
 import {
   handlerCreateTask,
   handlerGetTask,
@@ -332,6 +332,7 @@ app.get("/api/v1/events", requireAuth, wrap(handlerGetEvents));
 app.get("/api/v1/events/:eventId/delivery", requireAuth, wrap(handlerGetEventDelivery));
 app.post("/api/v1/events/:eventId/delivery/:operationId/retry", requireAuth, rateLimit(30, 60_000, { byUser: true }), wrap(handlerRetryEventDelivery));
 app.get("/api/v1/events/:eventId/delivery/:operationId/conflict", requireAuth, rateLimit(30, 60_000, { byUser: true }), wrap(handlerGetEventDeliveryConflict));
+app.post("/api/v1/events/:eventId/delivery/:operationId/discard-alarm", requireAuth, rateLimit(30, 60_000, { byUser: true }), wrap(handlerDiscardEventAlarm));
 app.post("/api/v1/events/:eventId/delivery/:operationId/resolve", requireAuth, rateLimit(30, 60_000, { byUser: true }), wrap(handlerResolveEventDelivery));
 app.post("/api/v1/events", requireAuth, wrap(handlerCreateEvent));
 app.post("/api/v1/events/time", requireAuth, wrap(handlerCreateEventTime));

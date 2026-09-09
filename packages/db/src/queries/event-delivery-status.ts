@@ -123,6 +123,7 @@ export async function getEventDeliveryStatus(
         updatedAt: eventOutbox.updatedAt,
         nextAttemptAt: eventOutbox.nextAttemptAt,
         errorCode: eventOutbox.errorCode,
+        alarm: sql<boolean>`${eventOutbox.payload}->'caldavAlarm' is not null`,
       };
       const receipts = (unresolved: boolean) =>
         tx
@@ -177,9 +178,11 @@ export async function getEventDeliveryStatus(
       );
       for (const last of latest) {
         const first = blockers.get(last.targetId) ?? last;
-        const { nextAttemptAt, errorCode, ...display } = first;
+        const { nextAttemptAt, errorCode, alarm, ...display } = first;
         targets.set(first.targetId, {
           ...display,
+          ...(alarm && first.status === "not-needed" && errorCode === "alarm-discarded" ? { alarmDiscarded: true as const } : {}),
+          ...(alarm && first.owned && first.connected && visibleEvent && ["conflict", "blocked", "unconfirmed"].includes(first.status) ? { alarmDiscardRevision: visibleEvent.revision } : {}),
           latestRevision: last.revision,
           issue: deliveryIssue(first.status, errorCode),
           retryAt: ["pending", "retry", "unconfirmed"].includes(first.status)

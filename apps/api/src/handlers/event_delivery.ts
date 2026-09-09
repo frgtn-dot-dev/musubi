@@ -1,3 +1,5 @@
+import { discardCaldavAlarm } from "@musubi/db";
+import { z } from "zod";
 import type { Request, Response } from "express";
 import {
   getEventDeliveryStatus,
@@ -9,6 +11,7 @@ import {
   commitEventDeliveryResolution,
 } from "@musubi/db";
 import {
+  EventWriteError,
   BadRequestError,
   ResolveEventDeliveryRequestSchema,
 } from "@musubi/types";
@@ -132,4 +135,17 @@ export async function handlerRetryEventDelivery(req: Request, res: Response) {
   void deliverEventOutboxAndNotify(operationID);
   res.setHeader("Cache-Control", "private, no-store");
   return res.status(202).json(status);
+}
+
+export async function handlerDiscardEventAlarm(req: Request, res: Response) {
+  const eventID = requireUUID(req.params.eventId, "eventId"), operationID = requireUUID(req.params.operationId, "operationId");
+  const body = z.object({ expectedRevision: z.number().int().positive() }).strict().safeParse(req.body);
+  if (!body.success) throw new BadRequestError("Discard requires the exact saved alarm revision.");
+  try { await discardCaldavAlarm(req.user!.id, eventID, operationID, body.data.expectedRevision); }
+  catch (error) {
+    if (error instanceof EventDeliveryRetryError || error instanceof EventWriteError) return res.status(409).json({ error: "The saved alarm or its source changed. Refresh delivery details before discarding." });
+    throw error;
+  }
+  res.setHeader("Cache-Control", "private, no-store");
+  return res.json(await getEventDeliveryStatus(req.user!.id, eventID));
 }

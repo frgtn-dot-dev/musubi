@@ -25,6 +25,7 @@ function matchesPersonalSettingTime(row: EventOutboxRow, values: PullValues) {
   return matchesRsvpEventProjection(row.provider, { ...row.payload.event, timeModel: nativeTime.data }, values, (row.payload.rsvp ?? row.payload.reminderInstance)?.instance);
 }
 function matchesProjection(row: EventOutboxRow, values: PullValues, providerState?: ProviderEventState) {
+  if (row.payload.caldavAlarm) return false; // Component summaries cannot acknowledge a full alarm resource.
   if (row.payload.reminderInstance) return row.action === "update" && matchesPersonalSettingTime(row, values) && matchesProviderReminderInstanceState(row.payload.reminderInstance, providerState);
   if (row.payload.rsvp) return row.action === "update" && matchesPersonalSettingTime(row, values) && isDeepStrictEqual(providerState, row.payload.rsvp.desiredState);
   if (row.payload.reminderEdit) return row.action === "update" && matchesReminderEventProjection(row.provider, row.payload.event, values) && matchesGoogleReminderIntent(row.payload.reminderEdit.reminders, providerState);

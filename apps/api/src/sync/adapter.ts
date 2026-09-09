@@ -1,3 +1,5 @@
+import type { CaldavAlarmContext, CaldavAlarmIntent } from "@musubi/db";
+import type { CaldavAlarmEvidence } from "./adapters/caldav_alarms";
 import type { googleReminderInstanceTransport } from "./adapters/google_reminder_instance";
 import type { GraphSeriesFamily } from "./adapters/microsoft_series_family";
 import type { GoogleRsvpEvidence, GoogleRsvpResponse, GoogleRsvpOccurrence } from "./adapters/google_rsvp";
@@ -122,6 +124,8 @@ export type FetchChangesResult = {
 // never talks to Google/Graph/CalDAV directly — only through an adapter.
 export type CalendarAdapter = {
   provider: string;
+  readCaldavAlarm?(context: CaldavAlarmContext, signal?: AbortSignal): Promise<CaldavAlarmEvidence>;
+  writeCaldavAlarm?(intent: CaldavAlarmIntent, signal?: AbortSignal, beforeMutation?: () => Promise<void>): Promise<CaldavAlarmEvidence>;
   createGraphFamily?(userID: string, accountID: string, calendarID: string, event: Event, identity: EventCreateIdentity, state: { uncertain: boolean; beforeWrite: () => Promise<void> }): Promise<GraphSeriesFamily>;
   readGraphFamily?(userID: string, accountID: string, calendarID: string, template: Event, ref: ExternalEventRef, signal?: AbortSignal): Promise<GraphSeriesFamily | null>;
   readRsvp?(user: string, account: string, calendar: string, ref: ExternalEventRef, response: GoogleRsvpResponse, signal?: AbortSignal, occurrence?: GoogleRsvpOccurrence): Promise<GoogleRsvpEvidence>;

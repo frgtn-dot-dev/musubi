@@ -2,6 +2,7 @@ import type { EventDeliveryTarget } from "@musubi/types";
 
 /** Shared language for the web and native clients; never aggregate receipts. */
 export function eventDeliveryLabel(target: EventDeliveryTarget): string {
+  if (target.alarmDiscarded) return "Saved alarm change discarded";
   const labels: Record<EventDeliveryTarget["status"], string> = {
     unknown: "No delivery receipt",
     pending: "Waiting to send",
@@ -20,6 +21,7 @@ export function eventDeliveryLabel(target: EventDeliveryTarget): string {
 }
 
 export function eventDeliveryExplanation(target: EventDeliveryTarget): string {
+  if (target.alarmDiscarded) return "This saved request was stopped. The current CalDAV event is read on the next sync; a change already accepted by the server is not undone.";
   if (!target.connected)
     return "This connection is no longer available. The saved delivery record remains.";
   switch (target.issue) {

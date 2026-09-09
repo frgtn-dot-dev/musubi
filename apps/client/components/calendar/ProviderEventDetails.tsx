@@ -38,8 +38,8 @@ export function ProviderEventDetailsBody({ event, userId }: { event: Event; user
       if (!active.current) return;
       setResult({ key, ...observation });
       if ((kind === "reminders" ? observation.reminderEdit : observation.rsvpEdit) && observation.state && observation.version) setEditor({ kind, observation });
-      else setOpenError("This Google action is unavailable in the refreshed state.");
-    } catch { if (active.current) setOpenError("Could not refresh Google details. Retry to load the current state."); }
+      else setOpenError("This provider action is unavailable in the refreshed state.");
+    } catch { if (active.current) setOpenError("Could not refresh provider details. Retry to load the current state."); }
     finally { refreshing.current = false; if (active.current) setOpening(false); }
   }
   useEffect(() => {
@@ -65,7 +65,7 @@ export function ProviderEventDetailsBody({ event, userId }: { event: Event; user
     </> : <Text accessibilityLiveRegion="polite" style={textStyle}>{current?.failed ? "Provider details could not be loaded. Reopen this event to retry." : "Loading provider details…"}</Text>}
     {openError ? <Text accessibilityRole="alert" style={textStyle}>{openError}</Text> : null}
     {current?.reminderEdit && current.state && current.version && !event.recurrence ? <>
-      <Btn label={event.seriesID ? "Edit reminders for this occurrence" : "Edit Google reminders"} variant="secondary" loading={opening} onPress={() => void openEditor()} />
+      <Btn label={current?.reminderEdit?.provider === "caldav" ? "Edit CalDAV event alarms" : event.seriesID ? "Edit reminders for this occurrence" : "Edit Google reminders"} variant="secondary" loading={opening} onPress={() => void openEditor()} />
     </> : null}
     {current?.rsvpEdit && current.state && current.version && !event.recurrence ? <Btn label={event.seriesID ? "Respond to this occurrence" : "Respond in Google"} variant="secondary" loading={opening} onPress={() => void openEditor("rsvp")} /> : null}
     {editor?.kind === "reminders" ? <ProviderReminderEditor event={{ ...event, id: targetID }} observation={editor.observation} onClose={() => setEditor(undefined)} /> : null}

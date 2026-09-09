@@ -1,3 +1,5 @@
+import { discardEventAlarm } from "~/api/resources";
+import { caldavAlarmDescription } from "@musubi/calendar";
 import styles from "./styles/event-delivery.module.css";
 import type {
   EventDeliveryConflict,
@@ -60,6 +62,8 @@ export function EventDeliveryDialog({
     refetchInterval: 15_000,
   });
   const busyRef = useRef(false);
+  const refreshRef = useRef<HTMLButtonElement>(null);
+  const discardReturnFocus = useRef<HTMLElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -68,35 +72,45 @@ export function EventDeliveryDialog({
     request: ResolveEventDeliveryRequest;
     trigger: HTMLElement;
   }>();
+  const [discard, setDiscard] = useState<{ id: string; revision: number; trigger: HTMLElement }>();
   const [reviewTarget, setReviewTarget] = useState<{
     id: string;
     trigger: HTMLElement;
   }>();
 
-  async function run(action: () => Promise<void>) {
+  async function run(action: () => Promise<void | boolean>) {
     if (busyRef.current) return;
     busyRef.current = true;
     setBusy(true);
     setError("");
     setNotice("");
+    let refreshed = false;
     try {
-      await action();
+      refreshed = (await action()) === true;
     } catch (cause) {
       setError(
         cause instanceof ApiError
           ? cause.message
           : "Could not reach the server. Try again; the saved operation will keep its identity.",
       );
+      if (discard) {
+        await query.refetch();
+        refreshed = true;
+        discardReturnFocus.current = refreshRef.current;
+      }
       if (cause instanceof ApiError && cause.status === 409) {
         setComparison(undefined);
+        if (discard) setDiscard(undefined);
         setError(
-          "The delivery state changed or cannot be resolved safely. Load a fresh comparison before trying again.",
+          discard
+            ? "The saved alarm delivery state changed. Check the refreshed status before discarding again."
+            : "The delivery state changed or cannot be resolved safely. Load a fresh comparison before trying again.",
         );
       }
     } finally {
       busyRef.current = false;
       setBusy(false);
-      void client.invalidateQueries({ queryKey: prefix });
+      if (!refreshed) void client.invalidateQueries({ queryKey: prefix });
     }
   }
 
@@ -120,7 +134,7 @@ export function EventDeliveryDialog({
           expectedRemoteEtag: preview.remoteEtag,
           ...(preview.scopeResolution ? { expectedScopeResolution: preview.scopeResolution } : {}),
           ...(preview.rsvpResolution ? { expectedRsvpBaselineVersion: preview.rsvpResolution.baselineVersion } : {}),
-          ...(preview.reminderResolution ? { expectedReminderStateVersion: preview.reminderResolution.stateVersion } : {}),
+          ...(preview.caldavAlarmResolution ? { expectedReminderStateVersion: preview.caldavAlarmResolution.stateVersion } : preview.reminderResolution ? { expectedReminderStateVersion: preview.reminderResolution.stateVersion } : {}),
           ...(preview.masterRevision !== undefined
             ? { expectedMasterRevision: preview.masterRevision }
             : {}),
@@ -148,6 +162,7 @@ export function EventDeliveryDialog({
         returnFocus={returnFocus}
         footer={
           <Button
+            ref={refreshRef}
             variant="secondary"
             disabled={busy || query.isFetching}
             onClick={() => void query.refetch()}
@@ -227,6 +242,7 @@ export function EventDeliveryDialog({
                             Retry
                           </Button>
                         ) : null}
+                        {target.alarmDiscardRevision !== undefined ? <Button size="compact" variant="secondary" disabled={busy} onClick={event => { setError(""); discardReturnFocus.current = event.currentTarget; setDiscard({ id: target.operationId!, revision: target.alarmDiscardRevision!, trigger: event.currentTarget }); }}>Discard saved alarm change</Button> : null}
                         {actions.review ? (
                           <Button
                             size="compact"
@@ -261,6 +277,7 @@ export function EventDeliveryDialog({
           ) : null}
         </SettingsSection>
       </Dialog>
+      {discard ? <ConfirmationDialog open title="Discard saved alarm change" description="Stop trying to apply this saved alarm. The current CalDAV event will be read again on the next sync. This does not undo a change the calendar server may already have accepted." confirmLabel="Discard saved alarm change" closeLabel="Close discard confirmation" returnFocus={discardReturnFocus} children={<><p>The saved request remains in delivery history. No calendar server write is sent.</p>{error ? <InlineError>{error}</InlineError> : null}</>} loading={busy} onOpenChange={open => { if (!open && !busyRef.current) setDiscard(undefined); }} onConfirm={() => { const saved = discard; void run(async () => { await discardEventAlarm(eventId, saved.id, saved.revision, connectionId); await query.refetch(); discardReturnFocus.current = refreshRef.current; setDiscard(undefined); setNotice("Saved alarm change discarded. The current CalDAV event will be read on the next sync."); return true; }); }} /> : null}
       {comparison ? (
         <ConfirmationDialog
           open
@@ -271,11 +288,11 @@ export function EventDeliveryDialog({
             }
           }}
           title="Review remote changes"
-          description={comparison.preview.rsvpResolution ? "Compare your saved response with your current response in Google Calendar." : comparison.preview.reminderResolution ? "Compare your saved reminder settings with your current settings in Google Calendar." : "Compare the current remote copy with the version saved in Musubi."}
+          description={comparison.preview.caldavAlarmResolution ? "Compare the saved event alarm with the current CalDAV event alarm." : comparison.preview.rsvpResolution ? "Compare your saved response with your current response in Google Calendar." : comparison.preview.reminderResolution ? "Compare your saved reminder settings with your current settings in Google Calendar." : "Compare the current remote copy with the version saved in Musubi."}
           closeLabel="Close comparison"
           returnFocus={comparison.trigger}
           confirmLabel={
-            comparison.preview.scopeResolution ? (comparison.preview.scopeResolution.kind === "following-delete" ? "Delete following occurrences" : comparison.preview.scopeResolution.kind === "following-create" ? "Finish future series" : comparison.preview.scopeResolution.kind === "following-update" ? "Apply following changes" : "Delete entire series") : comparison.preview.rsvpResolution ? "Send saved response" : comparison.preview.reminderResolution ? "Apply saved reminders" : comparison.preview.action === "delete"
+            comparison.preview.caldavAlarmResolution ? "Apply saved event alarm" : comparison.preview.scopeResolution ? (comparison.preview.scopeResolution.kind === "following-delete" ? "Delete following occurrences" : comparison.preview.scopeResolution.kind === "following-create" ? "Finish future series" : comparison.preview.scopeResolution.kind === "following-update" ? "Apply following changes" : "Delete entire series") : comparison.preview.rsvpResolution ? "Send saved response" : comparison.preview.reminderResolution ? "Apply saved reminders" : comparison.preview.action === "delete"
               ? "Delete remote copy"
               : comparison.preview.action === "create"
                 ? "Recreate remote copy"
@@ -300,7 +317,7 @@ export function EventDeliveryDialog({
           }
         >
           <ConfirmationNotice icon={<AlertTriangle size={18} />}>
-            {comparison.preview.scopeResolution ? (comparison.preview.scopeResolution.kind === "following-delete" ? "This removes the selected occurrence and all later occurrences from the remote series. Earlier occurrences remain. The saved deletion in Musubi remains." : comparison.preview.scopeResolution.kind === "following-create" ? "The earlier series is already saved. This finishes only the saved future series at its original destination. If the complete future series is already present, it is confirmed without another write." : comparison.preview.scopeResolution.kind === "following-update" ? "This applies the saved following changes in two steps: shorten the earlier series, then create the saved future series. Delivery may finish one step at a time; retry keeps the same future series identity." : "This removes the entire remote series, including all occurrences and exceptions. The saved deletion in Musubi remains.") : comparison.preview.rsvpResolution ? `This applies only your saved response and preserves the other current Google fields. ${providerRsvpNotice}` : comparison.preview.reminderResolution ? "This replaces your personal Google Calendar reminders. Event time, participants and Musubi reminders stay unchanged. Google Calendar sends these notifications; other apps may notify separately." : comparison.preview.action === "delete"
+            {comparison.preview.caldavAlarmResolution ? "This replaces only the supported alarm on the CalDAV event. Calendar apps deliver this alarm; Musubi reminders are separate and both may notify you." : comparison.preview.scopeResolution ? (comparison.preview.scopeResolution.kind === "following-delete" ? "This removes the selected occurrence and all later occurrences from the remote series. Earlier occurrences remain. The saved deletion in Musubi remains." : comparison.preview.scopeResolution.kind === "following-create" ? "The earlier series is already saved. This finishes only the saved future series at its original destination. If the complete future series is already present, it is confirmed without another write." : comparison.preview.scopeResolution.kind === "following-update" ? "This applies the saved following changes in two steps: shorten the earlier series, then create the saved future series. Delivery may finish one step at a time; retry keeps the same future series identity." : "This removes the entire remote series, including all occurrences and exceptions. The saved deletion in Musubi remains.") : comparison.preview.rsvpResolution ? `This applies only your saved response and preserves the other current Google fields. ${providerRsvpNotice}` : comparison.preview.reminderResolution ? "This replaces your personal Google Calendar reminders. Event time, participants and Musubi reminders stay unchanged. Google Calendar sends these notifications; other apps may notify separately." : comparison.preview.action === "delete"
               ? "This removes the remote copy. The saved deletion in Musubi remains."
               : "This applies the saved version to the remote copy. Remote differences may be replaced; unsaved form edits are not sent."}
           </ConfirmationNotice>
@@ -308,6 +325,9 @@ export function EventDeliveryDialog({
           {comparison.preview.rsvpResolution ? <>
             <Row label="Saved Google response" detail={providerRsvpResponseLabel(comparison.preview.rsvpResolution.desired)} />
             <Row label="Current Google response" detail={providerRsvpResponseLabel(comparison.preview.rsvpResolution.remote)} />
+          </> : comparison.preview.caldavAlarmResolution ? <>
+            <Row label="Saved CalDAV event alarm" detail={caldavAlarmDescription(comparison.preview.caldavAlarmResolution.desired)} />
+            <Row label="Current CalDAV event alarm" detail={caldavAlarmDescription(comparison.preview.caldavAlarmResolution.remote)} />
           </> : comparison.preview.reminderResolution ? (
             <>
               <Row label="Saved Google reminders" detail={providerReminderDescription({ provider: "google", overrides: [], ...comparison.preview.reminderResolution.desired })} />

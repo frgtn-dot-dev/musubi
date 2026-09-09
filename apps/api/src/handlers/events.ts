@@ -1,3 +1,4 @@
+import { caldavAlarmObservation, queueCaldavAlarms } from "../sync/caldav_alarms";
 import { queueGoogleReminders } from "../sync/provider_reminders";
 import { resolveEventTimeEdit } from "@musubi/calendar";
 import { queueGraphSeriesCreateRequest, findGraphSeriesCreateRequest } from "../sync/graph_series_create";
@@ -677,13 +678,12 @@ export async function handlerGetProviderEventState(req: Request, res: Response) 
   const id = requireUUID(req.params.eventId, "eventId");
   await assertCanViewEvent(req.user!.id, id);
   res.setHeader("Cache-Control", "private, no-store");
-  res.json(await getOwnProviderEventObservation(req.user!.id, id, config.api.providerReminderEditsEnabled, config.api.providerRsvpEditsEnabled));
+  res.json(await caldavAlarmObservation(req.user!.id, id, await getOwnProviderEventObservation(req.user!.id, id, config.api.providerReminderEditsEnabled, config.api.providerRsvpEditsEnabled)));
 }
 
 export async function handlerProviderReminderEdit(req: Request, res: Response) {
-  if (!config.api.providerReminderEditsEnabled) throw new EventWriteError("event-write", "unsupported");
   const id = requireUUID(req.params.eventId, "eventId");
-  const receipt = await queueGoogleReminders(req.user!.id, id, req.body);
+  const receipt = req.body?.provider === "caldav" ? await queueCaldavAlarms(req.user!.id, id, req.body) : await queueGoogleReminders(req.user!.id, id, req.body);
   res.setHeader("Cache-Control", "private, no-store");
   res.status(202).json({ ...receipt, localCommitted: true });
 }

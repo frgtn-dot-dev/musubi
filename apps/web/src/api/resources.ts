@@ -1,5 +1,5 @@
 import { ProviderRsvpReceiptSchema, type ProviderRsvpEdit } from "@musubi/types";
-import { ProviderEventStateResponseSchema, ProviderReminderReceiptSchema, type ProviderReminderEdit } from "@musubi/types";
+import { ProviderEventStateResponseSchema, ProviderReminderReceiptSchema, type AnyProviderReminderEdit } from "@musubi/types";
 import {
   EventScopeResponseSchema,
   EventScopeRequestSchema,
@@ -690,10 +690,14 @@ export function getProviderEventState(eventId: string, signal?: AbortSignal, con
 }
 
 
-export function editProviderReminders(eventId: string, request: ProviderReminderEdit, connectionId?: string) {
+export function editProviderReminders(eventId: string, request: AnyProviderReminderEdit, connectionId?: string) {
   return apiRequest(route(connectionId, `/api/v1/events/${encodeURIComponent(eventId)}/provider-reminders`), { method: "POST", body: request, responseSchema: ProviderReminderReceiptSchema });
 }
 
 export function editProviderRsvp(eventId: string, request: ProviderRsvpEdit, connectionId?: string) {
   return apiRequest(route(connectionId, `/api/v1/events/${encodeURIComponent(eventId)}/provider-rsvp`), { method: "POST", body: request, responseSchema: ProviderRsvpReceiptSchema });
+}
+
+export function discardEventAlarm(eventId: string, operationId: string, expectedRevision: number, connectionId?: string) {
+  return apiRequest(route(connectionId, `/api/v1/events/${eventId}/delivery/${operationId}/discard-alarm`), { method: "POST", body: { expectedRevision }, responseSchema: EventDeliverySchema });
 }
