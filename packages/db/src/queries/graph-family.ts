@@ -1,9 +1,10 @@
+import { ZodError } from "zod";
 import { lockExternalEventIdentity } from "./event-outbox-deletions";
 import { readGraphSeriesCreateOutboxInTransaction, graphSeriesCreateProjection, assertNoPendingGraphSeriesCreate } from "./graph-series-create";
 import { randomUUID } from "node:crypto";
 import { and, eq, ne, inArray, or, sql } from "drizzle-orm";
 import { expandRecurringEvents } from "@musubi/calendar";
-import { EventSchema, OccurrenceStartSchema, ProviderEventStateSchema, type Event, type EventTimeModel, type OccurrenceIdentity, type OccurrenceStart, type ProviderEventState } from "@musubi/types";
+import { EventSchema, EventWriteError, OccurrenceStartSchema, ProviderEventStateSchema, type Event, type EventTimeModel, type OccurrenceIdentity, type OccurrenceStart, type ProviderEventState } from "@musubi/types";
 import { db } from "..";
 import { account, calendarEvents, calendarMembers, events, externalCalendars, externalEvents, externalEventTombstones, eventOutbox } from "../schema";
 import type { DbTransaction } from "./calendars";
@@ -14,7 +15,8 @@ const DAY = 86_400_000;
 const canonical = (value: unknown): unknown => value instanceof Date ? value.toISOString() : Array.isArray(value) ? value.map(canonical) : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item)])) : value;
 const same = (a: unknown, b: unknown) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 const key = (value: OccurrenceStart) => JSON.stringify(OccurrenceStartSchema.parse(value));
-function refuse(): never { throw new Error("The accepted Graph family changed or is unsupported. Retry complete reconciliation."); }
+class GraphFamilyChanged extends Error {}
+function refuse(): never { throw new GraphFamilyChanged("The accepted Graph family changed or is unsupported. Retry complete reconciliation."); }
 
 type Address = { userID: string; accountID: string; calendarID: string; externalMasterID: string };
 type Values = Pick<typeof events.$inferSelect, "title" | "start" | "end" | "isAllDay" | "description" | "location" | "organizer" | "recurrence" | "url"> & { timeModel: EventTimeModel };
@@ -238,5 +240,8 @@ export async function completeGraphSeriesCreateOutbox(id: string, token: string,
       .where(and(eq(eventOutbox.id, id), eq(eventOutbox.status, "attempting"), eq(eventOutbox.leaseToken, token), sql`${eventOutbox.leaseUntil} > clock_timestamp()`)).returning({ id: eventOutbox.id });
     if (!completed) refuse();
     return true;
-  }).catch(() => false);
+  }).catch(error => {
+    if (error instanceof GraphFamilyChanged || error instanceof EventWriteError || error instanceof ZodError) return false;
+    throw new Error("Complete Graph creation could not be acknowledged. Retry reconciliation.");
+  });
 }

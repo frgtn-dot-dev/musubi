@@ -126,5 +126,8 @@ export async function readGraphSeriesCreateOutboxInTransaction(tx: DbTransaction
 }
 
 export async function confirmGraphSeriesCreateOutbox(id: string, token: string): Promise<boolean> {
-  return db.transaction(async tx => !!await readGraphSeriesCreateOutboxInTransaction(tx, id, token)).catch(() => false);
+  return db.transaction(async tx => !!await readGraphSeriesCreateOutboxInTransaction(tx, id, token)).catch(error => {
+    if (error instanceof EventWriteError || error instanceof z.ZodError) return false;
+    throw new Error("Graph creation authority could not be checked. Retry reconciliation.");
+  });
 }

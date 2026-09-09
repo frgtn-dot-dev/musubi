@@ -1,3 +1,4 @@
+import { confirmGraphSeriesCreateOutbox, completeGraphSeriesCreateOutbox, type GraphFamilyObservation } from "@musubi/db";
 import { googleRsvpEventEvidence } from "./adapters/google_rsvp_projection";
 import { googleRsvpEvidence } from "./adapters/google_rsvp";
 import { googleEventState } from "./adapters/provider_event_state";
@@ -149,6 +150,39 @@ export async function deliverEventOutbox(
         }
         return true;
       };
+      if (row.payload.graphSeriesCreate) {
+        if (!config.api.eventTimeEditsEnabled || row.provider !== "microsoft" || row.action !== "create" || !adapter?.createGraphFamily)
+          throw new EventWriteError("event-write", "unsupported");
+        const check = async () => {
+          if (!(await checkDestination()) || !(await confirmGraphSeriesCreateOutbox(row.id, token))) throw new ProviderEventWriteError("provider-conflict");
+        };
+        await check();
+        let family;
+        try {
+          family = await adapter.createGraphFamily(row.userID, row.accountID, row.externalCalendarID, EventSchema.parse(row.payload.graphSeriesCreate.nativeEvent), { operationID: row.id, signal }, { uncertain: row.reconciling, beforeWrite: async () => { await check(); mutationStarted = true; } });
+        } catch (error) {
+          // A recovered native create can fail its subsequent complete read
+          // even when this attempt sent no POST. Preserve that uncertainty.
+          if (error instanceof ProviderEventWriteError && error.outcome === "unconfirmed") mutationStarted = true;
+          throw error;
+        }
+        mutationStarted = true;
+        signal.throwIfAborted();
+        const project = (value: NormalizedEvent): GraphFamilyObservation["master"] => {
+          if (!value.timeModel || !value.icalUid || !value.providerState) throw new ProviderEventWriteError("provider-write-failed", "unconfirmed");
+          return { creationOperationID: value.creationOperationID, externalID: value.externalId, icalUid: value.icalUid, etag: value.etag ?? null, providerState: value.providerState,
+            values: { title: value.title, description: value.description, location: value.location, organizer: value.organizer ?? "", url: value.url, start: value.start, end: value.end, isAllDay: value.isAllDay, recurrence: value.recurrence, timeModel: value.timeModel } };
+        };
+        const observation: GraphFamilyObservation = { master: project(family.master), instances: family.instances.map(value => {
+          if (!value.originalStart) throw new ProviderEventWriteError("provider-write-failed", "unconfirmed");
+          return { ...project(value), originalStart: value.originalStart };
+        }), cancelled: family.cancelled };
+        // Do not persist a master-only resultRef on failed acknowledgement.
+        // Retry must recover the stable transaction and read its whole family.
+        if (!(await checkDestination())) return;
+        if (!(await completeGraphSeriesCreateOutbox(row.id, token, observation))) throw new ProviderEventWriteError("provider-conflict", "unconfirmed");
+        return;
+      }
       if (row.payload.caldavSplit) {
         const journal = row.payload.caldavSplit;
         const source = row.id === journal.sourceOperationID;
