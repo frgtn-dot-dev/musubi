@@ -255,3 +255,24 @@ and conflict resolution are connected and tested.
 
 Provider references: [event identity and attendee response fields](https://developers.google.com/workspace/calendar/api/v3/reference/events)
 and [PATCH method](https://developers.google.com/workspace/calendar/api/v3/reference/events/patch).
+
+## Private instance journal and accepted family binding
+
+The internal `prepareProviderRsvpInstanceEdit` entry derives the existing child,
+original slot, external parent and parent mapping from accepted local state.
+It freezes the parent revision as a local consistency fence; that revision is
+not a provider validator. Both events must remain live in the same owned source,
+with known supported temporal models and matching mapping identities. Unresolved
+parent work prevents queuing an independent child response.
+
+Commit locks the parent before the child, re-derives this context, then stores one
+private RSVP intent atomically. Concurrent commits and replay reuse its identity.
+Neither canonical content/revisions nor accepted mappings change when queuing.
+`provider_rsvp_instance.integration.test.ts` covers moved zoned/all-day children,
+parent revision/mapping/deletion/unlink races, child/mapping identity drift,
+pending/cancelled parent work, tampering and concurrent retry.
+
+Public enqueue/capabilities still refuse recurring RSVP. Instance journals are
+explicitly refused by worker source checks and specialized ACK until the complete
+instance delivery/confirmation path is installed. Native conflict resolution
+also remains closed. This staged internal entry is not a supported public action.

@@ -1,4 +1,4 @@
-import type { EventTimeModel } from "./event_time";
+import { OccurrenceStartSchema, type EventTimeModel } from "./event_time";
 import { z } from "zod";
 import { ProviderEventStateSchema, type ProviderEventState } from "./provider-event-state";
 export const ProviderRsvpEditSchema = z.object({
@@ -9,11 +9,19 @@ export const ProviderRsvpEditSchema = z.object({
   sendUpdates: z.literal("all"),
 }).strict();
 export type ProviderRsvpEdit = z.infer<typeof ProviderRsvpEditSchema>;
+/** Private accepted parent/slot binding for an already materialized instance. */
+export const ProviderRsvpInstanceSchema = z.object({
+  seriesID: z.uuid(), parentRevision: z.number().int().positive(), parentMappingID: z.uuid(),
+  externalSeriesID: z.string().min(1),
+  originalStart: OccurrenceStartSchema.refine(value => value.kind !== "floating"),
+}).strict();
+export type ProviderRsvpInstance = z.infer<typeof ProviderRsvpInstanceSchema>;
 /** Private outbox payload. Native raw evidence never belongs in a public DTO. */
 export type ProviderRsvpIntent = {
   request: ProviderRsvpEdit;
   baseline: Record<string, unknown>;
   nativeTime?: EventTimeModel;
+  instance?: ProviderRsvpInstance;
   baselineState: ProviderEventState;
   desiredState: ProviderEventState;
   mappingID: string;
