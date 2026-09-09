@@ -3745,15 +3745,18 @@ test("joins a calendar from a pasted cross-server invite link", async ({
 
 	const inviteInput = page.getByRole("textbox", { name: "Invite link" });
 	const openInvite = page.getByRole("button", { name: "Open invite" });
-	const [inputBox, buttonBox] = await Promise.all([
-		inviteInput.boundingBox(),
-		openInvite.boundingBox(),
-	]);
-	expect(
-		Math.abs(
-			inputBox!.y + inputBox!.height / 2 - (buttonBox!.y + buttonBox!.height / 2),
-		),
-	).toBeLessThanOrEqual(1);
+	// The dialog translates/scales while opening. Measure both siblings in one
+	// browser frame: separate boundingBox calls can sample different transforms.
+	const centerDifference = await inviteInput.evaluate((input) => {
+		const button = input.closest("form")?.querySelector('button[type="submit"]');
+		if (!button) throw new Error("Invite submit button is missing");
+		const inputBox = input.getBoundingClientRect();
+		const buttonBox = button.getBoundingClientRect();
+		return Math.abs(
+			inputBox.y + inputBox.height / 2 - (buttonBox.y + buttonBox.height / 2),
+		);
+	});
+	expect(centerDifference).toBeLessThanOrEqual(1);
 
 	await inviteInput.fill(`https://friends.example/invite/${token}`);
 	await openInvite.click();

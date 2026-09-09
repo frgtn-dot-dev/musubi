@@ -5,9 +5,10 @@ import { eventOutbox } from "../schema";
 import { unresolvedEventOutbox } from "./event-outbox";
 
 /** Discover retained deletes as well as live events after a client restart.
- * Google receipt titles follow the current source grant, including retained
- * deletes. Accepted payloads remain private and immutable; only this projection
- * is redacted. Other providers retain the existing saved-title behavior.
+ * Google and Microsoft receipt titles follow the current source grant, including
+ * retained deletes. CalDAV uses the current readable event title and its own
+ * connected-account proof. Accepted payloads remain private and immutable; only
+ * this projection is redacted. Other providers retain saved-title behavior.
  * UUID keyset order stays stable when retries change updatedAt. Refresh begins
  * from the first page; this is a live list, not a cross-request snapshot. */
 export async function getEventDeliveryInbox(
@@ -34,6 +35,7 @@ export async function getEventDeliveryInbox(
             and connected.provider_id = source.provider
             and connected.user_id = source.user_id
           where source.id = event_outbox.external_calendar_link_id
+            and source.provider in ('google', 'microsoft')
             and source.provider = event_outbox.provider
             and source.user_id = event_outbox.user_id
             and source.account_id = event_outbox.account_id

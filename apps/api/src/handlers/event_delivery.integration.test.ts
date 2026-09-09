@@ -5,6 +5,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import {
   db,
   account,
+  caldavAccounts,
   user,
   events,
   calendarMembers,
@@ -147,13 +148,17 @@ async function main() {
           calendarID: calendar.id,
           userID: person.id,
           provider,
-          accountID: `private-account-${randomUUID()}`,
+          accountID: randomUUID(),
           externalCalendarID: `private-calendar-${randomUUID()}`,
         })
         .returning();
       // Receipt title projection requires a real current connected account,
       // including legacy links whose access discovery has not run yet.
-      await db.insert(account).values({ id: randomUUID(), accountId: link.accountID, providerId: provider, userId: person.id });
+      if (provider === "caldav") {
+        await db.insert(caldavAccounts).values({ id: link.accountID, userID: person.id, serverUrl: "https://fixture.invalid", username: person.id, encryptedPassword: "unused-fixture" });
+      } else {
+        await db.insert(account).values({ id: randomUUID(), accountId: link.accountID, providerId: provider, userId: person.id });
+      }
       return { calendar, link };
     };
     const google = await destination(owner, "Google", "google");
@@ -269,12 +274,15 @@ async function main() {
     ]) {
       assert.equal(JSON.stringify(otherInbox.body).includes(forbidden), false);
     }
-    // Discovery reads retained intent content, never a newer private event title.
+    // CalDAV projects current readable content, without rewriting accepted intent.
     await db
       .update(events)
       .set({ title: "New private content" })
       .where(eq(events.id, value.id));
-    assert.deepEqual((await inbox(other)).body, otherInbox.body);
+    assert.deepEqual((await inbox(other)).body.items, [
+      { eventId: value.id, savedTitle: "New private content" },
+    ]);
+    assert.equal((await db.select().from(eventOutbox).where(eq(eventOutbox.id, blocker.id)))[0]!.payload.event.title, value.title);
 
     assert.equal((await read(owner, value.id, false)).status, 401);
     assert.equal((await read(owner, "invalid")).status, 400);
