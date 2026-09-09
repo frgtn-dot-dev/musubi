@@ -304,7 +304,7 @@ export async function syncProvider(
           }
           const project = (event: NormalizedEvent): GraphFamilyObservation["master"] => {
             if (!event.timeModel || !event.icalUid || !event.providerState) throw new Error("Incomplete Graph family projection.");
-            return { externalID: event.externalId, icalUid: event.icalUid, etag: event.etag ?? null, providerState: event.providerState, values: { ...toEventValues(event, link.calColor), timeModel: event.timeModel } };
+            return { creationOperationID: event.creationOperationID, externalID: event.externalId, icalUid: event.icalUid, etag: event.etag ?? null, providerState: event.providerState, values: { ...toEventValues(event, link.calColor), timeModel: event.timeModel } };
           };
           const observation: GraphFamilyObservation = { master: project(native.master), instances: native.instances.map(value => {
             if (!value.originalStart) throw new Error("Missing Graph original identity.");

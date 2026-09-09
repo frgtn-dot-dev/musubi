@@ -1,10 +1,11 @@
-import { assertNoPendingGraphSeriesCreate } from "./graph-series-create";
+import { lockExternalEventIdentity } from "./event-outbox-deletions";
+import { readGraphSeriesCreateOutboxInTransaction, graphSeriesCreateProjection, assertNoPendingGraphSeriesCreate } from "./graph-series-create";
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, eq, ne, inArray, or, sql } from "drizzle-orm";
 import { expandRecurringEvents } from "@musubi/calendar";
-import { EventSchema, OccurrenceStartSchema, ProviderEventStateSchema, type EventTimeModel, type OccurrenceIdentity, type OccurrenceStart, type ProviderEventState } from "@musubi/types";
+import { EventSchema, OccurrenceStartSchema, ProviderEventStateSchema, type Event, type EventTimeModel, type OccurrenceIdentity, type OccurrenceStart, type ProviderEventState } from "@musubi/types";
 import { db } from "..";
-import { account, calendarEvents, calendarMembers, events, externalCalendars, externalEvents, eventOutbox } from "../schema";
+import { account, calendarEvents, calendarMembers, events, externalCalendars, externalEvents, externalEventTombstones, eventOutbox } from "../schema";
 import type { DbTransaction } from "./calendars";
 import { lockCalendarLifecycle, lockUserLifecycle } from "./calendar-lifecycle";
 import { hasProviderSyncScopes } from "./oauth";
@@ -19,7 +20,7 @@ type Address = { userID: string; accountID: string; calendarID: string; external
 type Values = Pick<typeof events.$inferSelect, "title" | "start" | "end" | "isAllDay" | "description" | "location" | "organizer" | "recurrence" | "url"> & { timeModel: EventTimeModel };
 type Active = { externalID: string; icalUid: string; etag: string | null; providerState: ProviderEventState; values: Values; originalStart: OccurrenceStart };
 export type GraphFamilyObservation = {
-  master: Omit<Active, "originalStart">;
+  master: Omit<Active, "originalStart"> & { creationOperationID?: string };
   instances: Active[];
   cancelled: { originalStart: OccurrenceStart; start: Date; end: Date; isAllDay: boolean; timeModel: EventTimeModel }[];
 };
@@ -28,7 +29,7 @@ async function lockAddress(tx: DbTransaction, address: Address) {
   await lockUserLifecycle(tx, [address.userID], "shared");
   await lockCalendarLifecycle(tx, [address.calendarID], "exclusive");
 }
-async function accepted(tx: DbTransaction, address: Address) {
+async function accepted(tx: DbTransaction, address: Address, excludedOperationID?: string) {
   const [initial] = await tx.select().from(externalEvents).where(and(eq(externalEvents.provider, "microsoft"), eq(externalEvents.calendarID, address.calendarID), eq(externalEvents.externalEventID, address.externalMasterID)));
   if (!initial) refuse();
   const [root] = await tx.select().from(events).where(eq(events.id, initial.eventID)).for("update");
@@ -50,7 +51,7 @@ async function accepted(tx: DbTransaction, address: Address) {
       mappings.some(value => !ids.includes(value.eventID) || value.provider !== "microsoft" || value.calendarID !== address.calendarID || value.externalCalendarID !== link.externalCalendarID ||
         (value.eventID !== root.id && (value.externalSeriesID !== address.externalMasterID || !value.originalStart || !children.find(child => child.id === value.eventID)?.originalStart || key(value.originalStart) !== key(children.find(child => child.id === value.eventID)!.originalStart!)))) ||
       new Set(mappings.map(value => value.eventID)).size !== mappings.length || children.some(value => !value.originalStart || value.recurrence || (!value.deletedAt && !value.isCanceled && !mappings.some(mapping => mapping.eventID === value.id)))) refuse();
-  const pending = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(inArray(eventOutbox.eventID, ids), sql`(${eventOutbox.status} not in ('completed', 'not-needed') and not (
+  const pending = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(inArray(eventOutbox.eventID, ids), excludedOperationID ? ne(eventOutbox.id, excludedOperationID) : undefined, sql`(${eventOutbox.status} not in ('completed', 'not-needed') and not (
     ${eventOutbox.status} = 'cancelled' and ${eventOutbox.errorCode} = 'superseded-by-resolution'
     and exists (select 1 from event_outbox replacement
       where replacement.event_id = ${eventOutbox.eventID}
@@ -77,10 +78,13 @@ export async function readGraphFamilyContext(address: Address): Promise<GraphFam
  * Used by tracked-family sync; native create delivery/ACK is separate. */
 export async function replaceGraphFamily(context: GraphFamilyContext, observation: GraphFamilyObservation): Promise<{ changed: boolean; seenExternalIDs: string[] }> {
   context = structuredClone(context); observation = structuredClone(observation);
-  return db.transaction(async tx => {
+  return db.transaction(tx => replaceGraphFamilyInTransaction(tx, context, observation)).catch(() => { throw new Error("Complete Graph family could not be persisted."); });
+}
+
+async function replaceGraphFamilyInTransaction(tx: DbTransaction, context: GraphFamilyContext, observation: GraphFamilyObservation, excludedOperationID?: string): Promise<{ changed: boolean; seenExternalIDs: string[] }> {
     await lockAddress(tx, context.address);
     for (const value of [...observation.instances, ...observation.cancelled]) value.originalStart = OccurrenceStartSchema.parse(value.originalStart);
-    const current = await accepted(tx, context.address);
+    const current = await accepted(tx, context.address, excludedOperationID);
     if (!same(context, current)) refuse();
     const { root, children, mappings, address } = current;
     const rootMap = mappings.find(value => value.eventID === root.id)!;
@@ -158,7 +162,7 @@ export async function replaceGraphFamily(context: GraphFamilyContext, observatio
     }
     const retained = await tx.select({ id: externalEvents.externalEventID }).from(externalEvents).where(and(eq(externalEvents.provider, "microsoft"), eq(externalEvents.calendarID, address.calendarID), or(eq(externalEvents.externalEventID, address.externalMasterID), eq(externalEvents.externalSeriesID, address.externalMasterID))));
     return { changed, seenExternalIDs: retained.map(value => value.id).sort() };
-  }).catch(() => { throw new Error("Complete Graph family could not be persisted."); });
+
 }
 
 /** Already accepted native masters only; never discovers or promotes ordinary
@@ -190,4 +194,49 @@ export async function removeGraphFamily(context: GraphFamilyContext): Promise<{ 
     }
     return { changed, seenExternalIDs: current.mappings.map(value => value.externalEventID).sort() };
   }).catch(() => { throw new Error("Complete Graph family could not be removed."); });
+}
+
+/** Accept a complete unchanged personal creation family and release its journal
+ * in the same transaction. A master-only echo can never take this path. */
+export async function completeGraphSeriesCreateOutbox(id: string, token: string, observation: GraphFamilyObservation): Promise<boolean> {
+  observation = structuredClone(observation);
+  return db.transaction(async tx => {
+    const creation = await readGraphSeriesCreateOutboxInTransaction(tx, id, token);
+    if (!creation) return false;
+    const { row, event, link } = creation;
+    const expected = graphSeriesCreateProjection(row.payload.event, row.userID);
+    const master = observation.master;
+    const personal = (value: Active | GraphFamilyObservation["master"], type: string) => {
+      const state = ProviderEventStateSchema.parse(value.providerState);
+      return state.provider === "microsoft" && state.isOrganizer === true && state.attendeesComplete && state.attendees.length === 0 && state.status === "active" && state.eventType === type && state.conferenceURLs.length === 0 &&
+        !!state.organizer?.address && value.values.organizer === state.organizer.address;
+    };
+    const content = (values: Values) => ({ title: values.title, description: values.description || null, location: values.location || null, organizer: values.organizer, url: values.url || null });
+    if (master.creationOperationID !== row.id || !master.externalID || !master.icalUid || !personal(master, "seriesMaster") || observation.cancelled.length ||
+        !same(content(master.values), content({ ...master.values, title: expected.title, description: expected.description ?? null, location: expected.location ?? null, url: null })) ||
+        !same({ start: master.values.start, end: master.values.end, isAllDay: master.values.isAllDay, timeModel: master.values.timeModel }, { start: expected.start, end: expected.end, isAllDay: expected.isAllDay, timeModel: expected.timeModel })) refuse();
+    // Compare the complete finite saved footprint, not RRULE string order.
+    const slots = expandRecurringEvents<Event & { occurrenceIdentity?: OccurrenceIdentity }>([expected], expected.start, new Date(expected.start.getTime() + 730 * DAY), { consumerTimeZone: "UTC" });
+    const byOriginal = new Map(slots.map(slot => [key(slot.occurrenceIdentity!.originalStart), slot]));
+    if (observation.instances.length !== slots.length || !slots.length) refuse();
+    const originals = new Set<string>(), ids = new Set([master.externalID]), uids = new Set([master.icalUid]);
+    for (const instance of observation.instances) {
+      const original = key(instance.originalStart), slot = byOriginal.get(original);
+      if (!slot || originals.has(original) || !instance.externalID || ids.has(instance.externalID) || !instance.icalUid || uids.has(instance.icalUid) ||
+          !personal(instance, "occurrence") || !same(content(instance.values), content(master.values)) ||
+          !same({ start: instance.values.start, end: instance.values.end, isAllDay: instance.values.isAllDay, timeModel: instance.values.timeModel }, { start: slot.start, end: slot.end, isAllDay: slot.isAllDay, timeModel: slot.timeModel })) refuse();
+      originals.add(original); ids.add(instance.externalID); uids.add(instance.icalUid);
+    }
+    for (const nativeID of [...ids].sort()) await lockExternalEventIdentity(tx, link.id, nativeID);
+    const deleted = await tx.select({ id: externalEventTombstones.id }).from(externalEventTombstones).where(and(eq(externalEventTombstones.externalCalendarLinkID, link.id), inArray(externalEventTombstones.externalEventID, [...ids]))).limit(1);
+    const collisions = await tx.select({ id: externalEvents.id }).from(externalEvents).where(and(eq(externalEvents.provider, "microsoft"), eq(externalEvents.calendarID, row.calendarID), or(inArray(externalEvents.externalEventID, [...ids]), eq(externalEvents.externalSeriesID, master.externalID)))).limit(1);
+    if (deleted.length || collisions.length) refuse();
+    await tx.insert(externalEvents).values({ provider: "microsoft", calendarID: row.calendarID, eventID: event.id, externalCalendarID: link.externalCalendarID, externalEventID: master.externalID, icalUid: master.icalUid });
+    const context = await accepted(tx, { userID: row.userID, accountID: row.accountID, calendarID: row.calendarID, externalMasterID: master.externalID }, row.id);
+    await replaceGraphFamilyInTransaction(tx, context, observation, row.id);
+    const [completed] = await tx.update(eventOutbox).set({ status: "completed", errorCode: null, resultRef: { externalEventId: master.externalID, icalUid: master.icalUid, etag: master.etag }, uncertain: false, leaseToken: null, leaseUntil: null, updatedAt: new Date() })
+      .where(and(eq(eventOutbox.id, id), eq(eventOutbox.status, "attempting"), eq(eventOutbox.leaseToken, token), sql`${eventOutbox.leaseUntil} > clock_timestamp()`)).returning({ id: eventOutbox.id });
+    if (!completed) refuse();
+    return true;
+  }).catch(() => false);
 }

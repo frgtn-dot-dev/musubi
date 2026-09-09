@@ -22,6 +22,7 @@ const event = z.object({
   isReminderOn: z.boolean(), reminderMinutesBeforeStart: z.number().int().nonnegative(), showAs: z.string(), sensitivity: z.string(), responseStatus: z.object({ response: z.string() }),
 }).passthrough();
 const master = event.extend({
+  transactionId: z.string().nullish(),
   cancelledOccurrences: z.array(opaque), exceptionOccurrences: z.array(z.unknown()),
   "exceptionOccurrences@odata.nextLink": z.never().optional(), "cancelledOccurrences@odata.nextLink": z.never().optional(),
   "exceptionOccurrences@odata.count": z.number().int().nonnegative().optional(), "cancelledOccurrences@odata.count": z.number().int().nonnegative().optional(),
@@ -54,7 +55,7 @@ function header(native: unknown, template: Event, ref: ExternalEventRef) {
       new Set(item.cancelledOccurrences).size !== item.cancelledOccurrences.length) refuse();
   const time = graphMasterTimeFromUtc(item);
   const recurrence = recurrenceFromGraph({ ...template, ...time }, item.recurrence);
-  const normalized = { ...content(item), ...time, timeModel: time.timeModel ?? undefined, recurrence };
+  const normalized = { ...content(item), ...time, timeModel: time.timeModel ?? undefined, recurrence, ...(typeof item.transactionId === "string" ? { creationOperationID: item.transactionId } : {}) };
   const slots = graphSeriesFootprint({ ...template, ...time, recurrence, isCanceled: false });
   return { item, normalized, slots };
 }
@@ -121,7 +122,7 @@ async function readFamily(accessToken: string, calendarID: string, template: Eve
     return response.json();
   };
   const masterURL = new URL(base);
-  masterURL.searchParams.set("$select", `${fields},cancelledOccurrences,exceptionOccurrences`);
+  masterURL.searchParams.set("$select", `${fields},transactionId,cancelledOccurrences,exceptionOccurrences`);
   masterURL.searchParams.set("$expand", "exceptionOccurrences");
   const firstResponse = await request(masterURL);
   if (allowMissing && firstResponse.status === 404) {

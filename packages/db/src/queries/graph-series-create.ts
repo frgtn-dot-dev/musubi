@@ -101,27 +101,30 @@ export async function assertNoPendingGraphSeriesCreate(tx: Pick<DbTransaction, "
 
 /** Short before-POST lease/authority check. Native delivery and atomic full-family
  * ACK are separate; generic per-event completion must never accept this row. */
-export async function confirmGraphSeriesCreateOutbox(id: string, token: string): Promise<boolean> {
-  if (!config.api.eventTimeEditsEnabled) return false;
-  return db.transaction(async tx => {
+export async function readGraphSeriesCreateOutboxInTransaction(tx: DbTransaction, id: string, token: string) {
+  if (!config.api.eventTimeEditsEnabled) return null;
     const [initial] = await tx.select().from(eventOutbox).where(eq(eventOutbox.id, id));
-    if (!initial?.payload.graphSeriesCreate) return false;
+    if (!initial?.payload.graphSeriesCreate) return null;
     await lockUserLifecycle(tx, [initial.userID], "shared");
     await lockCalendarLifecycle(tx, [initial.calendarID], "exclusive");
     const [event] = await tx.select().from(events).where(eq(events.id, initial.eventID)).for("update");
     const links = await tx.select().from(calendarEvents).where(eq(calendarEvents.eventID, initial.eventID)).for("share");
     const children = await tx.select({ id: events.id }).from(events).where(eq(events.seriesID, initial.eventID)).limit(1);
     const mappings = await tx.select({ id: externalEvents.id }).from(externalEvents).where(eq(externalEvents.eventID, initial.eventID)).limit(1);
-    if (!event || event.deletedAt || children.length || mappings.length || links.length !== 1 || links[0]!.calendarID !== initial.calendarID) return false;
+    if (!event || event.deletedAt || children.length || mappings.length || links.length !== 1 || links[0]!.calendarID !== initial.calendarID) return null;
     const link = await destination(tx, initial.userID, initial.calendarID);
     const history = await tx.select().from(eventOutbox).where(eq(eventOutbox.eventID, initial.eventID)).orderBy(eventOutbox.id).for("update");
-    if (history.length !== 1) return false;
+    if (history.length !== 1) return null;
     const row = history[0]!;
     if (row.calendarID !== link.calendarID || row.userID !== link.userID || !row.uncertain || row.id !== id || row.status !== "attempting" || row.leaseToken !== token || row.actorID !== row.userID || row.provider !== "microsoft" || row.action !== "create" || row.position !== 0 || row.revision !== 1 || row.predecessorID || row.externalEventID || row.expectedEtag || row.icalUid || row.resultRef || row.remoteSnapshot ||
         row.externalCalendarLinkID !== link.id || row.accountID !== link.accountID || row.externalCalendarID !== link.externalCalendarID || row.payload.createIdentityVersion !== 1 || row.payload.graphSeriesCreate?.version !== 1 ||
         Object.keys(row.payload).some(key => !["event", "createIdentityVersion", "graphSeriesCreate"].includes(key)) || !same({ ...event, calendars: [link.calendarID] }, row.payload.event) ||
-        !same(graphSeriesCreateProjection(row.payload.event, row.userID), row.payload.graphSeriesCreate.nativeEvent)) return false;
+        !same(graphSeriesCreateProjection(row.payload.event, row.userID), row.payload.graphSeriesCreate.nativeEvent)) return null;
     const [leased] = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(eq(eventOutbox.id, id), eq(eventOutbox.leaseToken, token), sql`${eventOutbox.leaseUntil} > clock_timestamp()`));
-    return !!leased;
-  }).catch(() => false);
+    return leased ? { row, event, link } : null;
+
+}
+
+export async function confirmGraphSeriesCreateOutbox(id: string, token: string): Promise<boolean> {
+  return db.transaction(async tx => !!await readGraphSeriesCreateOutboxInTransaction(tx, id, token)).catch(() => false);
 }
