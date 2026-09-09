@@ -1,13 +1,16 @@
 import { OccurrenceStartSchema, type EventTimeModel } from "./event_time";
 import { z } from "zod";
 import { ProviderEventStateSchema, type ProviderEventState } from "./provider-event-state";
-export const ProviderRsvpEditSchema = z.object({
+const ProviderRsvpCommonSchema = z.object({
   operationID: z.uuid().transform(value => value.toLowerCase()),
   expectedRevision: z.number().int().positive(),
   expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
-  provider: z.literal("google"), response: z.enum(["accepted", "tentative", "declined"]),
-  sendUpdates: z.literal("all"),
-}).strict();
+  response: z.enum(["accepted", "tentative", "declined"]),
+});
+export const ProviderRsvpEditSchema = z.discriminatedUnion("provider", [
+  ProviderRsvpCommonSchema.extend({ provider: z.literal("google"), sendUpdates: z.literal("all") }).strict(),
+  ProviderRsvpCommonSchema.extend({ provider: z.literal("caldav"), notificationPolicy: z.literal("server-reply") }).strict(),
+]);
 export type ProviderRsvpEdit = z.infer<typeof ProviderRsvpEditSchema>;
 /** Private accepted parent/slot binding for an already materialized instance. */
 export const ProviderRsvpInstanceSchema = z.object({
@@ -34,6 +37,18 @@ export function providerRsvpDesiredState(input: ProviderEventState, copyEmail: s
   self[0]!.response = response; state.ownResponse = response;
   return state;
 }
+
+/** CalDAV keeps provider-native PARTSTAT spellings and imported state. The
+ * principal/self identity is proven separately by fresh scheduling preflight. */
+export function caldavRsvpDesiredState(input: ProviderEventState, selfAddress: string, response: ProviderRsvpEdit["response"]): ProviderEventState {
+  const state = ProviderEventStateSchema.parse(input);
+  const own = selfAddress.toLowerCase();
+  const matches = state.attendees.filter(item => item.address?.toLowerCase() === own);
+  if (state.provider !== "caldav" || !state.attendeesComplete || matches.length !== 1 || !own.startsWith("mailto:") || !state.organizer?.address || state.organizer.address.toLowerCase() === own || state.isOrganizer === true) throw new Error("Unsupported CalDAV RSVP identity");
+  if (matches[0]!.response?.toUpperCase() !== response.toUpperCase()) matches[0]!.response = response.toUpperCase();
+  return state;
+}
+export type CaldavRsvpConfirmation = { resourceHash: string; scheduleTag: string; selfAddress: string };
 
 /** Acceptance of a private intent; notification delivery remains unknowable. */
 export const ProviderRsvpReceiptSchema = z.object({

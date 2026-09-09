@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { ProviderEventStateResponse, ProviderRsvpEdit } from "@musubi/types";
-import { providerRsvpOptions, providerRsvpNotice, providerRsvpRequest, providerRsvpReceiptMessage } from "@musubi/calendar";
+import { providerRsvpOptions, providerRsvpNotice, caldavRsvpNotice, providerRsvpRequest, providerRsvpReceiptMessage } from "@musubi/calendar";
 import { editProviderRsvp } from "~/api/resources";
 import { Button } from "~/ui/Button";
 import { Dialog } from "~/ui/Dialog";
@@ -11,6 +11,7 @@ import styles from "./styles/event-delivery.module.css";
 export function ProviderRsvpEditor({ eventId, connectionId, observation, onClose, returnFocus, occurrence = false }: {
   eventId: string; occurrence?: boolean; connectionId?: string; observation: ProviderEventStateResponse; onClose: () => void; returnFocus?: HTMLElement | null;
 }) {
+  const caldav = observation.rsvpEdit?.provider === "caldav";
   const [response, setResponse] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -24,17 +25,17 @@ export function ProviderRsvpEditor({ eventId, connectionId, observation, onClose
       const request = lastRequest.current?.response === response ? lastRequest.current : providerRsvpRequest(observation, response, crypto.randomUUID());
       lastRequest.current = request;
       const receipt = await editProviderRsvp(eventId, request, connectionId);
-      setNotice(providerRsvpReceiptMessage(receipt.status));
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not submit your Google response. Your choice is still here."); }
+      setNotice(providerRsvpReceiptMessage(receipt.status, caldav ? "caldav" : "google"));
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not submit your response. Your choice is still here."); }
     finally { pending.current = false; setBusy(false); }
   }
   return <div className={styles.layerBoundary} onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
-    <Dialog open title={occurrence ? "Respond to this occurrence" : "Respond in Google"} description={`${occurrence ? "This Google response applies only to this occurrence. " : ""}${providerRsvpNotice}`} closeLabel="Close Google response" returnFocus={returnFocus} onOpenChange={open => { if (!open && !pending.current) onClose(); }} size="compact" footer={<>
+    <Dialog open title={occurrence ? "Respond to this occurrence" : caldav ? "Respond in calendar" : "Respond in Google"} description={`${occurrence ? "This Google response applies only to this occurrence. " : ""}${caldav ? caldavRsvpNotice : providerRsvpNotice}`} closeLabel={caldav ? "Close calendar response" : "Close Google response"} returnFocus={returnFocus} onOpenChange={open => { if (!open && !pending.current) onClose(); }} size="compact" footer={<>
       <Button variant="secondary" disabled={busy} onClick={onClose}>{notice ? "Close" : "Cancel"}</Button>
-      {!notice ? <Button disabled={!response} loading={busy} onClick={() => void send()}>Send response</Button> : null}
+      {!notice ? <Button disabled={!response} loading={busy} onClick={() => void send()}>{caldav ? "Send response to organizer" : "Send response"}</Button> : null}
     </>}>
       {notice ? <p role="status">{notice}</p> : <>
-        <Select label="Your Google response" placeholder="Choose a response" value={response} disabled={busy} options={[...providerRsvpOptions]} onChange={setResponse} />
+        <Select label={caldav ? "Your response" : "Your Google response"} placeholder="Choose a response" value={response} disabled={busy} options={[...providerRsvpOptions]} onChange={setResponse} />
         {error ? <InlineError>{error}</InlineError> : null}
       </>}
     </Dialog>

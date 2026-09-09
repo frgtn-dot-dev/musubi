@@ -2,8 +2,9 @@ import { matchesProviderReminderInstanceState } from "./provider-reminder-instan
 import { readProviderRsvpInstance } from "./provider-rsvp-instance";
 import { isDeepStrictEqual } from "node:util";
 import { providerStateVersion } from "./provider-reminders";
-import { ProviderEventStateSchema, providerRsvpDesiredState } from "@musubi/types";
+import { ProviderEventStateSchema, providerRsvpDesiredState, caldavRsvpDesiredState, type CaldavRsvpConfirmation } from "@musubi/types";
 import { and, desc, eq, sql } from "drizzle-orm";
+import { config } from "@musubi/config";
 import { db } from "..";
 import {
   calendarEvents,
@@ -160,8 +161,8 @@ export async function hasEventOutboxRevisionCoverage(row: EventOutboxRow) {
 export async function completeEventOutbox(id: string, leaseToken: string, resultRef: EventDeliveryRef | null, expectedRef: EventDeliveryRef | null, observation?: EventOutboxRow["remoteSnapshot"]) {
   return completeEventOutboxInternal(id, leaseToken, resultRef, expectedRef, observation, "ordinary");
 }
-export async function completeProviderRsvpOutbox(id: string, leaseToken: string, resultRef: EventDeliveryRef, expectedRef: EventDeliveryRef, observation: EventOutboxRow["remoteSnapshot"]) {
-  return completeEventOutboxInternal(id, leaseToken, resultRef, expectedRef, observation, "rsvp");
+export async function completeProviderRsvpOutbox(id: string, leaseToken: string, resultRef: EventDeliveryRef, expectedRef: EventDeliveryRef, observation: EventOutboxRow["remoteSnapshot"], caldavConfirmation?: CaldavRsvpConfirmation) {
+  return completeEventOutboxInternal(id, leaseToken, resultRef, expectedRef, observation, "rsvp", caldavConfirmation);
 }
 export async function completeProviderReminderInstanceOutbox(id: string, leaseToken: string, resultRef: EventDeliveryRef, expectedRef: EventDeliveryRef, observation: EventOutboxRow["remoteSnapshot"]) {
   return completeEventOutboxInternal(id, leaseToken, resultRef, expectedRef, observation, "reminder-instance");
@@ -173,6 +174,7 @@ async function completeEventOutboxInternal(
   expectedRef: EventDeliveryRef | null,
   observation: EventOutboxRow["remoteSnapshot"] | undefined,
   confirmation: "ordinary" | "rsvp" | "reminder-instance",
+  caldavConfirmation?: CaldavRsvpConfirmation,
 ) {
   try {
     return await db.transaction(async (tx) => {
@@ -217,12 +219,14 @@ async function completeEventOutboxInternal(
       const sourceChanged = row.payload.reminderInstance ? "reminder-source-changed" : "rsvp-source-changed";
       if (settings) {
         const intent = settings;
+        const caldav = row.payload.rsvp?.request.provider === "caldav";
+        if (caldav && (!config.api.providerRsvpEditsEnabled || !caldavConfirmation || caldavConfirmation.resourceHash !== row.payload.rsvp!.baseline.desiredResourceHash || caldavConfirmation.selfAddress !== row.payload.rsvp!.baseline.selfAddress || !/^"[\x21\x23-\x7e\x80-\xff]*"$/.test(caldavConfirmation.scheduleTag) || current?.seriesID || current?.originalStart || current?.recurrence || current?.isCanceled)) return settle(tx, row, "unconfirmed", "rsvp-confirmation-unavailable", resultRef);
         if (!isDeepStrictEqual(intent.instance, addressInstance))
           return settle(tx, row, "unconfirmed", sourceChanged, resultRef);
         const [membership] = await tx.select({ role: calendarMembers.role }).from(calendarMembers).where(and(eq(calendarMembers.calendarID, row.calendarID), eq(calendarMembers.userID, row.actorID))).for("share");
-        if (!membership || !["owner", "editor"].includes(membership.role) || row.actorID !== row.userID || row.provider !== "google" || row.action !== "update" || !current || current.deletedAt || current.originCalendarID !== row.calendarID || current.revision !== row.revision)
+        if (!membership || !["owner", "editor"].includes(membership.role) || row.actorID !== row.userID || row.provider !== (caldav ? "caldav" : "google") || row.action !== "update" || !current || current.deletedAt || current.originCalendarID !== row.calendarID || current.revision !== row.revision)
           return settle(tx, row, "unconfirmed", sourceChanged, resultRef);
-        if (!observation?.isEcho || observation.deleted || observation.externalEventId !== resultRef?.externalEventId || observation.etag !== resultRef?.etag || expectedRef?.externalEventId !== row.externalEventID || expectedRef?.etag !== row.expectedEtag || !(row.payload.reminderInstance ? matchesProviderReminderInstanceState(row.payload.reminderInstance, observation.providerState) : isDeepStrictEqual(observation.providerState, intent.desiredState) && isDeepStrictEqual(intent.desiredState, providerRsvpDesiredState(intent.baselineState, row.externalCalendarID, row.payload.rsvp!.request.response))))
+        if (!observation?.isEcho || observation.deleted || observation.externalEventId !== resultRef?.externalEventId || observation.etag !== resultRef?.etag || expectedRef?.externalEventId !== row.externalEventID || expectedRef?.etag !== row.expectedEtag || !(row.payload.reminderInstance ? matchesProviderReminderInstanceState(row.payload.reminderInstance, observation.providerState) : isDeepStrictEqual(observation.providerState, intent.desiredState) && isDeepStrictEqual(intent.desiredState, caldav ? caldavRsvpDesiredState(intent.baselineState, String(row.payload.rsvp!.baseline.selfAddress), row.payload.rsvp!.request.response) : providerRsvpDesiredState(intent.baselineState, row.externalCalendarID, row.payload.rsvp!.request.response))))
           return settle(tx, row, "unconfirmed", row.payload.reminderInstance ? "reminder-confirmation-unavailable" : "rsvp-confirmation-unavailable", resultRef);
       }
       const [target] = await tx
@@ -356,7 +360,8 @@ async function completeEventOutboxInternal(
           return settle(tx, row, "conflict", "mapping-version-changed", resultRef);
         if (settings) {
           try {
-            const instance = current && mapping ? await readProviderRsvpInstance(tx, current, mapping, row.userID) : undefined;
+            const instance = row.provider === "google" && current && mapping ? await readProviderRsvpInstance(tx, current, mapping, row.userID) : undefined;
+            if (row.provider === "caldav" && (mapping?.externalSeriesID || mapping?.originalStart || mapping?.icalUid !== row.icalUid)) return settle(tx, row, "unconfirmed", sourceChanged, resultRef);
             if (!isDeepStrictEqual(instance, settings.instance))
               return settle(tx, row, "unconfirmed", sourceChanged, resultRef);
           } catch { return settle(tx, row, "unconfirmed", sourceChanged, resultRef); }

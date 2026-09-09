@@ -299,6 +299,27 @@ export async function deliverEventOutbox(
         remoteSnapshot = null;
         return;
       }
+      if (row.payload.rsvp?.request.provider === "caldav") {
+        if (!config.api.providerRsvpEditsEnabled || row.provider !== "caldav" || row.action !== "update" || !adapter?.writeCaldavRsvp) throw new EventWriteError("event-write", "unsupported");
+        if (!(await checkDestination())) return;
+        const { prepareCaldavRsvp, caldavRsvpState } = await import("./adapters/caldav_rsvp");
+        const { normalizeCaldavResource } = await import("./adapters/caldav_time");
+        const { caldavRsvpDesiredState } = await import("@musubi/types");
+        const intent = row.payload.rsvp, request = ProviderRsvpEditSchema.parse(intent.request);
+        if (request.provider !== "caldav" || intent.instance || request.expectedRevision !== row.revision) throw new ProviderEventWriteError("provider-conflict");
+        const saved = intent.baseline as unknown as import("./adapters/caldav_rsvp").CaldavRsvpEvidence;
+        const evidence = prepareCaldavRsvp(saved.before, saved, saved.proof, request.response);
+        const native = normalizeCaldavResource({ url: evidence.id, etag: evidence.etag, data: evidence.before })[0]!;
+        if (!isDeepStrictEqual(evidence, saved) || evidence.id !== row.externalEventID || evidence.etag !== row.expectedEtag || evidence.uid !== row.icalUid || !isDeepStrictEqual(intent.nativeTime, native.timeModel) || !matchesRsvpEventProjection("caldav", event, native) || !isDeepStrictEqual(intent.baselineState, caldavRsvpState(evidence.before)) || !isDeepStrictEqual(intent.desiredState, caldavRsvpDesiredState(intent.baselineState, evidence.selfAddress, request.response))) throw new ProviderEventWriteError("provider-conflict");
+        const requireSource = async () => { signal.throwIfAborted(); if (!(await hasProviderRsvpSource(row))) throw new ProviderEventWriteError("provider-conflict", mutationStarted ? "unconfirmed" : "not-written"); };
+        await requireSource();
+        expectedRef = { externalEventId: evidence.id, etag: evidence.etag, icalUid: evidence.uid };
+        const observed = await adapter.writeCaldavRsvp(row.userID, row.accountID, row.externalCalendarID, evidence, signal, async () => { await requireSource(); mutationStarted = true; });
+        resultRef = { externalEventId: evidence.id, etag: observed.etag, icalUid: evidence.uid };
+        signal.throwIfAborted();
+        await completeProviderRsvpOutbox(row.id, token, resultRef, expectedRef, { isEcho: true, externalEventId: evidence.id, etag: observed.etag, deleted: false, providerState: intent.desiredState, observedAt: new Date().toISOString() }, observed.confirmation);
+        return;
+      }
       if (row.payload.rsvp) {
         if (!config.api.providerRsvpEditsEnabled || row.provider !== "google" || row.action !== "update" || !adapter?.writeRsvp) throw new EventWriteError("event-write", "unsupported");
         if (!(await checkDestination())) return;
@@ -309,12 +330,12 @@ export async function deliverEventOutbox(
         await requireSource();
         const intent = row.payload.rsvp;
         const request = ProviderRsvpEditSchema.parse(intent.request);
-        if (request.expectedRevision !== row.revision || !isDeepStrictEqual(intent.desiredState, providerRsvpDesiredState(intent.baselineState, row.externalCalendarID, request.response))) throw new ProviderEventWriteError("provider-conflict");
+        if (request.provider !== "google" || request.expectedRevision !== row.revision || !isDeepStrictEqual(intent.desiredState, providerRsvpDesiredState(intent.baselineState, row.externalCalendarID, request.response))) throw new ProviderEventWriteError("provider-conflict");
         expectedRef = { externalEventId: row.externalEventID!, etag: row.expectedEtag };
         const evidence = googleRsvpEvidence(intent.baseline, { eventId: expectedRef.externalEventId, etag: expectedRef.etag ?? "", authenticatedCopyEmail: row.externalCalendarID, ...(intent.instance ? { occurrence: { externalSeriesID: intent.instance.externalSeriesID, originalStart: intent.instance.originalStart } } : {}) }, intent.request.response);
         const native = googleRsvpEventEvidence(evidence);
         if (!isDeepStrictEqual(intent.nativeTime, native.timeModel) || !isDeepStrictEqual(googleEventState(evidence.baseline), intent.baselineState) || !matchesRsvpEventProjection(row.provider, event, native, intent.instance)) throw new ProviderEventWriteError("provider-conflict");
-        const observed = await adapter.writeRsvp(row.userID, row.accountID, row.externalCalendarID, evidence, { sendUpdates: intent.request.sendUpdates }, signal, async () => {
+        const observed = await adapter.writeRsvp(row.userID, row.accountID, row.externalCalendarID, evidence, { sendUpdates: request.sendUpdates }, signal, async () => {
           await requireSource();
           mutationStarted = true;
         });

@@ -6,6 +6,7 @@ process.env.BETTER_AUTH_URL ??= "http://localhost:7531";
 
 async function main() {
   const {
+    normalizedObjectChanges,
     icalToNormalized,
     icalToNormalizedTask,
     patchEventIcal,
@@ -101,6 +102,20 @@ async function main() {
   );
   assert.match(compatibleEvent?.recurrence ?? "", /EXDATE:20260108T090000Z/);
   assert.match(compatibleEvent?.recurrence ?? "", /RDATE:20260108T110000Z/);
+
+  const { config } = await import("@musubi/config");
+  const oldTimeFlag = config.api.eventTimeEditsEnabled, oldRsvpFlag = config.api.providerRsvpEditsEnabled;
+  try {
+    config.api.eventTimeEditsEnabled = false; config.api.providerRsvpEditsEnabled = true;
+    const plain = normalizedObjectChanges([{ url: "https://dav.example/cal/one.ics", data }]);
+    assert.equal(plain[0]?.kind, "event");
+    if (plain[0]?.kind === "event") { assert.equal(plain[0].data.timeModel, undefined); assert.equal((plain[0].data.reminderTimeEvidence && "timeModel" in plain[0].data.reminderTimeEvidence ? plain[0].data.reminderTimeEvidence.timeModel.kind : undefined), "zoned"); }
+    const recurring = normalizedObjectChanges([{ url: "https://dav.example/cal/series.ics", data: compatibilityData }]);
+    assert.equal(recurring[0]?.kind, "event");
+    if (recurring[0]?.kind === "event") { assert.equal(recurring[0].data.reminderTimeEvidence, undefined); assert.deepEqual(recurring[0].data, compatibleEvent); }
+    const unknown = normalizedObjectChanges([{ url: "https://dav.example/cal/unknown.ics", data: data.replace("DTSTART:20260101T100000Z", "DTSTART;TZID=Unknown/Zone:20260101T100000") }]);
+    if (unknown[0]?.kind === "event") assert.equal(unknown[0].data.reminderTimeEvidence, undefined);
+  } finally { config.api.eventTimeEditsEnabled = oldTimeFlag; config.api.providerRsvpEditsEnabled = oldRsvpFlag; }
 
   const taskData = [
     "BEGIN:VCALENDAR",

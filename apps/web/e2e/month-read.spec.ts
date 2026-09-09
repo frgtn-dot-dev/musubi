@@ -9158,3 +9158,46 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     expect(writes[0]).toMatchObject({ scope: "series", action: "update", expectedRevision: 1, patch: {}, time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-10-23T02:30:00.000", endLocal: "2026-10-23T03:30:00.000" } });
   });
 }
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`K13 CalDAV RSVP editor preserves retry: ${theme} ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    page.on("console", message => { if (message.type() === "error" && !message.text().includes("503 (Service Unavailable)")) errors.push(message.text()); });
+    const imported = event("00000000-0000-4000-8000-000000000192", "CalDAV RSVP meeting", "personal", "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z");
+    await mockAuthenticatedReads(page, { ...events, events: [imported] }, [{ ...calendars[0]!, provider: "caldav", accountID: "fixture", accountLabel: "Fixture" }]);
+    let observations = 0;
+    await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, {
+      state: { provider: "caldav", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [{ name: "Guest", address: "guest@example.test", self: true, role: "required", response: "needsAction" }], attendeesComplete: true, ownResponse: "needsAction", reminders: { provider: "caldav", alarms: [] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] },
+      version: (++observations === 1 ? "b" : "a").repeat(64), rsvpEdit: { provider: "caldav", expectedRevision: 7 },
+    }));
+    const writes: any[] = [];
+    await page.route(`**/api/v1/events/${imported.id}/provider-rsvp`, route => {
+      const body = route.request().postDataJSON(); writes.push(body);
+      return writes.length === 1 ? respond(route, { error: "Temporary failure" }, 503) : respond(route, { operationID: body.operationID, replayed: true, status: "pending", localCommitted: true, notificationDelivery: "unknown" }, 202);
+    });
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    const eventTrigger = page.getByRole("button", { name: /CalDAV RSVP meeting/ }).first();
+    await eventTrigger.click();
+    await page.getByRole("button", { name: "Respond in calendar", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "Respond in calendar", exact: true });
+    await expect(editor.getByRole("button", { name: "Send response to organizer" })).toBeDisabled();
+    await chooseSelectOption(page, "Your response", "Tentative");
+    await expect(editor.getByText(/Organizer delivery cannot be verified/)).toBeVisible();
+    await expectNoAccessibilityViolations(page);
+    expect(await editor.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await editor.screenshot({ path: `/tmp/musubi-k12-live/caldav-rsvp-browser-${theme}.png` });
+    await editor.getByRole("button", { name: "Send response to organizer" }).press("Enter");
+    await expect(editor.getByRole("alert")).toContainText("Temporary failure");
+    await expect(editor.getByRole("combobox", { name: "Your response" })).toContainText("Tentative");
+    await editor.getByRole("button", { name: "Send response to organizer" }).press("Enter");
+    await expect(editor.getByRole("status")).toContainText("Calendar confirmation is still pending");
+    expect(writes).toHaveLength(2); expect(writes[1]).toEqual(writes[0]);
+    expect(writes[0]).toEqual({ operationID: expect.any(String), expectedRevision: 7, expectedStateVersion: "a".repeat(64), provider: "caldav", response: "tentative", notificationPolicy: "server-reply" });
+    await editor.getByRole("button", { name: "Close", exact: true }).press("Space");
+    await expect(eventTrigger).toBeFocused(); expect(errors).toEqual([]);
+    await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+  });
+}

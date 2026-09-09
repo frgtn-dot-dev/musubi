@@ -6,11 +6,19 @@ export const providerRsvpOptions = [
   { value: "declined", label: "Decline" },
 ] as const;
 export const providerRsvpNotice = "Google may notify the organizer and other participants. Email delivery cannot be verified.";
+export const caldavRsvpNotice = "Your calendar server will send a response to the organizer. Organizer delivery cannot be verified.";
 export function providerRsvpRequest(observation: ProviderEventStateResponse, response: string, operationID: string) {
-  if (!observation.rsvpEdit || !observation.version || observation.state?.provider !== "google") throw new Error("Refresh the event before responding to Google.");
+  if (!observation.rsvpEdit || !observation.version || observation.state?.provider !== observation.rsvpEdit.provider) throw new Error("Refresh the event before responding.");
+  if (observation.rsvpEdit.provider === "caldav") return ProviderRsvpEditSchema.parse({ operationID, expectedRevision: observation.rsvpEdit.expectedRevision, expectedStateVersion: observation.version, provider: "caldav", response, notificationPolicy: "server-reply" });
   return ProviderRsvpEditSchema.parse({ operationID, expectedRevision: observation.rsvpEdit.expectedRevision, expectedStateVersion: observation.version, provider: "google", response, sendUpdates: "all" });
 }
-export function providerRsvpReceiptMessage(status: string) {
+export function providerRsvpReceiptMessage(status: string, provider: "google" | "caldav" = "google") {
+  if (provider === "caldav") {
+    if (["completed", "not-needed"].includes(status)) return "Your response is saved on the calendar server. Organizer delivery cannot be verified.";
+    if (["conflict", "blocked", "cancelled", "not-written"].includes(status)) return "Response request saved, but calendar delivery needs attention. Open Delivery details to review it.";
+    if (status === "unconfirmed") return "The calendar server may have saved your response. Open Delivery details to verify the result.";
+    return "Response request saved. Calendar confirmation is still pending; check Delivery details for the result.";
+  }
   if (status === "completed") return "Your response is confirmed in Google. Email delivery cannot be verified.";
   if (["conflict", "blocked", "cancelled", "not-written"].includes(status)) return "Response request saved, but Google delivery needs attention. Open Delivery details to review it.";
   if (status === "unconfirmed") return "Google may have saved your response. Open Delivery details to verify the result.";

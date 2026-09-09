@@ -8,8 +8,9 @@ import {
   ForbiddenError,
   EventTimeModelSchema, type EventTimeModel,
   ProviderEventStateSchema,
-  ProviderRsvpInstanceSchema, ProviderRsvpEditSchema, providerRsvpDesiredState, type ProviderRsvpInstance, type ProviderRsvpEdit, type ProviderRsvpIntent, type Event,
+  ProviderRsvpInstanceSchema, ProviderRsvpEditSchema, providerRsvpDesiredState, caldavRsvpDesiredState, type ProviderRsvpInstance, type ProviderRsvpEdit, type ProviderRsvpIntent, type Event,
 } from "@musubi/types";
+import { config } from "@musubi/config";
 import { db } from "..";
 import {
   calendarEvents,
@@ -23,7 +24,7 @@ import { lockCalendarLifecycle } from "./calendar-lifecycle";
 import { appendEventOutbox } from "./event-outbox";
 import { providerStateVersion } from "./provider-reminders";
 import { isDeepStrictEqual } from "node:util";
-export type ProviderRsvpContext = { actorID: string; eventID: string; request: ProviderRsvpEdit; event: Event; mappingID: string; externalEventID: string; etag: string; accountID: string; externalCalendarID: string; linkID: string; state: import("@musubi/types").ProviderEventState; instance?: ProviderRsvpInstance };
+export type ProviderRsvpContext = { actorID: string; eventID: string; request: ProviderRsvpEdit; event: Event; mappingID: string; externalEventID: string; etag: string; icalUid: string | null; accountID: string; externalCalendarID: string; linkID: string; state: import("@musubi/types").ProviderEventState; instance?: ProviderRsvpInstance };
 export type ProviderRsvpReceipt = { operationID: string; replayed: boolean; status: string };
 export type ProviderRsvpPreparation = { kind: "replay"; receipt: ProviderRsvpReceipt } | { kind: "prepared"; context: ProviderRsvpContext };
 export async function prepareProviderRsvpEdit(actorID: string, eventID: string, input: unknown): Promise<ProviderRsvpPreparation> {
@@ -44,6 +45,7 @@ async function rsvpTransaction(
   prepared?: { context: ProviderRsvpContext; baseline: Record<string, unknown>; nativeTime: EventTimeModel },
 ): Promise<ProviderRsvpPreparation> {
   const request = ProviderRsvpEditSchema.parse(input);
+  if (request.provider === "caldav" && !config.api.providerRsvpEditsEnabled) throw new EventWriteError("event-write", "unsupported");
   eventID = eventID.toLowerCase();
   return db.transaction(async (tx) => {
     await tx.execute(
@@ -147,7 +149,8 @@ async function rsvpTransaction(
       !mapping.providerState
     )
       throw new EventWriteError("event-write", "unsupported");
-    const instance = await readProviderRsvpInstance(tx, event, mapping, actorID);
+    if (request.provider === "caldav" && (event.seriesID || event.originalStart || mapping.externalSeriesID || mapping.originalStart || !mapping.icalUid || !["zoned", "all-day"].includes(event.timeModel?.kind ?? ""))) throw new EventWriteError("event-write", "unsupported");
+    const instance = request.provider === "google" ? await readProviderRsvpInstance(tx, event, mapping, actorID) : undefined;
     if (
       event.revision !== request.expectedRevision ||
       providerStateVersion(mapping) !== request.expectedStateVersion
@@ -199,8 +202,8 @@ async function rsvpTransaction(
       calendars: links.map((link) => link.calendarID).sort(),
     });
     const state = ProviderEventStateSchema.parse(mapping.providerState);
-    const desiredState = providerRsvpDesiredState(state, target.link.externalCalendarID, request.response);
-    const context: ProviderRsvpContext = { actorID, eventID, request, event: snapshot, mappingID: mapping.id, externalEventID: mapping.externalEventID, etag: mapping.etag, accountID: target.link.accountID, externalCalendarID: target.link.externalCalendarID, linkID: target.link.id, state, ...(instance ? { instance } : {}) };
+    const desiredState = request.provider === "google" ? providerRsvpDesiredState(state, target.link.externalCalendarID, request.response) : prepared ? caldavRsvpDesiredState(state, String(prepared.baseline.selfAddress), request.response) : state;
+    const context: ProviderRsvpContext = { actorID, eventID, request, event: snapshot, mappingID: mapping.id, externalEventID: mapping.externalEventID, etag: mapping.etag, icalUid: mapping.icalUid, accountID: target.link.accountID, externalCalendarID: target.link.externalCalendarID, linkID: target.link.id, state, ...(instance ? { instance } : {}) };
     if (!prepared) return { kind: "prepared", context };
     if (!isDeepStrictEqual(context, prepared.context)) throw new BadRequestError("RSVP source changed during provider verification.");
     // Raw evidence is server-internal and was normalized/compared by preflight.
@@ -235,7 +238,7 @@ async function rsvpTransaction(
 /** Recheck a claimed intent's exact live source before provider work. */
 export async function hasProviderRsvpSource(row: import("./event-outbox").EventOutboxRow): Promise<boolean> {
   const intent = row.payload.rsvp;
-  if (!intent || !row.leaseToken || row.provider !== "google" || row.action !== "update" || row.actorID !== row.userID) return false;
+  if (!intent || !row.leaseToken || !["google", "caldav"].includes(row.provider) || intent.request.provider !== row.provider || row.action !== "update" || row.actorID !== row.userID) return false;
   const [source] = await db.select({ event: events, mapping: externalEvents, role: calendarMembers.role })
     .from(events)
     .innerJoin(eventOutbox, and(eq(eventOutbox.id, row.id), eq(eventOutbox.leaseToken, row.leaseToken), eq(eventOutbox.status, "attempting"), sql`${eventOutbox.leaseUntil} > clock_timestamp()`))
@@ -246,6 +249,7 @@ export async function hasProviderRsvpSource(row: import("./event-outbox").EventO
     .where(and(eq(events.id, row.eventID), eq(events.originCalendarID, row.calendarID), isNull(events.deletedAt)));
   if (!source || !["owner", "editor"].includes(source.role) || source.event.revision !== row.revision || source.mapping.etag !== row.expectedEtag || providerStateVersion(source.mapping) !== intent.request.expectedStateVersion) return false;
   try {
+    if (row.provider === "caldav") return config.api.providerRsvpEditsEnabled && !intent.instance && !source.event.seriesID && !source.event.originalStart && !source.event.recurrence && !source.event.isCanceled && !source.mapping.externalSeriesID && !source.mapping.originalStart && source.mapping.icalUid === row.icalUid;
     const current = await readProviderRsvpInstance(db, source.event, source.mapping, row.userID);
     return isDeepStrictEqual(current, intent.instance);
   } catch { return false; }

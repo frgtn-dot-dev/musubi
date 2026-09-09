@@ -16,7 +16,7 @@ vi.mock("@/components/ui/OptionPicker", () => ({ OptionPicker: "OptionPicker" })
 vi.mock("@/services/api", () => ({ useApi: () => ({ editProviderRsvp: h.save }) }));
 const event = EventSchema.parse({ id: "00000000-0000-4000-8000-000000000001", revision: 7, title: "Meeting", start: new Date("2026-09-10T09:00:00Z"), end: new Date("2026-09-10T10:00:00Z"), isAllDay: false, organizer: "owner", creatorID: "owner", color: "red", calendars: ["source"], hasAttendees: false, isCanceled: false });
 const observation: ProviderEventStateResponse = { version: "a".repeat(64), rsvpEdit: { provider: "google", expectedRevision: 7 }, state: { provider: "google", organizer: null, isOrganizer: false, attendees: [], attendeesComplete: true, ownResponse: null, reminders: { provider: "google", useDefault: false, overrides: [{ method: "email", minutes: 30 }] }, availability: null, privacy: null, status: null, eventType: null, conferenceURLs: [] } };
-function render(value = event) { h.index = 0; return ProviderRsvpEditor({ event: value, observation, onClose: h.close }); }
+function render(value = event, observed = observation) { h.index = 0; return ProviderRsvpEditor({ event: value, observation: observed, onClose: h.close }); }
 function nodes(node: ReactNode): any[] { if (Array.isArray(node)) return node.flatMap(nodes); if (!isValidElement(node)) return []; const props = node.props as any; return [{ type: node.type, props }, ...nodes(props.children)]; }
 function button(tree: ReactNode, label: string) { return nodes(tree).find(node => node.type === "Btn" && node.props.label === label)!.props; }
 async function settle() { for (let i = 0; i < 8; i++) await Promise.resolve(); }
@@ -45,4 +45,17 @@ it("describes an instance-only response and submits the child's frozen identity"
   tree = render(child); button(tree, "Send response").onPress(); await settle();
   expect(h.save.mock.calls[0][0].id).toBe(child.id);
   expect(h.save.mock.calls[0][0].seriesID).toBe(child.seriesID);
+});
+it("sends a native CalDAV server reply with immutable retry and unknown organizer delivery", async () => {
+  const caldav = { ...observation, rsvpEdit: { provider: "caldav" as const, expectedRevision: 7 }, state: { ...observation.state!, provider: "caldav" as const, reminders: { provider: "caldav" as const, alarms: [] } } };
+  h.save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "completed" });
+  let tree = render(event, caldav);
+  expect(button(tree, "Send response to organizer").disabled).toBe(true);
+  nodes(tree).find(node => node.type === "OptionPicker")!.props.onSelect("accepted");
+  tree = render(event, caldav); button(tree, "Send response to organizer").onPress(); await settle();
+  tree = render(event, caldav); button(tree, "Send response to organizer").onPress(); await settle();
+  expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
+  expect(h.save.mock.calls[0][1]).toMatchObject({ provider: "caldav", response: "accepted", notificationPolicy: "server-reply" });
+  expect(h.save.mock.calls[0][1]).not.toHaveProperty("sendUpdates");
+  expect(nodes(render(event, caldav)).some(node => typeof node.props.children === "string" && node.props.children.includes("Your response is saved on the calendar server"))).toBe(true);
 });
