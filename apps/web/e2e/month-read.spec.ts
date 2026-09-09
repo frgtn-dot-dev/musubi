@@ -8643,3 +8643,57 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await expect(trigger).toBeFocused(); expect(errors).toEqual([]);
   });
 }
+
+for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
+  for (const mode of ["quick-handoff", "zoned", "all-day"] as const) {
+    test(`creation draft identity survives lost response and reload ${mode} ${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+      const calendarID = "00000000-0000-4000-8000-000000000155";
+      await mockAuthenticatedReads(page, { ...events, events: [] }, [{ ...calendars[0]!, id: calendarID, ...(mode === "quick-handoff" ? {} : { provider: "microsoft" as const }) }]);
+      const writes: any[] = [];
+      const intercept = async (route: Route) => {
+        if (route.request().method() !== "POST") return route.fallback();
+        const body = route.request().postDataJSON(); writes.push(body);
+        if (writes.length === 1) return route.abort("failed");
+        const value = body.event ?? body;
+        return respond(route, { ...value, revision: 1, localCommitted: true,
+          ...(body.time ? {
+            start: mode === "all-day" ? "2026-07-30T00:00:00Z" : "2026-07-30T07:30:00Z",
+            end: mode === "all-day" ? "2026-07-30T00:00:00Z" : "2026-07-30T08:30:00Z",
+            isAllDay: mode === "all-day", timeModel: mode === "all-day" ? { kind: "all-day" } : body.time,
+          } : {}),
+        }, 202);
+      };
+      await page.route("**/api/v1/events", intercept);
+      await page.route("**/api/v1/events/time", intercept);
+      const draftUrl = `/app/p/${DEFAULT_PAGE_ID}/week/event/new?date=2026-07-30&view=week&calendarId=${calendarID}&title=Creation+retry&startTime=09%3A30&endTime=10%3A30&timeKind=${mode}${mode === "all-day" ? "&allDay=true" : ""}&timeZone=Europe%2FPrague&recurrence=RRULE%3AFREQ%3DDAILY%3BCOUNT%3D4`;
+      if (mode === "quick-handoff") {
+        await page.goto(`/app/p/${DEFAULT_PAGE_ID}/week?date=2026-07-30`);
+        await openCreateEvent(page);
+        await page.getByRole("textbox", { name: "Event title" }).fill("Creation retry");
+      } else await page.goto(draftUrl);
+      await page.getByRole("button", { name: "Create", exact: true }).click();
+      await expect(page.getByRole("alert")).toBeVisible();
+      expect(writes).toHaveLength(1);
+      if (mode === "quick-handoff") await page.getByRole("button", { name: "More options" }).click();
+      const id = (writes[0].event ?? writes[0]).id;
+      await expect(page).toHaveURL(new RegExp(`createID=${id}`));
+      await page.reload();
+      await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue("Creation retry");
+      await expectNoAccessibilityViolations(page);
+      await page.getByRole("button", { name: "Create", exact: true }).click();
+      await expect(page.getByRole("textbox", { name: "Event title" })).toHaveCount(0);
+      expect(writes).toHaveLength(2);
+      expect(writes[1]).toEqual(writes[0]);
+      if (mode !== "quick-handoff") {
+        expect(writes[1].time.kind).toBe(mode);
+        expect(writes[1].event.recurrence).toBe("RRULE:FREQ=DAILY;COUNT=4");
+        expect(writes[1].event.createID).toBeUndefined();
+      }
+      await page.goto(`/app/p/${DEFAULT_PAGE_ID}/week/event/new?date=2026-07-30&view=week`);
+      await expect(page.getByRole("textbox", { name: "Event title" })).toBeVisible();
+      expect(new URL(page.url()).searchParams.get("createID")).not.toBe(id);
+    });
+  }
+}

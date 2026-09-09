@@ -58,3 +58,12 @@ it("detects every restored editable override, not navigation alone", async () =>
   }
   expect(hasEventEditorContent(eventEditorSearchSchema.parse({ date: "2026-01-01", returnDate: "2026-01-02", view: "week" }))).toBe(false);
 });
+
+ it("preserves creation identity across quick/full URL handoff without treating identity alone as content", async () => {
+  const { hasEventEditorContent } = await import("./event-editor-search");
+  const draft = defaultEventFormValues("personal", "2026-07-08");
+  const search = eventEditorSearchSchema.parse({ createID: draft.createID });
+  expect(applyEventEditorSearch(defaultEventFormValues("personal", "2026-07-08"), search).createID).toBe(draft.createID);
+  expect(hasEventEditorContent(search)).toBe(false);
+  expect(eventEditorSearchSchema.parse({ createID: "invalid" }).createID).toBeUndefined();
+});

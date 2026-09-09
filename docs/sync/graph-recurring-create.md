@@ -369,3 +369,35 @@ concurrent replay, current/deleted results, permission loss between commit and
 receipt, notification failure, and unchanged local/other-provider behavior.
 Client/browser and live Outlook acceptance remain separate, as do wider recurrence
 and native UPDATE/DELETE contracts. Production flags remain disabled.
+
+
+## Client creation identity
+
+Web quick/full composers retain a creation UUID across failed submissions and
+edited retries. Quick-to-full handoff carries it with the existing URL draft;
+the full create route assigns it before rendering so reload also preserves it.
+A new draft gets a new UUID. The native composer similarly retains identity
+through save failures and resets it when the composer is reset or reopened.
+A changed request after uncertain acceptance must reconcile under that identity;
+changing form fields does not silently allocate a second event.
+
+Client regression tests cover retry, handoff/reset and strict UUID URL parsing.
+Browser HTTP mocks cover lost responses followed by reload and HTTP 202 for
+finite zoned/all-day series, plus quick/full handoff, in light and dark layouts.
+These tests establish client behavior, not live Outlook or physical native
+acceptance. Native conditional scope writes and wider recurrence remain separate.
+
+Ordinary legacy and local known-time creation also reconcile existing UUIDs before
+new-write admission. A currently readable event matching the requested content
+returns HTTP 202; changed content or deletion returns an explicit committed 409,
+with current content only when readable. This is current-state reconciliation,
+not an immutable historical request ledger. The receipt reader holds lifecycle,
+event, membership and source locks, and never appends outbox rows or sends native
+requests. Concurrent first submissions converge after the winning insert. Graph
+journal retries retain their stricter actor/key/frozen-intent contract.
+
+Actual HTTP/PostgreSQL tests cover both endpoints, legacy/zoned/all-day models,
+concurrent first requests, changed/deleted/private results, and an uncertain native
+journal whose rows remain unchanged during receipt recovery. Reconciliation is
+bounded by retained canonical state; it does not promise UUID recovery after
+physical deletion of that state.

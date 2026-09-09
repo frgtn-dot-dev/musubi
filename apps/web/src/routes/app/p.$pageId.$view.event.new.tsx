@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { type RefObject, useRef } from "react";
 import { DEFAULT_CALENDAR_COLOR } from "@musubi/types";
 import { useSessionUser } from "~/auth/use-session-user";
@@ -26,6 +26,12 @@ import { Empty } from "~/ui/Empty";
 
 export const Route = createFileRoute("/app/p/$pageId/$view/event/new")({
   validateSearch: eventEditorSearchSchema,
+  beforeLoad: ({ search, params }) => {
+    if (!search.createID) throw redirect({
+      to: "/app/p/$pageId/$view/event/new", params,
+      search: { ...search, createID: crypto.randomUUID() }, replace: true,
+    });
+  },
   component: NewEventRoute,
 });
 
