@@ -7,7 +7,7 @@ import type { DbTransaction } from "./calendars";
 /** Caller holds lifecycle and parent-before-child event locks when committing.
  * The parent revision is a local binding fence, not a provider CAS validator. */
 export async function readProviderRsvpInstance(
-  tx: DbTransaction,
+  tx: Pick<DbTransaction, "select">,
   event: typeof events.$inferSelect,
   mapping: typeof externalEvents.$inferSelect,
   actorID: string,

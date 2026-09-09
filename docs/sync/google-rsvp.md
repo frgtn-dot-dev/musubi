@@ -276,3 +276,26 @@ Public enqueue/capabilities still refuse recurring RSVP. Instance journals are
 explicitly refused by worker source checks and specialized ACK until the complete
 instance delivery/confirmation path is installed. Native conflict resolution
 also remains closed. This staged internal entry is not a supported public action.
+
+## Instance worker, full confirmation and pull coordination
+
+The private instance worker re-derives the accepted family binding before reading
+and immediately before PATCH. Its full native RSVP proof binds the instance URL,
+parent and original slot; a separate RSVP projection compares actual content and
+known time without relaxing the one-off reminder contract. A timed instance
+without explicit native zone evidence remains unsupported in this slice.
+
+ACK locks parent before child, verifies the retained binding and current mapping,
+then advances only the confirmed instance's provider state/ETag. Parent revision,
+parent mapping, permissions or lease changes prevent confirmation. Pending pull
+requires the same canonical parent, original identity, temporal model and desired
+state, and is only a candidate echo: full native readback is still authoritative.
+Retry after an applied 503 or lost response confirms the result without another
+PATCH. Later echo import keeps the existing child identity and canonical revision.
+
+The real HTTP/DB `provider_rsvp_instance.integration.test.ts` exercises both time
+kinds, recovery, parent/child/mapping changes, permission loss before and after
+PATCH, lease loss, native original-identity drift, interleaved pull and stable echo.
+Generic ACK remains unable to confirm RSVP. Public instance enqueue/capability
+and explicit conflict resolution still require their final integration; no live
+RSVP or production flag activation is implied by this private delivery support.

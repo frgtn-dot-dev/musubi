@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { EventTimeModelSchema, type Event, type ProviderEventState } from "@musubi/types";
-import { matchesEventProviderProjection, matchesGoogleOccurrenceProjection, matchesReminderEventProjection, matchesGoogleReminderIntent } from "./event-outbox-projection";
+import { matchesEventProviderProjection, matchesGoogleOccurrenceProjection, matchesReminderEventProjection, matchesRsvpEventProjection, matchesGoogleReminderIntent } from "./event-outbox-projection";
 import { and, eq, sql } from "drizzle-orm";
 import { eventOutbox, events, externalCalendars } from "../schema";
 import type { DbTransaction } from "./calendars";
@@ -21,7 +21,7 @@ function matchesRsvpTime(row: EventOutboxRow, values: PullValues) {
   // Unknown canonical metadata cannot erase a known provider zone. Missing or
   // still-unknown native time cannot establish a safe echo at all.
   if (!nativeTime.success || !["zoned", "all-day"].includes(nativeTime.data.kind)) return false;
-  return matchesReminderEventProjection(row.provider, { ...row.payload.event, timeModel: nativeTime.data }, values);
+  return matchesRsvpEventProjection(row.provider, { ...row.payload.event, timeModel: nativeTime.data }, values, row.payload.rsvp?.instance);
 }
 function matchesProjection(row: EventOutboxRow, values: PullValues, providerState?: ProviderEventState) {
   if (row.payload.rsvp) return row.action === "update" && matchesRsvpTime(row, values) && isDeepStrictEqual(providerState, row.payload.rsvp.desiredState);

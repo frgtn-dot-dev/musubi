@@ -240,7 +240,7 @@ async function rsvpTransaction(
 /** Recheck a claimed intent's exact live source before provider work. */
 export async function hasProviderRsvpSource(row: import("./event-outbox").EventOutboxRow): Promise<boolean> {
   const intent = row.payload.rsvp;
-  if (!intent || intent.instance || !row.leaseToken || row.provider !== "google" || row.action !== "update" || row.actorID !== row.userID) return false;
+  if (!intent || !row.leaseToken || row.provider !== "google" || row.action !== "update" || row.actorID !== row.userID) return false;
   const [source] = await db.select({ event: events, mapping: externalEvents, role: calendarMembers.role })
     .from(events)
     .innerJoin(eventOutbox, and(eq(eventOutbox.id, row.id), eq(eventOutbox.leaseToken, row.leaseToken), eq(eventOutbox.status, "attempting"), sql`${eventOutbox.leaseUntil} > clock_timestamp()`))
@@ -249,7 +249,11 @@ export async function hasProviderRsvpSource(row: import("./event-outbox").EventO
     .innerJoin(externalCalendars, and(eq(externalCalendars.id, row.externalCalendarLinkID), eq(externalCalendars.calendarID, row.calendarID), eq(externalCalendars.userID, row.userID), eq(externalCalendars.accountID, row.accountID), eq(externalCalendars.provider, row.provider), eq(externalCalendars.externalCalendarID, row.externalCalendarID), eq(externalCalendars.disabled, false), eq(externalCalendars.supportsEvents, true)))
     .innerJoin(externalEvents, and(eq(externalEvents.id, intent.mappingID), eq(externalEvents.eventID, events.id), eq(externalEvents.calendarID, row.calendarID), eq(externalEvents.provider, row.provider), eq(externalEvents.externalCalendarID, row.externalCalendarID), eq(externalEvents.externalEventID, row.externalEventID!)))
     .where(and(eq(events.id, row.eventID), eq(events.originCalendarID, row.calendarID), isNull(events.deletedAt)));
-  return !!source && ["owner", "editor"].includes(source.role) && source.event.revision === row.revision && source.mapping.etag === row.expectedEtag && providerStateVersion(source.mapping) === intent.request.expectedStateVersion;
+  if (!source || !["owner", "editor"].includes(source.role) || source.event.revision !== row.revision || source.mapping.etag !== row.expectedEtag || providerStateVersion(source.mapping) !== intent.request.expectedStateVersion) return false;
+  try {
+    const current = await readProviderRsvpInstance(db, source.event, source.mapping, row.userID);
+    return isDeepStrictEqual(current, intent.instance);
+  } catch { return false; }
 }
 
 /** Opaque preview identity includes every native field, including unprojected

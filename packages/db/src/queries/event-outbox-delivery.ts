@@ -1,3 +1,4 @@
+import { readProviderRsvpInstance } from "./provider-rsvp-instance";
 import { isDeepStrictEqual } from "node:util";
 import { providerStateVersion } from "./provider-reminders";
 import { ProviderEventStateSchema, providerRsvpDesiredState } from "@musubi/types";
@@ -175,7 +176,7 @@ async function completeEventOutboxInternal(
         .select()
         .from(eventOutbox)
         .where(eq(eventOutbox.id, id));
-      if (!address || address.payload.rsvp?.instance || address.payload.caldavSplit || address.payload.caldavSeries || address.payload.caldavSeriesDeletion || !!address.payload.rsvp !== rsvpConfirmed) return undefined;
+      if (!address || address.payload.caldavSplit || address.payload.caldavSeries || address.payload.caldavSeriesDeletion || !!address.payload.rsvp !== rsvpConfirmed) return undefined;
       await lockCalendarLifecycle(tx, [address.calendarID], "shared");
       const resource =
         resultRef ?? (address.action === "delete" ? expectedRef : null);
@@ -185,6 +186,8 @@ async function completeEventOutboxInternal(
           address.externalCalendarLinkID,
           resource.externalEventId,
         );
+      if (address.payload.rsvp?.instance)
+        await tx.select({ id: events.id }).from(events).where(eq(events.id, address.payload.rsvp.instance.seriesID)).for("update");
       if (address.payload.googleOccurrence)
         await tx.select({ id: events.id }).from(events).where(eq(events.id, address.payload.googleOccurrence.master.id)).for("update");
       const [current] = await tx
@@ -207,6 +210,8 @@ async function completeEventOutboxInternal(
       if (!row) return undefined;
       if (row.payload.rsvp) {
         const intent = row.payload.rsvp;
+        if (!isDeepStrictEqual(intent.instance, address.payload.rsvp?.instance))
+          return settle(tx, row, "unconfirmed", "rsvp-source-changed", resultRef);
         const [membership] = await tx.select({ role: calendarMembers.role }).from(calendarMembers).where(and(eq(calendarMembers.calendarID, row.calendarID), eq(calendarMembers.userID, row.actorID))).for("share");
         if (!membership || !["owner", "editor"].includes(membership.role) || row.actorID !== row.userID || row.provider !== "google" || row.action !== "update" || !current || current.deletedAt || current.originCalendarID !== row.calendarID || current.revision !== row.revision)
           return settle(tx, row, "unconfirmed", "rsvp-source-changed", resultRef);
@@ -342,6 +347,13 @@ async function completeEventOutboxInternal(
         const mapping = mappings[0];
         if (row.payload.rsvp && (!mapping || mapping.id !== row.payload.rsvp.mappingID || providerStateVersion(mapping) !== row.payload.rsvp.request.expectedStateVersion))
           return settle(tx, row, "conflict", "mapping-version-changed", resultRef);
+        if (row.payload.rsvp) {
+          try {
+            const instance = current && mapping ? await readProviderRsvpInstance(tx, current, mapping, row.userID) : undefined;
+            if (!isDeepStrictEqual(instance, row.payload.rsvp.instance))
+              return settle(tx, row, "unconfirmed", "rsvp-source-changed", resultRef);
+          } catch { return settle(tx, row, "unconfirmed", "rsvp-source-changed", resultRef); }
+        }
         if (
           mapping &&
           (mapping.externalEventID !== resultRef.externalEventId ||
