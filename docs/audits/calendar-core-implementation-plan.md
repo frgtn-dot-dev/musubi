@@ -1,6 +1,6 @@
 # Implementační plán: důvěryhodný sjednocený kalendář
 
-Stav: K01–K06 implementovány, lokálně ověřeny a převzaty (2026-09-05). K06 je převzat celý, nikoli pouze jeho dřívější checkpoint. K07 byl schválen a squash-mergnut (2026-09-07); navazující nezávislé review má samostatnou UUID opravu. K08 je převzatý; K09 je převzatý; K10 je lokálně dokončený; K11 je lokálně převzatý v dokumentovaném podporovaném rozsahu; K12–K14 jsou rozpracované (dílčí převzaté řezy níže); K15 probíhá průběžně; release ani nasazení nejsou schváleny.
+Stav: K01–K06 implementovány, lokálně ověřeny a převzaty (2026-09-05). K06 je převzat celý, nikoli pouze jeho dřívější checkpoint. K07 byl schválen a squash-mergnut (2026-09-07); navazující nezávislé review má samostatnou UUID opravu. K08 je převzatý; K09 je převzatý; K10 je lokálně dokončený; K11 je lokálně převzatý v dokumentovaném podporovaném rozsahu; vymezená autonomní implementace K12–K14 je lokálně dokončená a společně ověřená (kontrakty a hranice níže), konečné převzetí dávky vyžaduje povinné CI a squash merge s evidencí přesné head revize v PR, živá acceptance zůstává otevřená; K15 probíhá průběžně; release ani nasazení nejsou schváleny.
 
 Navazuje na [audit kalendářového jádra](calendar-core-audit.md), revize `60316a9`.
 
@@ -30,7 +30,7 @@ Nyní nevzniká nový provider, message broker, plugin systém, komponentová kn
 
 ## Pořadí a závislosti
 
-Značky A1–A10 odkazují na nálezy auditu. K01–K07 jsou `completed` (K07 UUID oprava po review viz níže); K08 je `completed`; K09 je `completed`; K10 je `completed` (lokální implementace; produkční aktivace čeká); K11 je `completed` (lokální podporovaný importní kontrakt); K12–K14 jsou `in_progress`; K15 probíhá průběžně. Dílčí read model ani lokální scope neznamenají uzavření providerových zápisů nebo živé acceptance.
+Značky A1–A10 odkazují na nálezy auditu. K01–K07 jsou `completed` (K07 UUID oprava po review viz níže); K08 je `completed`; K09 je `completed`; K10 je `completed` (lokální implementace; produkční aktivace čeká); K11 je `completed` (lokální podporovaný importní kontrakt); K12–K14 mají lokálně dokončenou a ověřenou vymezenou implementaci; jejich živá acceptance a release zůstávají `in_progress`, stejně jako K15. Konečné převzetí dávky vyžaduje povinné CI a squash merge; přesnou head revizi a její výsledky eviduje příslušné PR. Lokální převzetí neznamená podporu všech providerových zápisů ani uzavřenou živou acceptance; nepodporované hranice určuje aktuální přehled zbývající práce.
 
 | ID | Výsledek | Závislosti | Audit |
 | --- | --- | --- | --- |
@@ -863,3 +863,43 @@ The bounded collection read-retirement slice is implemented in
 family/task generation fences, task admission and public editor refresh. It does
 not complete all K14 or establish iCloud resource write grants; live account and
 physical-device acceptance remain separate from the locally tested behavior.
+
+**K13 CalDAV organizer rescheduling slice:** the default-off organizer contract
+now includes same-type, same-zone one-off time updates after complete native
+endpoint/VTIMEZONE proof. The private request fixes the required non-organizer
+NEEDS-ACTION reset and sequence increment; full native ACK and permanent no-resend
+recovery remain strict. Web/native expose locked-zone/type time controls only
+with this proof. Zone/type conversion, named-zone creation, meeting recurrence
+and live notification acceptance remain open. See
+[CalDAV organizer rescheduling](../sync/caldav-organizer.md#explicit-rescheduling).
+### K13 evidence update: Graph organizer create
+
+The bounded own-default-calendar one-off organizer create path is implemented behind the existing default-off organizer flag, with strict server-invite policy, transactionId and permanent-marker read-only recovery. Existing web/native composition and fake HTTP/disposable DB/browser evidence cover this slice. Graph update/delete CAS, broader meeting operations and live invitation delivery remain separate. See [the current contract](../sync/microsoft-organizer-create.md).
+
+### Závěrečná integrace organizer řezů (2026-09-09)
+
+Dřívější omezení CalDAV rescheduling v checkpointu výše překonává implementovaný
+one-off writer ve stejném typu a zóně s úplným native time proof. Finální společná
+dávka jej kombinuje s Graph one-off organizer CREATE a zachovává již integrované
+Google bound-occurrence operace. Graph organizer a RSVP nyní oddělují OAuth
+subject od tokenem ověřeného Graph object ID a ukládají jejich neměnnou vazbu;
+staré nevázané RSVP záměry nesmějí znovu odesílat. Samostatná feature i společná
+integrační review jsou uzavřená.
+
+Finální lokální `pnpm check` a celá `pnpm test:db` prošly. Klientské sady mají
+327 native a 555 web testů; cílená browser acceptance prošla ve 22 scénářích.
+Oprava dialogových vrstev má 17 cílených unit testů a 4 cílené Storybook scénáře;
+typy a lint prošly. Jde o lokální unit/HTTP/disposable DB a browser/mock důkazy,
+nikoli úplnou živou nebo fyzickou matici. Lokální výsledky nenahrazují povinné CI
+a squash merge nutné pro konečné převzetí dávky; výsledky přesné head revize
+eviduje příslušné PR.
+
+Vymezená autonomní implementace K12–K14 tím nemá další otevřenou feature položku.
+Nové konkrétní regrese nebo review nálezy se opravují před uzavřením. Samostatná
+DST produkční osa a její interakce čekají na schválení vizuálního návrhu a teprve
+potom na implementaci. Živá dvouúčtová invitation/RSVP acceptance, providerové
+permission/CAS důkazy, fyzická zařízení/OS a kompatibilní release/aktivace zůstávají
+human-last. Širší RDATE/recurrence, guest editing ani Graph UPDATE/DELETE se touto
+dávkou nepovolují. Historické checkpointy a původní živá kritéria hotovo výše
+zůstávají evidencí svých etap; aktuální hranice a zbývající gates shrnuje
+[přehled zbývající práce](calendar-core-remaining-work.md).

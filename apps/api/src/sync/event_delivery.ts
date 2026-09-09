@@ -157,11 +157,17 @@ export async function deliverEventOutbox(
       };
       if (row.payload.organizer) {
         const caldav = row.provider === "caldav";
-        if (caldav ? !config.api.caldavOrganizerEditsEnabled || !adapter?.caldavOrganizer : !config.api.providerOrganizerEditsEnabled || !adapter?.organizer) throw new EventWriteError("organizer", "unsupported");
+        if (caldav ? !config.api.caldavOrganizerEditsEnabled || !adapter?.caldavOrganizer : !config.api.providerOrganizerEditsEnabled || (row.provider === "microsoft" ? !adapter?.microsoftOrganizer : !adapter?.organizer)) throw new EventWriteError("organizer", "unsupported");
         await withProviderOrganizerLease(row, async () => undefined);
         const mark = async () => { await markProviderOrganizer(row); mutationStarted = true; };
         const accepted = async () => { await markProviderOrganizer(row, true); };
-        if (caldav) {
+        if (row.provider === "microsoft") {
+          if (row.action !== "create") throw new EventWriteError("organizer", "unsupported");
+          const transport = await adapter!.microsoftOrganizer!(row.userID, row.accountID, row.externalCalendarID, signal);
+          const outcome = await transport.deliver(row.payload.organizer, mark, accepted);
+          if (outcome.kind === "observed") await completeProviderOrganizer(row, { ...outcome.native, state: outcome.state });
+          else await finishEventOutbox(row.id, token, "unconfirmed", "organizer-outcome-unknown", { uncertain: !!row.payload.organizer.dispatch || mutationStarted, nextAttemptAt: new Date(Date.now() + Math.min(3_600_000, 30_000 * 2 ** Math.min(row.attempts, 7))) });
+        } else if (caldav) {
           const transport = await adapter!.caldavOrganizer!(row.userID, row.accountID, row.externalCalendarID, row.action, row.externalEventID ?? undefined, signal);
           const outcome = await transport.deliver(row.payload.organizer, mark, accepted);
           if (outcome.kind === "observed") await completeProviderOrganizer(row, { id: outcome.native.id, etag: outcome.native.etag, iCalUID: outcome.native.iCalUID, state: outcome.state });
@@ -329,7 +335,7 @@ export async function deliverEventOutbox(
         const { markGraphRsvpDispatched, markGraphRsvpAccepted, providerRsvpBaselineVersion } = await import("@musubi/db");
         const intent = row.payload.rsvp, request = ProviderRsvpEditSchema.parse(intent.request);
         if (request.provider !== "microsoft" || intent.instance || request.expectedRevision !== row.revision) throw new ProviderEventWriteError("provider-conflict");
-        const evidence = microsoftRsvpEvidence(intent.baseline.native, String(intent.baseline.selfAddress), request.response);
+        const evidence = microsoftRsvpEvidence(intent.baseline.native, String(intent.baseline.selfAddress), request.response, intent.baseline.graphIdentity);
         if (!isDeepStrictEqual(evidence, intent.baseline) || evidence.id !== row.externalEventID || evidence.etag !== row.expectedEtag || !matchesRsvpEventProjection("microsoft", row.payload.event, microsoftRsvpProjection(evidence)) || !isDeepStrictEqual(intent.desiredState, microsoftRsvpDesiredState(intent.baselineState, evidence.selfAddress, request.response))) throw new ProviderEventWriteError("provider-conflict");
         expectedRef = { externalEventId: row.externalEventID!, etag: row.expectedEtag, icalUid: row.icalUid };
         const dispatched = intent.graphDispatch !== undefined;

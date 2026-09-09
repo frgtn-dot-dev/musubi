@@ -1,3 +1,4 @@
+import { graphIdentitySchema, type GraphIdentity } from "./microsoft_identity";
 import { isDeepStrictEqual } from "node:util";
 import { createHash } from "node:crypto";
 import { z } from "zod";
@@ -18,16 +19,16 @@ const nativeSchema = z.object({
   organizer: address, responseStatus, subject: z.string(), body: z.object({ contentType: z.literal("text"), content: z.string() }),
   location: z.object({ displayName: z.string() }).passthrough(),
 }).passthrough();
-export type MicrosoftRsvpEvidence = { id: string; etag: string; selfAddress: string; response: ProviderRsvpEdit["response"]; native: Record<string, unknown> };
+export type MicrosoftRsvpEvidence = { graphIdentity?: GraphIdentity; id: string; etag: string; selfAddress: string; response: ProviderRsvpEdit["response"]; native: Record<string, unknown> };
 const fail = (): never => { throw new ProviderEventWriteError("provider-conflict"); };
-export function microsoftRsvpEvidence(input: unknown, selfAddress: string, response: ProviderRsvpEdit["response"]): MicrosoftRsvpEvidence {
+export function microsoftRsvpEvidence(input: unknown, selfAddress: string, response: ProviderRsvpEdit["response"], graphIdentity?: unknown): MicrosoftRsvpEvidence {
   const native = nativeSchema.parse(structuredClone(input));
   const own = selfAddress.toLowerCase();
   const self = native.attendees.filter(a => a.emailAddress.address.toLowerCase() === own);
   if (self.length !== 1 || self[0]!.type === "resource" || native.organizer.emailAddress.address.toLowerCase() === own || native.attendees.some(a => "proposedNewTime" in a) || new Set(native.attendees.map(a => a.emailAddress.address.toLowerCase())).size !== native.attendees.length) fail();
   graphRsvpTime(native);
   microsoftRsvpDesiredState(microsoftEventState(native), own, response);
-  return { id: native.id, etag: native["@odata.etag"], selfAddress: own, response, native };
+  return { ...(graphIdentity ? { graphIdentity: graphIdentitySchema.parse(graphIdentity) } : {}), id: native.id, etag: native["@odata.etag"], selfAddress: own, response, native };
 }
 export function microsoftRsvpProjection(evidence: MicrosoftRsvpEvidence) {
   const item = nativeSchema.parse(evidence.native);

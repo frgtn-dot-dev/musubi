@@ -22,9 +22,9 @@ with 1–100 distinct external email addresses. The clients explicitly show UTC;
 they do not convert a selected local zone silently. Creating a named-zone meeting
 needs a separate complete VTIMEZONE creation contract and is not supported here.
 Existing one-off meetings with already accepted known native time support only
-summary, description and location changes, plus cancellation. Time and guest-list
-changes, recurrence, exceptions, resource booking, delegation and conference
-creation remain unsupported. There must be one personal local calendar link.
+summary, description and location changes, bounded same-zone/type rescheduling,
+and cancellation. Zone/type conversion, guest-list changes, recurrence,
+exceptions, resource booking, delegation and conference creation remain unsupported. There must be one personal local calendar link.
 
 Every operation rechecks exact collection owner/current-principal identity,
 calendar-auto-schedule advertisement, a discovered scheduling outbox resource,
@@ -58,7 +58,9 @@ After that marker, every attempt is read-only, including a crash before send,
 a server error or a lost response. No automatic resend or forced notification
 is available. Exact desired native readback can acknowledge an update/create;
 only validated server-owned DTSTAMP, nondecreasing SEQUENCE and attendee
-SCHEDULE-STATUS may differ. Parameterized SEQUENCE is refused before admission
+SCHEDULE-STATUS may differ. A real reschedule requires the deterministic attendee
+response reset and at least the requested sequence increment; other attendee
+responses remain significant. Parameterized SEQUENCE is refused before admission
 and matching, so unknown sequence extensions cannot be discarded by ACK. PARTSTAT and all other resource changes remain
 significant. An already matching meeting is a no-op. Cancellation confirmation
 requires both a persisted successful DELETE response and current absence; a lost
@@ -86,3 +88,48 @@ Focused parser/HTTP, public/database and actual client regressions accompany the
 implementation. Final executed counts and independent review are recorded with
 the batch handoff; live organizer acceptance and the unsupported scopes above
 remain open.
+
+
+## Explicit rescheduling
+
+The existing editor exposes time fields only after a native time proof. Calendar
+kind and zone are locked. Timed edits stay in the accepted UTC or named zone;
+all-day edits stay all-day. A non-UTC event needs exactly one matching complete
+VTIMEZONE definition, with embedded rules agreeing with IANA at the old and new
+endpoints. Native transition intervals are checked independently for both old
+and new endpoints, so a native fold is refused even when IANA considers that
+civil time unique. Multi-value timezone RDATE properties, multiple RRULEs,
+EXDATE/EXRULE observance exclusions and RDATE-only definitions omitting DTSTART
+are outside this bounded proof. Recurrence expansion must finish within 20,000
+transitions per observance and endpoint; incomplete proofs fail closed.
+Raw TZOFFSETFROM/TO values are checked before decoding: minute precision (or
+explicit zero seconds), no parameters or trailing text, and the decoder's exact
+UTC-12 through UTC+14 range are required. Nonzero seconds and offsets the library
+would truncate or wrap are refused; original accepted offset bytes stay intact.
+Gaps, folds, mixed endpoint zones, subsecond times, missing/conflicting
+zone definitions and nonpositive duration are refused before local admission.
+No silent UTC conversion or new timezone definition is performed.
+
+A real one-off retime replaces DTSTART/DTEND property spans and preserves their
+existing parameters. An unparameterized supported DURATION may become explicit
+DTEND after exact endpoint proof; unrelated resource bytes, including VTIMEZONE,
+alarms, conferences and guest parameters remain untouched. An unchanged request
+returns the original resource before sequence or response changes.
+
+[RFC 6638 section 3.2.8](https://www.rfc-editor.org/rfc/rfc6638.html#section-3.2.8)
+requires rescheduling to reset non-organizer attendees to NEEDS-ACTION. The
+immutable desired request includes this exact reset, preserves the organizer's
+own attendee response, and advances SEQUENCE once. The server can advance it
+further and replace a valid UTC DTSTAMP; full readback requires at least the
+requested sequence, a changed strong ETag/Schedule-Tag, and exact requested time
+and participation state. An immediate later guest reply remains unconfirmed
+rather than broadening the matcher to ignore PARTSTAT. Checks never resend.
+[RFC 5546 section 2.1.4](https://www.rfc-editor.org/rfc/rfc5546.html#section-2.1.4)
+defines the sequence requirement. Neither resource acceptance nor reset responses
+prove individual notification delivery. Returning to a former time is a new
+explicit scheduling action, not an automatic undo.
+
+The synthetic scenarios cover actual public admission, invalid-gap correction,
+UTC/named-zone/all-day changes, DURATION across DST, native echo before ACK,
+no-op, lost response and a guest reply arriving before readback. Web/native
+regressions retain the selected zone/type and exact frozen retry request.

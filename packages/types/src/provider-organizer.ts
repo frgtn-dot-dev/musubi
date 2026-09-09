@@ -126,6 +126,7 @@ export const CaldavOrganizerRequestSchema = z.discriminatedUnion("action", [
       expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
       patch: content
         .partial()
+        .extend({ time: time.optional() })
         .strict()
         .refine(
           (value) => Object.keys(value).length > 0,
@@ -141,6 +142,15 @@ export const CaldavOrganizerRequestSchema = z.discriminatedUnion("action", [
     })
     .strict(),
 ]);
+export const MicrosoftOrganizerRequestSchema = caldavCommon.extend({
+  provider: z.literal("microsoft"),
+  action: z.literal("create"),
+  content: content.strict(),
+  time: time.refine(value => value.kind === "all-day" || (value.kind === "zoned" && value.timeZone === "UTC"), "Outlook creation requires explicit UTC or all-day time"),
+  guests: z.array(guest).min(1).max(100).refine(values => new Set(values.map(value => value.email)).size === values.length, "Duplicate guest"),
+  color: z.string().max(64),
+}).strict();
+export type MicrosoftOrganizerRequest = z.infer<typeof MicrosoftOrganizerRequestSchema>;
 export type GoogleOrganizerRequest = z.infer<
   typeof GoogleOrganizerRequestSchema
 >;
@@ -150,13 +160,14 @@ export type CaldavOrganizerRequest = z.infer<
 export const ProviderOrganizerRequestSchema = z.discriminatedUnion("provider", [
   GoogleOrganizerRequestSchema,
   CaldavOrganizerRequestSchema,
+  MicrosoftOrganizerRequestSchema,
 ]);
 export type ProviderOrganizerRequest = z.infer<
   typeof ProviderOrganizerRequestSchema
 >;
 export const OrganizerDispatchSchema = z
   .object({
-    kind: z.enum(["google-organizer-dispatch", "caldav-organizer-dispatch"]),
+    kind: z.enum(["google-organizer-dispatch", "caldav-organizer-dispatch", "microsoft-organizer-dispatch"]),
     version: z.literal(1),
     startedAt: z.iso.datetime(),
     acceptedAt: z.iso.datetime().optional(),
@@ -177,6 +188,8 @@ export type ProviderOrganizerIntent = {
   mappingID: string | null;
   sourceEvent: Event;
   instance?: ProviderRsvpInstance;
+  sourceAccessRevision?: number;
+  graphIdentity?: { oauthAccountID: string; graphUserID: string; calendarID: string; selfAddress: string };
   dispatch?: z.infer<typeof OrganizerDispatchSchema>;
 };
 export const ProviderOrganizerReceiptSchema = z
@@ -193,6 +206,7 @@ export const ProviderOrganizerReceiptSchema = z
 export const ProviderOrganizerCalendarSchema = z.discriminatedUnion(
   "provider",
   [
+    z.object({ provider: z.literal("microsoft"), calendarID: z.uuid(), notificationPolicy: z.literal("server-invite"), createTime: z.literal("utc-or-all-day"), actions: z.tuple([z.literal("create")]) }).strict(),
     z
       .object({
         provider: z.literal("google"),

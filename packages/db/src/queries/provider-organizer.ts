@@ -47,7 +47,7 @@ export type OrganizerContext = {
 };
 function enabled(provider: string) {
   if (
-    provider === "google"
+    (provider === "google" || provider === "microsoft")
       ? !config.api.providerOrganizerEditsEnabled
       : provider === "caldav"
         ? !config.api.caldavOrganizerEditsEnabled
@@ -95,7 +95,7 @@ async function source(
         eq(externalCalendars.userID, actorID),
         provider
           ? eq(externalCalendars.provider, provider)
-          : sql`${externalCalendars.provider} in ('google', 'caldav')`,
+          : sql`${externalCalendars.provider} in ('google', 'caldav', 'microsoft')`,
         eq(externalCalendars.disabled, false),
         eq(externalCalendars.supportsEvents, true),
       ),
@@ -124,7 +124,7 @@ async function source(
     .where(
       and(
         eq(account.userId, actorID),
-        eq(account.providerId, "google"),
+        eq(account.providerId, target.link.provider),
         eq(account.accountId, target.link.accountID),
       ),
     )
@@ -133,7 +133,7 @@ async function source(
     !grant ||
     grant.syncStatus !== "active" ||
     !grant.refreshToken ||
-    !hasProviderSyncScopes("google", grant.scope ?? "")
+    !hasProviderSyncScopes(target.link.provider, grant.scope ?? "")
   )
     throw new EventWriteError("organizer", "denied");
   return target.link;
@@ -213,6 +213,7 @@ export async function prepareProviderOrganizer(
   input: unknown,
   prepared?: {
     context: OrganizerContext;
+    graphIdentity?: ProviderOrganizerIntent["graphIdentity"];
     baseline: Record<string, unknown> | null;
     desired: Record<string, unknown> | null;
   },
@@ -350,6 +351,8 @@ export async function prepareProviderOrganizer(
         prepared.baseline?.etag !== mapping!.etag)
     )
       throw new BadRequestError("Native source version changed.");
+    if (request.provider === "microsoft" && (!prepared.graphIdentity || prepared.graphIdentity.oauthAccountID !== link.accountID || prepared.graphIdentity.calendarID !== link.externalCalendarID || !prepared.graphIdentity.graphUserID || !prepared.graphIdentity.selfAddress))
+      throw new BadRequestError("Verified Graph identity is required.");
     enabled(request.provider);
     let saved: Event;
     if (request.action === "create") {
@@ -409,11 +412,13 @@ export async function prepareProviderOrganizer(
     }
     const organizer: ProviderOrganizerIntent = {
       request,
+      ...(request.provider === "microsoft" ? { graphIdentity: prepared.graphIdentity } : {}),
       baseline: prepared.baseline,
       desired: prepared.desired,
       mappingID: mapping?.id ?? null,
       sourceEvent: event ?? saved,
       ...(instance ? { instance } : {}),
+      ...(request.provider === "microsoft" ? { sourceAccessRevision: link.providerAccessRevision } : {}),
     };
     await appendEventOutbox(tx, saved, [
       {
@@ -455,7 +460,7 @@ async function activeSource(tx: DbTransaction, row: EventOutboxRow) {
   if (
     !intent ||
     row.actorID !== row.userID ||
-    !["google", "caldav"].includes(row.provider) ||
+    !["google", "caldav", "microsoft"].includes(row.provider) ||
     intent.request.provider !== row.provider ||
     (intent.dispatch &&
       intent.dispatch.kind !== `${row.provider}-organizer-dispatch`) ||
@@ -464,6 +469,7 @@ async function activeSource(tx: DbTransaction, row: EventOutboxRow) {
     throw new EventWriteError("organizer", "unsupported");
   const link = await source(tx, row.userID, row.calendarID, row.provider);
   if (
+    (row.provider === "microsoft" && intent.sourceAccessRevision !== link.providerAccessRevision) ||
     link.id !== row.externalCalendarLinkID ||
     link.accountID !== row.accountID ||
     link.externalCalendarID !== row.externalCalendarID
@@ -549,12 +555,13 @@ async function activeSource(tx: DbTransaction, row: EventOutboxRow) {
 export async function withProviderOrganizerLease<T>(
   row: EventOutboxRow,
   action: (tx: DbTransaction, current: EventOutboxRow) => Promise<T>,
+  nativeIdentity?: string,
 ) {
   return db.transaction(async (tx) => {
     await lockUserLifecycle(tx, [row.userID], "shared");
     await lockCalendarLifecycle(tx, [row.calendarID], "shared");
     const identity =
-      row.externalEventID ?? String(row.payload.organizer!.desired?.id ?? "");
+      row.externalEventID ?? (row.provider === "microsoft" ? nativeIdentity ?? `transaction:${row.id}` : String(row.payload.organizer!.desired?.id ?? ""));
     if (!identity)
       throw new BadRequestError("Organizer native identity is unavailable.");
     await lockExternalEventIdentity(tx, row.externalCalendarLinkID, identity);
@@ -610,7 +617,7 @@ export async function markProviderOrganizer(
           kind:
             row.provider === "caldav"
               ? "caldav-organizer-dispatch"
-              : "google-organizer-dispatch",
+              : row.provider === "microsoft" ? "microsoft-organizer-dispatch" : "google-organizer-dispatch",
           version: 1,
           startedAt: new Date().toISOString(),
         });
@@ -700,6 +707,7 @@ export async function completeProviderOrganizer(
     await tx
       .update(eventOutbox)
       .set({
+        ...(current.provider === "microsoft" && native ? { externalEventID: native.id } : {}),
         status: intent.dispatch ? "completed" : "not-needed",
         errorCode: null,
         uncertain: false,
@@ -715,7 +723,7 @@ export async function completeProviderOrganizer(
           : null,
       })
       .where(eq(eventOutbox.id, current.id));
-  });
+  }, native?.id);
 }
 export async function readProviderOrganizerCalendar(
   actorID: string,
@@ -740,7 +748,7 @@ export async function getOrganizerTimeEventIDs(
   userID: string,
   accountID: string,
   externalCalendarID: string,
-  provider: "google" | "caldav" = "google",
+  provider: "google" | "caldav" | "microsoft" = "google",
 ): Promise<string[]> {
   const rows = await db
     .select({
@@ -788,7 +796,7 @@ export async function getOrganizerTimeEventIDs(
         if (!parsed.success) return [];
         return row.externalID
           ? [row.externalID]
-          : parsed.data.action === "create"
+          : parsed.data.action === "create" && parsed.data.provider !== "microsoft"
             ? [
                 parsed.data.provider === "google"
                   ? `musubi${parsed.data.operationID.replace(/-/g, "")}`

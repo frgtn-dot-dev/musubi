@@ -31,6 +31,17 @@ async function main() {
     }
     const fixture = await graphRsvpFixture();
     try {
+      const originalSession = await graphRsvpSession("fixture", "account", "calendar");
+      const bound = (await originalSession.read("meeting", "accepted"))!;
+      assert.equal(bound.graphIdentity?.graphUserID, "graph-object-id");
+      const legacy = structuredClone(bound); delete legacy.graphIdentity;
+      await assert.rejects(originalSession.write(legacy, false, async () => { throw Error("must not infer legacy identity"); }, async () => {}));
+      await assert.rejects(originalSession.write(legacy, true, async () => {}, async () => {}));
+      fixture.state.mode = "swapped";
+      const swapped = await graphRsvpSession("fixture", "account", "calendar");
+      await assert.rejects(swapped.write(bound, false, async () => { throw Error("must not dispatch"); }, async () => {}));
+      await assert.rejects(swapped.write(bound, true, async () => {}, async () => {}));
+      fixture.state.reads = 0;
       config.api.providerRsvpEditsEnabled = false;
       await assert.rejects(() => graphRsvpSession("fixture", "account", "calendar")); assert.equal(fixture.state.reads, 0);
       config.api.providerRsvpEditsEnabled = true;

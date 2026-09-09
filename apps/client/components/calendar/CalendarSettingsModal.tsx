@@ -298,7 +298,7 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.container}>
-                {visible && calendar && ["google", "caldav"].includes(calendar.provider ?? "") && calendar.role === "owner" ? <ProviderOrganizerCreateAction key={calendar.id} calendarID={calendar.id} color={calendar.color} /> : null}
+                {visible && calendar && ["google", "caldav", "microsoft"].includes(calendar.provider ?? "") && calendar.role === "owner" ? <ProviderOrganizerCreateAction key={calendar.id} calendarID={calendar.id} color={calendar.color} /> : null}
                 <SettingRowAction
                   label="Remind Me"
                   value={

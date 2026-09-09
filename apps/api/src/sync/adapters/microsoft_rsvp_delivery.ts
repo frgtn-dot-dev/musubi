@@ -1,3 +1,4 @@
+import { verifiedGraphIdentity } from "./microsoft_identity";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import { config } from "@musubi/config";
@@ -17,19 +18,17 @@ export async function graphRsvpSession(token: string, accountID: string, calenda
     if (missing && response.status === 404) return null;
     assertCompleteEventReadResponse(response); return response.json();
   };
-  const user = z.object({ id: z.literal(accountID), mail: z.email().nullable(), userPrincipalName: z.string() }).parse(await get(`${base}/me?$select=id,mail,userPrincipalName`));
-  const selfAddress = z.email().parse(user.mail ?? user.userPrincipalName).toLowerCase();
-  const calendar = z.object({ id: z.literal(calendarID), isDefaultCalendar: z.literal(true), canEdit: z.literal(true), owner: z.object({ address: z.email() }) }).parse(await get(`${base}/me/calendar?$select=id,isDefaultCalendar,canEdit,owner`));
-  if (calendar.owner.address.toLowerCase() !== selfAddress) fail();
+  const identity = await verifiedGraphIdentity(get, accountID, calendarID);
+  const selfAddress = identity.selfAddress;
   const url = (eventID: string) => `${base}/me/calendars/${encodeURIComponent(calendarID)}/events/${encodeURIComponent(id.parse(eventID))}`;
   return {
-    read: async (eventID: string, response: ProviderRsvpEdit["response"]) => { const native = await get(url(eventID), true); if (!native) return null; const evidence = microsoftRsvpEvidence(native, selfAddress, response); if (evidence.id !== eventID) fail(); return evidence; },
+    read: async (eventID: string, response: ProviderRsvpEdit["response"]) => { const native = await get(url(eventID), true); if (!native) return null; const evidence = microsoftRsvpEvidence(native, selfAddress, response, identity); if (evidence.id !== eventID) fail(); return evidence; },
     write: async (saved: MicrosoftRsvpEvidence, dispatched: boolean, beforeDispatch: () => Promise<void>, accepted: () => Promise<void>) => {
       saved = structuredClone(saved);
-      if (saved.selfAddress !== selfAddress) fail();
+      if (!isDeepStrictEqual(saved.graphIdentity, identity) || saved.selfAddress !== selfAddress) fail();
       const native = await get(url(saved.id), true);
       if (!native) return { kind: "absent" as const };
-      if (matchesMicrosoftRsvp(saved, native)) return { kind: "observed" as const, evidence: microsoftRsvpEvidence(native, selfAddress, saved.response) };
+      if (matchesMicrosoftRsvp(saved, native)) return { kind: "observed" as const, evidence: microsoftRsvpEvidence(native, selfAddress, saved.response, identity) };
       if (dispatched) return { kind: "unconfirmed" as const };
       if (!isDeepStrictEqual(native, saved.native)) fail();
       await beforeDispatch();
@@ -41,7 +40,7 @@ export async function graphRsvpSession(token: string, accountID: string, calenda
       await accepted();
       const result = await get(url(saved.id), true);
       if (!result) return { kind: "absent" as const };
-      return matchesMicrosoftRsvp(saved, result) ? { kind: "observed" as const, evidence: microsoftRsvpEvidence(result, selfAddress, saved.response) } : { kind: "unconfirmed" as const };
+      return matchesMicrosoftRsvp(saved, result) ? { kind: "observed" as const, evidence: microsoftRsvpEvidence(result, selfAddress, saved.response, identity) } : { kind: "unconfirmed" as const };
     },
   };
 }

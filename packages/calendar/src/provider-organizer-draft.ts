@@ -16,14 +16,14 @@ export type OrganizerDraft = {
 };
 export const organizerNotice =
   "Google will be asked to notify all guests. Guest notification delivery cannot be verified. These guests do not become Musubi calendar members or receive a second Musubi invitation.";
-export function organizerNotificationNotice(provider: "google" | "caldav") {
+export function organizerNotificationNotice(provider: "google" | "caldav" | "microsoft") {
   return provider === "google"
     ? organizerNotice
-    : organizerNotice.replace("Google", "The CalDAV server");
+    : organizerNotice.replace("Google", provider === "microsoft" ? "Outlook" : "The CalDAV server");
 }
 export function organizerDraft(
   event?: Event,
-  provider: "google" | "caldav" = "google",
+  provider: "google" | "caldav" | "microsoft" = "google",
 ): OrganizerDraft {
   const day = new Date().toISOString().slice(0, 10),
     time = event?.timeModel;
@@ -53,7 +53,7 @@ export function organizerDraft(
         ? time.timeZone
         : event
           ? ""
-          : provider === "caldav"
+          : provider !== "google"
             ? "UTC"
             : Intl.DateTimeFormat().resolvedOptions().timeZone,
     allDay: event?.isAllDay ?? false,
@@ -68,7 +68,7 @@ export function organizerRequest(
     eventID: string;
     calendarID: string;
     color: string;
-    provider?: "google" | "caldav";
+    provider?: "google" | "caldav" | "microsoft";
   },
   observation?: ProviderEventStateResponse,
 ): ProviderOrganizerRequest {
@@ -78,7 +78,7 @@ export function organizerRequest(
     ...ids
   } = identity;
   const common =
-    provider === "caldav"
+    provider !== "google"
       ? { ...ids, provider, notificationPolicy: "server-invite" }
       : { ...ids, provider, sendUpdates: "all" };
   const time = draft.allDay
@@ -132,11 +132,13 @@ export function organizerRequest(
     if (changed.includes(key))
       patch[key] = draft[key] || (key === "title" ? "" : null);
   if (
-    provider === "google" &&
     observation?.organizerEdit?.scope !== "occurrence" &&
     changed.some((key) => ["start", "end", "timeZone", "allDay"].includes(key))
-  )
+  ) {
+    if (provider === "caldav" && !observation?.organizerEdit?.timeEdit)
+      throw new Error("Time editing is not available for this meeting.");
     patch.time = time;
+  }
   return ProviderOrganizerRequestSchema.parse({
     ...common,
     action,

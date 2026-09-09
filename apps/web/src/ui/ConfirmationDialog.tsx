@@ -21,6 +21,8 @@ export type ConfirmationDialogProps = ConfirmationAction & {
   confirmLabel: ReactNode;
   confirmVariant?: Extract<ButtonVariant, "destructive" | "primary">;
   description: ReactNode;
+  /** Match the parent dialog when opened above an anchored surface. */
+  elevated?: boolean;
   initialFocus?: RefObject<HTMLElement | null>;
   loading?: boolean;
   onOpenChange: (open: boolean) => void;
@@ -45,6 +47,7 @@ export function ConfirmationDialog({
   confirmLabel,
   confirmVariant = "destructive",
   description,
+  elevated,
   initialFocus,
   loading = false,
   onConfirm,
@@ -57,6 +60,7 @@ export function ConfirmationDialog({
 
   return (
     <Dialog
+      elevated={elevated}
       closeLabel={closeLabel}
       description={description}
       footer={

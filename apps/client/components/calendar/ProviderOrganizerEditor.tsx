@@ -45,7 +45,7 @@ function OrganizerCreateActionBody({
   useEffect(() => {
     apiRef.current = api;
   }, [api]);
-  const [available, setAvailable] = useState<"google" | "caldav" | null>(null),
+  const [available, setAvailable] = useState<"google" | "caldav" | "microsoft" | null>(null),
     [open, setOpen] = useState(false);
   useEffect(() => {
     let active = true;
@@ -62,7 +62,7 @@ function OrganizerCreateActionBody({
   return available ? (
     <>
       <Btn
-        label={`Create ${available === "caldav" ? "CalDAV" : "Google"} meeting`}
+        label={`Create ${available === "caldav" ? "CalDAV" : available === "microsoft" ? "Outlook" : "Google"} meeting`}
         variant="secondary"
         onPress={() => setOpen(true)}
       />
@@ -89,7 +89,7 @@ export function ProviderOrganizerEditor({
   color: string;
   event?: Event;
   observation?: ProviderEventStateResponse;
-  provider?: "google" | "caldav";
+  provider?: "google" | "caldav" | "microsoft";
   onClose: () => void;
 }) {
   const api = useApi(),
@@ -99,7 +99,9 @@ export function ProviderOrganizerEditor({
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [submitted, setSubmitted] = useState(false),
-    [frozenAction, setFrozenAction] = useState<ProviderOrganizerRequest["action"] | null>(null);
+    [frozenAction, setFrozenAction] = useState<
+      ProviderOrganizerRequest["action"] | null
+    >(null);
   const pending = useRef(false),
     frozen = useRef<ProviderOrganizerRequest | null>(null),
     changed = useRef<(keyof OrganizerDraft)[]>([]),
@@ -121,14 +123,18 @@ export function ProviderOrganizerEditor({
     changed.current = [...new Set([...changed.current, key])];
     setDraft((previous) => ({ ...previous, [key]: value }));
   }
-  const canUpdate =
+  const canEditTime =
     !event ||
     provider !== "caldav" ||
-    observation?.organizerEdit?.actions?.includes("update") === true;
+    observation?.organizerEdit?.timeEdit === true;
+  const canUpdate =
+    !event ||
+    (provider !== "microsoft" && (provider !== "caldav" ||
+    observation?.organizerEdit?.actions?.includes("update") === true));
   const canDelete =
     !!event &&
-    (provider !== "caldav" ||
-      observation?.organizerEdit?.actions?.includes("delete") === true);
+    (provider !== "microsoft" && (provider !== "caldav" ||
+      observation?.organizerEdit?.actions?.includes("delete") === true));
   const canSubmit = frozenAction === "delete" ? canDelete : canUpdate;
   async function send(action: ProviderOrganizerRequest["action"]) {
     if (
@@ -152,7 +158,7 @@ export function ProviderOrganizerEditor({
       setSubmitted(true);
       await api.editProviderOrganizer(frozen.current);
       setNotice(
-        `Meeting change saved. Check Delivery details for ${provider === "caldav" ? "the CalDAV server’s" : "Google's"} result. Guest notification delivery remains unknown.`,
+        `Meeting change saved. Check Delivery details for ${provider === "caldav" ? "the CalDAV server’s" : provider === "microsoft" ? "Outlook's" : "Google's"} result. Guest notification delivery remains unknown.`,
       );
     } catch (cause) {
       if (
@@ -185,7 +191,7 @@ export function ProviderOrganizerEditor({
     ...(!event
       ? [["guests", "Guest email addresses"] as [keyof OrganizerDraft, string]]
       : []),
-    ...(provider === "caldav" && event
+    ...(provider === "caldav" && event && !canEditTime
       ? []
       : ([
           [
@@ -236,7 +242,7 @@ export function ProviderOrganizerEditor({
           <View style={styles.modalHandle} />
           <View style={styles.modalTitleRow}>
             <Text accessibilityRole="header" style={styles.modalTitle}>
-              {occurrence ? "Manage this occurrence" : `${event ? "Manage" : "Create"} ${provider === "caldav" ? "CalDAV" : "Google"} meeting`}
+              {occurrence ? "Manage this occurrence" : `${event ? "Manage" : "Create"} ${provider === "caldav" ? "CalDAV" : provider === "microsoft" ? "Outlook" : "Google"} meeting`}
             </Text>
           </View>
           <ScrollView
@@ -262,28 +268,34 @@ export function ProviderOrganizerEditor({
                       style={styles.textInput}
                       editable={
                         !locked &&
-                        !(provider === "caldav" && key === "timeZone")
+                        !(provider !== "google" && key === "timeZone")
                       }
                       value={String(draft[key])}
                       onChangeText={(value) => patch(key, value)}
                     />
                   </View>
                 ))}
-                {(provider === "caldav" && event) || occurrence ? (
+                {(provider === "caldav" && event && !canEditTime) || occurrence ? (
                   <Text style={copy}>
                     {occurrence ? "Only this occurrence will change. Series timing and guests stay unchanged." : "Meeting time and guests are preserved."}
                   </Text>
                 ) : (
                   <>
-                    {provider === "caldav" && !draft.allDay ? (
+                    {provider === "caldav" && event ? (
                       <Text style={copy}>
-                        New timed CalDAV meetings use UTC.
+                        Changing time asks guests to respond again. Their
+                        existing responses will reset.
+                      </Text>
+                    ) : null}
+                    {provider !== "google" && !event && !draft.allDay ? (
+                      <Text style={copy}>
+                        New timed meetings use UTC.
                       </Text>
                     ) : null}
                     <Btn
                       variant="secondary"
                       label={`All day: ${draft.allDay ? "yes" : "no"}`}
-                      disabled={locked}
+                      disabled={locked || (provider === "caldav" && !!event)}
                       onPress={() => patch("allDay", !draft.allDay)}
                     />
                   </>

@@ -322,3 +322,31 @@ it("requires explicit cancellation of only the bound occurrence", async () => {
   await screen.findByRole("status");
   expect(api.save.mock.calls[0][0]).toMatchObject({ action: "delete", scope: "occurrence", expectedInstanceVersion: "b".repeat(64) });
 });
+it("reschedules in the proven native zone and preserves the frozen retry", async () => {
+  api.save.mockRejectedValueOnce(new Error("Response lost")).mockResolvedValue({ status: "pending" });
+  render(<ProviderOrganizerEditor calendarID={calendarID} color="red" event={event} observation={{ ...observation, organizerEdit: { ...observation.organizerEdit!, provider: "caldav", actions: ["update"], timeEdit: true } }} onClose={vi.fn()} />);
+  const zone = screen.getByRole("textbox", { name: "Event time zone" }) as HTMLInputElement;
+  expect(zone.value).toBe("Europe/Prague"); expect(zone.disabled).toBe(true);
+  expect((screen.getByRole("checkbox", { name: "All day" }) as HTMLInputElement).disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText("Start", { exact: true }), { target: { value: "2026-10-25T10:00" } });
+  fireEvent.change(screen.getByLabelText("End", { exact: true }), { target: { value: "2026-10-25T11:00" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save and notify guests" }));
+  await screen.findByText("Response lost");
+  fireEvent.click(screen.getByRole("button", { name: "Retry saved meeting action" })); await screen.findByRole("status");
+  expect(api.save.mock.calls[1]).toEqual(api.save.mock.calls[0]);
+  expect(api.save.mock.calls[0][0].patch).toEqual({ time: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-10-25T10:00:00.000", endLocal: "2026-10-25T11:00:00.000" } });
+});
+
+it("opens verified Outlook creation in explicit UTC", async () => {
+  api.observe.mockResolvedValue({ provider: "microsoft", calendarID, notificationPolicy: "server-invite", createTime: "utc-or-all-day" });
+  api.save.mockResolvedValue({ status: "pending" });
+  render(<ProviderOrganizerCreateAction calendarID={calendarID} color="red" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Create Outlook meeting" }));
+  expect((screen.getByRole("textbox", { name: "Event time zone" }) as HTMLInputElement).value).toBe("UTC");
+  expect((screen.getByRole("textbox", { name: "Event time zone" }) as HTMLInputElement).disabled).toBe(true);
+  fireEvent.change(screen.getByRole("textbox", { name: "Title" }), { target: { value: "Meeting" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Guest email addresses" }), { target: { value: "guest@example.test" } });
+  fireEvent.click(screen.getByRole("button", { name: "Create and send invitations" }));
+  await screen.findByRole("status");
+  expect(api.save.mock.calls[0][0]).toMatchObject({ provider: "microsoft", notificationPolicy: "server-invite", time: { kind: "zoned", timeZone: "UTC" } });
+});
