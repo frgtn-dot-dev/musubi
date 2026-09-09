@@ -2,7 +2,7 @@
 
 The private native candidate targets an existing bound instance on the connected
 account's own primary calendar. The default-off reminder flag blocks provider I/O.
-No public capability, queue or production activation is added by this candidate.
+No public capability or production activation is added by this candidate.
 
 The accepted native instance ID, parent ID and original date/instant are checked
 independently of a moved current start. Timed instances require an explicit known
@@ -31,3 +31,24 @@ Google describes reminders as private settings for the authenticated user in its
 [reminder documentation](https://developers.google.com/workspace/calendar/api/concepts/reminders).
 Native instance identity follows the [recurring-event contract](https://developers.google.com/workspace/calendar/api/guides/recurringevents).
 These API contracts do not replace live acceptance of Musubi's implementation.
+
+## Private durable instance journal
+
+Preparation captures the accepted local parent revision, parent mapping, child
+mapping and original slot under lifecycle and parent-before-child locks. Native
+preflight runs outside the transaction. Commit re-reads the entire context and
+requires the same revision, source, permission, mappings, provider state and known
+native time before storing the full baseline and personal reminder intent.
+
+A concurrent replay of the same actor/operation/request returns one receipt.
+Changed requests, pending child or parent work, cancelled previous source work,
+permission loss and changed bindings cannot enqueue a replacement implicitly.
+Neither canonical event revision nor accepted provider mapping changes on enqueue.
+The claimed-source helper checks the current lease and accepted binding again.
+Generic worker, ACK and conflict replacement paths refuse this private journal;
+the specialized worker/ACK and public composition remain follow-up work.
+
+Disposable PostgreSQL regressions cover zoned/all-day moved slots, defaults/off/
+custom intent, concurrent replay, stale parent and mapping, deleted/unlinked parent,
+changed child revision/original identity, permission and lease loss, and generic
+path isolation with zero provider I/O.

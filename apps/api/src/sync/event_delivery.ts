@@ -150,6 +150,8 @@ export async function deliverEventOutbox(
         }
         return true;
       };
+      // Private instance reminder journals require their own worker and ACK.
+      if (row.payload.reminderInstance) throw new EventWriteError("event-write", "unsupported");
       if (row.payload.graphSeriesCreate) {
         if (!config.api.eventTimeEditsEnabled || row.provider !== "microsoft" || row.action !== "create" || !adapter?.createGraphFamily)
           throw new EventWriteError("event-write", "unsupported");

@@ -1,3 +1,6 @@
+import { ProviderEventStateSchema, type ProviderEventState } from "./provider-event-state";
+import type { EventTimeModel } from "./event_time";
+import type { ProviderRsvpInstance } from "./provider-rsvp";
 import { z } from "zod";
 
 // This write contract is intentionally smaller than the lossless read model.
@@ -36,3 +39,21 @@ export const ProviderReminderReceiptSchema = z.object({
   operationID: z.uuid(), replayed: z.boolean(), status: z.string(), localCommitted: z.literal(true),
 }).strict();
 export type ProviderReminderReceipt = z.infer<typeof ProviderReminderReceiptSchema>;
+
+/** Private durable evidence for a bound existing instance. Never a public DTO. */
+export type ProviderReminderInstanceIntent = {
+  request: ProviderReminderEdit;
+  baseline: Record<string, unknown>;
+  nativeTime: EventTimeModel;
+  instance: ProviderRsvpInstance;
+  baselineState: ProviderEventState;
+  desiredState: ProviderEventState;
+  mappingID: string;
+};
+export function providerReminderDesiredState(input: ProviderEventState, reminders: GoogleReminderWrite): ProviderEventState {
+  const state = ProviderEventStateSchema.parse(input);
+  const desired = GoogleReminderWriteSchema.parse(reminders);
+  if (state.provider !== "google" || state.reminders.provider !== "google") throw new Error("Unsupported provider reminder identity");
+  state.reminders = { provider: "google", useDefault: desired.useDefault, overrides: desired.useDefault ? [] : desired.overrides };
+  return state;
+}
