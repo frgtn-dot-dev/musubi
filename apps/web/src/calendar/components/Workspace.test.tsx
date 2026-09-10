@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ReactElement, ReactNode } from "react";
+import { useState, type ReactElement, type ReactNode } from "react";
 import { getServerOrigin } from "~/api/query-keys";
 import type { PageConfigV1 } from "@musubi/types";
 import { render as renderBase, screen, within } from "@testing-library/react";
@@ -776,6 +776,36 @@ describe("Workspace", () => {
     );
     await user.click(screen.getByRole("menuitem", { name: "Task" }));
 
+    expect(screen.getByRole("dialog", { name: "New task" })).not.toBeNull();
+  });
+
+  it("preserves a task creation request across the first Tasks loading screen", async () => {
+    const user = userEvent.setup();
+    function LoadingRoute() {
+      const [view, setView] = useState<"month" | "tasks">("month");
+      const [loading, setLoading] = useState(false);
+      const [taskCreateRequest, setTaskCreateRequest] = useState(0);
+      if (loading) return <button onClick={() => setLoading(false)}>Finish loading tasks</button>;
+      return (
+        <Workspace
+          {...commonProps}
+          activeView={view}
+          taskCreateRequest={taskCreateRequest}
+          onTaskCreateRequestChange={setTaskCreateRequest}
+          onViewChange={() => { setView("tasks"); setLoading(true); }}
+        />
+      );
+    }
+    render(<LoadingRoute />);
+    await user.click(screen.getByRole("button", { name: "Create event or task" }));
+    await user.click(screen.getByRole("menuitem", { name: "Task" }));
+    expect(screen.queryByRole("dialog", { name: "New task" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Finish loading tasks" }));
+    expect(screen.getByRole("dialog", { name: "New task" })).not.toBeNull();
+    await user.click(within(screen.getByRole("dialog", { name: "New task" })).getByRole("button", { name: "Close task editor" }));
+    expect(screen.queryByRole("dialog", { name: "New task" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Create event or task" }));
+    await user.click(screen.getByRole("menuitem", { name: "Task" }));
     expect(screen.getByRole("dialog", { name: "New task" })).not.toBeNull();
   });
 
