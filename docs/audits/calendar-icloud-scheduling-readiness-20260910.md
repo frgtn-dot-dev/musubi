@@ -49,7 +49,15 @@ resource permission is unknown or denied. Existing RSVP/organizer regressions
 and API typechecking also passed. These local checks are separate from the live
 metadata observations above.
 
-## Remaining acceptance boundary
+## Follow-up
+
+The later [invitation intake and native comparison](calendar-icloud-invite-live-acceptance-20260910.md)
+confirms the new iCloud address, manual intake, Musubi import, and native Apple
+to Google invitation delivery. These observations supersede the pending-address
+state below, which describes this earlier read-only checkpoint. Musubi RSVP and
+organizer-write acceptance remain open.
+
+## Remaining acceptance boundary at this read-only checkpoint
 
 No iCloud invitation or RSVP scenario has passed in this investigation. The
 user has not yet confirmed the email address for the proposed invitation test.
