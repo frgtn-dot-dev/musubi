@@ -9,9 +9,9 @@ describe("availability grid geometry", () => {
     expect(first).toMatchObject({ startMin: 1410, endMin: 1440 }); expect(second).toMatchObject({ startMin: 0, endMin: 180 });
     expect(first).not.toHaveProperty("event"); expect(first).not.toHaveProperty("id");
   });
-  it.each([new Date(2026, 2, 29), new Date(2026, 9, 25)])("withholds blocks on clock-change days (%s)", day => {
+  it.each([new Date(2026, 2, 29), new Date(2026, 9, 25)])("projects blocks on clock-change days (%s)", day => {
     expect(isAvailabilityGridDay(day)).toBe(false);
-    expect(availabilityDaySegments([{ ...interval, start: new Date(day.getFullYear(), day.getMonth(), day.getDate(), 1).toISOString(), end: new Date(day.getFullYear(), day.getMonth(), day.getDate(), 4).toISOString() }], day)).toEqual([]);
+    expect(availabilityDaySegments([{ ...interval, start: new Date(day.getFullYear(), day.getMonth(), day.getDate(), 1).toISOString(), end: new Date(day.getFullYear(), day.getMonth(), day.getDate(), 4).toISOString() }], day)).toHaveLength(1);
   });
   it("pins existing event-axis DST limitation separately from the availability projection", () => {
     const day = new Date(2026, 2, 29);

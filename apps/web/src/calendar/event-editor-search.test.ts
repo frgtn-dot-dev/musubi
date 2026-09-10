@@ -67,3 +67,14 @@ it("detects every restored editable override, not navigation alone", async () =>
   expect(hasEventEditorContent(search)).toBe(false);
   expect(eventEditorSearchSchema.parse({ createID: "invalid" }).createID).toBeUndefined();
 });
+
+it("restores both fold instants through serialized route search", () => {
+  for (const hour of ["00", "01"]) {
+    const exactRange = { start: `2026-10-25T${hour}:30:00.000Z`, end: "2026-10-25T02:30:00.000Z" };
+    const search = eventEditorSearchSchema.parse(JSON.parse(JSON.stringify({ exactRange, invalidatedExactEndpoints: ["end"] })));
+    const restored = applyEventEditorSearch(defaultEventFormValues("personal", "2026-10-25", "02:30"), search);
+    expect(restored.exactRange).toEqual({ start: new Date(exactRange.start), end: new Date(exactRange.end) });
+    expect(restored.invalidatedExactEndpoints).toEqual(["end"]);
+  }
+  expect(eventEditorSearchSchema.parse({ exactRange: { start: "2026-10-25T02:30", end: "invalid" } }).exactRange).toBeUndefined();
+});

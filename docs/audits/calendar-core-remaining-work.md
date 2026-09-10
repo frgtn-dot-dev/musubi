@@ -32,7 +32,7 @@ produkční aktivace. Stejný provider může podporovat jednu operaci a odmítn
 | K14 Graph private-read access | Discovery rozlišuje canEdit a tri-state canViewPrivateItems; potvrzené zúžení rediguje staré detaily před fetch a generation fence blokuje opožděný import/delete/cursor včetně rodin | Čerstvý omezený read může obnovit aktuálně povolený obsah; unknown proof neobnoví redigovaný obsah. Retained receipts/email a web/native editor drafty mají stejnou privacy hranici. Fake HTTP/DB a mounted klientské regrese nenahrazují živou Graph/device acceptance. CalDAV collection read-privilege parity je popsána v samostatném řádku níže. [Kontrakt](../sync/microsoft-calendar-access.md) |
 | K14 CalDAV collection read access | Přesné href/namespace/úspěšné propstat discovery; samostatný DAV read/free-busy/write důkaz a generační fence pro VEVENT rodiny i VTODO | Potvrzená ztráta read rediguje import před fetch, čerstvý celý resource obnovuje stejnou identitu; stale task DTO/ACK nemůže vrátit starý obsah. Web task/event a native event editory zachovávají vlastní drafty. Starší task klient po retirement dostane conflict; živé iCloud resource ACL a device acceptance zůstávají lidské ověření. [Kontrakt](../sync/caldav-read-access.md) |
 | K14 CalDAV event alarms | One-off nebo explicitní konečná COUNT master série: známý zoned/all-day osobní VEVENT, nula/jeden jednoduchý DISPLAY START-relative alarm; web/native editor a explicitní konflikt | Samostatný default-off flag, plný privátní resource proof, strong ETag CAS, durable replay/ACK a blokace neúplného pull jsou lokálně pokryté včetně disposable Radicale. Nejde o per-user preference. Master-only série zachovává přesný RRULE a vyžaduje explicitní scope; active/retired exceptions, RDATE/EXDATE, složitější recurrence, komplexní alarmy, meeting/floating resources a živá iCloud/OS acceptance zůstávají otevřené. [Kontrakt](../sync/caldav-event-alarms.md) |
-| K14 Google intervalová dostupnost | Default-off freeBusy.query API, privátní registry zdrojů a explicitní výběr do 20 zdrojů v Connections na webu i v nativním klientu; UTC intervalový dialog bez Event identit či edit akcí | Scope/owner/account/generation kontroly, reconnect-required versus unavailable versus potvrzené prázdno, bez offline cache. Web day/week nabízí explicitní session/page opt-in statických intervalů pro normální 24hodinové dny. Přechody DST mají výslovný list fallback; produkční oprava existující časové osy čeká na schválení vizuálního návrhu a následnou integraci, další grid pohledy jsou mimo tento vymezený rozsah. Nativní callback/transport regrese nejsou fyzická ani renderovaná acceptance; device QA, živý re-consent a aktivace zbývají. [Kontrakt](../sync/google-availability.md) |
+| K14 Google intervalová dostupnost | Default-off freeBusy.query API, privátní registry zdrojů a explicitní výběr do 20 zdrojů v Connections na webu i v nativním klientu; UTC intervalový dialog bez Event identit či edit akcí | Scope/owner/account/generation kontroly, reconnect-required versus unavailable versus potvrzené prázdno, bez offline cache. Web day/week nabízí explicitní session/page opt-in statických intervalů včetně přechodů DST. Vlastníkem schválená společná časová osa pokrývá události, intervaly i interakce; další grid pohledy jsou mimo tento vymezený rozsah. Nativní callback/transport regrese nejsou fyzická ani renderovaná acceptance; device QA, živý re-consent a aktivace zbývají. [Kontrakt](../sync/google-availability.md) |
 | K14 Google reminders | Vlastní one-off a vázané existující instance: defaults/off/custom, veřejný web/native editor, durable delivery a explicitní konflikt | Parent/original identity, známý čas, podmíněný PATCH, plná obnova a explicitní konflikt jsou pokryté lokálně. Web/native callbacky a browser/mock acceptance rozlišují výskyt a sérii. Osobní Google one-off a vázaná existující instance mají živý důkaz custom popup/off včetně zachování sousedů; series, Graph native writer a skutečné OS oznámení zůstávají otevřené. [Živá evidence instance](calendar-personal-series-live-acceptance-20260910.md). Vymezený CalDAV alarm writer je samostatně popsaný výše. [Instance kontrakt](../sync/google-instance-reminders.md). Musubi reminder plánování je oddělené. [Kontrakt](../sync/provider-event-state.md#gated-personal-google-reminder-editor) |
 
 ## Závěrečné lokální ověření vymezeného rozsahu
@@ -54,8 +54,8 @@ head revizi eviduje příslušné PR.
 
 V tomto vymezeném rozsahu nezbývá další autonomní feature implementace.
 Konkrétní nová regrese či review nález se musí opravit před převzetím.
-Samostatná produkční integrace DST osy a jejích interakcí může následovat až
-po schválení připraveného vizuálního návrhu vlastníkem. Další grid pohledy,
+Samostatná integrace DST osy byla po schválení vlastníkem provedena; její
+[vymezená acceptance](calendar-dst-axis-acceptance-20260910.md) zahrnuje webové interakce. Další grid pohledy,
 komplexní RDATE/recurrence, editace hostů a Graph UPDATE/DELETE nejsou nově
 přidanou podmínkou této dávky. Nepodporované varianty v tabulce zůstávají
 nepodporované; bezpečné odmítnutí se nevydává za jejich implementaci.
@@ -80,7 +80,6 @@ pouze do lokálního připojení, nikdy do chatu, repozitáře nebo testovacích
 | Další Outlook acceptance a conditional-write důkaz | Vývojové OAuth a one-off create/Accept/Tentative již prošly, stejně jako [osobní zoned/all-day DAILY COUNT=3 create](calendar-personal-series-live-acceptance-20260910.md). Decline delivery, širší recurrence varianty a skutečný event conditional-write kontrakt zbývají; `changeKey` není CAS důkaz. [Invite/RSVP evidence](calendar-outlook-live-acceptance-20260910.md). |
 | Identity a konkrétní invite/RSVP scénáře pro zbývající providery | Google one-off a Outlook create/Accept/Tentative mezi schválenými účty jsou ověřené. Zbývající iCloud a recurring scénáře vyžadují odpovídající připojení a vymezené testovací adresáty; samotné připojení není důkaz doručení. |
 | iCloud resource permission kontrakt | Tři standardní DAV dotazy neposkytly positive resource write privilege. Připojení je dostupné, ale zpřístupnění scope writeru vyžaduje důvěryhodný mechanismus nebo výslovně schválený jiný kontrakt. [Živá evidence](calendar-icloud-series-live-acceptance.md#follow-up-three-standard-dav-privilege-queries) |
-| Podoba DST osy v týdnu | Konkrétní [Storybook návrh](../ui/proposals/dst-axis.md) rezervuje neinteraktivní řádky pro neexistující místní časy a rozlišuje opakované hodiny UTC offsetem. Nový produkční vizuální vzor vyžaduje schválení podle Musubi UI skillu; čistý model je připravený, integrace interakcí zbývá. |
 | Fyzické native/OS a notification QA | Mockované callbacky a Chromium nejsou důkaz chování telefonu, OS oprávnění, klávesnice ani skutečných oznámení. |
 | Release, minimální klientské verze a produkční aktivace | Samostatné rozhodnutí až po odpovídající acceptance. Dosavadní práce nemění verze/minima 0.1.8 ani nezapíná produkční time/reminder/RSVP flagy. |
 
@@ -90,19 +89,10 @@ prokázanou ochranou celé family nebo novým výslovně schváleným produktov�
 kontraktem. [Rozhodnutí a reprodukce souběhu](calendar-google-series-live-acceptance.md#follow-up-exception-concurrency-and-product-decision).
 
 
-### Samostatná následná oprava DST osy
+### Dokončená navazující integrace DST osy
 
-`packages/calendar/src/layout/day-segments.ts` počítá elapsed minuty od místní
-půlnoci a ořezává je na 1440, zatímco `TimeGridView.tsx` vykresluje 24 wall-clock
-hodin. V Europe/Prague dne 2026-03-29 událost v 09:00 získá `startMin=480`,
-tedy polohu 08:00; podzimní 25hodinový den se navíc ořezává. Nová regrese
-`availability-grid.test.ts` tento existující rozpor dokládá. Tento řez osu nemění:
-intervaly se na takových dnech nevykreslí a coverage notice odkazuje na UTC list.
-Další práce musí sjednotit grid/label/selection/drag geometrii pro 23/25hodinové
-dny; chybějící busy bloky se nesmějí vydávat za volno.
-
-Samostatný model přesných okamžiků a Storybook návrh pro Prague/Lord Howe je
-připravený a lokálně ověřený; žádný produkční caller jej zatím nepoužívá.
-[Návrh a zbývající integrace](../ui/proposals/dst-axis.md) pokrývá opakované
-hodiny i chybějící civilní časy. Nový vizuální vzor týdne čeká na rozhodnutí
-vlastníka, potom zbývá propojit stejnou osu s vykreslením a všemi interakcemi.
+Vlastník schválil návrh 2026-09-10. Webový den/týden používá společnou osu
+pro vykreslení, výběr, náhled, přesun, resize, klávesnici a dostupnost. Přesné
+okamžiky přecházejí také do rychlého/plného editoru a jeho URL draftu. Sdílený
+nativní layout zůstává samostatný; nejde o fyzickou native/OS acceptance.
+[Implementace a vymezené výsledky](calendar-dst-axis-acceptance-20260910.md).

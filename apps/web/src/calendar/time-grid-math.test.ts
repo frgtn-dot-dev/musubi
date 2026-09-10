@@ -1,5 +1,8 @@
+import { buildDayAxis, sharedWeekAxis, singleDayAxis } from "./day-axis";
 import { describe, expect, it } from "vitest";
 import {
+  axisOpenScroll,
+  holeSegments,
   getTimeGridDays,
   getTimeGridLabel,
   getTimeGridQueryRange,
@@ -149,5 +152,25 @@ describe("opening scroll position", () => {
     expect(openScrollMinutes(new Date("2026-07-30T15:20:00"), false)).toBe(
       7 * 60,
     );
+  });
+});
+
+describe("axis opening and holes", () => {
+  it.each([
+    ["2026-03-29", "Europe/Prague", 360],
+    ["2026-10-25", "Europe/Prague", 480],
+    ["2026-04-05", "Australia/Lord_Howe", 450],
+    ["2026-10-04", "Australia/Lord_Howe", 390],
+    ["2026-07-27", "Europe/Prague", 420],
+  ])("opens %s at civil 07:00 (%s)", (date, zone, coordinate) => {
+    const axis = singleDayAxis(buildDayAxis(String(date), String(zone)));
+    expect(axisOpenScroll(axis, new Date(0), false)).toBe(coordinate);
+    expect(holeSegments(axis, 0)).toEqual([]);
+  });
+  it("reserves a complete repeated block only in ordinary week columns", () => {
+    const axis = sharedWeekAxis([buildDayAxis("2026-10-24", "Europe/Prague"), buildDayAxis("2026-10-25", "Europe/Prague")]);
+    expect(holeSegments(axis, 0)).toEqual([{ start: 180, end: 240 }]);
+    expect(holeSegments(axis, 1)).toEqual([]);
+    expect(axisOpenScroll(axis, new Date("2026-10-25T01:30:00Z"), true)).toBe(120);
   });
 });

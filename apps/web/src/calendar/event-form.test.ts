@@ -217,3 +217,35 @@ describe("K06 untouched nullable text", () => {
   const next = { ...defaultEventFormValues("calendar-1", "2026-07-26"), title: "Retry" };
   expect(createEventFromForm(next, identity, "red").id).not.toBe(first.id);
 });
+
+
+describe("exact grid time handoff", () => {
+  it.each(["00", "01"])("creates the Prague 02:30 fold at %s:30Z", (hour) => {
+    const exactRange = { start: new Date(`2026-10-25T${hour}:30:00Z`), end: new Date(`2026-10-25T${hour}:45:00Z`) };
+    const values = { ...defaultEventFormValues("personal", "2026-10-25", "02:30", { endTime: "02:45", exactRange }), title: "Chosen fold" };
+    expect(validateEventForm(values)).toBeNull();
+    const event = createEventFromForm(values, { email: "alex@example.com", userId: "alex" }, "#b3492f");
+    expect(event.start).toEqual(exactRange.start);
+    expect(event.end).toEqual(exactRange.end);
+  });
+
+  it.each(["2026-03-29", "2026-10-25"])("refuses an unresolved civil time on %s", (date) => {
+    const values = { ...defaultEventFormValues("personal", date, "02:30", { endTime: "03:30" }), title: "Unresolved time" };
+    expect(validateEventForm(values)).toContain("missing or occurs twice");
+    expect(() => createEventFromForm(values, { email: "alex@example.com", userId: "alex" }, "#b3492f")).toThrow("missing or occurs twice");
+  });
+});
+
+it("retains an untouched exact fold end when only the start changes", () => {
+  const values = {
+    ...defaultEventFormValues("personal", "2026-10-25", "01:30", {
+      exactRange: { start: new Date("2026-10-25T01:30:00Z"), end: new Date("2026-10-25T01:45:00Z") },
+    }),
+    invalidatedExactEndpoints: ["start" as const],
+    title: "Earlier start",
+  };
+  expect(values.endTime).toBe("02:45");
+  const event = createEventFromForm(values, { email: "alex@example.com", userId: "alex" }, "#b3492f");
+  expect(event.start).toEqual(new Date("2026-10-24T23:30:00Z"));
+  expect(event.end).toEqual(new Date("2026-10-25T01:45:00Z"));
+});

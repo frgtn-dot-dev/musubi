@@ -1,3 +1,4 @@
+import { instantToCoordinate, type TimeAxis } from "./day-axis";
 import type { Settings } from "@musubi/types";
 import {
   addDays,
@@ -173,4 +174,26 @@ export function getTimeGridLabel(
   }
 
   return `${firstMonth} ${first.getDate()} – ${lastMonth} ${last.getDate()}${year}`;
+}
+
+/** Opening position follows the same physical rows as events, including folds. */
+export function axisOpenScroll(axis: TimeAxis, now: Date, includesToday: boolean): number {
+  if (includesToday) {
+    const column = axis.days.findIndex(day => now.getTime() >= day.start && now.getTime() < day.end);
+    const coordinate = instantToCoordinate(axis, column, now.getTime());
+    if (coordinate !== null) {
+      const row = axis.rows[Math.floor(coordinate)]!;
+      return Math.max(0, coordinate - row.minute % 60 - coordinate % 1 - 60);
+    }
+  }
+  return Math.max(0, axis.rows.findIndex(row => row.minute === 7 * 60 && row.fold === 0));
+}
+export function holeSegments(axis: TimeAxis, column: number): { start: number; end: number }[] {
+  const result: { start: number; end: number }[] = [];
+  axis.columns[column]?.forEach((value, row) => {
+    if (value) return;
+    const previous = result.at(-1);
+    if (previous?.end === row) previous.end++; else result.push({ start: row, end: row + 1 });
+  });
+  return result;
 }

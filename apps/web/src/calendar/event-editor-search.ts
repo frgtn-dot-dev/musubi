@@ -15,6 +15,8 @@ export const eventEditorSearchSchema = z.object({
   createID: z.string().uuid().optional().catch(undefined),
   timeKind: z.enum(["legacy-unknown", "zoned", "floating", "all-day"]).optional().catch(undefined),
   timeZone: optional,
+  exactRange: z.object({ start: z.string().datetime(), end: z.string().datetime() }).optional().catch(undefined),
+  invalidatedExactEndpoints: z.array(z.enum(["start", "end"])).optional().catch(undefined),
   allDay: z.boolean().optional().catch(undefined),
   attendees: z.boolean().optional().catch(undefined),
   calendarId: optional,
@@ -65,6 +67,8 @@ export function applyEventEditorSearch(
   return {
     ...base,
     createID: search.createID ?? base.createID,
+    exactRange: search.exactRange ? { start: new Date(search.exactRange.start), end: new Date(search.exactRange.end) } : base.exactRange,
+    invalidatedExactEndpoints: search.invalidatedExactEndpoints ?? base.invalidatedExactEndpoints,
     timeKind: search.timeKind ?? base.timeKind,
     timeZone: search.timeZone ?? base.timeZone,
     calendarId,

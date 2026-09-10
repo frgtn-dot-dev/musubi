@@ -201,6 +201,7 @@ export type PageWorkingDraft = {
 };
 
 type CreateIntent = {
+  exactRange?: { start: Date; end: Date };
   anchor: QuickCreateAnchor;
   /** The chosen calendar's colour, so the draft block wears it too. */
   color?: string;
@@ -761,10 +762,12 @@ export function Workspace({
     {
       endDate,
       endTime,
+      exactRange,
       point,
     }: {
       endDate?: string;
       endTime?: string;
+      exactRange?: { start: Date; end: Date };
       point?: Pick<QuickCreateAnchor, "x" | "y">;
     } = {},
   ) {
@@ -785,6 +788,7 @@ export function Workspace({
         y: point?.y ?? bounds.top,
       },
       date: nextDate,
+      exactRange,
       endDate,
       endTime,
       id: Date.now(),
@@ -797,6 +801,7 @@ export function Workspace({
    * is not remounted and a title already typed into it survives the drag.
    */
   function moveCreateDraft(when: {
+    exactRange?: { start: Date; end: Date };
     color?: string;
     date: string;
     endDate?: string;
@@ -1147,6 +1152,7 @@ export function Workspace({
                   ? {
                       color: createIntent.color,
                       date: createIntent.date,
+                      exactRange: createIntent.exactRange,
                       endTime: createIntent.endTime,
                       startTime: createIntent.startTime,
                     }
@@ -1163,12 +1169,12 @@ export function Workspace({
               onLinkEvent={onLinkEvent}
               onCreateAtTime={
                 editableCalendars.length > 0
-                  ? (nextDate, time, createAnchor, endTime) =>
+                  ? (nextDate, time, createAnchor, endTime, exactRange) =>
                       openCreateAtDate(
                         nextDate,
                         createAnchor.returnFocus,
                         time,
-                        { endTime, point: createAnchor },
+                        { endTime, exactRange, point: createAnchor },
                       )
                   : undefined
               }
@@ -1329,6 +1335,7 @@ export function Workspace({
           email={user.email}
           endDate={createIntent.endDate}
           endTime={createIntent.endTime}
+          exactRange={createIntent.exactRange}
           isAllDay={Boolean(createIntent.endDate)}
           key={createIntent.id}
           onCreate={onCreateEvent}
@@ -1338,6 +1345,7 @@ export function Workspace({
           onDraftChange={(draft) =>
             moveCreateDraft({
               color: draft.color,
+              exactRange: draft.exactRange,
               date: draft.date,
               endDate: draft.isAllDay ? draft.endDate : undefined,
               endTime: draft.isAllDay ? undefined : draft.endTime,

@@ -1,9 +1,15 @@
 import { EventTimeZoneSchema, editedEvent, type Event, type EventWriteRequest } from "@musubi/types";
-import { knownEventTimeDraft, editEventTimeDraft, createEventTimeDraft, type EventTimeDraft } from "@musubi/calendar";
+import { instantToCivil, unambiguousCivilToInstant, knownEventTimeDraft, editEventTimeDraft, createEventTimeDraft, type EventTimeDraft } from "@musubi/calendar";
 import { toDateKey } from "./date-key";
 import { spansMultipleServers, type ConnectionMap } from "./federation-routing";
 
+export type ExactEventRange = { start: Date; end: Date };
+
 export type EventFormValues = {
+  /** Exact slot selected on the grid, retained while its civil fields are unchanged. */
+  exactRange?: ExactEventRange;
+  /** Civil edits revoke only the edited endpoint’s selected occurrence. */
+  invalidatedExactEndpoints?: ("start" | "end")[];
   /** Authored private fields carried between editor surfaces, never sent as event content. */
   privateDraftFields?: ("title" | "description" | "location" | "url")[];
   /** Stable creation identity for this draft, including retries and handoff. */
@@ -71,12 +77,14 @@ export function defaultEventFormValues(
     endDate,
     endTime,
     isAllDay = false,
-  }: { endDate?: string; endTime?: string; isAllDay?: boolean } = {},
+    exactRange,
+  }: { endDate?: string; endTime?: string; isAllDay?: boolean; exactRange?: ExactEventRange } = {},
 ): EventFormValues {
   const start = timedBoundary(date, startTime);
   const end = new Date(start.getTime() + 60 * 60 * 1_000);
 
   return {
+    exactRange,
     createID: crypto.randomUUID(),
     timeEditable: true,
     timeKind: "legacy-unknown",
@@ -84,8 +92,8 @@ export function defaultEventFormValues(
     calendarIds: [calendarId],
     date,
     description: "",
-    endDate: endDate ?? date,
-    endTime: endTime ?? toTimeInput(end),
+    endDate: endDate ?? (exactRange ? toDateKey(exactRange.end) : date),
+    endTime: endTime ?? toTimeInput(exactRange?.end ?? end),
     hasAttendees: false,
     isAllDay,
     location: "",
@@ -114,6 +122,7 @@ export function eventFormValues(event: Event): EventFormValues {
     url: event.url ?? "",
     timeEditable: true,
     timeKind: "legacy-unknown",
+    ...(!known && !event.isAllDay ? { exactRange: { start: event.start, end: event.end } } : {}),
     ...(known ?? {}),
   };
 }
@@ -152,10 +161,12 @@ export function validateEventForm(
   }
 
   if (!values.isAllDay && !(values.timeKind && values.timeKind !== "legacy-unknown")) {
-    const start = timedBoundary(values.date, values.startTime).getTime();
-    const end = timedBoundary(values.endDate, values.endTime).getTime();
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
-      return "End time must be after start time.";
+    try {
+      const { start, end } = eventBoundaries(values);
+      if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start)
+        return "End time must be after start time.";
+    } catch (error) {
+      return error instanceof Error ? error.message : "Choose a valid time.";
     }
   }
 
@@ -195,15 +206,31 @@ export function selectHomeCalendar(
   };
 }
 
-function eventBoundaries(values: EventFormValues) {
+function legacyBoundary(values: EventFormValues, endpoint: "start" | "end") {
+  const date = endpoint === "start" ? values.date : values.endDate;
+  const time = endpoint === "start" ? values.startTime : values.endTime;
+  if (!Number.isFinite(timedBoundary(date, time).getTime()))
+    throw new Error("End time must be after start time.");
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const chosen = values.invalidatedExactEndpoints?.includes(endpoint) ? undefined : values.exactRange?.[endpoint];
+  if (chosen && instantToCivil(chosen, zone).slice(0, 16) === `${date}T${time}`)
+    return chosen;
+  try {
+    return unambiguousCivilToInstant(`${date}T${time}:00.000`, zone);
+  } catch {
+    throw new Error("This local time is missing or occurs twice because the clocks change. Choose an exact time on the calendar grid, or enter a different time.");
+  }
+}
+
+export function eventBoundaries(values: EventFormValues) {
   return values.isAllDay
     ? {
         end: allDayBoundary(values.endDate),
         start: allDayBoundary(values.date),
       }
     : {
-        end: timedBoundary(values.endDate, values.endTime),
-        start: timedBoundary(values.date, values.startTime),
+        end: values.timeKind && values.timeKind !== "legacy-unknown" ? timedBoundary(values.endDate, values.endTime) : legacyBoundary(values, "end"),
+        start: values.timeKind && values.timeKind !== "legacy-unknown" ? timedBoundary(values.date, values.startTime) : legacyBoundary(values, "start"),
       };
 }
 
