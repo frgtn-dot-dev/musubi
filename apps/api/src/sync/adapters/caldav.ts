@@ -1,3 +1,4 @@
+import { isIcloudRsvpDestination } from "@musubi/types";
 import { isCaldavPersonalContentOperation, isIcloudPersonalContentDestination, type CaldavPersonalContentOperation } from "../caldav_personal_content";
 import { caldavOrganizerTransport } from "./caldav_organizer_delivery";
 import { caldavAlarmScope } from "@musubi/calendar";
@@ -1207,6 +1208,15 @@ async function rsvpAuthorization(userID: string, accountID: string, externalCale
   return basicAuthForAccount(accountID);
 }
 
+/** Re-read the authenticated account and enabled link; persisted evidence cannot
+ * grant compatibility after account, destination or feature policy changes. */
+async function icloudRsvpEligibility(userID: string, accountID: string, calendar: string, resource: string): Promise<boolean> {
+  if (!config.api.providerRsvpEditsEnabled || !config.api.icloudRsvpEditsEnabled) return false;
+  await rsvpAuthorization(userID, accountID, calendar);
+  const account = (await getCaldavAccountsByUser(userID)).find(item => item.id === accountID);
+  return !!account && isIcloudRsvpDestination(account.serverUrl, calendar, resource);
+}
+
 async function seriesAuthorization(userID: string, accountId: string, externalCalendarId: string, intent: CaldavSeriesIntent, signal?: AbortSignal, action: "update" | "delete" | "create" = "update", operation?: CaldavPersonalContentOperation) {
   if (!config.api.eventTimeEditsEnabled)
     throw new EventWriteError("event-write", "unsupported");
@@ -1395,14 +1405,14 @@ export const caldavAdapter: CalendarAdapter = {
   },
   async readCaldavRsvp(userID, accountID, calendar, ref, response, signal) {
     if (!ref.icalUid) throw new EventWriteError("event-write", "unsupported");
-    return readCaldavRsvp(calendar, { id: ref.externalEventId, etag: requireEventEtag(ref.etag), uid: ref.icalUid }, await rsvpAuthorization(userID, accountID, calendar), response, signal);
+    return readCaldavRsvp(calendar, { id: ref.externalEventId, etag: requireEventEtag(ref.etag), uid: ref.icalUid }, await rsvpAuthorization(userID, accountID, calendar), response, signal, () => icloudRsvpEligibility(userID, accountID, calendar, ref.externalEventId));
   },
   async writeCaldavRsvp(userID, accountID, calendar, evidence, signal, beforeWrite, readOnly = false) {
     const authorization = await rsvpAuthorization(userID, accountID, calendar);
     return deliverCaldavRsvp(calendar, evidence, authorization, signal, async () => {
       if (await rsvpAuthorization(userID, accountID, calendar) !== authorization) throw new ProviderEventWriteError("provider-conflict");
       await beforeWrite?.();
-    }, readOnly);
+    }, readOnly, () => icloudRsvpEligibility(userID, accountID, calendar, evidence.id));
   },
   async readCaldavSeries(userID, accountId, externalCalendarId, intent, signal, operation) {
     const { resource, authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, intent, signal, "update", operation);

@@ -124,3 +124,11 @@ metadat, ověřenou identitu a podmíněný zápis. Nesmí předstírat Schedule
 ETag ani přebírat fallback osobních obsahových změn. Následovat musí nezávislá
 review, regresní testy a živé ověření vlastníkových testovacích účtů. Produkční
 aktivace ani fyzická device acceptance tím nejsou převzaté.
+
+Navazující dávka implementuje samostatný default-off `ICLOUD_RSVP_EDITS_ENABLED`
+pro jednorázové attendee RSVP s přesným paired-404 důkazem a skutečně chybějícím
+Schedule-Tag. Zachovává ověřenou identitu, strong ETag, trvalý dispatch marker
+a oddělený režim při ACK. Lokální HTTP/DB regrese nejsou živá acceptance:
+existující ručně importovaná pozvánka má `SCHEDULE-AGENT=CLIENT` a je nadále
+správně odmítnutá. Nativní URI organizátoři a organizer zápisy nejsou rozšířené.
+[Kontrakt a hranice](../sync/caldav-rsvp.md#separately-gated-icloud-attendee-compatibility).

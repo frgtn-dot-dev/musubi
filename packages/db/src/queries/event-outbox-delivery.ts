@@ -1,10 +1,10 @@
 import { matchesRsvpEventProjection } from "./event-outbox-projection";
-import { providerRsvpBaselineVersion } from "./provider-rsvp";
+import { hasCaldavRsvpBoundary, providerRsvpBaselineVersion } from "./provider-rsvp";
 import { matchesProviderReminderInstanceState } from "./provider-reminder-instance";
 import { readProviderRsvpInstance } from "./provider-rsvp-instance";
 import { isDeepStrictEqual } from "node:util";
 import { providerStateVersion } from "./provider-reminders";
-import { EventSchema, ProviderEventStateSchema, microsoftRsvpDesiredState, matchesMicrosoftRsvpObservedState, type MicrosoftRsvpConfirmation, providerRsvpDesiredState, caldavRsvpDesiredState, type CaldavRsvpConfirmation } from "@musubi/types";
+import { CaldavRsvpDeliverySchema, EventSchema, ProviderEventStateSchema, microsoftRsvpDesiredState, matchesMicrosoftRsvpObservedState, type MicrosoftRsvpConfirmation, providerRsvpDesiredState, caldavRsvpDesiredState, type CaldavRsvpConfirmation } from "@musubi/types";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { config } from "@musubi/config";
 import { db } from "..";
@@ -17,7 +17,7 @@ import {
   externalEvents,
   externalEventTombstones,
 } from "../schema";
-import { lockCalendarLifecycle } from "./calendar-lifecycle";
+import { lockUserLifecycle, lockCalendarLifecycle } from "./calendar-lifecycle";
 import type { EventOutboxRow } from "./event-outbox";
 import type { DbTransaction } from "./calendars";
 import { lockExternalEventIdentity } from "./event-outbox-deletions";
@@ -185,6 +185,7 @@ async function completeEventOutboxInternal(
         .from(eventOutbox)
         .where(eq(eventOutbox.id, id));
       if (!address || address.payload.organizer || address.payload.caldavAlarm || address.payload.graphSeriesCreate || address.payload.caldavSplit || address.payload.caldavSeries || address.payload.caldavSeriesDeletion || !!address.payload.rsvp !== (confirmation === "rsvp") || !!address.payload.reminderInstance !== (confirmation === "reminder-instance")) return undefined;
+      if (address.payload.rsvp?.request.provider === "caldav") await lockUserLifecycle(tx, [address.userID], "shared");
       await lockCalendarLifecycle(tx, [address.calendarID], "shared");
       const resource =
         resultRef ?? (address.action === "delete" ? expectedRef : null);
@@ -224,7 +225,7 @@ async function completeEventOutboxInternal(
         const caldav = row.payload.rsvp?.request.provider === "caldav";
         const graph = row.payload.rsvp?.request.provider === "microsoft";
         if (graph && (!config.api.providerRsvpEditsEnabled || !graphConfirmation || graphConfirmation.baselineHash !== providerRsvpBaselineVersion(intent.mappingID, intent.baseline) || graphConfirmation.observedResponse !== intent.desiredState.ownResponse || current?.seriesID || current?.originalStart || current?.recurrence || current?.isCanceled)) return settle(tx, row, "unconfirmed", "rsvp-confirmation-unavailable", resultRef);
-        if (caldav && (!config.api.providerRsvpEditsEnabled || !caldavConfirmation || caldavConfirmation.resourceHash !== row.payload.rsvp!.baseline.desiredResourceHash || caldavConfirmation.selfAddress !== row.payload.rsvp!.baseline.selfAddress || !/^"[\x21\x23-\x7e\x80-\xff]*"$/.test(caldavConfirmation.scheduleTag) || current?.seriesID || current?.originalStart || current?.recurrence || current?.isCanceled)) return settle(tx, row, "unconfirmed", "rsvp-confirmation-unavailable", resultRef);
+        if (caldav && (!config.api.providerRsvpEditsEnabled || !caldavConfirmation || (caldavConfirmation.mode !== undefined && caldavConfirmation.mode !== "strict" && caldavConfirmation.mode !== "icloud-oneoff-attendee") || caldavConfirmation.resourceHash !== row.payload.rsvp!.baseline.desiredResourceHash || caldavConfirmation.selfAddress !== row.payload.rsvp!.baseline.selfAddress || !(await hasCaldavRsvpBoundary(row, row.payload.rsvp!.baseline, tx, true)) || (caldavConfirmation.mode ?? "strict") !== (row.payload.rsvp!.baseline.mode ?? "strict") || (caldavConfirmation.mode === "icloud-oneoff-attendee" ? caldavConfirmation.scheduleTag !== null || !CaldavRsvpDeliverySchema.safeParse(row.payload.rsvp!.caldavDelivery).success : typeof caldavConfirmation.scheduleTag !== "string" || !/^"[\x21\x23-\x7e\x80-\xff]*"$/.test(caldavConfirmation.scheduleTag)) || current?.seriesID || current?.originalStart || current?.recurrence || current?.isCanceled)) return settle(tx, row, "unconfirmed", "rsvp-confirmation-unavailable", resultRef);
         if (!isDeepStrictEqual(intent.instance, addressInstance))
           return settle(tx, row, "unconfirmed", sourceChanged, resultRef);
         const [membership] = await tx.select({ role: calendarMembers.role }).from(calendarMembers).where(and(eq(calendarMembers.calendarID, row.calendarID), eq(calendarMembers.userID, row.actorID))).for("share");

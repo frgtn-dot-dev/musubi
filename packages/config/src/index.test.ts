@@ -5,13 +5,16 @@ process.env.ENVIRONMENT ??= "dev";
 process.env.BETTER_AUTH_URL ??= "http://localhost:7531";
 
 async function main() {
+  delete process.env.ICLOUD_RSVP_EDITS_ENABLED;
   const {
+    config,
     parseAdminEmails,
     parseEnvironment,
     parseMediaConfig,
     validateAuthSecret,
   } = await import("./index");
 
+  assert.equal(config.api.icloudRsvpEditsEnabled, false);
   assert.equal(parseEnvironment("dev"), "dev");
   assert.equal(parseEnvironment("test"), "test");
   assert.equal(parseEnvironment("prod"), "prod");

@@ -2,6 +2,7 @@ import { davMultistatus, type DavNode as Node } from "./caldav_properties";
 import { createGuardedCaldavFetch } from "./caldav_client";
 import { assertEventWriteResponse } from "./event_write";
 import { EventWriteError } from "@musubi/types";
+import { config } from "@musubi/config";
 
 const DAV = "DAV:", CAL = "urn:ietf:params:xml:ns:caldav";
 const guardedFetch = createGuardedCaldavFetch();
@@ -36,11 +37,14 @@ function safeURL(value: string, base: string): string {
   }
   return url.href;
 }
-async function properties(url: string, authorization: string, names: string[], signal?: AbortSignal, discoverPrincipal = false) {
+async function rawProperties(url: string, authorization: string, names: string[], signal?: AbortSignal) {
   const response = await guardedFetch(url, { method: "PROPFIND", redirect: "error", signal, headers: { authorization, depth: "0", "content-type": "application/xml", "cache-control": "no-cache" }, body: `<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop>${names.map(name => `<${name}/>`).join("")}</d:prop></d:propfind>` });
   assertEventWriteResponse(response);
   if (response.status !== 207 || response.headers.has("content-range") || !response.headers.get("content-type")?.toLowerCase().includes("xml")) refuse();
-  const raw = schedulingResponse(await response.text(), url);
+  return schedulingResponse(await response.text(), url);
+}
+async function properties(url: string, authorization: string, names: string[], signal?: AbortSignal, discoverPrincipal = false) {
+  const raw = await rawProperties(url, authorization, names, signal);
   const props = new Map([...raw].map(([name, property]) => [name, property.status === 200 ? property.value : { ...property.value, children: [], text: "" }]));
   // RFC 5397 identity may be exposed at the origin root but unavailable on a
   // calendar. Only an explicit empty 404 permits this bounded discovery step.
@@ -63,8 +67,11 @@ function privileges(node: Node): Set<string> {
     return item.children[0]!.name;
   }));
 }
-export type CaldavSchedulingProof = { principal: string; owner: string; outbox: string; addresses: string[] };
-export async function readCaldavSchedulingProof(collection: string, resource: string, authorization: string, signal?: AbortSignal, action: "reply" | "create" | "update" | "delete" = "reply"): Promise<CaldavSchedulingProof> {
+export type CaldavSchedulingProof = { principal: string; owner: string; outbox: string; addresses: string[] } & (
+  | { compatibility?: never; resourceWrite?: never; scheduleTag?: never }
+  | { compatibility: "icloud-oneoff-attendee"; resourceWrite: "empty-404"; scheduleTag: "empty-404" }
+);
+export async function readCaldavSchedulingProof(collection: string, resource: string, authorization: string, signal?: AbortSignal, action: "reply" | "create" | "update" | "delete" = "reply", allowIcloudReply = false): Promise<CaldavSchedulingProof> {
   safeURL(resource, collection);
   const options = await guardedFetch(collection, { method: "OPTIONS", redirect: "error", signal, headers: { authorization, "cache-control": "no-cache" } });
   assertEventWriteResponse(options);
@@ -109,7 +116,19 @@ export async function readCaldavSchedulingProof(collection: string, resource: st
   if (type.text || !type.children.some(item => item.name === key(DAV, "collection") && !item.children.length && !item.text) || !type.children.some(item => item.name === key(CAL, "schedule-outbox") && !item.children.length && !item.text)) refuse();
   const sending = privileges(one(permission, DAV, "current-user-privilege-set"));
   if (![key(DAV, "all"), key(CAL, "schedule-send"), key(CAL, action === "reply" ? "schedule-send-reply" : "schedule-send-invite")].some(value => sending.has(value))) refuse();
-  const writable = privileges(one(await properties(action === "create" || action === "delete" ? collection : resource, authorization, ["d:current-user-privilege-set"], signal), DAV, "current-user-privilege-set"));
+  const compatible = action === "reply" && allowIcloudReply && config.api.icloudRsvpEditsEnabled && config.api.providerRsvpEditsEnabled;
+  // The exception is one paired observation at the exact event resource. Never
+  // combine failed properties from separate requests or infer missing metadata.
+  const resourceProps = await rawProperties(action === "create" || action === "delete" ? collection : resource, authorization,
+    compatible ? ["d:current-user-privilege-set", "c:schedule-tag"] : ["d:current-user-privilege-set"], signal);
+  const write = resourceProps.get(key(DAV, "current-user-privilege-set"));
+  const tag = resourceProps.get(key(CAL, "schedule-tag"));
+  const empty404 = (property: typeof write) => property?.status === 404 && !property.value.text && !property.value.children.length;
+  if (compatible && empty404(write) && empty404(tag)) {
+    return { principal, owner, outbox, addresses, compatibility: "icloud-oneoff-attendee", resourceWrite: "empty-404", scheduleTag: "empty-404" };
+  }
+  if (write?.status !== 200) refuse();
+  const writable = privileges(write.value);
   if (![key(DAV, "all"), key(DAV, "write"), key(DAV, action === "create" ? "bind" : action === "delete" ? "unbind" : "write-content")].some(value => writable.has(value))) refuse();
   return { principal, owner, outbox, addresses };
 }
