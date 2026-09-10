@@ -51,7 +51,26 @@ export function caldavRsvpDesiredState(input: ProviderEventState, selfAddress: s
   if (matches[0]!.response?.toUpperCase() !== response.toUpperCase()) matches[0]!.response = response.toUpperCase();
   return state;
 }
-export type CaldavRsvpConfirmation = { resourceHash: string; scheduleTag: string; selfAddress: string };
+export type CaldavRsvpConfirmation = { resourceHash: string; selfAddress: string } & (
+  { mode?: "strict"; scheduleTag: string } |
+  { mode: "icloud-oneoff-attendee"; scheduleTag: null }
+);
+
+/** Destination eligibility only; never permission to write or proof of identity. */
+export function isIcloudRsvpDestination(accountServerURL: string, calendarURL: string, resourceURL: string): boolean {
+  try {
+    const urls = [accountServerURL, calendarURL, resourceURL].map(value => new URL(value));
+    if (!urls.every(url => url.protocol === "https:" && !url.username && !url.password && !url.port && !url.search && !url.hash
+      && /^(?:caldav|p[0-9]+-caldav)\.icloud\.com$/.test(url.hostname)
+      && url.pathname.split("/").every(part => {
+        const decoded = decodeURIComponent(part);
+        return decoded !== "." && decoded !== ".." && !/[\\/%\u0000-\u0020\u007f]/.test(decoded);
+      }))) return false;
+    const [, calendar, resource] = urls;
+    return calendar!.origin === resource!.origin && calendar!.pathname.endsWith("/")
+      && resource!.pathname.startsWith(calendar!.pathname) && resource!.pathname.length > calendar!.pathname.length;
+  } catch { return false; }
+}
 
 /** Acceptance of a private intent; notification delivery remains unknowable. */
 export const ProviderRsvpReceiptSchema = z.object({

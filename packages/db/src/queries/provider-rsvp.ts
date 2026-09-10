@@ -4,6 +4,7 @@ import { readProviderRsvpInstance } from "./provider-rsvp-instance";
 import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import {
+  isIcloudRsvpDestination,
   BadRequestError,
   EventSchema,
   EventWriteError,
@@ -61,6 +62,7 @@ async function rsvpTransaction(
       .where(eq(events.id, eventID));
     if (!initial?.calendarID)
       throw new ForbiddenError("A live connected source event is required.");
+    if (request.provider === "caldav") await lockUserLifecycle(tx, [actorID], "shared");
     await lockCalendarLifecycle(tx, [initial.calendarID], "shared");
     if (initial.seriesID)
       await tx.select({ id: events.id }).from(events).where(eq(events.id, initial.seriesID)).for("update");
@@ -210,6 +212,8 @@ async function rsvpTransaction(
     const context: ProviderRsvpContext = { actorID, eventID, request, event: snapshot, mappingID: mapping.id, externalEventID: mapping.externalEventID, etag: mapping.etag, icalUid: mapping.icalUid, accountID: target.link.accountID, externalCalendarID: target.link.externalCalendarID, linkID: target.link.id, state, ...(instance ? { instance } : {}) };
     if (!prepared) return { kind: "prepared", context };
     if (!isDeepStrictEqual(context, prepared.context)) throw new BadRequestError("RSVP source changed during provider verification.");
+    if (request.provider === "caldav" && !(await hasCaldavRsvpBoundary({ userID: actorID, accountID: target.link.accountID, externalCalendarID: target.link.externalCalendarID, externalEventID: mapping.externalEventID }, prepared.baseline, tx, true)))
+      throw new EventWriteError("event-write", "unsupported");
     // Raw evidence is server-internal and was normalized/compared by preflight.
     if (prepared.baseline.id !== mapping.externalEventID || prepared.baseline.etag !== mapping.etag)
       throw new BadRequestError("RSVP provider identity changed.");
@@ -254,10 +258,29 @@ export async function hasProviderRsvpSource(row: import("./event-outbox").EventO
   const [source] = lock ? await query.for("share", { of: [events, calendarEvents, calendarMembers, externalCalendars, externalEvents] }) : await query;
   if (!source || !["owner", "editor"].includes(source.role) || source.event.revision !== row.revision || source.mapping.etag !== row.expectedEtag || providerStateVersion(source.mapping) !== intent.request.expectedStateVersion) return false;
   try {
+    if (row.provider === "caldav" && (!(await hasCaldavRsvpBoundary(row, intent.baseline, executor, lock)) || (intent.baseline.mode === "icloud-oneoff-attendee" && !CaldavRsvpDeliverySchema.safeParse(intent.caldavDelivery).success))) return false;
     if (row.provider !== "google") return config.api.providerRsvpEditsEnabled && !intent.instance && !source.event.seriesID && !source.event.originalStart && !source.event.recurrence && !source.event.isCanceled && !source.mapping.externalSeriesID && !source.mapping.originalStart && source.mapping.icalUid === row.icalUid;
     const current = await readProviderRsvpInstance(executor, source.event, source.mapping, row.userID);
     return isDeepStrictEqual(current, intent.instance);
   } catch { return false; }
+}
+
+/** Validate persisted evidence at every database trust boundary. Compatibility
+ * cannot be inferred from absent tags or enabled configuration. */
+export async function hasCaldavRsvpBoundary(
+  destination: { userID: string; accountID: string; externalCalendarID: string; externalEventID: string | null },
+  baseline: Record<string, unknown>, executor: typeof db | DbTransaction = db, lock = false,
+): Promise<boolean> {
+  if (!config.api.providerRsvpEditsEnabled) return false;
+  const proof = baseline.proof;
+  if (!proof || typeof proof !== "object" || Array.isArray(proof)) return false;
+  const evidence = proof as Record<string, unknown>;
+  if (baseline.mode === undefined || baseline.mode === "strict")
+    return typeof baseline.scheduleTag === "string" && /^"[\x21\x23-\x7e\x80-\xff]*"$/.test(baseline.scheduleTag) && evidence.compatibility === undefined && evidence.resourceWrite === undefined && evidence.scheduleTag === undefined;
+  if (baseline.mode !== "icloud-oneoff-attendee" || baseline.scheduleTag !== null || evidence.compatibility !== "icloud-oneoff-attendee" || evidence.resourceWrite !== "empty-404" || evidence.scheduleTag !== "empty-404" || !config.api.icloudRsvpEditsEnabled || !destination.externalEventID) return false;
+  const query = executor.select({ serverUrl: caldavAccounts.serverUrl, encryptedPassword: caldavAccounts.encryptedPassword }).from(caldavAccounts).where(and(eq(caldavAccounts.id, destination.accountID), eq(caldavAccounts.userID, destination.userID)));
+  const [grant] = lock ? await query.for("share") : await query;
+  return !!grant?.encryptedPassword && config.api.providerRsvpEditsEnabled && config.api.icloudRsvpEditsEnabled && isIcloudRsvpDestination(grant.serverUrl, destination.externalCalendarID, destination.externalEventID);
 }
 
 /** Opaque preview identity includes every native field, including unprojected

@@ -6,7 +6,7 @@ export const caldavRsvpDstDurationData = caldavRsvpFixtureData
   .replace("DTSTART:20260328T090000Z", "DTSTART;TZID=Europe/Prague:20260328T090000")
   .replace("DTEND:20260328T100000Z", "DURATION:PT24H");
 export async function createCaldavRsvpFixture() {
-  const state = { data: caldavRsvpFixtureData, etag: '"before"', scheduleTag: '"schedule-before"', mode: "ok", puts: 0, reads: 0, requests: [] as string[], onRead: undefined as (() => Promise<void>) | undefined, onPut: undefined as (() => Promise<void>) | undefined };
+  const state = { data: caldavRsvpFixtureData, etag: '"before"', scheduleTag: '"schedule-before"', mode: "ok", compatibility: false, puts: 0, reads: 0, requests: [] as string[], onRead: undefined as (() => Promise<void>) | undefined, onPut: undefined as (() => Promise<void>) | undefined };
   const server = createServer(async (req, res) => {
     state.requests.push(`${req.method} ${req.url}`);
     assert.ok(req.headers.authorization?.startsWith("Basic "));
@@ -21,6 +21,10 @@ export async function createCaldavRsvpFixture() {
       else if (req.url === "/principal/") props = `<c:calendar-user-address-set><d:href>mailto:self@example.test</d:href>${state.mode === "two-self" ? "<d:href>mailto:other@example.test</d:href>" : ""}</c:calendar-user-address-set><c:schedule-outbox-URL><d:href>/outbox/</d:href></c:schedule-outbox-URL>`;
       else if (req.url === "/outbox/") props = `<d:resourcetype><d:collection/>${state.mode === "no-outbox" ? "" : "<c:schedule-outbox/>"}</d:resourcetype><d:current-user-privilege-set><d:privilege><c:${state.mode === "no-reply" ? "schedule-send-invite" : "schedule-send-reply"}/></d:privilege></d:current-user-privilege-set>`;
       else { assert.equal(req.url, "/collection/invite.ics"); props = `<d:current-user-privilege-set><d:privilege><d:${state.mode === "no-write" ? "read" : "write-content"}/></d:privilege></d:current-user-privilege-set>`; }
+      if (state.compatibility && req.url === "/collection/invite.ics") {
+        res.writeHead(207, { "content-type": "application/xml" });
+        return res.end(`<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:response><d:href>${req.url}</d:href><d:propstat><d:prop><d:current-user-privilege-set/><c:schedule-tag/></d:prop><d:status>HTTP/1.1 404 Not Found</d:status></d:propstat></d:response></d:multistatus>`);
+      }
       const response = `<d:response><d:href>${state.mode === "wrong-href" ? "/elsewhere" : req.url}</d:href><d:propstat><d:prop>${props}</d:prop><d:status>HTTP/1.1 ${state.mode === "failed-propstat" ? "403 Forbidden" : state.mode === "partial-propstat" ? "206 Partial Content" : "200 OK"}</d:status></d:propstat></d:response>`;
       res.writeHead(207, { "content-type": "application/xml" }); return res.end(`<d:multistatus xmlns:d="DAV:" xmlns:c="${state.mode === "wrong-namespace" ? "urn:evil" : "urn:ietf:params:xml:ns:caldav"}">${response}${state.mode === "duplicate-response" ? response : ""}</d:multistatus>`);
     }
@@ -28,7 +32,7 @@ export async function createCaldavRsvpFixture() {
     if (req.method === "GET") {
       state.reads++; await state.onRead?.();
       if (state.mode === "GET-404") { res.writeHead(404); return res.end(); }
-      res.writeHead(200, { "content-type": "text/calendar", etag: state.mode === "weak-etag" ? 'W/"weak"' : state.etag, ...(state.mode === "no-schedule-tag" ? {} : { "schedule-tag": state.scheduleTag }) }); return res.end(state.data);
+      res.writeHead(200, { "content-type": "text/calendar", etag: state.mode === "weak-etag" ? 'W/"weak"' : state.etag, ...((state.mode === "no-schedule-tag" || state.compatibility && !["weak-schedule-tag", "malformed-schedule-tag", "present-schedule-tag"].includes(state.mode)) ? {} : { "schedule-tag": state.mode === "weak-schedule-tag" ? 'W/"weak"' : state.mode === "malformed-schedule-tag" ? "invalid" : state.scheduleTag }) }); return res.end(state.data);
     }
     assert.equal(req.method, "PUT"); assert.equal(req.headers["if-schedule-tag-match"], undefined); assert.equal(req.headers["schedule-reply"], undefined);
     state.puts++;

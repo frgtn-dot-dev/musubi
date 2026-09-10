@@ -7,7 +7,7 @@ proof. The explicit action is **Send response to organizer**; its immutable
 request carries `provider=caldav` and `notificationPolicy=server-reply`.
 Google's separate `sendUpdates=all` contract is unchanged.
 
-## Supported native resource
+## Strict-mode supported native resource
 
 One complete, non-cancelled VEVENT with a known zoned or all-day time model,
 UID, strong ETag and Schedule-Tag is required. RRULE, RDATE, EXDATE,
@@ -35,9 +35,42 @@ The principal address set may contain non-email URI references under
 Only validated `mailto` members participate in email identity matching; other
 well-formed references are neither fetched nor interpreted as email addresses.
 Duplicate identities, malformed email members and ambiguous self matches fail.
-The separate iCloud personal-content fallback never applies to scheduling:
-resource `write-content` remains required for RSVP and organizer updates;
+The separate iCloud personal-content fallback never applies to scheduling.
+Under this strict mode, resource `write-content` remains required for RSVP and organizer updates;
 collection `bind`/`unbind` proves only the corresponding create/delete operation.
+
+## Separately gated iCloud attendee compatibility
+
+`ICLOUD_RSVP_EDITS_ENABLED` defaults to false and additionally requires
+`PROVIDER_RSVP_EDITS_ENABLED`. It permits only one-off attendee replies with the
+same mailto organizer, unique self identity, complete resource and strong ETag
+requirements above. Native Apple URI organizers, recurrence, delegation and
+`SCHEDULE-AGENT=CLIENT` or `NONE` remain unsupported.
+
+The current authenticated account must use an HTTPS Apple CalDAV host. The
+resource must remain inside the selected collection on its exact origin. Fresh
+metadata discovery must return the paired, explicitly empty **404** properties
+`DAV:current-user-privilege-set` and `CALDAV:schedule-tag` for that exact resource;
+the subsequent GET must actually omit Schedule-Tag. Missing properties, explicit
+denial, malformed responses, weak tags, and a present tag do not qualify for
+this exception. Automatic scheduling, principal equal to owner, and positive
+outbox send-reply privileges remain required.
+
+The private evidence and confirmation carry an explicit `icloud-oneoff-attendee`
+mode and null Schedule-Tag. Strict evidence retains its required strong tag.
+ETag is never substituted for Schedule-Tag. Account, destination, mode and both
+flags are checked across admission, worker source validation, dispatch and ACK;
+strict or legacy evidence cannot silently become compatibility evidence. The
+permanent single-attempt marker and read-only recovery apply to this mode too.
+A fully observed attendee copy still does not prove organizer delivery.
+
+Fake HTTP tests cover successful conditional delivery and refusal boundaries.
+Synthetic PostgreSQL tests cover compatibility dispatch and ACK, revoked flags
+or account, forged mode/tag, legacy policy absence and unchanged mappings on
+refusal. Live read-only preflight of the manually imported QA invitation found
+`SCHEDULE-AGENT=CLIENT`; it correctly refused before creating an intent or PUT.
+This is not live iCloud RSVP acceptance. See the
+[live investigation](../audits/calendar-icloud-invite-live-acceptance-20260910.md).
 
 ## Conditional delivery and recovery
 
@@ -77,14 +110,14 @@ A successful local readback proves the attendee copy was saved. The receipt
 continues to report notification delivery as unknown: automatic scheduling and
 an organizer SCHEDULE-STATUS are not evidence of organizer or email delivery.
 Live two-account organizer acceptance remains a separately authorized human-last
-step. This batch enables no flags, minima or versions and performs no live calls.
+step. This batch enables no production flags, minima or versions and performs no live scheduling writes through Musubi.
 
 ## Evidence
 
 `caldav_rsvp.test.ts` covers fake HTTP scheduling discovery, namespace attacks,
 self identity, exact native preservation, strong CAS, disabled/no-op behavior,
 server metadata, lost response recovery and unrelated changes.
-`caldav_rsvp.integration.test.ts` covers 38 synthetic PostgreSQL/public API
+`caldav_rsvp.integration.test.ts` covers 48 synthetic PostgreSQL/public API
 scenarios including replay/concurrency, forged ACK, pending pull, all-day data,
 and source/lease/revision races, atomic dispatch grants, marker-preserving retry,
 legacy read-only recovery, expired-lease reclamation, crash-before-PUT and HTTP 412 without resend, receipt

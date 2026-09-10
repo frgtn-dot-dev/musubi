@@ -84,6 +84,7 @@ type APIConfig = {
   caldavAlarmEditsEnabled: boolean;
   googleAvailabilityEnabled: boolean;
   providerRsvpEditsEnabled: boolean;
+  icloudRsvpEditsEnabled: boolean;
   providerOrganizerEditsEnabled: boolean;
     caldavOrganizerEditsEnabled: boolean;
   port: number;
@@ -246,6 +247,7 @@ const apiConfig: APIConfig = {
   caldavAlarmEditsEnabled: process.env.CALDAV_ALARM_EDITS_ENABLED === "true",
   googleAvailabilityEnabled: process.env.GOOGLE_AVAILABILITY_ENABLED === "true",
   providerRsvpEditsEnabled: process.env.PROVIDER_RSVP_EDITS_ENABLED === "true",
+  icloudRsvpEditsEnabled: process.env.ICLOUD_RSVP_EDITS_ENABLED === "true",
   providerOrganizerEditsEnabled: process.env.PROVIDER_ORGANIZER_EDITS_ENABLED === "true",
     caldavOrganizerEditsEnabled: process.env.CALDAV_ORGANIZER_EDITS_ENABLED === "true",
   port: Number(process.env.API_SERVER_PORT) || 7531,

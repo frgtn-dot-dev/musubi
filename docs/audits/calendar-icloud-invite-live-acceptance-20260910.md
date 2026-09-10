@@ -118,3 +118,30 @@ The native organizer comparison was deleted with notification; the obsolete
 Gmail-targeted fixture was also cancelled. No claim of successful iCloud RSVP
 is made. Native cancellation UI completion alone is not a Musubi cancellation
 writer acceptance or a claim that every remote guest copy has disappeared.
+
+## Separate compatibility preflight follow-up
+
+The later default-off attendee compatibility implementation preserves strict
+CalDAV behavior and explicitly models the paired empty-404 properties and
+absent GET Schedule-Tag. Its first live check used only the existing inbound
+fixture and read requests, with both development flags scoped to the QA process.
+
+The native ETag still matched the local mapping. The organizer was the expected
+Google mailto identity without SENT-BY, but the stored organizer carried
+`SCHEDULE-AGENT=CLIENT`. Preflight correctly rejected that resource. No RSVP
+intent, scheduling PUT, parameter rewrite or claim of organizer delivery was
+made. A manually imported email attachment therefore does not yet provide a
+server-scheduled fixture for this mode. Native invitation intake or a separately
+specified client scheduling transport must be evaluated before live acceptance.
+
+Read-only inspection of iCloud Calendar Account settings showed **via In-app
+Notifications** already selected for both confirmed aliases. No account setting
+was changed. A new Google fixture, **Musubi QA iCloud inapp retry 0920**,
+September 20, 19:00–19:30 Europe/Prague, was sent to the sole confirmed iCloud
+guest to check fresh intake after Mail activation; this is a separate native
+Google invitation test, not a Musubi RSVP write.
+The inbox still showed zero notifications and a subsequent standard CalDAV sync
+found no active matching resource during this bounded check. The new retry
+fixture was cancelled through Google Calendar with notification to its sole
+test guest; the UI confirmed deletion. The earlier manually imported fixture
+remains available. This observation does not prove eventual delivery impossible.

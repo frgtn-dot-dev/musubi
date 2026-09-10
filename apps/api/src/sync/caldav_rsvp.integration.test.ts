@@ -1,10 +1,11 @@
+import { hasCaldavRsvpBoundary } from "../../../../packages/db/src/queries/provider-rsvp";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import express from "express";
 import { eq, sql } from "drizzle-orm";
 import { config } from "@musubi/config";
 import { CLIENT_VERSION_HEADER, PRODUCT_VERSION, ProviderEventStateResponseSchema, ProviderRsvpReceiptSchema, CaldavRsvpDeliverySchema } from "@musubi/types";
-import { db, user, caldavAccounts, events, eventOutbox, externalEvents, externalCalendars, calendarMembers, saveCaldavAccount, importExternalCalendar, replaceExternalEventResource, upsertExternalEvent, getEventSnapshot, getOwnProviderEventObservation, claimEventOutbox, completeEventOutbox, completeProviderRsvpOutbox, replaceMemberToken, markCaldavRsvpDispatched, requestEventDeliveryRetry, getEventDeliveryStatus } from "@musubi/db";
+import { db, user, caldavAccounts, events, eventOutbox, externalEvents, externalCalendars, calendarMembers, saveCaldavAccount, importExternalCalendar, replaceExternalEventResource, upsertExternalEvent, getEventSnapshot, getOwnProviderEventObservation, claimEventOutbox, completeEventOutbox, completeProviderRsvpOutbox, prepareProviderRsvpEdit, commitProviderRsvpEdit, replaceMemberToken, markCaldavRsvpDispatched, requestEventDeliveryRetry, getEventDeliveryStatus } from "@musubi/db";
 import { createCaldavRsvpFixture, caldavRsvpDstDurationData } from "./adapters/caldav_rsvp.fixture";
 import { normalizeCaldavResource } from "./adapters/caldav_time";
 import { caldavRsvpState } from "./adapters/caldav_rsvp";
@@ -20,6 +21,7 @@ import { handlerGetProviderEventState, handlerProviderRsvpEdit } from "../handle
 async function main() {
   assert.equal(process.env.ENVIRONMENT, "test");
   for (const invalid of [null, {}, { kind: "caldav-rsvp-at-most-once", version: 2 }, { kind: "caldav-rsvp-at-most-once", version: 1, startedAt: "invalid" }, { kind: "caldav-rsvp-at-most-once", version: 1, cleared: true }]) assert.equal(CaldavRsvpDeliverySchema.safeParse(invalid).success, false);
+  const icloudFlag = config.api.icloudRsvpEditsEnabled;
   const flag = config.api.providerRsvpEditsEnabled, timeFlag = config.api.eventTimeEditsEnabled;
   config.api.eventTimeEditsEnabled = false;
   const app = express(); app.use(express.json());
@@ -30,7 +32,7 @@ async function main() {
   const port = api.address(); assert.ok(port && typeof port !== "string");
   const origin = `http://127.0.0.1:${port.port}`;
   try {
-    for (const scenario of ["public", "all-day", "concurrent", "lost", "metadata", "no-op", "lowercase-no-op", "echo-before-ack", "echo-dst-duration", "OPTIONS-429", "PROPFIND-503", "disabled", "worker-disabled", "viewer", "role-after", "lease-after", "revision-after", "mapping-before", "source-before", "permission-before", "account-after-read", "changed-native", "forged-ack", "pending-pull", "marker-race", "marker-expired", "marker-payload", "marker-source", "marker-disconnected", "marker-flag", "marker-legacy", "marker-malformed", "marker-retry", "marker-crash", "marker-reclaim", "legacy-readonly", "legacy-recovered", "dispatch-412"]) {
+    for (const scenario of ["compat-db-positive", "compat-db-disabled", "compat-db-disconnected", "compat-db-account", "compat-db-mode", "compat-db-tag", "compat-db-legacy", "compat-boundary", "compat-forged-ack", "compat-marker-forged", "public", "all-day", "concurrent", "lost", "metadata", "no-op", "lowercase-no-op", "echo-before-ack", "echo-dst-duration", "OPTIONS-429", "PROPFIND-503", "disabled", "worker-disabled", "viewer", "role-after", "lease-after", "revision-after", "mapping-before", "source-before", "permission-before", "account-after-read", "changed-native", "forged-ack", "pending-pull", "marker-race", "marker-expired", "marker-payload", "marker-source", "marker-disconnected", "marker-flag", "marker-legacy", "marker-malformed", "marker-retry", "marker-crash", "marker-reclaim", "legacy-readonly", "legacy-recovered", "dispatch-412"]) {
       const fixture = await createCaldavRsvpFixture(), { state, collection, resource } = fixture;
       const actor = `caldav-rsvp-${randomUUID()}`, credential = issueMemberToken();
       await db.insert(user).values({ id: actor, name: "Fixture", email: `${actor}@example.test`, isExternal: true });
@@ -78,6 +80,82 @@ async function main() {
         await assert.rejects(() => queueProviderRsvp(actor, original.id, { ...request, response: "declined" }));
         assert.equal((await journal()).length, 1); assert.deepEqual(await savedEvents(), untouched); assert.deepEqual(await savedMaps(), originalMaps);
         const row = (await journal())[0]!;
+        if (scenario.startsWith("compat-db-")) {
+          // Synthetic persisted evidence exercises database boundaries without
+          // routing an Apple hostname to the HTTP fixture or contacting Apple.
+          config.api.icloudRsvpEditsEnabled = true;
+          const appleCollection = "https://p01-caldav.icloud.com/cal/", appleResource = appleCollection + "event.ics";
+          await db.update(caldavAccounts).set({ serverUrl: "https://caldav.icloud.com/" }).where(eq(caldavAccounts.id, account.id));
+          await db.update(externalCalendars).set({ externalCalendarID: appleCollection }).where(eq(externalCalendars.calendarID, calendar.id));
+          await db.update(externalEvents).set({ externalCalendarID: appleCollection, externalEventID: appleResource }).where(eq(externalEvents.id, mapping!.id));
+          const payload = { ...row.payload, rsvp: { ...row.payload.rsvp!, baseline: { ...row.payload.rsvp!.baseline, id: appleResource, mode: "icloud-oneoff-attendee", scheduleTag: null, proof: { ...row.payload.rsvp!.baseline.proof as object, compatibility: "icloud-oneoff-attendee", resourceWrite: "empty-404", scheduleTag: "empty-404" } } } };
+          await db.update(eventOutbox).set({ externalCalendarID: appleCollection, externalEventID: appleResource, payload }).where(eq(eventOutbox.id, row.id));
+          const claimed = (await claimEventOutbox(row.id))!;
+          assert.equal(await markCaldavRsvpDispatched(claimed), true);
+          const dispatched = (await journal())[0]!;
+          assert.equal(await markCaldavRsvpDispatched(dispatched), false);
+          const beforeAck = await savedMaps();
+          if (scenario === "compat-db-disabled") config.api.icloudRsvpEditsEnabled = false;
+          if (scenario === "compat-db-disconnected") await db.delete(caldavAccounts).where(eq(caldavAccounts.id, account.id));
+          if (scenario === "compat-db-account") await db.update(caldavAccounts).set({ serverUrl: "https://example.test/" }).where(eq(caldavAccounts.id, account.id));
+          if (scenario === "compat-db-legacy") {
+            delete dispatched.payload.rsvp!.caldavDelivery;
+            await db.update(eventOutbox).set({ payload: dispatched.payload }).where(eq(eventOutbox.id, row.id));
+          }
+          const result = { externalEventId: appleResource, etag: '"compat-after"', icalUid: "rsvp-fixture" };
+          const confirmation = { mode: "icloud-oneoff-attendee", scheduleTag: null, resourceHash: String(row.payload.rsvp!.baseline.desiredResourceHash), selfAddress: String(row.payload.rsvp!.baseline.selfAddress) };
+          if (scenario === "compat-db-mode") Object.assign(confirmation, { mode: "strict", scheduleTag: '"tag"' });
+          if (scenario === "compat-db-tag") Object.assign(confirmation, { scheduleTag: '"tag"' });
+          await completeProviderRsvpOutbox(row.id, claimed.leaseToken!, result, { externalEventId: appleResource, etag: row.expectedEtag, icalUid: "rsvp-fixture" }, { isEcho: true, externalEventId: appleResource, etag: result.etag, deleted: false, providerState: row.payload.rsvp!.desiredState, observedAt: new Date().toISOString() }, confirmation as any);
+          const acknowledged = (await journal())[0]!;
+          if (scenario === "compat-db-positive") {
+            assert.equal(acknowledged.status, "completed");
+            assert.equal((await savedMaps())[0]!.etag, result.etag);
+          } else {
+            assert.notEqual(acknowledged.status, "completed");
+            assert.deepEqual(await savedMaps(), beforeAck);
+          }
+          if (scenario !== "compat-db-legacy") assert.deepEqual(acknowledged.payload.rsvp!.caldavDelivery, dispatched.payload.rsvp!.caldavDelivery);
+          assert.deepEqual(await savedEvents(), untouched); assert.equal(state.puts, 0); continue;
+        }
+        if (scenario === "compat-boundary") {
+          const baseline = { ...row.payload.rsvp!.baseline, mode: "icloud-oneoff-attendee", scheduleTag: null, proof: { ...row.payload.rsvp!.baseline.proof as object, compatibility: "icloud-oneoff-attendee", resourceWrite: "empty-404", scheduleTag: "empty-404" } };
+          const destination = { ...row, externalCalendarID: "https://p01-caldav.icloud.com/cal/", externalEventID: "https://p01-caldav.icloud.com/cal/event.ics" };
+          config.api.icloudRsvpEditsEnabled = true;
+          // A provider-looking collection cannot turn an unrelated account into iCloud.
+          assert.equal(await hasCaldavRsvpBoundary(destination, baseline), false);
+          await db.update(caldavAccounts).set({ serverUrl: "https://caldav.icloud.com/" }).where(eq(caldavAccounts.id, account.id));
+          assert.equal(await hasCaldavRsvpBoundary(destination, baseline), true);
+          for (const invalid of [ { ...baseline, mode: undefined }, { ...baseline, mode: "strict" }, { ...baseline, scheduleTag: '"tag"' }, { ...baseline, proof: { ...baseline.proof, resourceWrite: undefined } }, { ...baseline, proof: { ...baseline.proof, scheduleTag: "200" } } ]) assert.equal(await hasCaldavRsvpBoundary(destination, invalid), false);
+          assert.equal(await hasCaldavRsvpBoundary({ ...destination, externalEventID: "https://p02-caldav.icloud.com/cal/event.ics" }, baseline), false);
+          config.api.icloudRsvpEditsEnabled = false;
+          assert.equal(await hasCaldavRsvpBoundary(destination, baseline), false);
+          config.api.icloudRsvpEditsEnabled = true; config.api.providerRsvpEditsEnabled = false;
+          assert.equal(await hasCaldavRsvpBoundary(destination, baseline), false);
+          config.api.providerRsvpEditsEnabled = true;
+          // Commit revalidates destination and fresh evidence even for internal callers.
+          await db.delete(eventOutbox).where(eq(eventOutbox.id, row.id));
+          const preparation = await prepareProviderRsvpEdit(actor, original.id, request);
+          assert.equal(preparation.kind, "prepared");
+          if (preparation.kind === "prepared") await assert.rejects(() => commitProviderRsvpEdit(preparation.context, baseline, row.payload.rsvp!.nativeTime!));
+          assert.equal((await journal()).length, 0); assert.deepEqual(await savedMaps(), originalMaps); assert.equal(state.puts, 0); continue;
+        }
+        if (scenario === "compat-marker-forged") {
+          config.api.icloudRsvpEditsEnabled = true;
+          const claimed = (await claimEventOutbox(row.id))!;
+          claimed.payload.rsvp!.baseline = { ...claimed.payload.rsvp!.baseline, mode: "icloud-oneoff-attendee", scheduleTag: null, proof: { ...claimed.payload.rsvp!.baseline.proof as object, compatibility: "icloud-oneoff-attendee", resourceWrite: "empty-404", scheduleTag: "empty-404" } };
+          await db.update(eventOutbox).set({ payload: claimed.payload }).where(eq(eventOutbox.id, row.id));
+          assert.equal(await markCaldavRsvpDispatched(claimed), false);
+          assert.equal((await journal())[0]!.payload.rsvp!.caldavDelivery?.startedAt, undefined);
+          assert.equal(state.puts, 0); continue;
+        }
+        if (scenario === "compat-forged-ack") {
+          config.api.icloudRsvpEditsEnabled = true;
+          const claimed = (await claimEventOutbox(row.id))!;
+          const result = { externalEventId: resource, etag: '"forged-compat"', icalUid: "rsvp-fixture" };
+          await completeProviderRsvpOutbox(row.id, claimed.leaseToken!, result, { externalEventId: resource, etag: row.expectedEtag, icalUid: "rsvp-fixture" }, { isEcho: true, externalEventId: resource, etag: result.etag, deleted: false, providerState: row.payload.rsvp!.desiredState, observedAt: new Date().toISOString() }, { mode: "icloud-oneoff-attendee", scheduleTag: null, resourceHash: String(row.payload.rsvp!.baseline.desiredResourceHash), selfAddress: String(row.payload.rsvp!.baseline.selfAddress) });
+          assert.notEqual((await journal())[0]!.status, "completed"); assert.deepEqual(await savedMaps(), originalMaps); assert.deepEqual(await savedEvents(), untouched); assert.equal(state.puts, 0); continue;
+        }
         assert.equal(row.payload.rsvp!.request.provider, "caldav"); assert.equal(row.payload.rsvp!.baseline.before, state.data);
         assert.equal((await getEventDeliveryStatus(actor, original.id)).targets[0]!.caldavRsvpPhase, "queued");
         assert.deepEqual(row.payload.rsvp!.caldavDelivery, { kind: "caldav-rsvp-at-most-once", version: 1 });
@@ -230,8 +308,8 @@ async function main() {
         assert.equal(await persist(), false); assert.deepEqual(await savedEvents(), untouched);
         assert.equal((await queueProviderRsvp(actor, original.id, request)).operationID, row.id); assert.equal(state.puts, ["no-op", "lowercase-no-op"].includes(scenario) ? 0 : 1);
         console.log(`CalDAV RSVP DB ${scenario}: private intent, full native ACK, unchanged canonical event and replay: OK`);
-      } finally { config.api.providerRsvpEditsEnabled = true; await db.delete(user).where(eq(user.id, actor)); await fixture.close(); }
+      } finally { config.api.icloudRsvpEditsEnabled = icloudFlag; config.api.providerRsvpEditsEnabled = true; await db.delete(user).where(eq(user.id, actor)); await fixture.close(); }
     }
-  } finally { config.api.providerRsvpEditsEnabled = flag; config.api.eventTimeEditsEnabled = timeFlag; api.closeAllConnections(); await new Promise<void>(resolve => api.close(() => resolve())); }
+  } finally { config.api.icloudRsvpEditsEnabled = icloudFlag; config.api.providerRsvpEditsEnabled = flag; config.api.eventTimeEditsEnabled = timeFlag; api.closeAllConnections(); await new Promise<void>(resolve => api.close(() => resolve())); }
 }
 void main().catch(error => { console.error(error); process.exitCode = 1; });

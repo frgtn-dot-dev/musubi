@@ -9,8 +9,9 @@ import { replaceEventProperties } from "./caldav_event_ical";
 import { canonicalCaldavResource } from "./caldav_series";
 
 export type CaldavRsvpResponse = "accepted" | "tentative" | "declined";
-export type CaldavRsvpEvidence = {
-  id: string; etag: string; uid: string; scheduleTag: string;
+export type CaldavRsvpMode = { mode?: "strict"; scheduleTag: string } | { mode: "icloud-oneoff-attendee"; scheduleTag: null };
+export type CaldavRsvpEvidence = CaldavRsvpMode & {
+  id: string; etag: string; uid: string;
   proof: CaldavSchedulingProof; selfAddress: string; response: CaldavRsvpResponse;
   before: string; after: string; desiredResourceHash: string;
 };
@@ -81,8 +82,14 @@ export function caldavRsvpResourceHash(data: string): string {
   const stripped = caldavRsvpParameter(replaceEventProperties(data, 0, new Map([["dtstamp", []]])), "organizer", 0, "schedule-status");
   return createHash("sha256").update(canonicalCaldavResource(stripped)).digest("hex");
 }
-export function prepareCaldavRsvp(data: string, ref: { id: string; etag: string; uid: string; scheduleTag: string }, proof: CaldavSchedulingProof, response: CaldavRsvpResponse): CaldavRsvpEvidence {
-  requireEventEtag(ref.etag); requireEventEtag(ref.scheduleTag);
+export function prepareCaldavRsvp(data: string, ref: { id: string; etag: string; uid: string } & CaldavRsvpMode, proof: CaldavSchedulingProof, response: CaldavRsvpResponse): CaldavRsvpEvidence {
+  requireEventEtag(ref.etag);
+  if (ref.mode === "icloud-oneoff-attendee") {
+    if (ref.scheduleTag !== null || proof.compatibility !== "icloud-oneoff-attendee" || proof.resourceWrite !== "empty-404" || proof.scheduleTag !== "empty-404") fail();
+  } else {
+    if (ref.mode !== undefined && ref.mode !== "strict" || proof.compatibility !== undefined) fail();
+    requireEventEtag(ref.scheduleTag);
+  }
   if (!["accepted", "tentative", "declined"].includes(response) || !ref.uid || proof.principal !== proof.owner || !proof.addresses.length || new Set(proof.addresses).size !== proof.addresses.length) fail();
   replaceEventProperties(data, 0, new Map());
   const calendar = new ICAL.Component(ICAL.parse(data)), components = calendar.getAllSubcomponents("vevent");
@@ -109,7 +116,7 @@ export function prepareCaldavRsvp(data: string, ref: { id: string; etag: string;
   // No force-send: a repeated identical response is a resource no-op.
   const changed = caldavRsvpParameter(data, "attendee", self[0]!, "partstat", response.toUpperCase());
   const after = status === response.toUpperCase() ? data : changed;
-  return { ...ref, proof: structuredClone(proof), selfAddress: addresses[self[0]!]!, response, before: data, after, desiredResourceHash: caldavRsvpResourceHash(after) };
+  return { id: ref.id, etag: ref.etag, uid: ref.uid, ...(ref.mode === undefined ? { scheduleTag: ref.scheduleTag } : { mode: ref.mode, scheduleTag: ref.scheduleTag } as CaldavRsvpMode), proof: structuredClone(proof), selfAddress: addresses[self[0]!]!, response, before: data, after, desiredResourceHash: caldavRsvpResourceHash(after) };
 }
 export function caldavRsvpState(data: string): ProviderEventState {
   return caldavEventState(new ICAL.Component(ICAL.parse(data)).getFirstSubcomponent("vevent")!);
