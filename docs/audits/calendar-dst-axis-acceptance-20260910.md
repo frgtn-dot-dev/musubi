@@ -47,3 +47,15 @@ axis integration remain separate. Product/minimum versions and provider flags
 are unchanged. The Google interval overlay keeps its existing identity,
 query-generation, privacy and opt-in fences; only its obsolete DST exclusion
 was removed after projection onto the same axis.
+
+## Full-matrix CI follow-up
+
+The first CI run found a single-piece height/container-query regression and two
+obsolete browser assertions requiring the former DST availability exclusion.
+Single pieces now fill the action's actual height; the existing content-density
+browser test passes unchanged. Availability acceptance now requires the correct
+fall-day busy interval and preserves its lack of event actions. All fourteen DST
+browser scenarios passed again after the correction, along with the affected
+availability cases and an existing two-session realtime case. Final required CI
+results are attached to the PR's exact head; the first failed run is not treated
+as acceptance.

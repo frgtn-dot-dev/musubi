@@ -63,7 +63,8 @@ it("does not expand a short event into a reserved week hole", () => {
   const event = { ...fixtureEvents[0]!, title: "Short meeting", start: new Date("2026-10-24T00:59:00Z"), end: new Date("2026-10-24T01:00:00Z"), isAllDay: false };
   render(<TimeGridView {...props()} view="week" events={[event]} />);
   const piece = screen.getByRole("button", { name: /Short meeting/ }).firstElementChild as HTMLElement;
-  expect(parseFloat(piece.style.height)).toBeCloseTo(geometry.pxPerMinute);
+  expect(piece.style.height).toBe("100%");
+  expect(parseFloat((piece.parentElement as HTMLElement).style.height)).toBeCloseTo(geometry.pxPerMinute);
 });
 it("keeps zero-duration imported events visible", () => {
   const event = { ...fixtureEvents[0]!, title: "Instant event", start: new Date("2026-10-25T01:30:00Z"), end: new Date("2026-10-25T01:30:00Z"), isAllDay: false };

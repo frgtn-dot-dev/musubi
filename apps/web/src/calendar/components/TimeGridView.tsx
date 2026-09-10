@@ -366,7 +366,9 @@ const TimelineEvent = memo(function TimelineEvent({
 						"--event-foreground": ghost
 							? "var(--text-secondary)"
 							: getReadableEventTextColor(eventColor),
-						height: `${pieceHeight(piece)}px`,
+						// A single piece fills the action box so CSS containment follows
+            // its actual rendered height, including density and layout changes.
+            height: pieces.length === 1 ? "100%" : `${pieceHeight(piece)}px`,
 						left: 0,
 						top: `${((piece.start - (pieces[0]?.start ?? startMin)) * geometry.pxPerMinute)}px`,
 						width: "100%",
