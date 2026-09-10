@@ -11,7 +11,7 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 async function localTargets(tx: Tx, ids: string[]) {
   if (ids.length && (await tx.select({ id: externalCalendars.id }).from(externalCalendars)
     .where(inArray(externalCalendars.calendarID, ids)).limit(1)).length)
-    throw new BadRequestError("This operation requires a time-model-aware provider write. No changes were saved.");
+    throw new EventWriteError("event-write", "unsupported", "Creating or copying events with an explicit time model is not supported for this calendar. No changes were saved.");
 }
 async function grants(tx: Tx, ids: string[], actorID: string) {
   return tx.select({ id: calendarMembers.calendarID, role: calendarMembers.role }).from(calendarMembers)

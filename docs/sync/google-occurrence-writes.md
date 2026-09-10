@@ -33,6 +33,21 @@ Unrelated reminders, availability, privacy and provider properties are omitted
 from the patch. Recovery after a lost response reads and compares the desired
 state before considering another PATCH. A 412 stays a conflict.
 
+Strict admission captures a versioned SHA-256 proof of the complete native master
+in the private occurrence intent. Object keys are canonicalized recursively;
+only top-level `etag` and `updated` are excluded. Recurrence, sequence, reminders,
+extended properties and unknown native fields remain part of the proof. The
+admission and prewrite reads still require the exact accepted master ETag.
+Postwrite confirmation and read-only recovery may accept a different master ETag
+only when the saved proof matches, alongside the existing content, temporal,
+identity and permission checks. This accommodates Google's master validator bump
+after an instance edit without accepting an actual master change. Older intents
+without this proof cannot accept a changed master validator. A recovery that
+finds only the original instance baseline still needs the strict prewrite master
+ETag check; a changed master validator therefore prevents another PATCH.
+Neither proof acceptance nor the child ACK changes the local master mapping;
+normal provider pull supplies a fresh master validator for subsequent edits.
+
 A baseline pull must not conflict with an already locally cancelled or moved
 exception. Pending scope echoes compare the original identity and cancellation;
 active echoes additionally compare temporal model and content. Cancellation-only

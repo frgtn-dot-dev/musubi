@@ -57,5 +57,6 @@ export async function prepareGoogleOccurrence(
     etag: observed.ref.etag!,
     baseline,
     providerState: observed.state,
+    masterProof: observed.masterProof,
   };
 }
