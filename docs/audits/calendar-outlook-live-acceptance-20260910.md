@@ -130,10 +130,10 @@ no-resend wording. Fresh Google organizer views continued to show the attendee
 as not responded. Organizer delivery remains **unproven**; accepted dispatch
 and a missing copy are not a successful-delivery assertion.
 
-The second meeting was deleted through native Google cancel-and-notify. Cleanup
-of the first meeting is awaiting explicit confirmation of its cancellation
-notice after automatic approval review blocked that final send. Both local
-journals are intentionally preserved; full local cleanup is not claimed.
+Both meetings were deleted through native Google cancel-and-notify. The first
+meeting’s cancellation notice was sent after the owner explicitly confirmed
+that final cleanup action. Both local journals are intentionally preserved;
+full local cleanup is not claimed.
 
 The new shared receipt tests, CalDAV scheduling regressions, API typecheck and
 full `pnpm check` passed. Independent clean-context review was clean after the
