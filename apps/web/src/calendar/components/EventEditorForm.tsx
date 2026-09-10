@@ -37,6 +37,7 @@ import { minutesToTime, TimePicker, timeToMinutes } from "~/ui/TimePicker";
 import { groupCalendars } from "../calendar-groups";
 import {
 	type EventFormValues,
+	eventBoundaries,
 	selectHomeCalendar,
 	validateEventForm,
 } from "../event-form";
@@ -75,7 +76,7 @@ function draftSignature(values: EventFormValues): string {
 /** The "when" fields a gesture outside the form can move under it. */
 export type EventWhen = Pick<
 	EventFormValues,
-	"date" | "endDate" | "endTime" | "isAllDay" | "startTime"
+	"date" | "endDate" | "endTime" | "isAllDay" | "startTime" | "exactRange"
 >;
 
 type EventEditorFormProps = {
@@ -158,11 +159,11 @@ export function EventEditorForm({
 	const [placementMessage, setPlacementMessage] = useState("");
 	// Adjusted during render rather than from an effect: the form must never
 	// paint a time the grid has already moved on from.
-	const whenSignature = when ? Object.values(when).join("|") : "";
+	const whenSignature = when ? JSON.stringify(when) : "";
 	const [syncedWhen, setSyncedWhen] = useState(whenSignature);
 	if (when && syncedWhen !== whenSignature) {
 		setSyncedWhen(whenSignature);
-		setValues((current) => ({ ...current, ...when }));
+		setValues((current) => ({ ...current, ...when, invalidatedExactEndpoints: undefined }));
 	}
 	const [error, setError] = useState<FormError>();
 	const [saving, setSaving] = useState(false);
@@ -176,15 +177,30 @@ export function EventEditorForm({
 	const showCalendarList = expanded || calendarPickerOpen;
 
 	function patch(next: Partial<EventFormValues>) {
-		const merged = { ...values, ...next };
+		const changed = (keys: (keyof EventFormValues)[]) => keys.some((key) => key in next && next[key] !== values[key]);
+		const invalidated = new Set(values.invalidatedExactEndpoints);
+		if (changed(["date", "startTime", "isAllDay", "timeKind", "timeZone"])) invalidated.add("start");
+		if (changed(["endDate", "endTime", "isAllDay", "timeKind", "timeZone"])) invalidated.add("end");
+		const merged = { ...values, ...next, invalidatedExactEndpoints: [...invalidated] };
+
 		setValues(merged);
 		onValuesChange?.(merged);
 		setError(undefined);
 		if (onDraftChange && draftSignature(merged) !== draftSignature(values)) {
+			let exactRange = merged.exactRange;
+			if (!merged.isAllDay && (!merged.timeKind || merged.timeKind === "legacy-unknown")) {
+				try {
+					exactRange = eventBoundaries(merged);
+				} catch {
+					// Keep the last valid grid preview until the civil edit resolves.
+					return;
+				}
+			}
 			onDraftChange({
 				color: calendars.find((calendar) => calendar.id === merged.calendarId)
 					?.color,
 				date: merged.date,
+				exactRange: merged.isAllDay ? undefined : exactRange,
 				endDate: merged.endDate,
 				endTime: merged.endTime,
 				isAllDay: merged.isAllDay,

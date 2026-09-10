@@ -9292,7 +9292,7 @@ for (const [width, theme, outcome] of [[1280, "light", "success"], [390, "dark",
 }
 
 for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
-  test(`Availability grid explicit static intervals and DST fallback: ${theme} ${width}`, async ({ page }) => {
+  test(`Availability grid explicit static intervals and DST projection: ${theme} ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
     const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
@@ -9332,8 +9332,12 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await page.goto("/app/p/my-calendar/day?date=2026-10-25");
     await page.getByRole("button", { name: "Availability", exact: true }).click();
     await page.getByRole("switch", { name: "Show selected availability" }).click(); await page.keyboard.press("Escape");
-    await expect(page.getByText(/Availability cannot be shown in the grid on clock-change days/)).toBeVisible();
-    await expect(page.locator("[data-availability-interval]")).toHaveCount(0);
+    await expect(page.getByText(/Availability cannot be shown in the grid on clock-change days/)).toHaveCount(0);
+    await expect(block).toBeVisible();
+    await expect(block).toHaveAttribute("aria-label", /2026-10-25, 09:00–10:00/);
+    await expect(page.locator("[data-availability-interval]")).toHaveCount(1);
+    await expect(block).not.toHaveAttribute("data-time-event");
+    await expect(block.getByRole("button")).toHaveCount(0);
     expect(errors).toEqual([]); await expect(page.locator("vite-error-overlay")).toHaveCount(0);
   });
 }

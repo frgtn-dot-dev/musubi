@@ -896,8 +896,9 @@ eviduje příslušné PR.
 
 Vymezená autonomní implementace K12–K14 tím nemá další otevřenou feature položku.
 Nové konkrétní regrese nebo review nálezy se opravují před uzavřením. Samostatná
-DST produkční osa a její interakce čekají na schválení vizuálního návrhu a teprve
-potom na implementaci. Živá dvouúčtová invitation/RSVP acceptance, providerové
+DST produkční osa byla následně schválena a integrována 2026-09-10;
+[evidence navazující dávky](calendar-dst-axis-acceptance-20260910.md) nahrazuje
+původní gate schválení a implementace. Živá dvouúčtová invitation/RSVP acceptance, providerové
 permission/CAS důkazy, fyzická zařízení/OS a kompatibilní release/aktivace zůstávají
 human-last. Širší RDATE/recurrence, guest editing ani Graph UPDATE/DELETE se touto
 dávkou nepovolují. Historické checkpointy a původní živá kritéria hotovo výše
@@ -947,3 +948,11 @@ cursor resetu ponechaly obě family bez aktivních masterů/dětí; dokončené 
 receipts zůstaly zachované. Produkční flagy,
 verze/minima ani device/OS acceptance se nemění.
 [Úplná evidence a omezení](calendar-personal-series-live-acceptance-20260910.md).
+
+
+**Web DST integration — 2026-09-10:** owner approval of the concrete day/week
+pattern is recorded. One axis now drives event/availability rendering and
+interaction, with exact fold instants preserved through quick/full URL drafts.
+Bounded Chromium, renderer/accessibility and unit acceptance covers Prague and
+Lord Howe, invalid holes, midnight and short-event boundaries. Native/OS and
+release gates remain separate. [Evidence](calendar-dst-axis-acceptance-20260910.md).

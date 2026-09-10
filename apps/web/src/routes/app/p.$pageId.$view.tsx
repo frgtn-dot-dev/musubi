@@ -334,6 +334,8 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
           createID: event ? undefined : values.createID,
           timeKind: values.timeKind,
           timeZone: values.timeZone,
+          exactRange: values.exactRange ? { start: values.exactRange.start.toISOString(), end: values.exactRange.end.toISOString() } : undefined,
+          invalidatedExactEndpoints: values.invalidatedExactEndpoints,
           allDay: values.isAllDay || undefined,
           attendees: values.hasAttendees || undefined,
           calendarId: values.calendarId,

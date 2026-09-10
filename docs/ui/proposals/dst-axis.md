@@ -1,6 +1,7 @@
 # Clock-change axis preparation
 
-Status: isolated model and Storybook proposal; no production caller uses it.
+Status: owner-approved pattern integrated into web day/week on 2026-09-10.
+[Implementation and bounded acceptance](../../audits/calendar-dst-axis-acceptance-20260910.md).
 
 `apps/web/src/calendar/day-axis.ts` takes an explicit IANA timezone and civil
 date. It enumerates real minute instants, retaining a civil minute, occurrence
@@ -34,12 +35,12 @@ plus “first”/“second”. Approving this pattern chooses aligned civil hour
 a mixed-length week rather than aligning elapsed minutes since each midnight.
 Standalone days omit nonexistent rows and show both real repeated occurrences.
 The screenshot is a geometry/label demonstration, not a production restyle or an
-approved event renderer. Production adoption of the missing-row treatment and
-repeated-label anatomy waits for review of this concrete Storybook variant under
-`.agents/skills/musubi-ui/SKILL.md`; the pure correctness work is implementable
-without a live account or provider approval.
+approved event renderer. The owner reviewed both Prague variants and approved the missing-row treatment
+and repeated-label anatomy on 2026-09-10 under `.agents/skills/musubi-ui/SKILL.md`.
+This approval covers the day/week integration below; it does not certify its
+implementation or replace interaction acceptance.
 
-## Remaining production handoff
+## Implemented production handoff
 
 - Replace the independent time calculations in `TimeGridView.tsx`,
   `time-grid-math.ts`, `time-geometry.ts`, `time-grid-drag.ts` and
@@ -56,7 +57,8 @@ without a live account or provider approval.
 - Render cross-hole intervals as linked visual segments of their existing event,
   with one coherent action/focus identity. The renderer must not accidentally
   make one visual segment resize the wrong edge. This interaction integration is
-  outstanding; the proposal intentionally contains no fabricated events.
+  covered by production renderer stories and browser regressions; the original
+  geometry proposal intentionally contains no fabricated events.
 - Keep shared calendar layout/native callers unchanged until their own mapping
   is migrated. The existing `layout/day-segments.ts` elapsed-minute contract can
   remain a source of clipped instants; a web-specific axis projection follows it.
@@ -69,5 +71,5 @@ changes, cross-midnight intervals, and a week with differently sized days.
 Browser tests must verify selection/preview geometry agrees with saved payload,
 keyboard and pointer reach both folds, invalid drop preserves the draft, resize
 can reach day end, and focus returns correctly. Add narrow/light/dark coverage
-and offscreen scrolling. Those production interaction claims are not made by
-this model or Storybook preparation batch.
+and offscreen scrolling. The isolated model alone does not establish these claims; see the linked
+production acceptance for the tested interaction scope.

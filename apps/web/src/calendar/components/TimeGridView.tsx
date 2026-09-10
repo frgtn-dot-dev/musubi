@@ -1,11 +1,11 @@
+import { buildDayAxis, singleDayAxis, sharedWeekAxis, coordinateToInstant, coordinateBoundaryInstant, instantToCoordinate, intervalAxisSegments, civilCandidates, utcOffsetLabel, type TimeAxis } from "../day-axis";
 import { availabilityDaySegments, type GridAvailabilityInterval } from "../availability-grid";
 import { DEFAULT_CALENDAR_COLOR, type Calendar, type Event, type Settings } from "@musubi/types";
 import {
 	addDays,
 	assignOverlapColumns,
-	bucketEventsByDay,
 	dayKey,
-	getDaySegments,
+	type getDaySegments,
 	isSameDay,
 	startOfDay,
 } from "@musubi/calendar/layout";
@@ -35,7 +35,7 @@ import {
 import { canEditEvent, eventHomeCalendarId } from "../event-permissions";
 import { EventMarks } from "./EventMarks";
 import {
-	nextDragTimes,
+	nextAxisDragTimes,
 	type DragMode,
 	type DragTimes,
 } from "../time-grid-drag";
@@ -46,7 +46,8 @@ import {
 } from "../use-time-grid-drag";
 import {
 	getTimeGridDays,
-	openScrollMinutes,
+	axisOpenScroll,
+	holeSegments,
 	overlapPlacement,
 	type TimeGridViewId,
 } from "../time-grid-math";
@@ -98,6 +99,7 @@ type TimeGridViewProps = EventActionHandlers & {
 	/** Drops the draft the open quick create describes, before a new one starts. */
 	onCancelDraft?: () => void;
 	pendingCreate?: {
+		exactRange?: { start: Date; end: Date };
 		color?: string;
 		date: string;
 		endTime?: string;
@@ -108,6 +110,7 @@ type TimeGridViewProps = EventActionHandlers & {
 	 * open. Absent leaves the draft as a still highlight.
 	 */
 	onMoveDraft?: (input: {
+		exactRange?: { start: Date; end: Date };
 		date: string;
 		endTime: string;
 		startTime: string;
@@ -120,6 +123,7 @@ type TimeGridViewProps = EventActionHandlers & {
 		anchor: { returnFocus: HTMLElement; x: number; y: number },
 		/** Present when the interval was dragged rather than clicked. */
 		endTime?: string,
+		exactRange?: { start: Date; end: Date },
 	) => void;
 	timeFormat: Settings["timeFormat"];
 	view: TimeGridViewId;
@@ -144,6 +148,7 @@ type TimelineEventProps = EventActionHandlers & {
 	pending?: boolean;
 	draggable: boolean;
 	geometry: TimeGeometry;
+	axis: TimeAxis;
 	onBeginDrag: (input: BeginDragInput) => void;
 	onKeyboardAdjust: (event: Event, times: DragTimes) => void;
 	timeFormat: Settings["timeFormat"];
@@ -164,11 +169,39 @@ function clockMinutes(value: string): number {
 	return Number(hour ?? 0) * 60 + Number(minute ?? 0);
 }
 
-/** A minute of the day as an `HH:MM` form value. */
-function clockValue(minutes: number): string {
-	const hour = Math.floor(minutes / 60) % 24;
-	const minute = Math.floor(minutes % 60);
-	return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+function clockAt(axis: TimeAxis, column: number, coordinate: number, edge: "start" | "end" = "start") {
+  const instant = coordinateBoundaryInstant(axis, column, coordinate, edge);
+  if (instant === null) return "";
+  return civilClock(new Date(instant));
+}
+function civilClock(date: Date) {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+function realRunHeight(axis: TimeAxis, column: number, start: number, geometry: TimeGeometry) {
+  let end = Math.floor(start);
+  while (end < axis.rows.length && axis.columns[column]?.[end]) end++;
+  return Math.max(0, end - start) * geometry.pxPerMinute;
+}
+function previewPieces(axis: TimeAxis, column: number, times: DragTimes) {
+  const start = times.exactRange?.start.getTime() ?? coordinateToInstant(axis, column, times.startMinutes);
+  const end = times.exactRange?.end.getTime() ?? coordinateBoundaryInstant(axis, column, times.endMinutes, "end");
+  return start === null || end === null ? [] : intervalAxisSegments(axis, column, start, end);
+}
+function axisTimeLabel(axis: TimeAxis, column: number, coordinate: number, format: Settings["timeFormat"], edge: "start" | "end" = "start") {
+  const instant = coordinateBoundaryInstant(axis, column, coordinate, edge);
+  if (instant === null) return "";
+  const date = new Date(instant);
+  const value = axis.columns[column]?.[Math.min(axis.rows.length - 1, Math.floor(coordinate))];
+  const label = minuteLabel(date.getHours() * 60 + date.getMinutes(), format);
+  return value && civilCandidates(axis.days[column]!, value.minute).length > 1 ? `${label} ${utcOffsetLabel(value.offsetMinutes)} ${value.fold ? "second" : "first"}` : label;
+}
+function tickLabel(axis: TimeAxis, coordinate: number, timeFormat: Settings["timeFormat"]) {
+  const row = axis.rows[coordinate]!;
+  const repeated = axis.rows.some(other => other.minute === row.minute && other.fold !== row.fold);
+  const time = row.minute % 60 === 0 ? hourLabel(row.minute / 60, timeFormat) : minuteLabel(row.minute, timeFormat);
+  if (!repeated) return time;
+  const value = axis.columns.map(column => column[coordinate]).find(Boolean)!;
+  return `${time} ${utcOffsetLabel(value.offsetMinutes)} ${row.fold === 0 ? "first" : "second"}`;
 }
 
 /** A minute of the day as a clock time, for live drag feedback. */
@@ -198,6 +231,7 @@ function timeZoneLabel(date: Date) {
 }
 
 const TimelineEvent = memo(function TimelineEvent({
+	axis,
 	calendar,
 	calendars,
 	dayIndex,
@@ -219,9 +253,17 @@ const TimelineEvent = memo(function TimelineEvent({
 	const editable = canEditEvent(eventActions.getEventMaster(event), calendars);
 	// While dragging, the block follows the ghost times rather than the data.
 	const startMin = dragTimes?.startMinutes ?? daySegment.startMin;
-	const endMin = dragTimes?.endMinutes ?? daySegment.endMin;
+  const endMin = dragTimes?.endMinutes ?? daySegment.endMin;
 	const eventColor = calendar?.color ?? event.color;
-	const duration = endMin - startMin;
+	const renderStart = (dragTimes?.exactRange?.start ?? event.start).getTime();
+  const renderEnd = (dragTimes?.exactRange?.end ?? event.end).getTime();
+  const pieces = intervalAxisSegments(axis, dayIndex, renderStart, Math.max(renderEnd, renderStart + 60_000));
+  function pieceHeight(piece: { start: number; end: number }) {
+    return Math.min(realRunHeight(axis, dayIndex, piece.start, geometry), Math.max(pieces.length > 1 ? (piece.end - piece.start) * geometry.pxPerMinute - 2 : durationToHeight(piece.end - piece.start, geometry) - 2, pieces.length > 1 ? 1 : geometry.minEventHeight));
+  }
+  const lastPiece = pieces.at(-1);
+  const actionHeight = lastPiece ? (lastPiece.start - pieces[0]!.start) * geometry.pxPerMinute + pieceHeight(lastPiece) : 0;
+
 
 	/**
 	 * Keyboard equivalent of dragging (docs/ui/calendar-ui.md R10): Alt+Up/Down
@@ -234,8 +276,10 @@ const TimelineEvent = memo(function TimelineEvent({
 
 		keyEvent.preventDefault();
 		keyEvent.stopPropagation();
+		if (keyEvent.shiftKey && event.end.getTime() > axis.days[dayIndex]!.end) { eventActions.onNotice("Resize this event from its final day."); return; }
 		const step = (keyEvent.key === "ArrowDown" ? 1 : -1) * geometry.snapMinutes;
-		const times = nextDragTimes({
+		const times = nextAxisDragTimes({
+			axis, originDayIndex: dayIndex, dayIndex, exactRange: { start: event.start, end: event.end },
 			deltaMinutes: step,
 			geometry,
 			mode: keyEvent.shiftKey ? "resize-end" : "move",
@@ -243,6 +287,7 @@ const TimelineEvent = memo(function TimelineEvent({
 			originStartMinutes: daySegment.startMin,
 		});
 
+		if (!times) { eventActions.onNotice("No local time at that position. The event was not changed."); return; }
 		if (
 			times.startMinutes === daySegment.startMin &&
 			times.endMinutes === daySegment.endMin
@@ -260,6 +305,7 @@ const TimelineEvent = memo(function TimelineEvent({
 		if (!draggable || pointerEvent.button !== 0) return;
 		onBeginDrag({
 			dayIndex,
+			exactRange: { start: event.start, end: event.end },
 			endMinutes: daySegment.endMin,
 			event,
 			mode,
@@ -291,11 +337,12 @@ const TimelineEvent = memo(function TimelineEvent({
 			{...eventActions}
 		>
 			<button
-				className={styles.timelineEvent}
+				className={styles.timelineEventAction}
+        style={{ left, width, top: minutesToY(pieces[0]?.start ?? startMin, geometry), height: actionHeight }}
 				type="button"
 				aria-label={`${event.title}, ${getEventDateLabel(
 					event,
-				)}, ${getEventRangeLabel(event, timeFormat)}, ${calendar?.name ?? "calendar"}`}
+				 )}, ${getEventRangeLabel(event, timeFormat)}, ${axisTimeLabel(axis, dayIndex, daySegment.startMin, timeFormat)}, ${calendar?.name ?? "calendar"}`}
 				aria-busy={pending || undefined}
 				data-dragging={dragTimes ? "" : undefined}
 				data-ghost={ghost ? "" : undefined}
@@ -306,22 +353,25 @@ const TimelineEvent = memo(function TimelineEvent({
 				data-time-event={event.id}
 				onKeyDown={handleKeyDown}
 				onPointerDown={(pointerEvent) => startDrag(pointerEvent, "move")}
+			>
+			{pieces.map((piece, pieceIndex) => (
+			<span className={styles.timelineEvent} data-linked-segment={pieces.length > 1 ? "" : undefined} data-draggable={draggable ? "" : undefined} data-pending={pending ? "" : undefined} data-overlapping={col > 0 ? "" : undefined} key={piece.start}
 				style={
 					{
 						"--event-color": eventColor,
+            padding: realRunHeight(axis, dayIndex, piece.start, geometry) < 12 ? 0 : undefined,
 						// A ghost is drawn as an outline over the page, not as a filled
 						// block, so the event's own foreground would be white on a 18%
 						// tint. Ink is what stays readable there.
 						"--event-foreground": ghost
 							? "var(--text-secondary)"
 							: getReadableEventTextColor(eventColor),
-						height: `${Math.max(
-							durationToHeight(duration, geometry) - 2,
-							geometry.minEventHeight,
-						)}px`,
-						left,
-						top: `${minutesToY(startMin, geometry)}px`,
-						width,
+						// A single piece fills the action box so CSS containment follows
+            // its actual rendered height, including density and layout changes.
+            height: pieces.length === 1 ? "100%" : `${pieceHeight(piece)}px`,
+						left: 0,
+						top: `${((piece.start - (pieces[0]?.start ?? startMin)) * geometry.pxPerMinute)}px`,
+						width: "100%",
 						zIndex: col + 1,
 					} as CSSProperties
 				}
@@ -334,10 +384,7 @@ const TimelineEvent = memo(function TimelineEvent({
 					{/* While dragging, show the time the drop would produce — the
               answer the user is actually looking for. */}
 					{dragTimes
-						? `${minuteLabel(startMin, timeFormat)}–${minuteLabel(
-								endMin,
-								timeFormat,
-							)}`
+						? `${axisTimeLabel(axis, dayIndex, startMin, timeFormat)}–${axisTimeLabel(axis, dayIndex, endMin, timeFormat, "end")}`
 						: getEventRangeLabel(event, timeFormat).replace(" – ", "–")}
 				</span>
 				<span className={styles.timelineEventTitle}>
@@ -354,6 +401,7 @@ const TimelineEvent = memo(function TimelineEvent({
 						<span
 							aria-hidden="true"
 							className={styles.resizeHandleTop}
+							hidden={pieceIndex !== 0 || (dragTimes?.exactRange?.start ?? event.start).getTime() < axis.days[dayIndex]!.start}
 							onPointerDown={(pointerEvent) => {
 								pointerEvent.stopPropagation();
 								startDrag(pointerEvent, "resize-start");
@@ -362,6 +410,7 @@ const TimelineEvent = memo(function TimelineEvent({
 						<span
 							aria-hidden="true"
 							className={styles.resizeHandleBottom}
+							hidden={pieceIndex !== pieces.length - 1 || (dragTimes?.exactRange?.end ?? event.end).getTime() > axis.days[dayIndex]!.end}
 							onPointerDown={(pointerEvent) => {
 								pointerEvent.stopPropagation();
 								startDrag(pointerEvent, "resize-end");
@@ -369,6 +418,8 @@ const TimelineEvent = memo(function TimelineEvent({
 						/>
 					</>
 				) : null}
+			</span>
+			))}
 			</button>
 		</EventDetailsPopover>
 	);
@@ -379,7 +430,7 @@ export function TimeGridView({
 	anchor,
 	calendars,
 	events,
-	geometry,
+	geometry: baseGeometry,
 	onCancelDraft,
 	onCreateAtTime,
 	onMoveEvent,
@@ -399,15 +450,24 @@ export function TimeGridView({
 			}),
 		[anchor, showWeekend, view, weekStartsOn],
 	);
-	const eventsByDay = useMemo(() => bucketEventsByDay(events), [events]);
-	const segmentsByDay = useMemo(
-		() =>
-			days.map((day) => [
-          ...getDaySegments(eventsByDay.get(dayKey(day)) ?? [], day).map(segment => ({ ...segment, kind: "event" as const })),
-          ...assignOverlapColumns(availabilityDaySegments(availabilityIntervals, day)),
-        ]),
-		[days, eventsByDay, availabilityIntervals],
-	);
+	const axis = useMemo(() => {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const axes = days.map(day => buildDayAxis(dayKey(day), timezone));
+    return view === "day" ? singleDayAxis(axes[0]!) : sharedWeekAxis(axes);
+  }, [days, view]);
+  const geometry = useMemo(() => ({ ...baseGeometry, visibleDayEndMinutes: axis.rows.length }), [baseGeometry, axis]);
+  const ticks = useMemo(() => {
+    const counts = new Map<number, number>();
+    for (const row of axis.rows) counts.set(row.minute, (counts.get(row.minute) ?? 0) + 1);
+    return axis.rows.flatMap((row, coordinate) => row.minute % 60 === 0 || coordinate === 0 || axis.rows[coordinate - 1]!.minute !== row.minute - 1 || ((counts.get(row.minute) ?? 0) > 1 && (counts.get(row.minute - 1) ?? 0) < 2) ? [{ row, coordinate }] : []);
+  }, [axis]);
+  const segmentsByDay = useMemo(() => days.map((day, column) => {
+    const eventSegments = assignOverlapColumns(events.filter(event => !event.isAllDay).flatMap(event => {
+      const pieces = intervalAxisSegments(axis, column, event.start.getTime(), Math.max(event.end.getTime(), event.start.getTime() + 60_000));
+      return pieces.length ? [{ event, kind: "event" as const, startMin: pieces[0]!.start, endMin: pieces.at(-1)!.end, col: 0, cols: 1 }] : [];
+    }));
+    return [...eventSegments, ...assignOverlapColumns(availabilityDaySegments(availabilityIntervals, day, axis, column))];
+  }), [days, axis, events, availabilityIntervals]);
 	const calendarsById = useMemo(
 		() => new Map(calendars.map((calendar) => [calendar.id, calendar])),
 		[calendars],
@@ -439,6 +499,7 @@ export function TimeGridView({
 	const dismissGuard = useLayerDismissGuard();
 	const rootRef = useRef<HTMLElement>(null);
 	const availabilityPress = useRef(false);
+  const [keyboardSlot, setKeyboardSlot] = useState<{ dayIndex: number; coordinate: number } | null>(null);
 	const setRoot = useCallback((element: HTMLElement | null) => {
 		rootRef.current = element;
 		setDetailBoundary(element?.parentElement ?? null);
@@ -461,6 +522,7 @@ export function TimeGridView({
 	}, [days.length]);
 
 	const { begin: beginDrag, drag } = useTimeGridDrag({
+		axis,
 		columns: readColumns,
 		geometry,
 		onCommit: async ({ dayOffset, event, times }) => {
@@ -468,9 +530,9 @@ export function TimeGridView({
 			const day = addDays(startOfDay(event.start), dayOffset);
 			await onMoveEvent({
 				dayOffset,
-				end: new Date(day.getTime() + times.endMinutes * 60_000),
+				end: times.exactRange?.end ?? new Date(day.getTime() + times.endMinutes * 60_000),
 				event,
-				start: new Date(day.getTime() + times.startMinutes * 60_000),
+				start: times.exactRange?.start ?? new Date(day.getTime() + times.startMinutes * 60_000),
 			});
 		},
 		onError: eventActions.onNotice,
@@ -487,15 +549,12 @@ export function TimeGridView({
 		try {
 			await onMoveEvent({
 				dayOffset: 0,
-				end: new Date(day.getTime() + times.endMinutes * 60_000),
+				end: times.exactRange?.end ?? new Date(day.getTime() + times.endMinutes * 60_000),
 				event,
-				start: new Date(day.getTime() + times.startMinutes * 60_000),
+				start: times.exactRange?.start ?? new Date(day.getTime() + times.startMinutes * 60_000),
 			});
 			eventActions.onNotice(
-				`${event.title} now ${minuteLabel(
-					times.startMinutes,
-					timeFormat,
-				)}–${minuteLabel(times.endMinutes, timeFormat)}.`,
+				`${event.title} now ${axisTimeLabel(axis, days.findIndex(value => dayKey(value) === dayKey(day)), times.startMinutes, timeFormat)}–${axisTimeLabel(axis, days.findIndex(value => dayKey(value) === dayKey(day)), times.endMinutes, timeFormat, "end")}.`,
 			);
 		} catch (error) {
 			eventActions.onNotice(
@@ -512,6 +571,7 @@ export function TimeGridView({
 		consumeClick,
 		selection: liveSelection,
 	} = useDragToCreate({
+		axis,
 		geometry,
 		onSelected: (dragged, column) => {
 			const day = days[dragged.dayIndex];
@@ -519,7 +579,7 @@ export function TimeGridView({
 			const bounds = column.getBoundingClientRect();
 			onCreateAtTime(
 				dayKey(day),
-				clockValue(dragged.startMinutes),
+				clockAt(axis, dragged.dayIndex, dragged.startMinutes),
 				{
 					returnFocus: column,
 					// The column's edge, so the popover lands beside the draft rather
@@ -527,7 +587,8 @@ export function TimeGridView({
 					x: bounds.right,
 					y: bounds.top + minutesToY(dragged.startMinutes, geometry),
 				},
-				clockValue(dragged.endMinutes),
+				clockAt(axis, dragged.dayIndex, dragged.endMinutes, "end"),
+				dragged.exactRange,
 			);
 		},
 	});
@@ -539,21 +600,21 @@ export function TimeGridView({
 		const dayIndex = days.findIndex((day) => dayKey(day) === pendingCreate.date);
 		if (dayIndex < 0) return undefined;
 
-		const startMinutes = clockMinutes(pendingCreate.startTime);
-		const endMinutes = pendingCreate.endTime
-			? clockMinutes(pendingCreate.endTime)
-			: startMinutes + 60;
-		return {
-			dayIndex,
-			endMinutes: Math.max(startMinutes + geometry.snapMinutes, endMinutes),
-			startMinutes,
-		};
-	}, [days, geometry.snapMinutes, pendingCreate]);
+    const day = axis.days[dayIndex]!;
+    const start = pendingCreate.exactRange?.start.getTime() ?? civilCandidates(day, clockMinutes(pendingCreate.startTime))[0]?.instant;
+    if (start === undefined) return undefined;
+    const end = pendingCreate.exactRange?.end.getTime() ?? (pendingCreate.endTime ? civilCandidates(day, clockMinutes(pendingCreate.endTime))[0]?.instant : start + 60 * 60_000);
+    if (end === undefined || end <= start) return undefined;
+    const pieces = intervalAxisSegments(axis, dayIndex, start, end);
+    if (!pieces.length) return undefined;
+    return { dayIndex, startMinutes: pieces[0]!.start, endMinutes: pieces.at(-1)!.end, exactRange: { start: new Date(start), end: new Date(end) } };
+  }, [days, axis, pendingCreate]);
 
 	// A second pointer machine, for the draft: same threshold, snapping,
 	// auto-scroll and Escape as a real event, but it commits into the open form
 	// instead of to the server.
 	const { begin: beginDraftDrag, drag: draftDrag } = useTimeGridDrag<undefined>({
+		axis,
 		columns: readColumns,
 		geometry,
 		onCommit: async ({ dayOffset, mode, times }) => {
@@ -570,9 +631,10 @@ export function TimeGridView({
 				];
 			if (!day) return;
 			onMoveDraft({
-				date: dayKey(day),
-				endTime: clockValue(times.endMinutes),
-				startTime: clockValue(times.startMinutes),
+				date: dayKey(times.exactRange?.start ?? day),
+				endTime: times.exactRange ? civilClock(times.exactRange.end) : clockAt(axis, days.indexOf(day), times.endMinutes, "end"),
+				startTime: times.exactRange ? civilClock(times.exactRange.start) : clockAt(axis, days.indexOf(day), times.startMinutes),
+				exactRange: times.exactRange,
 			});
 		},
 		onError: eventActions.onNotice,
@@ -592,6 +654,7 @@ export function TimeGridView({
 			return {
 				dayIndex:
 					draftDrag.mode === "move" ? draftDrag.dayIndex : draftSlot.dayIndex,
+				exactRange: draftDrag.times.exactRange,
 				endMinutes: draftDrag.times.endMinutes,
 				startMinutes: draftDrag.times.startMinutes,
 			};
@@ -608,6 +671,7 @@ export function TimeGridView({
 		pointerEvent.stopPropagation();
 		beginDraftDrag({
 			dayIndex: draftSlot.dayIndex,
+			exactRange: draftSlot.exactRange,
 			endMinutes: draftSlot.endMinutes,
 			event: undefined,
 			mode,
@@ -620,6 +684,7 @@ export function TimeGridView({
 
 	const layoutStyle = {
 		"--day-count": days.length,
+		"--axis-height": `${axis.rows.length * geometry.pxPerMinute}px`,
 		"--all-day-height": `${allDayLaneCount * 24 + 8}px`,
 		// The CSS grid derives its height from the same number as the event maths.
 		"--hour-height": `${geometry.hourHeight}px`,
@@ -641,10 +706,10 @@ export function TimeGridView({
 		scrollRoot.scrollTo?.({
 			top:
 				previousHourHeight === geometry.hourHeight
-					? minutesToY(openScrollMinutes(new Date(), hasToday), geometry) - 12
+					? minutesToY(axisOpenScroll(axis, new Date(), hasToday), geometry) - 12
 					: scrollRoot.scrollTop * (geometry.hourHeight / previousHourHeight),
 		});
-	}, [anchor, geometry, hasToday, view, weekStartsOn]);
+	}, [anchor, axis, geometry, hasToday, view, weekStartsOn]);
 
 	useEffect(() => {
 		if (!hasToday) {
@@ -821,19 +886,19 @@ export function TimeGridView({
 			</div>
 
 			<div className={styles.timeGridCanvas} ref={canvasRef}>
-				{Array.from({ length: 24 }, (_, hour) => (
+				{ticks.map(({ row, coordinate }) => (
 					<div
 						className={styles.timeGridHour}
-						key={hour}
-						style={{ top: `${minutesToY(hour * 60, geometry)}px` }}
+						key={row.key}
+						style={{ top: `${minutesToY(coordinate, geometry)}px` }}
 					>
-						{hour > 0 ? <span>{hourLabel(hour, timeFormat)}</span> : null}
+						{coordinate > 0 ? <span>{tickLabel(axis, coordinate, timeFormat)}</span> : null}
 					</div>
 				))}
 				<div className={styles.timeGridColumns}>
 					{days.map((day, dayIndex) => {
 						const today = isSameDay(day, now);
-						const nowMinutes = now.getHours() * 60 + now.getMinutes();
+						const nowMinutes = instantToCoordinate(axis, dayIndex, now.getTime());
 
 						return (
 							<div
@@ -845,7 +910,30 @@ export function TimeGridView({
 								}
 								data-time-grid-column={dayKey(day)}
 								key={dayKey(day)}
-								tabIndex={-1}
+								tabIndex={onCreateAtTime ? 0 : -1}
+                role="group"
+                aria-label={`${dayKey(day)} time slots${keyboardSlot?.dayIndex === dayIndex ? `, ${axisTimeLabel(axis, dayIndex, keyboardSlot.coordinate, timeFormat)}` : ""}`}
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget || !onCreateAtTime) return;
+                  let coordinate = keyboardSlot?.dayIndex === dayIndex ? keyboardSlot.coordinate : axisOpenScroll(axis, new Date(), false);
+                  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                    event.preventDefault(); event.stopPropagation();
+                    const step = event.key === "ArrowDown" ? geometry.snapMinutes : -geometry.snapMinutes;
+                    let next = coordinate + step;
+                    while (next >= 0 && next < axis.rows.length && coordinateToInstant(axis, dayIndex, next) === null) next += step;
+                    if (next < 0 || next >= axis.rows.length) return;
+                    coordinate = next;
+                    setKeyboardSlot({ dayIndex, coordinate });
+                    const scrollRoot = rootRef.current?.parentElement;
+                    if (scrollRoot) scrollRoot.scrollTo?.({ top: Math.max(0, minutesToY(coordinate, geometry) - scrollRoot.clientHeight / 2) });
+                  } else if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault(); event.stopPropagation();
+                    const instant = coordinateToInstant(axis, dayIndex, coordinate);
+                    if (instant === null) return;
+                    const bounds = event.currentTarget.getBoundingClientRect();
+                    onCreateAtTime(dayKey(day), clockAt(axis, dayIndex, coordinate), { returnFocus: event.currentTarget, x: bounds.right, y: bounds.top + minutesToY(coordinate, geometry) }, undefined, { start: new Date(instant), end: new Date(Math.min(axis.days[dayIndex]!.end, instant + 60 * 60_000)) });
+                  }
+                }}
 								onPointerDown={(pointerEvent) => {
 									availabilityPress.current = pointerEvent.target instanceof Element && !!pointerEvent.target.closest("[data-availability-interval]");
 									if (
@@ -859,6 +947,7 @@ export function TimeGridView({
 									) {
 										return;
 									}
+									if (coordinateToInstant(axis, dayIndex, yToMinutes(pointerEvent.clientY - pointerEvent.currentTarget.getBoundingClientRect().top, geometry)) === null) return;
 									// Same as the month grid: the previous draft goes on press,
 									// so two pending events are never on screen at once.
 									onCancelDraft?.();
@@ -889,12 +978,13 @@ export function TimeGridView({
 									// Same geometry the grid is drawn with, so the created time is
 									// the time the user pointed at (snapped and clamped there).
 									const minutes = yToMinutes(event.clientY - bounds.top, geometry);
-									const hour = Math.floor(minutes / 60);
-									const minute = minutes % 60;
+									const instant = coordinateToInstant(axis, dayIndex, minutes);
+									if (instant === null) return;
+									const exactRange = { start: new Date(instant), end: new Date(Math.min(axis.days[dayIndex]!.end, instant + 60 * 60_000)) };
 
 									onCreateAtTime(
 										dayKey(day),
-										`${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+										clockAt(axis, dayIndex, minutes),
 										{
 											returnFocus: event.currentTarget,
 											// Beside the column, level with the slot that was clicked
@@ -902,34 +992,38 @@ export function TimeGridView({
 											x: event.currentTarget.getBoundingClientRect().right,
 											y: event.clientY,
 										},
+										undefined, exactRange,
 									);
 								}}
 							>
+                {keyboardSlot?.dayIndex === dayIndex ? <div aria-hidden="true" className={styles.timeGridKeyboardSlot} style={{ top: minutesToY(keyboardSlot.coordinate, geometry), height: geometry.snapMinutes * geometry.pxPerMinute }} /> : null}
+                {holeSegments(axis, dayIndex).map(hole => <div key={hole.start} className={styles.timeGridHole} data-time-axis-hole="" style={{ top: minutesToY(hole.start, geometry), height: (hole.end - hole.start) * geometry.pxPerMinute }}>No local time</div>)}
 								{/* The draft: visible from the first pixel of the create
                     gesture, and once laid down it can be moved and resized like
                     a real block. It stays aria-hidden — the popover's own date
                     and time fields are the keyboard path to the same change. */}
-								{selection?.dayIndex === dayIndex ? (
+								{selection?.dayIndex === dayIndex ? previewPieces(axis, dayIndex, selection).map((piece, pieceIndex, pieces) => (
 									<div
 										aria-hidden="true"
 										className={styles.timeGridSelection}
+                    key={piece.start}
 										data-draft={draftSlot && onMoveDraft ? "" : undefined}
 										data-dragging={draftDrag ? "" : undefined}
 										style={
 											{
 												"--draft-accent": pendingCreate?.color,
-												height: `${durationToHeight(
-													selection.endMinutes - selection.startMinutes,
-													geometry,
-												)}px`,
-												top: `${minutesToY(selection.startMinutes, geometry)}px`,
+                        padding: realRunHeight(axis, dayIndex, piece.start, geometry) < 12 ? 0 : undefined,
+                        borderWidth: realRunHeight(axis, dayIndex, piece.start, geometry) < 2 ? 0 : undefined,
+                        overflow: "hidden",
+												height: `${Math.min(realRunHeight(axis, dayIndex, piece.start, geometry), durationToHeight(piece.end - piece.start, geometry))}px`,
+												top: `${minutesToY(piece.start, geometry)}px`,
 											} as CSSProperties
 										}
 										onPointerDown={(pointerEvent) => startDraftDrag(pointerEvent, "move")}
 									>
 										<span className={styles.timeGridSelectionTime}>
-											{minuteLabel(selection.startMinutes, timeFormat)}–
-											{minuteLabel(selection.endMinutes, timeFormat)}
+											{axisTimeLabel(axis, dayIndex, selection.startMinutes, timeFormat)}–
+											{axisTimeLabel(axis, dayIndex, selection.endMinutes, timeFormat, "end")}
 										</span>
 										{/* Named once it is laid down, so it reads as the event it
                         is about to become rather than as a selection. */}
@@ -939,13 +1033,15 @@ export function TimeGridView({
 										{draftSlot && onMoveDraft ? (
 											<>
 												<span
-													className={styles.resizeHandleTop}
+													hidden={pieceIndex !== 0 || (selection.exactRange !== undefined && selection.exactRange.start.getTime() < axis.days[dayIndex]!.start)}
+                          className={styles.resizeHandleTop}
 													onPointerDown={(pointerEvent) =>
 														startDraftDrag(pointerEvent, "resize-start")
 													}
 												/>
 												<span
-													className={styles.resizeHandleBottom}
+													hidden={pieceIndex !== pieces.length - 1 || (selection.exactRange !== undefined && selection.exactRange.end.getTime() > axis.days[dayIndex]!.end)}
+                          className={styles.resizeHandleBottom}
 													onPointerDown={(pointerEvent) =>
 														startDraftDrag(pointerEvent, "resize-end")
 													}
@@ -953,44 +1049,41 @@ export function TimeGridView({
 											</>
 										) : null}
 									</div>
-								) : null}
+								)) : null}
 								{/* The event where it is being dragged to — the answer to
                     "where will this land", including across days. */}
-								{drag && drag.mode === "move" && drag.dayIndex === dayIndex ? (
+								{drag && drag.mode === "move" && drag.dayIndex === dayIndex ? previewPieces(axis, dayIndex, drag.times).map(piece => (
 									<div
 										aria-hidden="true"
 										className={styles.dragPreview}
+                    key={piece.start}
 										data-drag-preview=""
 										style={
 											{
 												"--event-color": dragPreviewColor,
+                        padding: realRunHeight(axis, dayIndex, piece.start, geometry) < 12 ? 0 : undefined,
 												"--event-foreground": getReadableEventTextColor(dragPreviewColor),
-												height: `${Math.max(
-													durationToHeight(
-														drag.times.endMinutes - drag.times.startMinutes,
-														geometry,
-													),
-													geometry.minEventHeight,
-												)}px`,
-												top: `${minutesToY(drag.times.startMinutes, geometry)}px`,
+												height: `${Math.min(realRunHeight(axis, dayIndex, piece.start, geometry), durationToHeight(piece.end - piece.start, geometry))}px`,
+												top: `${minutesToY(piece.start, geometry)}px`,
 											} as CSSProperties
 										}
 									>
 										<span className={styles.dragPreviewTime}>
-											{minuteLabel(drag.times.startMinutes, timeFormat)}–
-											{minuteLabel(drag.times.endMinutes, timeFormat)}
+											{axisTimeLabel(axis, dayIndex, drag.times.startMinutes, timeFormat)}–
+											{axisTimeLabel(axis, dayIndex, drag.times.endMinutes, timeFormat, "end")}
 										</span>
 										<span className={styles.dragPreviewTitle}>{drag.event.title}</span>
 									</div>
-								) : null}
+								)) : null}
 								{segmentsByDay[dayIndex]?.map((segment) => segment.kind === "availability" ? (
-                  <div key={`${segment.interval.sourceId}:${segment.interval.start}:${segment.interval.end}`} className={styles.timelineAvailability} data-availability-interval="" role="note" aria-label={`Busy, ${segment.interval.label}, ${dayKey(day)}, ${minuteLabel(segment.startMin, timeFormat)}–${minuteLabel(segment.endMin, timeFormat)}`} style={{ "--event-color": DEFAULT_CALENDAR_COLOR, "--event-foreground": getReadableEventTextColor(DEFAULT_CALENDAR_COLOR), top: `${minutesToY(segment.startMin, geometry)}px`, height: `${durationToHeight(segment.endMin - segment.startMin, geometry)}px`, padding: durationToHeight(segment.endMin - segment.startMin, geometry) < 12 ? 0 : undefined, ...overlapPlacement(segment.col, segment.cols), zIndex: 0 } as CSSProperties}>
-                    <span className={styles.timelineEventTime}>{minuteLabel(segment.startMin, timeFormat)}–{minuteLabel(segment.endMin, timeFormat)}</span>
+                  <div key={`${segment.interval.sourceId}:${segment.interval.start}:${segment.interval.end}:${segment.startMin}`} className={styles.timelineAvailability} data-availability-interval="" role="note" aria-label={`Busy, ${segment.interval.label}, ${dayKey(day)}, ${axisTimeLabel(axis, dayIndex, segment.startMin, timeFormat)}–${axisTimeLabel(axis, dayIndex, segment.endMin, timeFormat, "end")}`} style={{ "--event-color": DEFAULT_CALENDAR_COLOR, "--event-foreground": getReadableEventTextColor(DEFAULT_CALENDAR_COLOR), top: `${minutesToY(segment.startMin, geometry)}px`, height: `${Math.min(realRunHeight(axis, dayIndex, segment.startMin, geometry), durationToHeight(segment.endMin - segment.startMin, geometry))}px`, padding: Math.min(realRunHeight(axis, dayIndex, segment.startMin, geometry), durationToHeight(segment.endMin - segment.startMin, geometry)) < 12 ? 0 : undefined, ...overlapPlacement(segment.col, segment.cols), zIndex: 0 } as CSSProperties}>
+                    <span className={styles.timelineEventTime}>{axisTimeLabel(axis, dayIndex, segment.startMin, timeFormat)}–{axisTimeLabel(axis, dayIndex, segment.endMin, timeFormat, "end")}</span>
                     <span className={styles.timelineEventTitle}>Busy</span>
                     <span className={styles.timelineEventMeta}>{segment.interval.label}</span>
                   </div>
                 ) : (
 									<TimelineEvent
+										axis={axis}
 										detailBoundary={detailBoundary}
 										detailInsideTrigger={dayMode}
 										pending={
@@ -1024,7 +1117,7 @@ export function TimeGridView({
 										{...eventActions}
 									/>
 								))}
-								{today ? (
+								{today && nowMinutes !== null ? (
 									<div
 										className={styles.timeGridNow}
 										data-current-time

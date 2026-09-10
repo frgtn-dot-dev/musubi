@@ -17,7 +17,9 @@ import {
   createEventFromForm,
   defaultEventFormValues,
   type EventFormValues,
+  type ExactEventRange,
 } from "../event-form";
+import { toDateKey } from "../date-key";
 import { getEventMutationError } from "../event-permissions";
 import { useWindowDrag } from "../use-window-drag";
 import { focusMovedToAnotherLayer } from "../layer-focus";
@@ -46,6 +48,7 @@ type QuickCreateProps = {
   bounds?: () => DOMRect | undefined;
   /** Hand the draft to the full editor. Absent expands in place instead. */
   onMoreOptions?: (values: EventFormValues) => void;
+  exactRange?: ExactEventRange;
   endDate?: string;
   endTime?: string;
   isAllDay?: boolean;
@@ -68,6 +71,7 @@ export function QuickCreate({
   onMoreOptions,
   onOpenChange,
   endDate,
+  exactRange,
   endTime,
   isAllDay,
   open,
@@ -89,7 +93,7 @@ export function QuickCreate({
     defaultCalendar?.id ?? "",
     date,
     startTime,
-    { endDate, endTime, isAllDay },
+    { endDate: exactRange ? toDateKey(exactRange.end) : endDate, endTime, isAllDay, exactRange },
   );
 
   async function handleSubmit(values: EventFormValues) {
@@ -206,7 +210,8 @@ export function QuickCreate({
             initialValues={initialValues}
             when={{
               date,
-              endDate: endDate ?? date,
+              exactRange,
+              endDate: initialValues.endDate,
               endTime: initialValues.endTime,
               isAllDay: initialValues.isAllDay,
               startTime: initialValues.startTime,

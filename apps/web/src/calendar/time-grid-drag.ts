@@ -1,3 +1,4 @@
+import { coordinateBoundaryInstant, coordinateToInstant, instantToCoordinate, type TimeAxis } from "./day-axis";
 import { shiftDayKey } from "./date-key";
 import type { TimeGeometry } from "./time-geometry";
 
@@ -10,6 +11,7 @@ import type { TimeGeometry } from "./time-geometry";
 export type DragMode = "move" | "resize-start" | "resize-end";
 
 export type DragTimes = {
+  exactRange?: { start: Date; end: Date };
   endMinutes: number;
   startMinutes: number;
 };
@@ -72,6 +74,49 @@ export function nextDragTimes({
     ),
   );
   return { endMinutes, startMinutes: originStartMinutes };
+}
+
+/** Resolve a gesture against the rendered axis. Holes have no target; the
+ * caller keeps its existing draft and must not commit the last valid preview.
+ * Moving preserves elapsed duration, including when the source spans midnight.
+ */
+export function nextAxisDragTimes({ axis, originDayIndex, dayIndex, deltaMinutes,
+  geometry, mode, originStartMinutes, originEndMinutes, exactRange,
+}: {
+  axis: TimeAxis; originDayIndex: number; dayIndex: number;
+  deltaMinutes: number; geometry: TimeGeometry; mode: DragMode;
+  originStartMinutes: number; originEndMinutes: number;
+  exactRange?: { start: Date; end: Date };
+}): DragTimes | null {
+  const day = axis.days[dayIndex];
+  if (!day || !Number.isFinite(deltaMinutes)) return null;
+  const anchor = coordinateToInstant(axis, originDayIndex, originStartMinutes);
+  const originalStart = exactRange?.start.getTime() ?? anchor;
+  const originalEnd = exactRange?.end.getTime() ?? coordinateBoundaryInstant(axis, originDayIndex, originEndMinutes, "end");
+  if (anchor === null || originalStart == null || originalEnd == null || !Number.isFinite(originalStart) || !Number.isFinite(originalEnd) || originalEnd < originalStart) return null;
+  const edge = mode === "resize-end" ? "end" : "start";
+  const origin = mode === "resize-end" ? originEndMinutes : originStartMinutes;
+  const coordinate = Math.max(0, Math.min(axis.rows.length - (mode === "move" ? 1 : edge === "start" ? geometry.snapMinutes : 0), snapTo(origin + deltaMinutes, geometry)));
+  let target = coordinateBoundaryInstant(axis, dayIndex, coordinate, edge);
+  if (target === null) return null;
+  let start = originalStart, end = originalEnd;
+  if (mode === "move") {
+    const duration = originalEnd - originalStart;
+    // On an ordinary contained event keep the historical day-edge clamp.
+    // A clipped multi-day segment moves the complete event by its anchor delta.
+    const sourceDay = axis.days[originDayIndex]!;
+    if (originalStart >= sourceDay.start && originalEnd <= sourceDay.end && duration <= day.end - day.start) target = Math.min(target, day.end - duration);
+    start = target - (anchor - originalStart);
+    end = start + duration;
+  } else if (mode === "resize-start") {
+    start = Math.max(day.start, Math.min(target, originalEnd - geometry.snapMinutes * 60_000));
+  } else {
+    end = Math.min(day.end, Math.max(target, originalStart + geometry.snapMinutes * 60_000));
+  }
+  const startMinutes = start < day.start ? 0 : instantToCoordinate(axis, dayIndex, start);
+  const endMinutes = end === start ? startMinutes : end >= day.end ? axis.rows.length : instantToCoordinate(axis, dayIndex, end - 1);
+  if (startMinutes === null || endMinutes === null || end < start) return null;
+  return { startMinutes, endMinutes: end >= day.end || end === start ? endMinutes : endMinutes + 1 / 60_000, exactRange: { start: new Date(start), end: new Date(end) } };
 }
 
 /** Column a pointer is over, clamped to the rendered days. */

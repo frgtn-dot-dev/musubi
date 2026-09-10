@@ -57,10 +57,9 @@ interval/DST normalization, per-calendar errors, scope checks, private owner and
 account isolation, downgrade mirror retirement, disabled defaults, and delayed
 responses across source removal, selection changes and disconnect/reconnect.
 
-The bounded day/week grid below is implemented; faithful DST-axis rendering and
-additional grid views remain follow-ups. A static layout may reuse
-existing visual patterns; any genuinely new visual pattern needs a Storybook
-proposal and normal Musubi UI approval. These dialogs are functional clients, not completion of all K14 availability/cache work.
+The bounded day/week grid below includes the owner-approved DST axis integration
+(2026-09-10). Other grid views remain separate follow-ups. These dialogs and
+grid intervals do not complete all K14 availability/cache work.
 
 Primary protocol: https://developers.google.com/workspace/calendar/api/v3/reference/freebusy/query
 
@@ -109,10 +108,10 @@ Grid query keys include home origin, user, page, visible date range, timezone an
 source generations. Range/identity changes, stream refresh, offline state, hiding
 the overlay and opening the list retire old observations; no grid queries enter
 offline persistence. Incomplete sources have explicit coverage notices and never
-mean free time. Only normal 24-hour local days project intervals into the grid.
-DST-transition days have an explicit coverage notice and UTC-list fallback because
-the existing event axis does not faithfully represent 23/25-hour days. No existing
-event-axis correction or new visual pattern is included in this slice.
+mean free time. The shared web day/week axis projects intervals on normal and
+clock-change days, including half-hour transitions, splitting intervals around
+nonexistent rows. The UTC interval list remains available. See the
+[DST integration evidence](../audits/calendar-dst-axis-acceptance-20260910.md).
 
 Source selection uses the shared query client mutation lifetime: closing or reopening
 Connections keeps both source observers suspended until the pending PUT settles.

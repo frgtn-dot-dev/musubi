@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useIsMutating, useQuery, useQueryClient } from "@tanstack/react-query";
-import { addDays, dayKey } from "@musubi/calendar/layout";
+import { addDays } from "@musubi/calendar/layout";
 import { AVAILABILITY_SOURCE_LIMIT, type Settings } from "@musubi/types";
 import { getServerCapabilities } from "~/api/resources";
 import { getServerOrigin } from "~/api/query-keys";
 import { getAvailability, getAvailabilitySources } from "./availability";
-import { currentAvailabilityResult, isAvailabilityGridDay, type GridAvailabilityInterval } from "./availability-grid";
+import { currentAvailabilityResult, type GridAvailabilityInterval } from "./availability-grid";
 import { getTimeGridDays } from "./time-grid-math";
 export function useGridAvailability({ userId, pageId, anchor, view, weekStartsOn, showWeekend, offline, listOpen }: { userId: string; pageId: string; anchor: Date; view: string; weekStartsOn: Settings["weekStartsOn"]; showWeekend: boolean; offline: boolean; listOpen: boolean }) {
   const client = useQueryClient();
@@ -36,7 +36,6 @@ export function useGridAvailability({ userId, pageId, anchor, view, weekStartsOn
     }, retry: false, gcTime: 0, staleTime: 0 });
   const current = active && !sources.isFetching && !sources.isError && !result.isFetching && !result.isError ? result.data : undefined;
   const intervals: GridAvailabilityInterval[] = current?.sources.flatMap(source => source.status === "available" ? source.intervals.map(interval => ({ ...interval, sourceId: source.sourceId, label: selected.find(item => item.id === source.sourceId)?.label ?? "Availability source" })) : []) ?? [];
-  const dstDays = days.filter(day => !isAvailabilityGridDay(day)).map(dayKey);
   let notice: string | undefined;
   if (shown) {
     if (offline) notice = "Availability is unavailable offline. No free time is confirmed.";
@@ -46,7 +45,6 @@ export function useGridAvailability({ userId, pageId, anchor, view, weekStartsOn
     else if (!selected.length) notice = "No availability sources selected. Choose sources in Sources and interval list.";
     else if (selected.length > AVAILABILITY_SOURCE_LIMIT) notice = `Select up to ${AVAILABILITY_SOURCE_LIMIT} availability sources in Sources and interval list.`;
     else if (current) notice = current.sources.some(source => source.status !== "available") ? "Some availability sources are unavailable or need reconnection. Missing blocks do not confirm free time." : `Availability observed ${current.observedAt}. Busy intervals only for your selected sources.`;
-    if (dstDays.length) notice = `${notice ?? ""} Availability cannot be shown in the grid on clock-change days (${dstDays.join(", ")}). Use Sources and interval list; missing blocks do not mean free.`.trim();
   }
   return { available, shown, toggle: () => setSelectedScope(shown ? undefined : scope), intervals, notice };
 }

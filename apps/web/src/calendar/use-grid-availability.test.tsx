@@ -38,8 +38,8 @@ it("hides old observations on range/stream/offline/list changes and keeps unknow
   await waitFor(() => expect(screen.getByTestId("intervals").textContent).toBe(id));
   view.rerender(view.show({ offline: true })); expect(screen.getByTestId("intervals").textContent).toBe(""); expect(screen.getByText(/unavailable offline/)).toBeTruthy();
 });
-it("announces DST grid exclusion while keeping the interval-list recovery available", async () => {
-  mockReads(); const view = mount(); view.rerender(view.show({ anchor: new Date(2026, 9, 25) })); await waitFor(() => expect((screen.getByText("Toggle") as HTMLButtonElement).disabled).toBe(false)); fireEvent.click(screen.getByText("Toggle")); await screen.findByText(/clock-change days \(2026-10-25\)/);
+it("shows verified intervals on DST days without the obsolete exclusion", async () => {
+  mockReads(); const view = mount(); view.rerender(view.show({ anchor: new Date(2026, 9, 25) })); await waitFor(() => expect((screen.getByText("Toggle") as HTMLButtonElement).disabled).toBe(false)); fireEvent.click(screen.getByText("Toggle")); await waitFor(() => expect(screen.getByTestId("intervals").textContent).toBe(id)); expect(screen.queryByText(/cannot be shown/)).toBeNull();
 });
 
 it("aborts old range requests and cannot display late intervals after navigation", async () => {

@@ -972,7 +972,7 @@
 
 .timeGridCanvas {
 	position: relative;
-	height: calc(24 * var(--hour-height));
+	height: var(--axis-height, calc(24 * var(--hour-height)));
 }
 
 /* Direct manipulation ------------------------------------------------------ */
@@ -999,7 +999,7 @@
 /* Opacity fades the text and the fill toward the page together, which collapses
    the contrast between them — white on shu at 45% is 2:1. A ghost is the hole an
    event left, so draw it as an outline with ink in it, not as a faded copy. */
-.timelineEvent[data-ghost],
+.timelineEventAction[data-ghost] .timelineEvent,
 .eventChip[data-ghost] {
 	--event-foreground: var(--text-secondary);
 	border: 1px dashed color-mix(in srgb, var(--event-color) 60%, transparent);
@@ -2343,3 +2343,28 @@
 		gap: var(--space-2);
 	}
 }
+
+/* One event action owns all linked pieces around reserved civil rows. */
+.timelineEventAction { position: absolute; left: 0; width: 100%; border: 0; padding: 0; background: transparent; pointer-events: none; }
+.timelineEventAction .timelineEvent { pointer-events: auto; }
+.resizeHandleTop[hidden], .resizeHandleBottom[hidden] { display: none; }
+.timelineEventAction:focus-visible .timelineEvent { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+.timelineEventAction[data-draggable] .timelineEvent { cursor: grab; }
+
+.timelineEventAction[data-dragging] .timelineEvent { cursor: grabbing; }
+.timelineEvent[data-linked-segment] { border-left: 1px dashed currentColor; }
+.timeGridHole {
+  position: absolute;
+  inset-inline: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-panel);
+  color: var(--text-muted);
+  font-size: var(--text-10);
+  border-block: 1px dashed var(--border-subtle);
+  pointer-events: none;
+}
+
+.timeGridKeyboardSlot { position: absolute; inset-inline: 0; border: 1px solid var(--accent-primary); pointer-events: none; }
+.timeGridColumn:not(:focus-visible) .timeGridKeyboardSlot { display: none; }

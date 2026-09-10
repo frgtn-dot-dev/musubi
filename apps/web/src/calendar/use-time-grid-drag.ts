@@ -1,3 +1,4 @@
+import { coordinateBoundaryInstant, coordinateToInstant, type TimeAxis } from "./day-axis";
 import type { Event } from "@musubi/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { yToMinutes, type TimeGeometry } from "./time-geometry";
@@ -6,6 +7,7 @@ import {
   exceedsDragThreshold,
   TOUCH_HOLD_MS,
   nextDragTimes,
+  nextAxisDragTimes,
   type DragMode,
   type DragTimes,
 } from "./time-grid-drag";
@@ -36,6 +38,7 @@ export type DragState<T = Event> = {
 };
 
 type Press<T> = {
+  exactRange?: { start: Date; end: Date };
   dayIndex: number;
   event: T;
   mode: DragMode;
@@ -48,6 +51,7 @@ type Press<T> = {
 };
 
 export type BeginDragInput<T = Event> = {
+  exactRange?: { start: Date; end: Date };
   dayIndex: number;
   endMinutes: number;
   event: T;
@@ -59,6 +63,7 @@ export type BeginDragInput<T = Event> = {
 };
 
 export type TimeGridDragOptions<T = Event> = {
+  axis?: TimeAxis;
   /** Column geometry, so a move can change day. */
   columns: () => { count: number; left: number; width: number };
   geometry: TimeGeometry;
@@ -123,11 +128,14 @@ export function coveredByLayer(x: number, y: number) {
  * that was just dropped, or dismisses the one describing the draft that was just
  * dragged. Captured once, at the document, so no layer below ever sees it.
  */
-function swallowNextClick() {
+function swallowNextClick(release: { clientX: number; clientY: number }) {
   function handleClick(event: MouseEvent) {
+    document.removeEventListener("click", handleClick, true);
+    // Only suppress the trailing pointer click at this release. A fast click
+    // on Save (or a keyboard activation) is a new action and must still work.
+    if (event.detail === 0 || Math.abs(event.clientX - release.clientX) > 4 || Math.abs(event.clientY - release.clientY) > 4) return;
     event.preventDefault();
     event.stopPropagation();
-    document.removeEventListener("click", handleClick, true);
   }
 
   document.addEventListener("click", handleClick, true);
@@ -139,6 +147,7 @@ function swallowNextClick() {
 }
 
 export function useTimeGridDrag<T = Event>({
+  axis,
   columns,
   geometry,
   onCommit,
@@ -147,6 +156,7 @@ export function useTimeGridDrag<T = Event>({
 }: TimeGridDragOptions<T>) {
   const [drag, setDrag] = useState<DragState<T>>();
 
+  const invalidRef = useRef(false);
   const pressRef = useRef<Press<T> | undefined>(undefined);
   const dragRef = useRef<DragState<T> | undefined>(undefined);
   const pointerRef = useRef({ x: 0, y: 0 });
@@ -154,9 +164,9 @@ export function useTimeGridDrag<T = Event>({
   const detachRef = useRef<(() => void) | undefined>(undefined);
   // Read through refs inside listeners so the gesture always sees current values
   // without needing to re-attach.
-  const optionsRef = useRef({ columns, geometry, onCommit, onError, scrollRoot });
+  const optionsRef = useRef({ axis, columns, geometry, onCommit, onError, scrollRoot });
   useEffect(() => {
-    optionsRef.current = { columns, geometry, onCommit, onError, scrollRoot };
+    optionsRef.current = { axis, columns, geometry, onCommit, onError, scrollRoot };
   });
 
   const stopAutoScroll = useCallback(() => {
@@ -205,14 +215,6 @@ export function useTimeGridDrag<T = Event>({
       press.startY +
       ((root?.scrollTop ?? 0) - press.startScrollTop);
 
-    const times = nextDragTimes({
-      deltaMinutes: deltaPx / currentGeometry.pxPerMinute,
-      geometry: currentGeometry,
-      mode: press.mode,
-      originEndMinutes: press.originEndMinutes,
-      originStartMinutes: press.originStartMinutes,
-    });
-
     // Only a move changes day; a resize stays in its column.
     const dayIndex =
       press.mode === "move" && grid.width > 0
@@ -225,6 +227,18 @@ export function useTimeGridDrag<T = Event>({
           )
         : press.dayIndex;
 
+    const input = {
+      deltaMinutes: deltaPx / currentGeometry.pxPerMinute,
+      geometry: currentGeometry, mode: press.mode,
+      originEndMinutes: press.originEndMinutes,
+      originStartMinutes: press.originStartMinutes,
+    };
+    const axis = optionsRef.current.axis;
+    const times = axis ? nextAxisDragTimes({ ...input, axis,
+      originDayIndex: press.dayIndex, dayIndex, exactRange: press.exactRange,
+    }) : nextDragTimes(input);
+    invalidRef.current = times === null;
+    if (!times) return;
     const next = {
       dayIndex,
       event: press.event,
@@ -238,7 +252,9 @@ export function useTimeGridDrag<T = Event>({
   const begin = useCallback(
     (input: BeginDragInput<T>) => {
       const root = optionsRef.current.scrollRoot();
+      invalidRef.current = false;
       pressRef.current = {
+        exactRange: input.exactRange,
         dayIndex: input.dayIndex,
         event: input.event,
         mode: input.mode,
@@ -308,6 +324,13 @@ export function useTimeGridDrag<T = Event>({
         const active = dragRef.current;
         if (!press || nativeEvent.pointerId !== press.pointerId) return;
 
+        if (invalidRef.current) {
+          swallowNextClick(nativeEvent);
+          optionsRef.current.onError("There is no local time at that position. The original time was kept.");
+          finish();
+          return;
+        }
+
         // Released without travelling: let the click handler open the preview.
         if (!active) {
           finish();
@@ -322,7 +345,7 @@ export function useTimeGridDrag<T = Event>({
         const commit = optionsRef.current.onCommit;
         const reportError = optionsRef.current.onError;
 
-        swallowNextClick();
+        swallowNextClick(nativeEvent);
         if (unchanged) {
           finish();
           return;
@@ -373,8 +396,8 @@ export function useTimeGridDrag<T = Event>({
     [finish, recompute, release, stopAutoScroll],
   );
 
-  // Unmounting mid-gesture must not leave listeners or a timer behind.
-  useEffect(() => finish, [finish]);
+  // Navigation to a different axis cancels a gesture as well as unmounting.
+  useEffect(() => finish, [axis, finish]);
 
   return { begin, drag };
 }
@@ -493,7 +516,7 @@ export function useMonthDrag<T = Event>({
         const unchanged = !active || active.dayKey === press.originDayKey;
         // Only after a real drag: a plain click has to reach the chip, which is
         // what opens its details.
-        if (active) swallowNextClick();
+        if (active) swallowNextClick(nativeEvent);
         if (unchanged || !active) {
           finish();
           return;
@@ -697,6 +720,7 @@ export function useDayRangeCreate({
 }
 
 export type CreateSelection = {
+  exactRange?: { start: Date; end: Date };
   dayIndex: number;
   endMinutes: number;
   startMinutes: number;
@@ -711,13 +735,16 @@ export type CreateSelection = {
  * both finish the selection and create a second event.
  */
 export function useDragToCreate({
+  axis,
   geometry,
   onSelected,
 }: {
+  axis?: TimeAxis;
   geometry: TimeGeometry;
   onSelected: (selection: CreateSelection, origin: HTMLElement) => void;
 }) {
   const [selection, setSelection] = useState<CreateSelection>();
+  const invalidRef = useRef(false);
   const pressRef = useRef<
     | {
         anchorMinutes: number;
@@ -732,9 +759,9 @@ export function useDragToCreate({
   const selectionRef = useRef<CreateSelection | undefined>(undefined);
   const consumedRef = useRef(false);
   const detachRef = useRef<(() => void) | undefined>(undefined);
-  const optionsRef = useRef({ geometry, onSelected });
+  const optionsRef = useRef({ axis, geometry, onSelected });
   useEffect(() => {
-    optionsRef.current = { geometry, onSelected };
+    optionsRef.current = { axis, geometry, onSelected };
   });
 
   const finish = useCallback(() => {
@@ -757,6 +784,8 @@ export function useDragToCreate({
         pointerEvent.clientY - bounds.top,
         optionsRef.current.geometry,
       );
+      if (optionsRef.current.axis && coordinateToInstant(optionsRef.current.axis, pointerEvent.dayIndex, anchorMinutes) === null) return;
+      invalidRef.current = false;
       pressRef.current = {
         anchorMinutes,
         column: pointerEvent.column,
@@ -781,7 +810,7 @@ export function useDragToCreate({
 
         nativeEvent.preventDefault();
         const current = yToMinutes(
-          nativeEvent.clientY - press.gridTop,
+          nativeEvent.clientY - press.column.getBoundingClientRect().top,
           optionsRef.current.geometry,
         );
         // Dragging upwards is as valid as downwards.
@@ -790,7 +819,16 @@ export function useDragToCreate({
           startMinutes + optionsRef.current.geometry.snapMinutes,
           Math.max(press.anchorMinutes, current),
         );
-        const next = { dayIndex: press.dayIndex, endMinutes, startMinutes };
+        const axis = optionsRef.current.axis;
+        let exactRange: CreateSelection["exactRange"];
+        if (axis) {
+          const start = coordinateToInstant(axis, press.dayIndex, startMinutes);
+          const end = coordinateBoundaryInstant(axis, press.dayIndex, endMinutes, "end");
+          invalidRef.current = start === null || end === null || end <= start;
+          if (invalidRef.current || start === null || end === null) return;
+          exactRange = { start: new Date(start), end: new Date(end) };
+        }
+        const next = { dayIndex: press.dayIndex, endMinutes, startMinutes, ...(exactRange ? { exactRange } : {}) };
         selectionRef.current = next;
         setSelection(next);
       }
@@ -803,9 +841,10 @@ export function useDragToCreate({
         const column = press.column;
         const report = optionsRef.current.onSelected;
         // Tell the click handler to stand down — a drag already answered "when".
-        consumedRef.current = Boolean(active);
+        const invalid = invalidRef.current;
+        consumedRef.current = Boolean(active) || invalid;
         finish();
-        if (active) report(active, column);
+        if (active && !invalid) report(active, column);
       }
 
       function handleKey(nativeEvent: KeyboardEvent) {
@@ -841,7 +880,7 @@ export function useDragToCreate({
     return consumed;
   }, []);
 
-  useEffect(() => finish, [finish]);
+  useEffect(() => finish, [axis, finish]);
 
   return { begin, consumeClick, selection };
 }
