@@ -1,5 +1,16 @@
 # Google organizer actions
 
+**Live evidence update — 2026-09-10:** the bounded one-off organizer
+create/update/cancel and attendee accept/tentative/decline paths passed between
+two approved Google accounts. Other-account Calendar UI and one real invitation
+email were observed; both synthetic meetings were cleaned up. This does not
+certify exactly-once notification delivery, every email, lost-response recovery,
+bound recurring instances or physical devices.
+[Full evidence and limitations](../audits/calendar-google-invite-live-acceptance-20260910.md).
+Live-pending statements below describe the original implementation checkpoint
+unless they name a remaining scope explicitly. Production activation remains
+separate.
+
 `PROVIDER_ORGANIZER_EDITS_ENABLED` is a separate default-off gate. Enabling RSVP
 does not enable organizer writes. This implementation supports a connected
 account's own primary Google calendar: create a one-off meeting, edit its content

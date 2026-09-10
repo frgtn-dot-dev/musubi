@@ -903,3 +903,11 @@ human-last. Širší RDATE/recurrence, guest editing ani Graph UPDATE/DELETE se 
 dávkou nepovolují. Historické checkpointy a původní živá kritéria hotovo výše
 zůstávají evidencí svých etap; aktuální hranice a zbývající gates shrnuje
 [přehled zbývající práce](calendar-core-remaining-work.md).
+
+
+**Živá Google one-off acceptance (2026-09-10):** organizer vytvoření, změna a
+zrušení i vlastní RSVP ano/možná/ne prošly mezi dvěma schválenými účty. Výsledek
+byl ověřen na druhé straně v Google Calendar; první pozvánka i v Gmailu. Obě
+QA schůzky jsou uklizené. [Evidence včetně omezení a interakční chyby automatizace](calendar-google-invite-live-acceptance-20260910.md).
+Produkční flagy/verze beze změny; recurring instance, ostatní provideři a device
+QA tím nejsou převzaté.
