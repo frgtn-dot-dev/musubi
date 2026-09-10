@@ -25,6 +25,20 @@ The namespace-preserving parser rejects duplicate properties/attributes,
 ambiguous responses, DOCTYPE/entity declarations and forged namespaces.
 Discovered URLs stay on the same origin; guarded fetch rejects redirects.
 
+Scheduling identity discovery accepts an explicit empty `404` for the collection's
+`current-user-principal` only by querying the same-origin root once. That root
+must return a valid authenticated principal exactly matching the collection owner;
+denied, unauthenticated, malformed and foreign-origin proof remains refused.
+This follows [RFC 5397 section 3](https://www.rfc-editor.org/rfc/rfc5397.html#section-3).
+The principal address set may contain non-email URI references under
+[RFC 6638 section 2.4.1](https://www.rfc-editor.org/rfc/rfc6638.html#section-2.4.1).
+Only validated `mailto` members participate in email identity matching; other
+well-formed references are neither fetched nor interpreted as email addresses.
+Duplicate identities, malformed email members and ambiguous self matches fail.
+The separate iCloud personal-content fallback never applies to scheduling:
+resource `write-content` remains required for RSVP and organizer updates;
+collection `bind`/`unbind` proves only the corresponding create/delete operation.
+
 ## Conditional delivery and recovery
 
 The private journal binds actor/account/source, mapping and revision, URL/UID,

@@ -101,3 +101,40 @@ from delta remain open; the latter has a verified manual full-sync recovery.
 Recurring creation, delegated operations, native conditional UPDATE/DELETE,
 physical-device notifications and production activation are not certified by
 this run. Existing unrelated uncertain Google operation history is preserved.
+
+## Follow-up: fresh direct Decline and stopped receipt — 2026-09-10
+
+Two new single meetings on September 17 were sent from the same authorized
+Google organizer to the sole Outlook QA attendee through native Google UI.
+The first (`Musubi QA Outlook decline direct 0917`, 15:00 Prague) was imported
+by standard sync and Decline was saved in the Musubi browser. The normal worker
+stopped with `provider-conflict` before dispatch: neither dispatch marker was
+present, and no RSVP POST was sent. Read-only comparison showed changed native
+`changeKey`, `@odata.etag` and `lastModifiedDateTime`, with response still
+`notResponded`. The original saved operation was not rewritten or retried.
+
+This exposed misleading receipt wording: a stopped, never-dispatched response
+was still described as waiting to be sent. The shared receipt now says
+**Outlook response not sent** and explains that the saved response is stopped.
+The corrected wording was verified in the live Musubi Delivery dialog. There is
+currently no in-app discard/reprepare action for this Graph conflict; the
+receipt directs the user to the current meeting in Outlook. This change does
+not relax the native snapshot check or add an automatic retry.
+
+The second (`Musubi QA Outlook decline stable 0917`, 16:00 Prague) was imported
+and refreshed before a fresh Musubi Decline. At 15:04 UTC the exact normal
+worker made one accepted dispatch, then reported `graph-rsvp-copy-absent`: both
+started/accepted markers exist, attempts = 1, status = `unconfirmed`. The browser
+showed **Outlook meeting copy unavailable** with **Check response** and explicit
+no-resend wording. Fresh Google organizer views continued to show the attendee
+as not responded. Organizer delivery remains **unproven**; accepted dispatch
+and a missing copy are not a successful-delivery assertion.
+
+Both meetings were deleted through native Google cancel-and-notify. The first
+meeting’s cancellation notice was sent after the owner explicitly confirmed
+that final cleanup action. Both local journals are intentionally preserved;
+full local cleanup is not claimed.
+
+The new shared receipt tests, CalDAV scheduling regressions, API typecheck and
+full `pnpm check` passed. Independent clean-context review was clean after the
+empty-href discovery regression was fixed. Exact-head CI remains the PR gate.
