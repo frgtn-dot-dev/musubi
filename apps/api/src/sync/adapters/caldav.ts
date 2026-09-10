@@ -1397,12 +1397,12 @@ export const caldavAdapter: CalendarAdapter = {
     if (!ref.icalUid) throw new EventWriteError("event-write", "unsupported");
     return readCaldavRsvp(calendar, { id: ref.externalEventId, etag: requireEventEtag(ref.etag), uid: ref.icalUid }, await rsvpAuthorization(userID, accountID, calendar), response, signal);
   },
-  async writeCaldavRsvp(userID, accountID, calendar, evidence, signal, beforeWrite) {
+  async writeCaldavRsvp(userID, accountID, calendar, evidence, signal, beforeWrite, readOnly = false) {
     const authorization = await rsvpAuthorization(userID, accountID, calendar);
     return deliverCaldavRsvp(calendar, evidence, authorization, signal, async () => {
       if (await rsvpAuthorization(userID, accountID, calendar) !== authorization) throw new ProviderEventWriteError("provider-conflict");
       await beforeWrite?.();
-    });
+    }, readOnly);
   },
   async readCaldavSeries(userID, accountId, externalCalendarId, intent, signal, operation) {
     const { resource, authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, intent, signal, "update", operation);

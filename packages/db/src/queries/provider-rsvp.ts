@@ -10,12 +10,13 @@ import {
   ForbiddenError,
   EventTimeModelSchema, type EventTimeModel,
   ProviderEventStateSchema,
-  GraphRsvpDispatchSchema, microsoftRsvpDesiredState, ProviderRsvpInstanceSchema, ProviderRsvpEditSchema, providerRsvpDesiredState, caldavRsvpDesiredState, type ProviderRsvpInstance, type ProviderRsvpEdit, type ProviderRsvpIntent, type Event,
+  CaldavRsvpDeliverySchema, GraphRsvpDispatchSchema, microsoftRsvpDesiredState, ProviderRsvpInstanceSchema, ProviderRsvpEditSchema, providerRsvpDesiredState, caldavRsvpDesiredState, type ProviderRsvpInstance, type ProviderRsvpEdit, type ProviderRsvpIntent, type Event,
 } from "@musubi/types";
 import { config } from "@musubi/config";
 import { db } from "..";
 import {
   account,
+  caldavAccounts,
   calendarEvents,
   calendarMembers,
   events,
@@ -212,7 +213,7 @@ async function rsvpTransaction(
     // Raw evidence is server-internal and was normalized/compared by preflight.
     if (prepared.baseline.id !== mapping.externalEventID || prepared.baseline.etag !== mapping.etag)
       throw new BadRequestError("RSVP provider identity changed.");
-    const rsvp: ProviderRsvpIntent = { request, baseline: prepared.baseline, nativeTime: prepared.nativeTime, ...(instance ? { instance } : {}), baselineState: state, desiredState, mappingID: mapping.id };
+    const rsvp: ProviderRsvpIntent = { request, ...(request.provider === "caldav" ? { caldavDelivery: CaldavRsvpDeliverySchema.parse({ kind: "caldav-rsvp-at-most-once", version: 1 }) } : {}), baseline: prepared.baseline, nativeTime: prepared.nativeTime, ...(instance ? { instance } : {}), baselineState: state, desiredState, mappingID: mapping.id };
     const id = randomUUID();
     await appendEventOutbox(tx, snapshot, [
       {
@@ -295,5 +296,28 @@ export async function markGraphRsvpAccepted(id: string, leaseToken: string) {
     const marker = GraphRsvpDispatchSchema.parse(row.payload.rsvp.graphDispatch);
     await tx.update(eventOutbox).set({ payload: { ...row.payload, rsvp: { ...row.payload.rsvp, graphDispatch: { ...marker, acceptedAt: new Date().toISOString() } } } }).where(eq(eventOutbox.id, id));
     return true;
+  });
+}
+
+/** Commit irreversible permission for one CalDAV RSVP PUT. Persist before any
+ * possible dispatch; neither refusal nor recovery may clear this marker. */
+export async function markCaldavRsvpDispatched(row: import("./event-outbox").EventOutboxRow): Promise<boolean> {
+  const intent = row.payload.rsvp;
+  const policy = CaldavRsvpDeliverySchema.safeParse(intent?.caldavDelivery);
+  const request = ProviderRsvpEditSchema.safeParse(intent?.request);
+  if (!config.api.providerRsvpEditsEnabled || row.provider !== "caldav" || row.action !== "update" || !request.success || request.data.provider !== "caldav" || !policy.success || policy.data.startedAt !== undefined || request.data.expectedRevision !== row.revision) return false;
+  return db.transaction(async tx => {
+    await lockUserLifecycle(tx, [row.userID], "shared");
+    await lockCalendarLifecycle(tx, [row.calendarID], "shared");
+    await tx.select({ id: events.id }).from(events).where(eq(events.id, row.eventID)).for("update");
+    const [current] = await tx.select().from(eventOutbox).where(eq(eventOutbox.id, row.id)).for("update");
+    if (!current || (["actorID", "userID", "provider", "action", "eventID", "calendarID", "externalCalendarLinkID", "accountID", "externalCalendarID", "externalEventID", "expectedEtag", "icalUid", "revision", "mutationID"] as const).some(key => current[key] !== row[key])) return false;
+    if (!(await hasProviderRsvpSource(row, tx, true))) return false;
+    const [grant] = await tx.select({ id: caldavAccounts.id, encryptedPassword: caldavAccounts.encryptedPassword }).from(caldavAccounts).where(and(eq(caldavAccounts.id, row.accountID), eq(caldavAccounts.userID, row.userID))).for("share");
+    if (!grant?.encryptedPassword || !config.api.providerRsvpEditsEnabled) return false;
+    const marker = CaldavRsvpDeliverySchema.parse({ ...policy.data, startedAt: new Date().toISOString() });
+    const [marked] = await tx.update(eventOutbox).set({ payload: { ...row.payload, rsvp: { ...intent!, caldavDelivery: marker } }, uncertain: true, updatedAt: new Date() })
+      .where(and(eq(eventOutbox.id, row.id), eq(eventOutbox.status, "attempting"), eq(eventOutbox.leaseToken, row.leaseToken!), sql`${eventOutbox.leaseUntil} > clock_timestamp()`, sql`${eventOutbox.payload} = ${JSON.stringify(row.payload)}::jsonb`, sql`${eventOutbox.payload}->'rsvp'->'caldavDelivery'->'startedAt' is null`)).returning({ id: eventOutbox.id });
+    return !!marked;
   });
 }

@@ -41,3 +41,16 @@ for (const graphRsvpPhase of ["dispatched", "accepted", "absent"] as const) {
   assert.equal(eventDeliveryRetryLabel(uncertain), "Check response");
 }
 console.log("Graph RSVP receipts distinguish stopped unsent requests from uncertain dispatched actions: OK");
+
+const caldav = { ...receipt, provider: "caldav", graphRsvpPhase: undefined, caldavRsvpPhase: "check-only" as const };
+assert.equal(eventDeliveryLabel(caldav), "CalDAV response needs verification");
+assert.match(eventDeliveryExplanation(caldav), /without sending it again/);
+assert.deepEqual(eventDeliveryActions(caldav), { retry: true, review: false });
+assert.equal(eventDeliveryRetryLabel(caldav), "Check response");
+assert.deepEqual(eventDeliveryActions({ ...caldav, connected: false }), { retry: false, review: false });
+assert.equal(eventDeliveryActions({ ...caldav, status: "cancelled" }).retry, false);
+assert.match(eventDeliveryExplanation({ ...caldav, caldavRsvpPhase: "observed", status: "completed" }), /Organizer delivery cannot be verified/);
+assert.equal(eventDeliveryLabel({ ...caldav, caldavRsvpPhase: "queued" }), "CalDAV response not sent");
+assert.equal(eventDeliveryLabel({ ...caldav, caldavRsvpPhase: "queued", status: "pending" }), "Response request saved");
+assert.equal(eventDeliveryActions({ ...caldav, caldavRsvpPhase: "queued" }).review, false);
+console.log("CalDAV RSVP receipts distinguish read-only checks from unsent requests: OK");

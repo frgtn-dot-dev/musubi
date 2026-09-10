@@ -27,6 +27,7 @@ export async function createCaldavRsvpFixture() {
     assert.equal(req.url, "/collection/invite.ics");
     if (req.method === "GET") {
       state.reads++; await state.onRead?.();
+      if (state.mode === "GET-404") { res.writeHead(404); return res.end(); }
       res.writeHead(200, { "content-type": "text/calendar", etag: state.mode === "weak-etag" ? 'W/"weak"' : state.etag, ...(state.mode === "no-schedule-tag" ? {} : { "schedule-tag": state.scheduleTag }) }); return res.end(state.data);
     }
     assert.equal(req.method, "PUT"); assert.equal(req.headers["if-schedule-tag-match"], undefined); assert.equal(req.headers["schedule-reply"], undefined);

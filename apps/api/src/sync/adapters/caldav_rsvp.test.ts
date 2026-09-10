@@ -22,6 +22,45 @@ async function main() {
       await deliver(); assert.equal(state.puts, 1); assert.equal(callbacks, 1);
       assert.deepEqual(frozen, evidence);
     }
+    const isReadOnlyUnconfirmed = (error: any) => error.code === "caldav-rsvp-response-unconfirmed" && error.outcome === "unconfirmed";
+    for (const mode of ["ok", "GET-404"]) {
+      reset(mode); let callbacks = 0;
+      await assert.rejects(() => deliverCaldavRsvp(collection, evidence, auth, undefined, async () => { callbacks++; }, true), isReadOnlyUnconfirmed);
+      assert.equal(state.puts, 0); assert.equal(callbacks, 0);
+    }
+    reset(); state.data = evidence.before.replace("Private notes", "Concurrent private notes"); state.etag = '"changed"';
+    await assert.rejects(() => deliverCaldavRsvp(collection, evidence, auth, undefined, undefined, true), isReadOnlyUnconfirmed);
+    assert.equal(state.puts, 0);
+    for (const mode of ["ok", "metadata"]) {
+      reset(); state.data = mode === "metadata" ? evidence.after.replace("DTSTAMP:20260301T090000Z", "DTSTAMP:20260302T090000Z") : evidence.after;
+      state.etag = '"after"'; state.scheduleTag = '"schedule-after"';
+      const recovered = await deliverCaldavRsvp(collection, evidence, auth, undefined, async () => { assert.fail("Read-only recovery must not dispatch"); }, true);
+      assert.equal(recovered.recovered, true); assert.equal(recovered.confirmation.resourceHash, evidence.desiredResourceHash); assert.equal(state.puts, 0);
+    }
+    // A lost PUT can leave later GETs at the original baseline. The durable
+    // dispatch marker makes every subsequent attempt read-only nonetheless.
+    reset("lost"); let dispatches = 0;
+    await assert.rejects(() => deliverCaldavRsvp(collection, evidence, auth, undefined, async () => { dispatches++; }), (error: any) => error.outcome === "unconfirmed");
+    Object.assign(state, { mode: "ok", data: evidence.before, etag: evidence.etag, scheduleTag: evidence.scheduleTag });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await assert.rejects(() => deliverCaldavRsvp(collection, evidence, auth, undefined, async () => { dispatches++; }, true), isReadOnlyUnconfirmed);
+    }
+    assert.equal(state.puts, 1); assert.equal(dispatches, 1);
+    reset(); const markerError = new Error("Dispatch marker did not commit");
+    await assert.rejects(() => deliverCaldavRsvp(collection, evidence, auth, undefined, async () => { throw markerError; }), error => error === markerError);
+    assert.equal(state.puts, 0);
+    reset(); const aborted = new AbortController();
+    await assert.rejects(() => deliverCaldavRsvp(collection, evidence, auth, aborted.signal, async () => { aborted.abort(); }), (error: any) => error.name === "AbortError");
+    assert.equal(state.puts, 0);
+    reset();
+    await assert.rejects(() => deliverCaldavRsvp(collection, evidence, auth, undefined, async () => { config.api.providerRsvpEditsEnabled = false; }));
+    assert.equal(state.puts, 0); config.api.providerRsvpEditsEnabled = true;
+    reset(); let markerCommitted = false;
+    state.onPut = async () => { assert.equal(markerCommitted, true); };
+    try {
+      await deliverCaldavRsvp(collection, evidence, auth, undefined, async () => { await new Promise<void>(resolve => setImmediate(resolve)); markerCommitted = true; });
+      assert.equal(state.puts, 1);
+    } finally { state.onPut = undefined; }
     reset(); state.data = evidence.after;
     const same = await readCaldavRsvp(collection, ref, auth, "accepted"); assert.equal(same.before, same.after);
     await deliverCaldavRsvp(collection, same, auth); assert.equal(state.puts, 0);

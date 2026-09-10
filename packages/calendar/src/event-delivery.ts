@@ -2,6 +2,9 @@ import type { EventDeliveryTarget } from "@musubi/types";
 
 /** Shared language for the web and native clients; never aggregate receipts. */
 export function eventDeliveryLabel(target: EventDeliveryTarget): string {
+  if (target.caldavRsvpPhase === "observed") return "Response observed in CalDAV";
+  if (target.caldavRsvpPhase === "check-only") return "CalDAV response needs verification";
+  if (target.caldavRsvpPhase === "queued") return ["conflict", "blocked", "cancelled", "not-written"].includes(target.status) ? "CalDAV response not sent" : "Response request saved";
   if (graphRsvpStoppedBeforeDispatch(target)) return "Outlook response not sent";
   if (target.graphRsvpPhase) return ({ queued: "Response request saved", dispatched: "Outlook response outcome unknown", accepted: "Outlook accepted the response action", observed: "Response observed in Outlook", absent: "Outlook meeting copy unavailable" })[target.graphRsvpPhase];
   if (target.organizerPhase) return ({ unchanged: "Google meeting already matches", queued: "Google meeting change saved", dispatched: "Google meeting outcome unknown", accepted: "Google accepted the meeting action", observed: "Meeting action observed in Google", absent: "Google meeting copy unavailable" })[target.organizerPhase].replace(/Google/g, target.provider === "caldav" ? "CalDAV" : target.provider === "microsoft" ? "Outlook" : "Google");
@@ -26,6 +29,9 @@ export function eventDeliveryLabel(target: EventDeliveryTarget): string {
 }
 
 export function eventDeliveryExplanation(target: EventDeliveryTarget): string {
+  if (target.caldavRsvpPhase === "observed") return "The current CalDAV response matches your choice. Organizer delivery cannot be verified.";
+  if (target.caldavRsvpPhase === "check-only") return "Musubi can check the saved response without sending it again. An earlier attempt may have reached the server, or its dispatch history is unavailable. Organizer delivery cannot be verified.";
+  if (target.caldavRsvpPhase === "queued") return ["conflict", "blocked", "cancelled", "not-written"].includes(target.status) ? "Musubi stopped before sending this saved response. Check the current meeting and account permissions." : "The response request is saved. Musubi will ask the CalDAV server to notify the organizer. Organizer delivery cannot be verified.";
   if (graphRsvpStoppedBeforeDispatch(target)) {
     if (target.status === "conflict") return "Musubi stopped before sending because the current Outlook state could not be confirmed. This saved response is stopped. Open the current meeting in Outlook to review it and respond there.";
     if (target.status === "cancelled") return "This saved response was cancelled before Musubi sent it. Open the current meeting in Outlook if you still want to respond.";
@@ -78,9 +84,9 @@ export function eventDeliveryActions(target: EventDeliveryTarget) {
   return {
     retry:
       available &&
-      (["retry", "unconfirmed", "not-written", "blocked"].includes(target.status) || target.status === "conflict" && (target.graphCreateCheck || (!!target.graphRsvpPhase && target.graphRsvpPhase !== "queued") || (!!target.organizerPhase && target.organizerPhase !== "queued"))),
+      (["retry", "unconfirmed", "not-written", "blocked"].includes(target.status) || target.status === "conflict" && (target.caldavRsvpPhase === "check-only" || target.graphCreateCheck || (!!target.graphRsvpPhase && target.graphRsvpPhase !== "queued") || (!!target.organizerPhase && target.organizerPhase !== "queued"))),
     review:
-      !target.graphRsvpPhase && !target.organizerPhase && available &&
+      !target.caldavRsvpPhase && !target.graphRsvpPhase && !target.organizerPhase && available &&
       ["conflict", "blocked", "cancelled", "unconfirmed"].includes(
         target.status,
       ),
@@ -88,5 +94,5 @@ export function eventDeliveryActions(target: EventDeliveryTarget) {
 }
 
 export function eventDeliveryRetryLabel(target: EventDeliveryTarget): string {
-  return target.graphCreateCheck ? "Check creation" : target.graphRsvpPhase && target.graphRsvpPhase !== "queued" ? "Check response" : target.organizerPhase && target.organizerPhase !== "queued" ? "Check result" : "Retry";
+  return target.caldavRsvpPhase === "check-only" ? "Check response" : target.graphCreateCheck ? "Check creation" : target.graphRsvpPhase && target.graphRsvpPhase !== "queued" ? "Check response" : target.organizerPhase && target.organizerPhase !== "queued" ? "Check result" : "Retry";
 }

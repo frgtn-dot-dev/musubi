@@ -124,6 +124,8 @@ export async function getEventDeliveryStatus(
         nextAttemptAt: eventOutbox.nextAttemptAt,
         errorCode: eventOutbox.errorCode,
         graphCreateCheck: sql<boolean>`${eventOutbox.provider} = 'microsoft' and ${eventOutbox.action} = 'create' and ${eventOutbox.actorID} = ${userID} and ${eventOutbox.uncertain} and ${eventOutbox.payload}->'graphSeriesCreate'->'version' = '1'::jsonb`,
+        caldavRsvp: sql<boolean>`${eventOutbox.provider} = 'caldav' and ${eventOutbox.payload}->'rsvp'->'request'->>'provider' = 'caldav'`,
+        caldavCheckOnly: sql<boolean>`${eventOutbox.payload}->'rsvp'->'caldavDelivery' is null or ${eventOutbox.payload}->'rsvp'->'caldavDelivery'->>'startedAt' is not null`,
         graphRsvp: sql<boolean>`${eventOutbox.payload}->'rsvp'->'request'->>'provider' = 'microsoft'`,
         graphDispatched: sql<boolean>`${eventOutbox.payload}->'rsvp'->'graphDispatch' is not null`,
         graphAccepted: sql<boolean>`${eventOutbox.payload}->'rsvp'->'graphDispatch'->>'acceptedAt' is not null`,
@@ -185,9 +187,10 @@ export async function getEventDeliveryStatus(
       );
       for (const last of latest) {
         const first = blockers.get(last.targetId) ?? last;
-        const { nextAttemptAt, errorCode, alarm, graphCreateCheck, graphRsvp, graphDispatched, graphAccepted, organizer, organizerDispatched, organizerAccepted, ...display } = first;
+        const { nextAttemptAt, errorCode, alarm, caldavRsvp, caldavCheckOnly, graphCreateCheck, graphRsvp, graphDispatched, graphAccepted, organizer, organizerDispatched, organizerAccepted, ...display } = first;
         targets.set(first.targetId, {
           ...display,
+          ...(caldavRsvp ? { caldavRsvpPhase: ["completed", "not-needed"].includes(first.status) ? "observed" as const : caldavCheckOnly ? "check-only" as const : "queued" as const } : {}),
           ...(graphCreateCheck && first.owned && first.connected ? { graphCreateCheck: true as const } : {}),
           ...(graphRsvp ? { graphRsvpPhase: (["completed", "not-needed"].includes(first.status) ? "observed" : errorCode === "graph-rsvp-copy-absent" ? "absent" : graphAccepted ? "accepted" : graphDispatched ? "dispatched" : "queued") as NonNullable<EventDeliveryTarget["graphRsvpPhase"]> } : {}),
           ...(organizer ? { organizerPhase: first.status === "not-needed" ? "unchanged" as const : first.status === "completed" ? "observed" as const : errorCode === "organizer-copy-absent" ? "absent" as const : organizerAccepted ? "accepted" as const : organizerDispatched ? "dispatched" as const : "queued" as const } : {}),
