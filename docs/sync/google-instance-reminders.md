@@ -115,3 +115,15 @@ covers zoned/all-day instances at 1280 px/light and 390 px/dark, keyboard and fo
 accessibility, failed draft preservation, exact request replay and both delivery
 targets, plus the prior one-off editors. This does not replace live Google reminder
 acceptance or physical native/OS notification QA.
+
+## Bounded live acceptance — 2026-09-10
+
+A guest-free primary-calendar DAILY COUNT=3 series had its middle existing bound
+instance changed through Musubi to a 15-minute popup notification, then Off.
+Both operations completed and native Google confirmed the selected settings;
+siblings retained their original 10-minute notifications, with notes/time
+unchanged. Native deletion and standard sync removed all active synthetic events
+while preserving both completed journals. This covers stored reminder settings,
+not notification firing, email reminders, physical devices or every instance
+variant. Earlier fixture-only sections remain evidence of their original stage.
+[Exact observations and cleanup](../audits/calendar-personal-series-live-acceptance-20260910.md).

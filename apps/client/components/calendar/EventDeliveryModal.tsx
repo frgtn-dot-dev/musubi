@@ -5,6 +5,7 @@ import { uuidv7 } from "uuidv7";
 import { spacing, typeSizes } from "@musubi/design-system";
 import {
   eventDeliveryActions,
+  eventDeliveryRetryLabel,
   eventDeliveryExplanation,
   eventDeliveryLabel,
   providerReminderDescription,
@@ -374,7 +375,7 @@ export function DeliveryBody({
                         ) : null}
                         {actions.retry ? (
                           <Btn
-                            label={target.graphRsvpPhase && target.graphRsvpPhase !== "queued" ? "Check response" : target.organizerPhase && target.organizerPhase !== "queued" ? "Check result" : "Retry"}
+                            label={eventDeliveryRetryLabel(target)}
                             variant="secondary"
                             disabled={busy || loading}
                             onPress={() =>

@@ -2,8 +2,10 @@
 
 Finite personal recurring creation is composed behind the disabled time-edit
 flag: public admission, durable delivery/recovery, full-family ACK and tracked
-sync. The sections below describe the individual contracts; client/browser and
-live-provider acceptance remain open. Production activation is not implied.
+sync. The sections below describe the individual contracts. Bounded personal Prague
+zoned and all-day COUNT=3 browser/live acceptance passed; wider provider and
+physical-client acceptance remains open. Production activation is not implied.
+[Current live evidence](../audits/calendar-personal-series-live-acceptance-20260910.md).
 
 ## Native identity and recovery read
 
@@ -429,3 +431,49 @@ chooses the observed provider version; this sends no Graph write, retains the
 original intent and releases the pending import fence only after atomic local
 family acceptance. Absent, duplicate, meeting, exceptional or unsupported
 families remain unresolved.
+
+## Bound Prague recurrence timezone equivalence
+
+Live personal create on 2026-09-10 returned `Central Europe Standard Time` in
+`recurrence.range.recurrenceTimeZone`, while the saved authored zone and both
+native `originalStartTimeZone` / `originalEndTimeZone` remained `Europe/Prague`.
+The create/recovery and bound complete-family readers recognize only that exact
+combination. A comparison-only clone substitutes the saved IANA zone for that
+range label; raw provider input and the saved intent remain unchanged. The
+canonical authored zone stays Prague. Generic time import and unbound adoption
+still reject this Windows label without the saved context.
+
+[CLDR release 48 windowsZones](https://github.com/unicode-org/cldr/blob/release-48/common/supplemental/windowsZones.xml)
+maps `Central Europe Standard Time`, territory `CZ`, to `Europe/Prague`; its
+world-default mapping is Budapest, so the Windows name alone is insufficient.
+[Microsoft's default timezone table](https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/default-time-zones?view=windows-11)
+also associates Czech Republic with this Windows zone. Graph defines
+[recurrenceTimeZone](https://learn.microsoft.com/en-us/graph/api/resources/recurrencerange?view=graph-rest-1.0)
+as the timezone of the recurrence range dates.
+
+Both native original labels must explicitly agree with the saved Prague zone.
+Missing labels, another saved zone, unknown Windows names and all-day alias use
+remain refused. Exact UTC precision and gap/fold checks, full finite recurrence
+and instance footprint, transaction/UID identity, content and cancellation/
+exception checks remain mandatory. This is no family-wide concurrency claim.
+Regression evidence covers both DST transitions, immutable inputs, mismatches,
+partial/shifted families, one-POST public recovery and stable tracked sync.
+
+An owned, uncertain Microsoft finite-create receipt exposes **Check creation**,
+including when the previous exact readback ended in conflict. The existing retry
+endpoint readmits only its frozen versioned create journal, retaining uncertainty,
+provider identity, snapshot and Retry-After. The worker therefore only recovers
+the original transaction and cannot POST a replacement. Ordinary create conflicts
+and nonuncertain conflicts are not admitted by this exception. **Review changes**
+remains a separate explicit adoption path; its unbound evidence is not relaxed.
+
+## Bounded live acceptance
+
+The 2026-09-10 personal-series run confirmed Prague zoned and all-day COUNT=3
+creation against native Outlook, stable one-master/three-child sync, and public
+read-only recovery of the original timed conflict without a second POST.
+Native Outlook deletion and standard sync without cursor reset removed both
+active QA families while retaining completed journals. Earlier implementation-stage test sections
+above do not represent this later live evidence. Broader zone/recurrence, physical
+client and conditional UPDATE/DELETE acceptance remain separate.
+[Exact observations and limits](../audits/calendar-personal-series-live-acceptance-20260910.md).

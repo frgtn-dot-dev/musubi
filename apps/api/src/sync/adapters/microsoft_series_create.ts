@@ -4,7 +4,7 @@ import { type Event, EventWriteError } from "@musubi/types";
 import type { CreatedEventEvidence, EventCreateIdentity } from "../adapter";
 import { assertCompleteEventReadResponse, eventCreateOperationID } from "../event_create_identity";
 import { ProviderEventWriteError } from "../event_write";
-import { graphTimeForEvent, graphMasterTimeFromUtc } from "./microsoft_time";
+import { graphTimeForEvent, graphMasterTimeFromUtc, graphMasterForSavedZone } from "./microsoft_time";
 import { graphRecurrenceForEvent, recurrenceFromGraph, type GraphRecurrence } from "./microsoft_recurrence";
 import { microsoftEventState } from "./provider_event_state";
 import { graphSeriesFootprint } from "./microsoft_series_footprint";
@@ -47,11 +47,12 @@ function recurrenceSemantics(value: GraphRecurrence): GraphRecurrence {
 export function graphSeriesCreateEvidence(native: unknown, saved: Event, identity: EventCreateIdentity, externalID: string): CreatedEventEvidence {
   const expected = graphSeriesCreateBody(saved, identity);
   try {
-    const item = nativeSeries.parse(native);
+    const projected = graphMasterForSavedZone(native, saved);
+    const item = nativeSeries.parse(projected);
     if (item.id !== externalID || item.transactionId !== expected.transactionId || item.subject !== expected.subject ||
         item.body.contentType.toLowerCase() !== "text" || item.body.content !== expected.body.content || item.location.displayName !== expected.location.displayName)
       throw new Error("Changed master");
-    const time = graphMasterTimeFromUtc(native);
+    const time = graphMasterTimeFromUtc(projected);
     const recurrence = recurrenceFromGraph({ ...saved, ...time }, item.recurrence);
     if (!isDeepStrictEqual(graphTimeForEvent(time), graphTimeForEvent(saved)) ||
         !isDeepStrictEqual(recurrenceSemantics(graphRecurrenceForEvent({ ...saved, ...time, recurrence })), recurrenceSemantics(expected.recurrence))) throw new Error("Changed recurrence");

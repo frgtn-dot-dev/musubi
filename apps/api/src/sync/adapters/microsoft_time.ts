@@ -79,6 +79,22 @@ export function graphInstanceTimeFromUtc(native: unknown, masterID: string, expe
   } catch { return refuse(); }
 }
 
+/** Comparison-only projection for a saved Prague family. CLDR release 48 maps
+ * Central Europe Standard Time / CZ to Europe/Prague; its global default is
+ * Budapest, so the Windows label alone must never select an authored zone.
+ * https://github.com/unicode-org/cldr/blob/release-48/common/supplemental/windowsZones.xml
+ * Generic import and unbound adoption continue to use the strict parser. */
+export function graphMasterForSavedZone(native: unknown, saved: Time): unknown {
+  const item = z.object({ recurrence: z.object({ range: z.object({ recurrenceTimeZone: z.unknown().optional() }).passthrough() }).passthrough(), originalStartTimeZone: z.unknown().optional(), originalEndTimeZone: z.unknown().optional() }).passthrough().parse(structuredClone(native));
+  if (item.recurrence.range.recurrenceTimeZone === "Central Europe Standard Time") {
+    const model = EventTimeModelSchema.parse(saved.timeModel);
+    if (saved.isAllDay || model.kind !== "zoned" || model.timeZone !== "Europe/Prague" ||
+        item.originalStartTimeZone !== "Europe/Prague" || item.originalEndTimeZone !== "Europe/Prague") refuse();
+    item.recurrence.range.recurrenceTimeZone = "Europe/Prague";
+  }
+  return item;
+}
+
 /** Strict master-time evidence for future recurring-create recovery. Existing
  * provider-expanded import keeps its separate legacy/coverage contract. */
 export function graphMasterTimeFromUtc(native: unknown): Time {

@@ -34,6 +34,14 @@ assert.deepEqual(proof.cancelled.map(value => value.originalStart), [{ kind: "in
 assert.deepEqual(proof.cancelledOccurrenceIDs, ["opaque-not-a-date"]);
 assert.equal(JSON.stringify({ changed, listed, template }), before);
 assert.equal(evidence(master, ordinary).instances.length, 4);
+const aliasMaster = structuredClone(master); aliasMaster.recurrence.range.recurrenceTimeZone = "Central Europe Standard Time";
+const aliasBefore = structuredClone(aliasMaster);
+assert.deepEqual(evidence(aliasMaster, ordinary), evidence(master, ordinary));
+assert.deepEqual(aliasMaster, aliasBefore);
+assert.throws(() => evidence(aliasMaster, ordinary.slice(0, 3)));
+assert.throws(() => evidence(aliasMaster, [...ordinary, ordinary[0]]));
+assert.throws(() => evidence(aliasMaster, ordinary.map((item, i) => i === 2 ? { ...item, start: { ...item.start, dateTime: "2026-03-29T08:00:00" } } : item)));
+assert.throws(() => graphSeriesFamilyEvidence(aliasMaster, ordinary, { ...template, timeModel: null }, ref));
 assert.deepEqual(evidence(changed, [...listed, moved]), proof);
 assert.deepEqual(evidence(changed, [...listed].reverse()), proof);
 const allCancelled = evidence({ ...master, cancelledOccurrences: ["opaque1", "opaque2", "opaque3", "opaque4"] }, []);

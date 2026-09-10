@@ -929,3 +929,21 @@ obnovu a deterministickou regresi. Automatická oprava vyžaduje samostatný ná
 s ochranou souběžných ACK; příčina u providera není prokázaná.
 [Hranice a následná práce](calendar-outlook-delta-reconciliation.md). Produkční
 flagy a minima se nemění; tento výsledek neuzavírá celé K13 ani K14.
+
+
+### Osobní série a instance reminders — živá acceptance 2026-09-10
+
+Outlook osobní Prague zoned a all-day DAILY COUNT=3 create prošly s nativním
+ověřením tří výskytů a stabilním syncem celé family. Původní timed konflikt po
+Windows recurrence labelu byl potvrzen veřejným read-only **Check creation**;
+druhý worker pokus nevytvořil další kopii. Vymezený kontextový alias a veřejná
+obnova mají nezávislé review, cílené regrese a úspěšný úplný `pnpm check`.
+
+Google vlastní primary vázaná instance prošla změnou popup reminderu na 15 minut
+a potom Off; oba sousedé zachovali 10 minut, notes a čas zůstaly stejné. Nativní
+smazání celé Google QA série a standardní sync ponechaly nula aktivních událostí
+a dva dokončené reminder journals. Nativní Outlook cleanup a standardní sync bez
+cursor resetu ponechaly obě family bez aktivních masterů/dětí; dokončené create
+receipts zůstaly zachované. Produkční flagy,
+verze/minima ani device/OS acceptance se nemění.
+[Úplná evidence a omezení](calendar-personal-series-live-acceptance-20260910.md).

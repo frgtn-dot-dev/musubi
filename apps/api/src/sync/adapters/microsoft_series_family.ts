@@ -4,7 +4,7 @@ import type { Event } from "@musubi/types";
 import type { ExternalEventRef, NormalizedEvent } from "../adapter";
 import { assertCompleteEventReadResponse } from "../event_create_identity";
 import { ProviderEventWriteError } from "../event_write";
-import { graphMasterTimeFromUtc, graphOriginalStartFromUtc, graphInstanceTimeFromUtc } from "./microsoft_time";
+import { graphMasterTimeFromUtc, graphMasterForSavedZone, graphOriginalStartFromUtc, graphInstanceTimeFromUtc } from "./microsoft_time";
 import { recurrenceFromGraph } from "./microsoft_recurrence";
 import { graphSeriesFootprint, type GraphSeriesOccurrence } from "./microsoft_series_footprint";
 import { microsoftEventState } from "./provider_event_state";
@@ -48,7 +48,7 @@ function content(native: unknown): NormalizedEvent {
     start: new Date(0), end: new Date(0), isAllDay: false, recurrence: null };
 }
 function header(native: unknown, template: Event, ref: ExternalEventRef) {
-  const item = master.parse(native);
+  const item = master.parse(graphMasterForSavedZone(native, template));
   if (item.id !== ref.externalEventId || !ref.icalUid || item.iCalUId !== ref.icalUid || template.seriesID || template.originalStart) refuse();
   if ((item["exceptionOccurrences@odata.count"] !== undefined && item["exceptionOccurrences@odata.count"] !== item.exceptionOccurrences.length) ||
       (item["cancelledOccurrences@odata.count"] !== undefined && item["cancelledOccurrences@odata.count"] !== item.cancelledOccurrences.length) ||

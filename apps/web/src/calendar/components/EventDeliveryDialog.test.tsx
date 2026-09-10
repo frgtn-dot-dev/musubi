@@ -1,3 +1,5 @@
+import { eventDeliveryActions, eventDeliveryRetryLabel } from "@musubi/calendar";
+import { EventDeliveryTargetSchema } from "@musubi/types";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   cleanup,
@@ -665,4 +667,30 @@ it("states the whole-series scope before applying a saved CalDAV alarm", async (
   expect(within(comparison).getByText(/This applies to every occurrence in the series/)).toBeTruthy();
   expect(within(comparison).getByRole("button", { name: "Apply saved series alarm" })).toBeTruthy();
   expect(within(comparison).queryByRole("button", { name: "Apply saved event alarm" })).toBeNull();
+});
+
+it("checks an uncertain Graph create conflict using its original operation without adopting", async () => {
+  const calls: { url: string; body: unknown }[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (input: string, init?: RequestInit) => {
+    const url = String(input);
+    if (url.endsWith("/retry")) calls.push({ url, body: JSON.parse(String(init?.body)) });
+    return json({ ...receipt, targets: [{ ...target, provider: "microsoft", action: "create", status: "conflict", graphCreateCheck: true }] });
+  }));
+  mount();
+  const check = await screen.findByRole("button", { name: "Check creation" });
+  expect(screen.getByRole("button", { name: "Review changes" })).toBeTruthy();
+  fireEvent.click(check);
+  await waitFor(() => expect(calls).toHaveLength(1));
+  expect(calls[0]).toEqual({ url: expect.stringContaining(`/delivery/${operationId}/retry`), body: {} });
+  expect(screen.queryByRole("dialog", { name: "Review remote changes" })).toBeNull();
+});
+
+it("keeps the additive creation-check capability private to available owned receipts", () => {
+  const parsed = EventDeliveryTargetSchema.parse({ ...target, provider: "microsoft", action: "create", status: "conflict", graphCreateCheck: true });
+  expect(eventDeliveryRetryLabel(parsed)).toBe("Check creation");
+  expect(eventDeliveryActions(parsed)).toEqual({ retry: true, review: true });
+  expect(eventDeliveryActions({ ...parsed, owned: false }).retry).toBe(false);
+  expect(eventDeliveryActions({ ...parsed, connected: false }).retry).toBe(false);
+  expect(eventDeliveryActions({ ...parsed, graphCreateCheck: undefined }).retry).toBe(false);
+  expect(EventDeliveryTargetSchema.safeParse({ ...parsed, graphCreateCheck: "true" }).success).toBe(false);
 });

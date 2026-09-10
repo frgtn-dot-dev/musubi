@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { EventSchema } from "@musubi/types";
 import { resolveEventTimeEdit, expandRecurringEvents, unambiguousCivilToInstant } from "@musubi/calendar";
-import { graphTimeForEvent, graphMasterTimeFromUtc } from "./microsoft_time";
+import { graphTimeForEvent, graphMasterTimeFromUtc, graphMasterForSavedZone } from "./microsoft_time";
 import { graphRecurrenceForEvent, recurrenceFromGraph } from "./microsoft_recurrence";
 
 const base = EventSchema.parse({ id: "00000000-0000-4000-8000-000000000181", revision: 1, creatorID: "owner", organizer: "", title: "Pattern", color: "red", calendars: [], isCanceled: false, recurrence: "RRULE:FREQ=DAILY;COUNT=4", ...resolveEventTimeEdit({ kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-27T09:00:00", endLocal: "2026-03-27T10:00:00" }) });
@@ -52,3 +52,15 @@ for (const change of [
 ]) { assert.throws(() => graphTimeForEvent({ ...base, ...change })); assert.throws(() => graphRecurrenceForEvent({ ...base, ...change })); }
 assert.throws(() => graphTimeForEvent({ ...graphMasterTimeFromUtc(allDay), start: new Date("2026-12-31T01:00:00Z") }));
 console.log("Graph master time: explicit UTC projection, exact native zone, civil serialization, inclusive all-day dates, independent DST expansion, gaps/folds and precision refusals: OK");
+
+// Bound comparison retains authored Prague across both DST transitions.
+for (const [startLocal, utcStart] of [["2026-03-27T09:00:00", "2026-03-27T08:00:00"], ["2026-10-23T09:00:00", "2026-10-23T07:00:00"]]) {
+  const saved = { ...base, ...resolveEventTimeEdit({ kind: "zoned", timeZone: "Europe/Prague", startLocal: startLocal!, endLocal: startLocal!.replace("09:", "10:") }) };
+  const raw = { ...native, start: { dateTime: utcStart, timeZone: "UTC" }, end: { dateTime: utcStart!.replace(/T(\d{2}):/, (_, h) => `T${String(Number(h) + 1).padStart(2, "0")}:`), timeZone: "UTC" }, recurrence: { pattern: { type: "daily", interval: 1 }, range: { type: "numbered", startDate: startLocal!.slice(0, 10), numberOfOccurrences: 4, recurrenceTimeZone: "Central Europe Standard Time" } } };
+  const before = structuredClone(raw); assert.throws(() => graphMasterTimeFromUtc(raw), "Unbound parser stays strict");
+  const projected = graphMasterForSavedZone(raw, saved) as typeof raw;
+  const time = graphMasterTimeFromUtc(projected), recurrence = recurrenceFromGraph({ ...saved, ...time }, projected.recurrence);
+  const starts = expandRecurringEvents([{ ...saved, ...time, recurrence }], new Date(saved.start.getTime() - 86400000), new Date(saved.start.getTime() + 5 * 86400000), { consumerTimeZone: "UTC" }).map(e => e.start.toISOString());
+  assert.deepEqual(starts, startLocal!.includes("03-27") ? ["2026-03-27T08:00:00.000Z", "2026-03-28T08:00:00.000Z", "2026-03-29T07:00:00.000Z", "2026-03-30T07:00:00.000Z"] : ["2026-10-23T07:00:00.000Z", "2026-10-24T07:00:00.000Z", "2026-10-25T08:00:00.000Z", "2026-10-26T08:00:00.000Z"]);
+  assert.deepEqual(raw, before);
+}

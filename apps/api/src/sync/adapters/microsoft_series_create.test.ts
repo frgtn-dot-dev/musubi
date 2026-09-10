@@ -7,6 +7,13 @@ import { graphSeriesCreateBody, graphSeriesCreateEvidence, findGraphCreatedSerie
 const saved = EventSchema.parse({ id: "00000000-0000-4000-8000-000000000181", revision: 1, creatorID: "owner", organizer: "", title: "Personal series", description: "Notes", location: "Office", color: "red", calendars: [], isCanceled: false, recurrence: "RRULE:FREQ=DAILY;COUNT=4", ...resolveEventTimeEdit({ kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-27T09:00:00", endLocal: "2026-03-27T10:00:00" }) });
 const identity = { operationID: "00000000-0000-4000-8000-000000000ABC" };
 const native: any = { id: "series/id", transactionId: identity.operationID.toLowerCase(), iCalUId: "native-uid", "@odata.etag": 'W/"opaque"', type: "seriesMaster", isAllDay: false, isCancelled: false, originalStartTimeZone: "Europe/Prague", originalEndTimeZone: "Europe/Prague", start: { dateTime: "2026-03-27T08:00:00.0000000", timeZone: "UTC" }, end: { dateTime: "2026-03-27T09:00:00.0000000", timeZone: "UTC" }, recurrence: { pattern: { type: "daily", interval: 1 }, range: { type: "numbered", startDate: "2026-03-27", numberOfOccurrences: 4, recurrenceTimeZone: "Europe/Prague" } }, subject: "Personal series", body: { contentType: "text", content: "Notes" }, location: { displayName: "Office" }, attendees: [], isOrganizer: true, organizer: { emailAddress: { address: "owner@example.test" } }, isDraft: false, isOnlineMeeting: false, onlineMeeting: null, onlineMeetingUrl: null, cancelledOccurrences: [], exceptionOccurrences: [], isReminderOn: true, reminderMinutesBeforeStart: 15, showAs: "busy", sensitivity: "normal", responseStatus: { response: "organizer" } };
+const aliasNative = structuredClone(native); aliasNative.recurrence.range.recurrenceTimeZone = "Central Europe Standard Time";
+const aliasBefore = structuredClone(aliasNative), savedBefore = structuredClone(saved);
+assert.equal(graphSeriesCreateEvidence(aliasNative, saved, identity, native.id).event.timeModel?.kind, "zoned");
+assert.deepEqual(aliasNative, aliasBefore); assert.deepEqual(saved, savedBefore);
+for (const changes of [{ originalStartTimeZone: undefined }, { originalEndTimeZone: undefined }, { originalStartTimeZone: "Europe/Budapest" }, { originalEndTimeZone: "UTC" }]) assert.throws(() => graphSeriesCreateEvidence({ ...aliasNative, ...changes }, saved, identity, native.id));
+assert.throws(() => graphSeriesCreateEvidence(aliasNative, { ...saved, ...resolveEventTimeEdit({ kind: "zoned", timeZone: "Europe/Budapest", startLocal: "2026-03-27T09:00:00", endLocal: "2026-03-27T10:00:00" }) }, identity, native.id));
+assert.throws(() => graphSeriesCreateEvidence({ ...aliasNative, recurrence: { ...aliasNative.recurrence, range: { ...aliasNative.recurrence.range, recurrenceTimeZone: "Central European Standard Time" } } }, saved, identity, native.id));
 const original = JSON.stringify(native);
 const body = graphSeriesCreateBody(saved, identity);
 assert.equal(body.transactionId, identity.operationID.toLowerCase());
@@ -22,6 +29,14 @@ assert.equal(JSON.stringify(native), original);
 const untilSaved = { ...saved, recurrence: "RRULE:FREQ=DAILY;UNTIL=20260330T215959Z" };
 const untilNative = { ...native, recurrence: { pattern: native.recurrence.pattern, range: { type: "endDate", startDate: "2026-03-27", endDate: "2026-03-30", recurrenceTimeZone: "Europe/Prague" } } };
 assert.equal(graphSeriesCreateEvidence(untilNative, untilSaved, identity, native.id).event.recurrence, "RRULE:FREQ=DAILY;INTERVAL=1;UNTIL=20260330T070000Z");
+const aliasUntil = structuredClone(untilNative); aliasUntil.recurrence.range.recurrenceTimeZone = "Central Europe Standard Time";
+assert.deepEqual(graphSeriesCreateEvidence(aliasUntil, untilSaved, identity, native.id), graphSeriesCreateEvidence(untilNative, untilSaved, identity, native.id));
+for (const recurrence of [
+  { ...aliasUntil.recurrence, range: { ...aliasUntil.recurrence.range, endDate: "2026-03-31" } },
+  { ...aliasUntil.recurrence, range: { ...aliasUntil.recurrence.range, startDate: "2026-03-28" } },
+  { ...aliasUntil.recurrence, pattern: { ...aliasUntil.recurrence.pattern, interval: 2 } },
+]) assert.throws(() => graphSeriesCreateEvidence({ ...aliasUntil, recurrence }, untilSaved, identity, native.id));
+assert.throws(() => graphSeriesCreateEvidence({ ...aliasNative, recurrence: { ...aliasNative.recurrence, range: { ...aliasNative.recurrence.range, numberOfOccurrences: 5 } } }, saved, identity, native.id));
 assert.equal(untilSaved.recurrence, "RRULE:FREQ=DAILY;UNTIL=20260330T215959Z");
 assert.throws(() => graphSeriesCreateEvidence(native, untilSaved, identity, native.id));
 assert.throws(() => graphSeriesCreateEvidence({ ...untilNative, recurrence: { ...untilNative.recurrence, range: { ...untilNative.recurrence.range, endDate: "2026-03-31" } } }, untilSaved, identity, native.id));
