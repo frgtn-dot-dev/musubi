@@ -103,8 +103,9 @@ export async function requestEventDeliveryRetry(
     const graphCheck = row.provider === "microsoft" && row.action === "update" && row.actorID === userID && graphRequest.success && graphRequest.data.provider === "microsoft" && GraphRsvpDispatchSchema.safeParse(row.payload.rsvp?.graphDispatch).success;
     // A dispatched Graph response can only be observed again. Keep its original
     // conflict snapshot and permanent marker; this never authorizes another POST.
+    const graphCreateCheck = row.provider === "microsoft" && row.action === "create" && row.actorID === userID && row.uncertain && row.payload.graphSeriesCreate?.version === 1;
     const organizerCheck = ["google", "caldav", "microsoft"].includes(row.provider) && row.payload.organizer?.request.provider === row.provider && row.payload.organizer?.dispatch?.kind === `${row.provider}-organizer-dispatch` && row.actorID === userID && ProviderOrganizerRequestSchema.safeParse(row.payload.organizer?.request).success && OrganizerDispatchSchema.safeParse(row.payload.organizer?.dispatch).success;
-    if (!graphCheck && !organizerCheck && (
+    if (!graphCheck && !organizerCheck && !graphCreateCheck && (
       row.status === "conflict" ||
       (row.remoteSnapshot && !row.remoteSnapshot.isEcho)
     ))
@@ -123,10 +124,10 @@ export async function requestEventDeliveryRetry(
       .update(eventOutbox)
       .set({
         status:
-          graphCheck || organizerCheck || row.uncertain || row.status === "unconfirmed"
+          graphCheck || organizerCheck || graphCreateCheck || row.uncertain || row.status === "unconfirmed"
             ? "unconfirmed"
             : "retry",
-        uncertain: graphCheck || organizerCheck || row.uncertain || row.status === "unconfirmed",
+        uncertain: graphCheck || organizerCheck || graphCreateCheck || row.uncertain || row.status === "unconfirmed",
         updatedAt: new Date(),
         // A manual click must not shorten a provider's persisted Retry-After.
         nextAttemptAt: sql`greatest(${eventOutbox.nextAttemptAt}, clock_timestamp())`,

@@ -123,6 +123,7 @@ export async function getEventDeliveryStatus(
         updatedAt: eventOutbox.updatedAt,
         nextAttemptAt: eventOutbox.nextAttemptAt,
         errorCode: eventOutbox.errorCode,
+        graphCreateCheck: sql<boolean>`${eventOutbox.provider} = 'microsoft' and ${eventOutbox.action} = 'create' and ${eventOutbox.actorID} = ${userID} and ${eventOutbox.uncertain} and ${eventOutbox.payload}->'graphSeriesCreate'->'version' = '1'::jsonb`,
         graphRsvp: sql<boolean>`${eventOutbox.payload}->'rsvp'->'request'->>'provider' = 'microsoft'`,
         graphDispatched: sql<boolean>`${eventOutbox.payload}->'rsvp'->'graphDispatch' is not null`,
         graphAccepted: sql<boolean>`${eventOutbox.payload}->'rsvp'->'graphDispatch'->>'acceptedAt' is not null`,
@@ -184,9 +185,10 @@ export async function getEventDeliveryStatus(
       );
       for (const last of latest) {
         const first = blockers.get(last.targetId) ?? last;
-        const { nextAttemptAt, errorCode, alarm, graphRsvp, graphDispatched, graphAccepted, organizer, organizerDispatched, organizerAccepted, ...display } = first;
+        const { nextAttemptAt, errorCode, alarm, graphCreateCheck, graphRsvp, graphDispatched, graphAccepted, organizer, organizerDispatched, organizerAccepted, ...display } = first;
         targets.set(first.targetId, {
           ...display,
+          ...(graphCreateCheck && first.owned && first.connected ? { graphCreateCheck: true as const } : {}),
           ...(graphRsvp ? { graphRsvpPhase: (["completed", "not-needed"].includes(first.status) ? "observed" : errorCode === "graph-rsvp-copy-absent" ? "absent" : graphAccepted ? "accepted" : graphDispatched ? "dispatched" : "queued") as NonNullable<EventDeliveryTarget["graphRsvpPhase"]> } : {}),
           ...(organizer ? { organizerPhase: first.status === "not-needed" ? "unchanged" as const : first.status === "completed" ? "observed" as const : errorCode === "organizer-copy-absent" ? "absent" as const : organizerAccepted ? "accepted" as const : organizerDispatched ? "dispatched" as const : "queued" as const } : {}),
           ...(first.status === "not-needed" && errorCode === "adopted-provider-version" ? { graphCreateAdopted: true as const } : {}),

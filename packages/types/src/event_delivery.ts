@@ -32,6 +32,7 @@ export const EventDeliveryTargetSchema = z.object({
   retryAt: z.coerce.date().nullable(),
   graphRsvpPhase: z.enum(["queued", "dispatched", "accepted", "observed", "absent"]).optional(),
   organizerPhase: z.enum(["queued", "dispatched", "accepted", "observed", "absent", "unchanged"]).optional(),
+  graphCreateCheck: z.literal(true).optional(),
   graphCreateAdopted: z.literal(true).optional(),
   alarmDiscarded: z.literal(true).optional(),
   alarmDiscardRevision: z.number().int().positive().optional(),

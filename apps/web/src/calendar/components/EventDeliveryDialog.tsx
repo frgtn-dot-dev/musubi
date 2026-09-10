@@ -8,6 +8,7 @@ import type {
 } from "@musubi/types";
 import {
   eventDeliveryActions,
+  eventDeliveryRetryLabel,
   eventDeliveryExplanation,
   eventDeliveryLabel,
   providerReminderDescription,
@@ -237,12 +238,12 @@ export function EventDeliveryDialog({
                                   connectionId,
                                 );
                                 setNotice(
-                                  "Retry requested. Provider confirmation is still pending.",
+                                  target.graphCreateCheck ? "Creation check requested. No new copy will be created." : "Retry requested. Provider confirmation is still pending.",
                                 );
                               })
                             }
                           >
-                            {target.graphRsvpPhase && target.graphRsvpPhase !== "queued" ? "Check response" : target.organizerPhase && target.organizerPhase !== "queued" ? "Check result" : "Retry"}
+                            {eventDeliveryRetryLabel(target)}
                           </Button>
                         ) : null}
                         {target.alarmDiscardRevision !== undefined ? <Button size="compact" variant="secondary" disabled={busy} onClick={event => { setError(""); discardReturnFocus.current = event.currentTarget; setDiscard({ id: target.operationId!, revision: target.alarmDiscardRevision!, trigger: event.currentTarget }); }}>Discard saved alarm change</Button> : null}
