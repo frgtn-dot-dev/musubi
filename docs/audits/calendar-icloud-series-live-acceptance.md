@@ -125,3 +125,66 @@ The authenticated iCloud scope path remains unsupported pending a trustworthy
 permission mechanism or an explicit product decision about a different contract.
 This is a remaining decision/acceptance gate, not an invitation to treat unknown
 permissions as write access.
+
+## Follow-up: ACL diagnostic and approved alternative (2026-09-10)
+
+After the user reconnected the local iCloud account, credential decryption worked.
+One synthetic past event without attendees was created with `If-None-Match: *`
+(201). Resource Depth 0 PROPFIND returned one exact href with property status 404
+for `DAV:acl`, `DAV:current-user-privilege-set` and `DAV:current-user-principal`.
+The raw ACL query therefore did not provide an alternate permission proof on this
+fixture. Independent code review found no demonstrated privilege-parser bug.
+
+Cleanup required a Depth 1 PROPFIND to locate the unique QA resource and a complete
+GET for a strong ETag; the initial HEAD did not provide a usable cleanup proof and
+calendar-query did not return calendar-data. The exact synthetic UID and summary
+were verified before `DELETE` with `If-Match`, which returned 204. One synthetic
+resource was removed; existing events were not edited.
+
+The user subsequently approved provider-enforced authorization at conditional
+write time for a narrow default-off personal master-content capability. This
+supersedes the earlier product-decision gate only for that capability; all other
+operations retain their existing permission contracts. See the
+[implementation contract](../sync/caldav-series-writes.md#icloud-personal-master-content-authorization-2026-09-10).
+Live authenticated scope/enqueue/worker/ACK acceptance of this new path is still
+pending; the ACL diagnostic itself does not establish it.
+
+## Accepted: authenticated personal master-content path (2026-09-10)
+
+At 14:17–14:18 UTC the approved fallback was enabled only inside an isolated
+acceptance process. It used a new temporary iCloud calendar, a synthetic local
+user with its own member token and copied encrypted account credential, and no
+background discovery or sync. Existing calendar contents and links were untouched.
+
+For each zoned (`Europe/Prague`), all-day and floating daily series, the provider
+stored a master, a moved exception and a cancelled exception. Baselines came from
+complete native GETs with strong ETags; the exact resource permission query
+confirmed the explicit missing-property condition. Each fixture retained an alarm
+and custom properties and had no organizer or attendees.
+
+| Assertion | Zoned | All-day | Floating |
+| --- | --- | --- | --- |
+| Authenticated HTTP master title/description/location scope accepted | Pass | Pass | Pass |
+| One scoped outbox operation delivered by the normal worker | Pass | Pass | Pass |
+| Complete desired native resource verified after delivery | Pass | Pass | Pass |
+| Moved/cancelled exceptions preserved | Pass | Pass | Pass |
+| All three local mappings acknowledged with the native ETag | Pass | Pass | Pass |
+| Same HTTP operation replayed; completed worker replay leaves native resource/ETag unchanged | Pass | Pass | Pass |
+| Series time edit refused with 403/unknown, no outbox entry or native change | Pass | Pass | Pass |
+
+The test compared the entire delivered resource with the saved desired resource,
+not merely the projected master fields. This run accepts authenticated
+scope/enqueue/worker/ACK and readback for the narrow fallback. Fake-provider tests
+separately cover explicit refusal, concurrent-write 412, revoked local membership
+and ambiguous delivery; this live run did not inject those failures again.
+
+Cleanup verified each synthetic UID through complete GET, conditionally deleted
+the three resources, verified the collection was empty and deleted it (204), then
+removed the synthetic local user. The run reported complete cleanup. No
+credentials, native resource URLs or personal calendar contents are recorded here.
+
+This supersedes the earlier missing-permission acceptance gate only for personal
+whole-series master title, description and location under the new default-off
+contract. Shared-calendar behavior, time/recurrence, occurrence/following writes,
+alarms and scheduling are not accepted by this evidence. No production flag,
+release version or client minimum changed.

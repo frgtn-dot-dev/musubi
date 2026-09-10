@@ -1,3 +1,4 @@
+import type { CaldavPersonalContentOperation } from "./caldav_personal_content";
 import type { CaldavAlarmContext, CaldavAlarmIntent } from "@musubi/db";
 import type { CaldavAlarmEvidence } from "./adapters/caldav_alarms";
 import type { googleReminderInstanceTransport } from "./adapters/google_reminder_instance";
@@ -143,9 +144,9 @@ export type CalendarAdapter = {
   readRsvp?(user: string, account: string, calendar: string, ref: ExternalEventRef, response: GoogleRsvpResponse, signal?: AbortSignal, occurrence?: GoogleRsvpOccurrence): Promise<GoogleRsvpEvidence>;
   readRsvpResolution?(user: string, account: string, calendar: string, ref: ExternalEventRef, response: GoogleRsvpResponse, signal?: AbortSignal, occurrence?: GoogleRsvpOccurrence): Promise<GoogleRsvpEvidence>;
   writeRsvp?(user: string, account: string, calendar: string, evidence: GoogleRsvpEvidence, policy: { sendUpdates: "all" }, signal?: AbortSignal, beforeWrite?: () => Promise<void>): Promise<{ etag: string; recovered: boolean; notificationDelivery: "unknown" }>;
-  readCaldavSeries?(user: string, account: string, calendar: string, intent: CaldavSeriesIntent, signal?: AbortSignal): Promise<CaldavSeriesEvidence>;
+  readCaldavSeries?(user: string, account: string, calendar: string, intent: CaldavSeriesIntent, signal?: AbortSignal, operation?: CaldavPersonalContentOperation): Promise<CaldavSeriesEvidence>;
   readCaldavSeriesDeletionResolution?(user: string, account: string, calendar: string, intent: CaldavSeriesIntent, before: string, signal?: AbortSignal): Promise<CaldavSeriesResolutionEvidence>;
-  readCaldavSeriesResolution?(user: string, account: string, calendar: string, intent: CaldavSeriesIntent, before: string, signal?: AbortSignal, targetEventID?: string | null): Promise<CaldavSeriesResolutionEvidence>;
+  readCaldavSeriesResolution?(user: string, account: string, calendar: string, intent: CaldavSeriesIntent, before: string, signal?: AbortSignal, targetEventID?: string | null, operation?: CaldavPersonalContentOperation): Promise<CaldavSeriesResolutionEvidence>;
   readCaldavSeriesForDelete?(user: string, account: string, calendar: string, intent: CaldavSeriesIntent, signal?: AbortSignal): Promise<CaldavSeriesEvidence>;
   deleteCaldavSeries?(user: string, account: string, calendar: string, intent: CaldavSeriesDeletion, signal?: AbortSignal, beforeMutation?: () => Promise<void>): Promise<ExternalEventRef>;
   readCaldavSplitFuture?(user: string, account: string, calendar: string, intent: CaldavSeriesSplit, signal?: AbortSignal): Promise<CaldavSeriesEvidence | null>;

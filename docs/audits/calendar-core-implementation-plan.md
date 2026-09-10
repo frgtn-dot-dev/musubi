@@ -956,3 +956,22 @@ interaction, with exact fold instants preserved through quick/full URL drafts.
 Bounded Chromium, renderer/accessibility and unit acceptance covers Prague and
 Lord Howe, invalid holes, midnight and short-event boundaries. Native/OS and
 release gates remain separate. [Evidence](calendar-dst-axis-acceptance-20260910.md).
+
+### 2026-09-10 — approved iCloud personal content authorization contract
+
+After a further live `DAV:acl` diagnostic also returned property 404, the user
+approved a separate default-off iCloud personal whole-series master-content path
+that defers unknown resource authorization to conditional PUT. This changes only
+affirmative preflight privilege proof; exact resource binding, complete personal
+family evidence, strong ETag CAS, exception preservation and verified readback
+remain required. Explicit denial and incomplete/failed permission responses are
+not eligible. Other scopes and fields retain their existing contracts.
+
+Implementation and fake-provider acceptance cover exact missing-property admission,
+strict denial and scope boundaries, actual scope enqueue/worker ACK, revoked
+membership refusal, conditional preservation and ambiguous readback recovery.
+Live authenticated scope/enqueue/worker/ACK acceptance passed on fresh zoned,
+all-day and floating iCloud fixtures, including time-write refusal, complete
+readback and replay; all synthetic resources and local state were cleaned up.
+No production flag, release version or client minimum changes.
+See [the contract](../sync/caldav-series-writes.md#icloud-personal-master-content-authorization-2026-09-10).

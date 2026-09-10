@@ -79,6 +79,7 @@ function parseMetricsPort(value: string | undefined) {
 type APIConfig = {
   // Opt-in until both editors and the release compatibility gate are ready.
   eventTimeEditsEnabled: boolean;
+  icloudPersonalContentWritesEnabled: boolean;
   providerReminderEditsEnabled: boolean;
   caldavAlarmEditsEnabled: boolean;
   googleAvailabilityEnabled: boolean;
@@ -240,6 +241,7 @@ const mediaConfig = parseMediaConfig(process.env);
 
 const apiConfig: APIConfig = {
   eventTimeEditsEnabled: process.env.EVENT_TIME_EDITS_ENABLED === "true",
+  icloudPersonalContentWritesEnabled: process.env.ICLOUD_PERSONAL_CONTENT_WRITES_ENABLED === "true",
   providerReminderEditsEnabled: process.env.PROVIDER_REMINDER_EDITS_ENABLED === "true",
   caldavAlarmEditsEnabled: process.env.CALDAV_ALARM_EDITS_ENABLED === "true",
   googleAvailabilityEnabled: process.env.GOOGLE_AVAILABILITY_ENABLED === "true",

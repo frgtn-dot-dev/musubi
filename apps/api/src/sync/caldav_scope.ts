@@ -23,7 +23,7 @@ export async function prepareCaldavSeries(context: CaldavSeriesContext, input: u
   const root = context.mappings.find(item => item.eventID === context.master.id)!;
   const baseline = { master: context.master, children: context.children, ref: { externalEventId: root.externalEventID, etag: root.etag, icalUid: root.icalUid } };
   try {
-    const evidence = await caldavAdapter.readCaldavSeries!(context.link.userID, context.link.accountID, context.link.externalCalendarID, baseline, AbortSignal.timeout(10_000));
+    const evidence = await caldavAdapter.readCaldavSeries!(context.link.userID, context.link.accountID, context.link.externalCalendarID, baseline, AbortSignal.timeout(10_000), request.scope === "series" && request.action === "update" ? { patch: request.patch, time: request.time } : undefined);
     for (const observed of [evidence.master, ...evidence.exceptions]) {
       const mapping = context.mappings.find(item => item.externalEventID === observed.externalId);
       if (!mapping || !sameCaldavScopeContext(mapping.originalStart, observed.originalStart ?? null)) throw new ProviderEventWriteError("provider-conflict");

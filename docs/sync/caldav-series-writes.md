@@ -1019,3 +1019,42 @@ with detached definitions remain separate work.
 The bounded all-day writer also supports reversible addition/removal of one
 single-value DATE RDATE on a finite personal master, retaining the original RRULE
 COUNT and anchor. See [single additional date contract and evidence](caldav-rdate-writes.md).
+
+## iCloud personal master-content authorization (2026-09-10)
+
+The user approved a bounded alternative to affirmative pre-write DAV privilege
+proof. `ICLOUD_PERSONAL_CONTENT_WRITES_ENABLED` defaults to false and also requires
+`EVENT_TIME_EDITS_ENABLED`. It is restricted to verified HTTPS iCloud CalDAV
+account and destination hosts and whole-series personal master title, description
+and location updates. It does not enable time, recurrence, occurrence/following,
+alarm, scheduling, creation or deletion operations.
+
+An exact resource's explicit 404 property status for
+`DAV:current-user-privilege-set` may defer authorization to the conditional PUT.
+This is not a positive privilege grant. Explicit denial, HTTP failures, malformed
+or incomplete property responses and foreign destinations remain refused. Local
+account ownership, active calendar linkage, resource membership and complete
+personal family validation remain required. Scope eligibility is passed explicitly
+for preparation and re-derived from the durable write at delivery; no persisted
+permission assertion can authorize a different operation.
+
+The existing strong ETag `If-Match`, complete baseline comparison, preservation of
+exceptions and unrelated content, full desired-resource readback and uncertain
+outcome recovery remain mandatory. Provider 401/403 is not successful delivery.
+Master-content conflict-resolution reads may use the same narrowly validated
+saved operation; structural and occurrence resolution keep strict preflight. This capability is not production activation. The subsequent bounded live
+[HTTP scope/outbox acceptance](../audits/calendar-icloud-series-live-acceptance.md#accepted-authenticated-personal-master-content-path-2026-09-10) passed for all three time models.
+
+Here “personal” means a complete resource without organizer, attendees or
+scheduling METHOD, accessed through the owning Musubi account and active source
+link. It is not proof that the provider calendar has never been shared. Shared
+calendar behavior is not accepted by this slice; the server remains responsible
+for enforcing access on each conditional write.
+
+Validation: the focused permission suite covers origin/scope and DAV response
+boundaries. The disposable PostgreSQL fake-provider integration exercises actual
+adapter admission/delivery/resolution, native meeting refusal, scope enqueue and
+worker ACK, post-PUT membership revocation without ACK, provider 403/412, and
+ambiguous complete-resource recovery. Existing CalDAV scope regressions and the
+full project check also pass. These tests intercept provider DNS/HTTP and do not
+constitute live iCloud acceptance.
