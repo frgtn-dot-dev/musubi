@@ -2,7 +2,7 @@ import { graphIdentitySchema, type GraphIdentity } from "./microsoft_identity";
 import { isDeepStrictEqual } from "node:util";
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { type ProviderRsvpEdit, microsoftRsvpDesiredState } from "@musubi/types";
+import { type ProviderRsvpEdit, microsoftRsvpDesiredState, matchesMicrosoftRsvpObservedState } from "@musubi/types";
 import { resolveEventTimeEdit } from "@musubi/calendar";
 import { microsoftEventState } from "./provider_event_state";
 import { ProviderEventWriteError } from "../event_write";
@@ -38,10 +38,13 @@ export function microsoftRsvpProjection(evidence: MicrosoftRsvpEvidence) {
 export function matchesMicrosoftRsvp(evidence: MicrosoftRsvpEvidence, actual: unknown) {
   try {
     const next = microsoftRsvpEvidence(actual, evidence.selfAddress, evidence.response);
-    if (next.id !== evidence.id || !isDeepStrictEqual(microsoftEventState(next.native), microsoftRsvpDesiredState(microsoftEventState(evidence.native), evidence.selfAddress, evidence.response))) return false;
+    if (next.id !== evidence.id || !matchesMicrosoftRsvpObservedState(microsoftEventState(evidence.native), microsoftEventState(next.native), evidence.selfAddress, evidence.response)) return false;
     const normalize = (input: Record<string, unknown>) => {
       const item = structuredClone(input) as any;
       for (const key of ["@odata.etag", "changeKey", "lastModifiedDateTime"]) delete item[key];
+      // The state check above authorizes only the evidenced availability transition.
+      if (evidence.response === "accepted" && evidence.native.showAs === "tentative" && item.showAs === "busy") item.showAs = "tentative";
+      if (evidence.response === "tentative" && evidence.native.showAs === "busy" && item.showAs === "tentative") item.showAs = "busy";
       item.responseStatus = { ...item.responseStatus, response: "response" }; delete item.responseStatus.time;
       for (const attendee of item.attendees) if (attendee.emailAddress.address.toLowerCase() === evidence.selfAddress) { attendee.status = { ...attendee.status, response: "response" }; delete attendee.status.time; }
       return item;

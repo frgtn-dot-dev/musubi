@@ -571,7 +571,10 @@ export async function fetchMicrosoftChanges(
         );
         if (options.timeModels) {
           if (!item.originalStart || item.type === "exception") {
-            const response = await graphGet(accessToken, `${graphBase}${microsoftEventPath(externalCalendarId, item.id)}`, fetchImpl);
+            // Graph can omit originalStart even from an unprojected instance
+            // GET. Select it explicitly while retaining the default fields so
+            // exception overrides and the instance validator remain available.
+            const response = await graphGet(accessToken, `${graphBase}${microsoftEventPath(externalCalendarId, item.id)}?$select=*,originalStart`, fetchImpl);
             if (!response.ok) throw await graphError(response);
             const instance = await response.json();
             if (instance.id !== item.id || instance.seriesMasterId !== item.seriesMasterId || instance["@removed"])

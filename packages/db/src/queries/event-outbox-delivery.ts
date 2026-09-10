@@ -1,9 +1,10 @@
+import { matchesRsvpEventProjection } from "./event-outbox-projection";
 import { providerRsvpBaselineVersion } from "./provider-rsvp";
 import { matchesProviderReminderInstanceState } from "./provider-reminder-instance";
 import { readProviderRsvpInstance } from "./provider-rsvp-instance";
 import { isDeepStrictEqual } from "node:util";
 import { providerStateVersion } from "./provider-reminders";
-import { ProviderEventStateSchema, microsoftRsvpDesiredState, type MicrosoftRsvpConfirmation, providerRsvpDesiredState, caldavRsvpDesiredState, type CaldavRsvpConfirmation } from "@musubi/types";
+import { EventSchema, ProviderEventStateSchema, microsoftRsvpDesiredState, matchesMicrosoftRsvpObservedState, type MicrosoftRsvpConfirmation, providerRsvpDesiredState, caldavRsvpDesiredState, type CaldavRsvpConfirmation } from "@musubi/types";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { config } from "@musubi/config";
 import { db } from "..";
@@ -229,7 +230,7 @@ async function completeEventOutboxInternal(
         const [membership] = await tx.select({ role: calendarMembers.role }).from(calendarMembers).where(and(eq(calendarMembers.calendarID, row.calendarID), eq(calendarMembers.userID, row.actorID))).for("share");
         if (!membership || !["owner", "editor"].includes(membership.role) || row.actorID !== row.userID || row.provider !== (graph ? "microsoft" : caldav ? "caldav" : "google") || row.action !== "update" || !current || current.deletedAt || current.originCalendarID !== row.calendarID || current.revision !== row.revision)
           return settle(tx, row, "unconfirmed", sourceChanged, resultRef);
-        if (!observation?.isEcho || observation.deleted || observation.externalEventId !== resultRef?.externalEventId || observation.etag !== resultRef?.etag || expectedRef?.externalEventId !== row.externalEventID || expectedRef?.etag !== row.expectedEtag || !(row.payload.reminderInstance ? matchesProviderReminderInstanceState(row.payload.reminderInstance, observation.providerState) : isDeepStrictEqual(observation.providerState, intent.desiredState) && isDeepStrictEqual(intent.desiredState, graph ? microsoftRsvpDesiredState(intent.baselineState, String(row.payload.rsvp!.baseline.selfAddress), row.payload.rsvp!.request.response) : caldav ? caldavRsvpDesiredState(intent.baselineState, String(row.payload.rsvp!.baseline.selfAddress), row.payload.rsvp!.request.response) : providerRsvpDesiredState(intent.baselineState, row.externalCalendarID, row.payload.rsvp!.request.response))))
+        if (!observation?.isEcho || observation.deleted || observation.externalEventId !== resultRef?.externalEventId || observation.etag !== resultRef?.etag || expectedRef?.externalEventId !== row.externalEventID || expectedRef?.etag !== row.expectedEtag || !(row.payload.reminderInstance ? matchesProviderReminderInstanceState(row.payload.reminderInstance, observation.providerState) : (graph ? matchesMicrosoftRsvpObservedState(intent.baselineState, observation.providerState, String(row.payload.rsvp!.baseline.selfAddress), row.payload.rsvp!.request.response) : isDeepStrictEqual(observation.providerState, intent.desiredState)) && isDeepStrictEqual(intent.desiredState, graph ? microsoftRsvpDesiredState(intent.baselineState, String(row.payload.rsvp!.baseline.selfAddress), row.payload.rsvp!.request.response) : caldav ? caldavRsvpDesiredState(intent.baselineState, String(row.payload.rsvp!.baseline.selfAddress), row.payload.rsvp!.request.response) : providerRsvpDesiredState(intent.baselineState, row.externalCalendarID, row.payload.rsvp!.request.response))))
           return settle(tx, row, "unconfirmed", row.payload.reminderInstance ? "reminder-confirmation-unavailable" : "rsvp-confirmation-unavailable", resultRef);
       }
       const [target] = await tx
@@ -266,6 +267,18 @@ async function completeEventOutboxInternal(
       if (settings && row.remoteSnapshot && (row.remoteSnapshot.deleted || row.remoteSnapshot.externalEventId !== resultRef?.externalEventId || row.remoteSnapshot.etag !== resultRef?.etag)) {
         row.remoteSnapshot = { ...row.remoteSnapshot, isEcho: false };
         return settle(tx, row, "conflict", "provider-conflict", resultRef);
+      }
+      // A formerly unrecognized Graph response side effect may already be
+      // retained as a conflict. Only this fully confirmed native version can
+      // reconcile that exact content/time/state snapshot, never a different pull.
+      if (row.payload.rsvp?.request.provider === "microsoft" && graphConfirmation && observation?.isEcho && row.remoteSnapshot && !row.remoteSnapshot.isEcho) {
+        const snapshot = row.remoteSnapshot;
+        const values = EventSchema.pick({ title: true, start: true, end: true, isAllDay: true, description: true, location: true, recurrence: true, timeModel: true, seriesID: true, originalStart: true, isCanceled: true }).partial({ isCanceled: true }).safeParse(snapshot.values);
+        if (snapshot.icalUid === resultRef?.icalUid && observation.observedAt >= snapshot.observedAt &&
+            isDeepStrictEqual(snapshot.providerState, observation.providerState) && values.success &&
+            isDeepStrictEqual(values.data.timeModel, row.payload.rsvp.nativeTime) &&
+            !snapshot.values?.externalSeriesID &&
+            matchesRsvpEventProjection("microsoft", row.payload.event, { ...values.data, description: values.data.description ?? null, location: values.data.location ?? null, recurrence: values.data.recurrence ?? null })) row.remoteSnapshot = observation;
       }
       if (observation?.isEcho && observation.externalEventId === resultRef?.externalEventId &&
           (!row.remoteSnapshot || row.remoteSnapshot.isEcho && observation.observedAt >= row.remoteSnapshot.observedAt))

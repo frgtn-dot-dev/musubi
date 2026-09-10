@@ -1,8 +1,8 @@
 # Outlook one-off organizer creation
 
 The existing default-off `PROVIDER_ORGANIZER_EDITS_ENABLED` gate now includes
-Microsoft **create only**. No deployment activation, OAuth re-consent or live
-invitation acceptance has been performed. Update/delete remain refused; this
+Microsoft **create only**. Development OAuth and bounded one-off invitation
+acceptance passed on 2026-09-10; no deployment activation is claimed. Update/delete remain refused; this
 feature does not establish an Outlook conditional-write contract.
 
 The existing web calendar list and native calendar settings expose **Create
@@ -66,8 +66,12 @@ existing creation composition; desktop-light/mobile-dark Playwright tests cover
 admission correction, frozen retries, unknown delivery, accessibility and focus
 return. These are not physical-device or live guest-delivery acceptance.
 
-Remaining: live OAuth/primary-owner and two-account invitation acceptance,
-physical native QA, deployment activation; broader named-zone creation, guest
+The [live one-off test](../audits/calendar-outlook-live-acceptance-20260910.md)
+verified primary-owner OAuth, create, the guest's Google copy and their accepted
+response in the Outlook organizer view. Cleanup required native Outlook cancel;
+a guarded full reset removed the local mirror after delta omitted its removal.
+Remaining: automatic reconciliation resilience, physical native QA, deployment
+activation; broader named-zone creation, guest
 editing, recurrence and organizer update/cancel are separate implementation or
 provider-CAS contracts.
 

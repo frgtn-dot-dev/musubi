@@ -70,5 +70,21 @@ export function microsoftRsvpDesiredState(input: ProviderEventState, selfAddress
   self[0]!.response = native; state.ownResponse = native;
   return state;
 }
+/** Graph's own response is authoritative. Live Accept/Tentative readback can
+ * leave the self attendee unchanged and apply the evidenced availability pair. */
+export function matchesMicrosoftRsvpObservedState(baseline: ProviderEventState, actual: unknown, selfAddress: string, response: ProviderRsvpEdit["response"]): boolean {
+  try {
+    const expected = microsoftRsvpDesiredState(baseline, selfAddress, response);
+    const observed = ProviderEventStateSchema.parse(actual);
+    const own = selfAddress.toLowerCase();
+    const before = baseline.attendees.find(item => item.address?.toLowerCase() === own)!;
+    const self = observed.attendees.filter(item => item.address?.toLowerCase() === own);
+    if (self.length !== 1 || ![before.response, expected.ownResponse].includes(self[0]!.response)) return false;
+    self[0]!.response = expected.ownResponse;
+    if (response === "accepted" && baseline.availability === "tentative" && observed.availability === "busy") observed.availability = "tentative";
+    if (response === "tentative" && baseline.availability === "busy" && observed.availability === "tentative") observed.availability = "busy";
+    return JSON.stringify(observed) === JSON.stringify(expected);
+  } catch { return false; }
+}
 export const GraphRsvpDispatchSchema = z.object({ kind: z.literal("graph-rsvp-dispatch"), version: z.literal(1), startedAt: z.iso.datetime(), acceptedAt: z.iso.datetime().optional() }).strict();
 export type MicrosoftRsvpConfirmation = { baselineHash: string; observedResponse: string };
