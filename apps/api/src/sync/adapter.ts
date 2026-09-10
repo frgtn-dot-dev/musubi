@@ -155,6 +155,7 @@ export type CalendarAdapter = {
   writeCaldavSeries?(user: string, account: string, calendar: string, intent: CaldavSeriesWrite, signal?: AbortSignal, beforeMutation?: () => Promise<void>): Promise<CaldavSeriesEvidence>;
   readSeries?(user: string, account: string, calendar: string, intent: Pick<GoogleOccurrenceIntent, "master" | "masterExternalID" | "masterEtag">, signal?: AbortSignal): Promise<GoogleSeriesEvidence>;
   readOccurrence?(user: string, account: string, calendar: string, intent: GoogleOccurrenceIntent, ref?: ExternalEventRef, signal?: AbortSignal): Promise<GoogleOccurrenceEvidence>;
+  recoverOccurrence?(user: string, account: string, calendar: string, intent: GoogleOccurrenceIntent, ref: ExternalEventRef, signal?: AbortSignal): Promise<GoogleOccurrenceEvidence>;
   writeOccurrence?(user: string, account: string, calendar: string, intent: GoogleOccurrenceIntent, event: Event, ref: ExternalEventRef, signal?: AbortSignal): Promise<GoogleOccurrenceEvidence>;
   reminderInstance?: ReturnType<typeof googleReminderInstanceTransport>;
   readReminderState?(userID: string, accountID: string, calendarID: string, ref: ExternalEventRef, signal?: AbortSignal): Promise<{ ref: ExternalEventRef; state: ProviderEventState; event: NormalizedEvent } | null>;

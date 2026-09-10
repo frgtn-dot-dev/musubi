@@ -312,7 +312,9 @@ export async function deliverEventOutbox(
         const intent = { ...row.payload.googleOccurrence, master: EventSchema.parse(row.payload.googleOccurrence.master), baseline: EventSchema.parse(row.payload.googleOccurrence.baseline) };
         expectedRef = await getEventOutboxExpectedRef(row);
         if (!expectedRef) throw new ProviderEventWriteError("provider-version-unavailable");
-        let observed = await adapter.readOccurrence(row.userID, row.accountID, row.externalCalendarID, intent, expectedRef, signal);
+        const readOccurrence = row.reconciling ? adapter.recoverOccurrence : adapter.readOccurrence;
+        if (!readOccurrence) throw new EventWriteError("event-write", "unsupported");
+        let observed = await readOccurrence(row.userID, row.accountID, row.externalCalendarID, intent, expectedRef, signal);
         remoteSnapshot = { externalEventId: observed.ref.externalEventId, etag: observed.ref.etag ?? null, deleted: false, values: JSON.parse(JSON.stringify(observed.event)), providerState: observed.state, observedAt: new Date().toISOString() };
         if (!matchesGoogleOccurrence(event, observed.event)) {
           if (observed.ref.etag !== expectedRef.etag || !matchesGoogleOccurrence(intent.baseline, observed.event)) throw new ProviderEventWriteError("provider-conflict");

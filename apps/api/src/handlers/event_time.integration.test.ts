@@ -157,10 +157,16 @@ async function main() {
     assert.equal(failed.body.committed[0].title, "Committed together");
     assert.equal(failed.body.committed[0].timeModel.kind, "floating");
     await db.insert(externalCalendars).values({ provider: "google", userID: owner, accountID: owner, externalCalendarID: "remote", calendarID: calendar.id });
-    const externalCreate = { event: { ...deniedRequest.event, recurrence: null }, time };
-    assert.equal((await send(externalCreate, token.raw, "/events/time", "POST")).status, 400);
-    assert.equal(await getEventSnapshot(deniedRequest.event.id), undefined);
-    assert.equal((await send({ calendarID: copy.id, expectedRevision: 3 }, token.raw, `/events/${event.id}/fork`, "POST")).status, 400);
+    for (const recurrence of [null, "FREQ=DAILY;COUNT=4"]) {
+      const externalCreate = { event: { ...deniedRequest.event, recurrence }, time };
+      const externalRejected = await send(externalCreate, token.raw, "/events/time", "POST");
+      assert.equal(externalRejected.status, 403);
+      assert.equal(externalRejected.body.reason, "unsupported");
+      assert.equal(externalRejected.body.capability, "event-write");
+      assert.match(externalRejected.body.error, /not supported for this calendar\. No changes were saved\./);
+      assert.equal(await getEventSnapshot(deniedRequest.event.id), undefined);
+    }
+    assert.equal((await send({ calendarID: copy.id, expectedRevision: 3 }, token.raw, `/events/${event.id}/fork`, "POST")).status, 403);
     assert.equal((await send({ expectedRevision: 3, time })).status, 400);
     assert.equal((await getEventSnapshot(event.id))?.revision, 3);
   } finally {

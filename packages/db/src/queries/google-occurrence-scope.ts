@@ -21,11 +21,13 @@ export type GoogleOccurrencePrepared = {
   etag: string;
   baseline: Event;
   providerState: ProviderEventState;
+  masterProof?: { version: 1; digest: string };
 };
 export type GoogleOccurrenceIntent = {
   master: Event;
   masterExternalID: string;
   masterEtag: string;
+  masterProof?: { version: 1; digest: string };
   originalStart: OccurrenceStart;
   baseline: Event;
 };
@@ -193,6 +195,7 @@ export async function appendGoogleOccurrence(
           master: context.master,
           masterExternalID: context.mapping.externalEventID,
           masterEtag: context.mapping.etag!,
+          masterProof: prepared.masterProof,
           originalStart: event.originalStart,
           baseline: prepared.baseline,
         },

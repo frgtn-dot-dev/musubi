@@ -1050,7 +1050,23 @@ describe("Workspace", () => {
     }
   });
 
-  it("keeps a provider-backed form open after an unconfirmed save", async () => {
+  it.each([
+    {
+      scenario: "an unconfirmed save",
+      error: new ApiError("Provider unavailable", 502, "provider-request"),
+      message: "Google Calendar did not confirm this change",
+    },
+    {
+      scenario: "an unsupported explicit time create",
+      error: new ApiError(
+        "Creating or copying events with an explicit time model is not supported for this calendar. No changes were saved.",
+        403,
+        "provider-request",
+        "unsupported",
+      ),
+      message: "Creating or copying events with an explicit time model is not supported for this calendar. No changes were saved.",
+    },
+  ])("keeps a provider-backed form open after $scenario", async ({ error, message }) => {
     const user = userEvent.setup();
     const providerCalendar = {
       ...fixtureCalendars[0]!,
@@ -1058,9 +1074,7 @@ describe("Workspace", () => {
     };
     const onCreateEvent = vi
       .fn()
-      .mockRejectedValue(
-        new ApiError("Provider unavailable", 502, "provider-request"),
-      );
+      .mockRejectedValue(error);
 
     render(
       <Workspace
@@ -1087,7 +1101,7 @@ describe("Workspace", () => {
     );
 
     expect(screen.getByRole("alert").textContent).toContain(
-      "Google Calendar did not confirm this change",
+      message,
     );
     expect(screen.getByRole("alert").textContent).toContain("provider-request");
     expect(

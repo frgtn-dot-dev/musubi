@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { config } from "@musubi/config";
 import {
   matchesGoogleOccurrenceProjection,
@@ -27,7 +28,19 @@ export type GoogleOccurrenceEvidence = {
   ref: ExternalEventRef;
   event: NormalizedEvent;
   state: ReturnType<typeof googleEventState>;
+  masterProof?: GoogleOccurrenceIntent["masterProof"];
 };
+// Keep every native field, including unknown extensions. Google changes these
+// two top-level observation fields when a detached instance changes.
+function masterProof(raw: Record<string, unknown>): NonNullable<GoogleOccurrenceIntent["masterProof"]> {
+  const canonical = (value: unknown): unknown => Array.isArray(value)
+    ? value.map(canonical)
+    : value && typeof value === "object"
+      ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([key, item]) => [key, canonical(item)]))
+      : value;
+  const { etag: _etag, updated: _updated, ...semantic } = raw;
+  return { version: 1, digest: createHash("sha256").update(JSON.stringify(canonical(semantic))).digest("hex") };
+}
 export type GoogleSeriesEvidence = {
   master: GoogleOccurrenceEvidence;
   exceptions: GoogleOccurrenceEvidence[];
@@ -87,6 +100,8 @@ export function googleOccurrenceMethods(
     masterExternalID: string,
     masterEtag: string,
     signal?: AbortSignal,
+    proof?: GoogleOccurrenceIntent["masterProof"],
+    recovery = false,
   ) {
     guard();
     const token = await tokenFor(user, account);
@@ -107,7 +122,11 @@ export function googleOccurrenceMethods(
     )
       throw new ProviderEventWriteError("provider-conflict");
     personal(master, true);
-    assertAcceptedEventEtag(masterEtag, master.etag);
+    requireEventEtag(master.etag);
+    const observedProof = masterProof(master);
+    const proofMatches = proof?.version === 1 && /^[a-f0-9]{64}$/.test(proof.digest) && proof.digest === observedProof.digest;
+    if (!recovery || !proofMatches) assertAcceptedEventEtag(masterEtag, master.etag);
+    if (proof && !proofMatches) throw new ProviderEventWriteError("provider-conflict");
     const masterEvent = normalizeGoogleTime(
       master,
       normalize({ ...master, recurrence: undefined }),
@@ -118,7 +137,7 @@ export function googleOccurrenceMethods(
         JSON.stringify(masterEvent.timeModel)
     )
       throw new ProviderEventWriteError("provider-conflict");
-    return { token, master, masterEvent };
+    return { token, master, masterEvent, observedProof };
   }
   async function readOccurrence(
     user: string,
@@ -127,8 +146,9 @@ export function googleOccurrenceMethods(
     intent: GoogleOccurrenceIntent,
     ref?: ExternalEventRef,
     signal?: AbortSignal,
+    recovery = false,
   ): Promise<GoogleOccurrenceEvidence> {
-    const { token, master } = await readMaster(
+    const { token, master, observedProof } = await readMaster(
       user,
       account,
       calendar,
@@ -136,6 +156,8 @@ export function googleOccurrenceMethods(
       intent.masterExternalID,
       intent.masterEtag,
       signal,
+      intent.masterProof,
+      recovery,
     );
     const evidence = (raw: any): GoogleOccurrenceEvidence => {
       if (
@@ -159,6 +181,7 @@ export function googleOccurrenceMethods(
         ref: { externalEventId: raw.id, etag: requireEventEtag(raw.etag) },
         event,
         state: googleEventState(raw),
+        masterProof: observedProof,
       };
     };
     if (ref) {
@@ -382,6 +405,7 @@ export function googleOccurrenceMethods(
         intent,
         ref,
         signal,
+        true,
       );
       if (!matchesGoogleOccurrence(event, result.event))
         throw new Error("Unconfirmed occurrence write");
@@ -390,5 +414,6 @@ export function googleOccurrenceMethods(
       throw new ProviderEventWriteError("provider-write-failed", "unconfirmed");
     }
   }
-  return { readOccurrence, readSeries, writeOccurrence };
+  const recoverOccurrence = (user: string, account: string, calendar: string, intent: GoogleOccurrenceIntent, ref: ExternalEventRef, signal?: AbortSignal) => readOccurrence(user, account, calendar, intent, ref, signal, true);
+  return { readOccurrence, recoverOccurrence, readSeries, writeOccurrence };
 }

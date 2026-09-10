@@ -49,7 +49,15 @@ async function main(
     | "precondition"
     | "floating"
     | "prepare-race"
-    | "identity",
+    | "identity"
+    | "master-validator"
+    | "master-validator-lost"
+    | "master-native-change"
+    | "master-rule-change"
+    | "master-proof-missing"
+    | "master-before-write"
+    | "master-baseline-recovery"
+    | "master-validator-missing",
 ) {
   assert.equal(process.env.ENVIRONMENT, "test");
   const seriesEvidence = scenario.startsWith("series-evidence");
@@ -69,6 +77,8 @@ async function main(
     reminders: { useDefault: true },
     transparency: "transparent",
     visibility: "private",
+    sequence: 0,
+    extendedProperties: { private: { untouched: "native master data" } },
   };
   let instance: any = {
     ...structuredClone(master),
@@ -153,7 +163,15 @@ async function main(
       return json({ error: "Concurrent provider version" });
     }
     patches++;
-    instance = { ...instance, ...patch, etag: '"i2"' };
+    if (scenario !== "master-baseline-recovery")
+      instance = { ...instance, ...patch, etag: '"i2"' };
+    if (scenario.startsWith("master-")) {
+      master.etag = '"m2"';
+      master.updated = "2026-09-10T12:00:00Z";
+      if (scenario === "master-validator-missing") delete master.etag;
+      if (scenario === "master-native-change") master.extendedProperties.private.untouched = "concurrent native edit";
+      if (scenario === "master-rule-change") master.recurrence = ["RRULE:FREQ=DAILY;COUNT=4"];
+    }
     if (patch.status === "cancelled")
       instance = {
         id: instance.id,
@@ -163,7 +181,7 @@ async function main(
         originalStartTime: instance.originalStartTime,
       };
     if (echo) await echo();
-    if (scenario === "ambiguous") {
+    if (["ambiguous", "master-validator-lost", "master-baseline-recovery"].includes(scenario)) {
       res.statusCode = 503;
       return json({ error: "committed, response lost" });
     }
@@ -596,6 +614,8 @@ async function main(
       .from(eventOutbox)
       .where(eq(eventOutbox.mutationID, request.operationID));
     assert.ok(operation.payload.googleOccurrence);
+    assert.equal(operation.payload.googleOccurrence.masterProof?.version, 1);
+    assert.match(operation.payload.googleOccurrence.masterProof!.digest, /^[a-f0-9]{64}$/);
     assert.equal(
       operation.action,
       "update",
@@ -614,6 +634,12 @@ async function main(
       .from(eventOutbox)
       .where(eq(eventOutbox.id, operation.id));
     assert.equal(afterBaseline.status, "pending");
+    if (scenario === "master-proof-missing") {
+      const payload = structuredClone(operation.payload);
+      delete payload.googleOccurrence!.masterProof;
+      await db.update(eventOutbox).set({ payload }).where(eq(eventOutbox.id, operation.id));
+    }
+    if (scenario === "master-before-write") master.etag = '"changed-before-write"';
     if (resolving) {
       instance.summary = "Concurrent remote change";
       instance.etag = '"remote"';
@@ -621,10 +647,22 @@ async function main(
       echo = async () => {
         await observe(instance);
       };
+    const masterBeforeDelivery = await getEventSnapshot(localMaster.id);
     const delivered = await deliverEventOutbox(
       operation.id,
       () => googleAdapter,
     );
+    if (scenario.startsWith("master-")) {
+      assert.equal(delivered?.status, scenario === "master-validator" ? "completed" : scenario === "master-before-write" ? "conflict" : "unconfirmed");
+      if (!["master-validator", "master-before-write"].includes(scenario)) {
+        await db.update(eventOutbox).set({ nextAttemptAt: new Date(0) }).where(eq(eventOutbox.id, operation.id));
+        const recovered = await deliverEventOutbox(operation.id, () => googleAdapter);
+        assert.equal(recovered?.status, scenario === "master-validator-lost" ? "completed" : scenario === "master-validator-missing" ? "blocked" : "conflict");
+      }
+      assert.equal(patches, scenario === "master-before-write" ? 0 : 1, "confirmation and recovery never issue another PATCH");
+      assert.deepEqual(await getEventSnapshot(localMaster.id), masterBeforeDelivery, "proof acceptance never changes the canonical master");
+      return;
+    }
     assert.equal(
       delivered?.status,
       scenario === "ambiguous"
@@ -828,4 +866,12 @@ Promise.resolve()
   .then(() => main("floating"))
   .then(() => main("prepare-race"))
   .then(() => main("identity"))
+  .then(() => main("master-validator"))
+  .then(() => main("master-validator-lost"))
+  .then(() => main("master-native-change"))
+  .then(() => main("master-rule-change"))
+  .then(() => main("master-proof-missing"))
+  .then(() => main("master-before-write"))
+  .then(() => main("master-baseline-recovery"))
+  .then(() => main("master-validator-missing"))
   .finally(() => db.$client.end());
