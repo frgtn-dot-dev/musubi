@@ -2,6 +2,7 @@ import type { EventDeliveryTarget } from "@musubi/types";
 
 /** Shared language for the web and native clients; never aggregate receipts. */
 export function eventDeliveryLabel(target: EventDeliveryTarget): string {
+  if (graphRsvpStoppedBeforeDispatch(target)) return "Outlook response not sent";
   if (target.graphRsvpPhase) return ({ queued: "Response request saved", dispatched: "Outlook response outcome unknown", accepted: "Outlook accepted the response action", observed: "Response observed in Outlook", absent: "Outlook meeting copy unavailable" })[target.graphRsvpPhase];
   if (target.organizerPhase) return ({ unchanged: "Google meeting already matches", queued: "Google meeting change saved", dispatched: "Google meeting outcome unknown", accepted: "Google accepted the meeting action", observed: "Meeting action observed in Google", absent: "Google meeting copy unavailable" })[target.organizerPhase].replace(/Google/g, target.provider === "caldav" ? "CalDAV" : target.provider === "microsoft" ? "Outlook" : "Google");
   if (target.graphCreateCheck) return "Outlook creation needs verification";
@@ -25,6 +26,11 @@ export function eventDeliveryLabel(target: EventDeliveryTarget): string {
 }
 
 export function eventDeliveryExplanation(target: EventDeliveryTarget): string {
+  if (graphRsvpStoppedBeforeDispatch(target)) {
+    if (target.status === "conflict") return "Musubi stopped before sending because the current Outlook state could not be confirmed. This saved response is stopped. Open the current meeting in Outlook to review it and respond there.";
+    if (target.status === "cancelled") return "This saved response was cancelled before Musubi sent it. Open the current meeting in Outlook if you still want to respond.";
+    return "Musubi could not send this saved response to Outlook. Check the account connection and permissions before retrying, or open the current meeting in Outlook to respond there.";
+  }
   if (target.graphRsvpPhase) return target.graphRsvpPhase === "queued" ? "Outlook will be asked to send your response to the organizer. Organizer delivery cannot be verified." : target.graphRsvpPhase === "observed" ? "The current Outlook response matches your choice. Organizer delivery cannot be verified." : "The response action will not be resent. Musubi can check the current copy, but a missing copy or accepted action does not prove organizer delivery. Check Outlook if this remains unresolved.";
   if (target.organizerPhase === "unchanged") return "The meeting already matched this request. No new notification request was sent. Guest notification delivery remains unknown.";
   if (target.organizerPhase === "queued") return `${target.provider === "caldav" ? "The CalDAV server" : target.provider === "microsoft" ? "Outlook" : "Google"} will be asked to notify all guests. Guest notification delivery cannot be verified.`;
@@ -60,6 +66,11 @@ export function eventDeliveryExplanation(target: EventDeliveryTarget): string {
   if (target.status === "cancelled")
     return "This saved operation stopped. Review the current state before replacing it.";
   return "The saved change is queued. Confirmation will appear after the provider responds.";
+}
+
+/** A queued phase proves no dispatch marker, but does not promise future work. */
+function graphRsvpStoppedBeforeDispatch(target: EventDeliveryTarget): boolean {
+  return target.graphRsvpPhase === "queued" && ["conflict", "blocked", "cancelled", "not-written"].includes(target.status);
 }
 
 export function eventDeliveryActions(target: EventDeliveryTarget) {

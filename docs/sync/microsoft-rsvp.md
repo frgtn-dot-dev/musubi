@@ -79,6 +79,15 @@ conflict caused by disappearance before ACK. This read-only recovery preserves
 the original dispatch marker and conflict snapshot. Generic apply-saved
 conflict resolution is not offered for this contract.
 
+A conflict before the durable dispatch marker means the response was not sent.
+Delivery reports that Musubi stopped because the current Outlook state could
+not be confirmed, instead of promising that the response is queued to send.
+This also covers strict native-version drift before POST; the guard remains
+unchanged. There is currently no in-app discard/reprepare recovery for these
+unsent conflicts. Review the current meeting and respond in Outlook. Refresh
+status does not re-admit the saved action, and the original journal remains
+available; do not clear the conflict or remove markers to force a retry.
+
 The existing local source/revision/mapping/tombstone checks fence readback ACK.
 Projected sync echoes retain pending evidence without independently confirming
 raw native preservation; the worker still needs its full read. An older retained
