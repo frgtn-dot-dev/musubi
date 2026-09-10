@@ -109,6 +109,8 @@ export async function deliverEventOutbox(
   const controller = new AbortController();
   const signal = controller.signal;
   let mutationStarted = false;
+  let caldavDispatchPossible = row.payload.rsvp?.request.provider === "caldav" &&
+    (row.payload.rsvp.caldavDelivery === undefined || row.payload.rsvp.caldavDelivery?.startedAt !== undefined);
   let remoteSnapshot: EventOutboxRow["remoteSnapshot"] = null;
   let expectedRef: ExternalEventRef | null = null;
   let resultRef: ExternalEventRef | null = null;
@@ -362,8 +364,11 @@ export async function deliverEventOutbox(
         if (!(await checkDestination())) return;
         const { prepareCaldavRsvp, caldavRsvpState } = await import("./adapters/caldav_rsvp");
         const { normalizeCaldavResource } = await import("./adapters/caldav_time");
-        const { caldavRsvpDesiredState } = await import("@musubi/types");
+        const { caldavRsvpDesiredState, CaldavRsvpDeliverySchema } = await import("@musubi/types");
+        const { markCaldavRsvpDispatched } = await import("@musubi/db");
         const intent = row.payload.rsvp, request = ProviderRsvpEditSchema.parse(intent.request);
+        const delivery = intent.caldavDelivery === undefined ? undefined : CaldavRsvpDeliverySchema.parse(intent.caldavDelivery);
+        const readOnly = delivery === undefined || delivery.startedAt !== undefined;
         if (request.provider !== "caldav" || intent.instance || request.expectedRevision !== row.revision) throw new ProviderEventWriteError("provider-conflict");
         const saved = intent.baseline as unknown as import("./adapters/caldav_rsvp").CaldavRsvpEvidence;
         const evidence = prepareCaldavRsvp(saved.before, saved, saved.proof, request.response);
@@ -372,7 +377,21 @@ export async function deliverEventOutbox(
         const requireSource = async () => { signal.throwIfAborted(); if (!(await hasProviderRsvpSource(row))) throw new ProviderEventWriteError("provider-conflict", mutationStarted ? "unconfirmed" : "not-written"); };
         await requireSource();
         expectedRef = { externalEventId: evidence.id, etag: evidence.etag, icalUid: evidence.uid };
-        const observed = await adapter.writeCaldavRsvp(row.userID, row.accountID, row.externalCalendarID, evidence, signal, async () => { await requireSource(); mutationStarted = true; });
+        const observed = await adapter.writeCaldavRsvp(row.userID, row.accountID, row.externalCalendarID, evidence, signal, async () => {
+          await requireSource();
+          if (readOnly) throw new ProviderEventWriteError("provider-conflict");
+          let granted: boolean;
+          try {
+            granted = await markCaldavRsvpDispatched(row);
+          } catch (error) {
+            // The commit may have succeeded even if its acknowledgement was lost.
+            caldavDispatchPossible = true;
+            throw error;
+          }
+          if (!granted) throw new ProviderEventWriteError("provider-conflict");
+          caldavDispatchPossible = true;
+          mutationStarted = true;
+        }, readOnly);
         resultRef = { externalEventId: evidence.id, etag: observed.etag, icalUid: evidence.uid };
         signal.throwIfAborted();
         await completeProviderRsvpOutbox(row.id, token, resultRef, expectedRef, { isEcho: true, externalEventId: evidence.id, etag: observed.etag, deleted: false, providerState: intent.desiredState, observedAt: new Date().toISOString() }, observed.confirmation);
@@ -656,7 +675,7 @@ export async function deliverEventOutbox(
     const providerError =
       error instanceof ProviderEventWriteError ? error : undefined;
     const uncertain =
-      row.reconciling ||
+      caldavDispatchPossible || row.reconciling ||
       (mutationStarted && providerError?.outcome !== "not-written");
     const conflict = providerError?.code === "provider-conflict";
     const retryableStatus =

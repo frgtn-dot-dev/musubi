@@ -21,7 +21,7 @@ export async function readCaldavRsvp(collection: string, ref: { id: string; etag
   if (current.etag !== ref.etag) throw new ProviderEventWriteError("provider-conflict");
   return prepareCaldavRsvp(current.data, { ...ref, scheduleTag: current.scheduleTag }, proof, response);
 }
-export async function deliverCaldavRsvp(collection: string, saved: CaldavRsvpEvidence, authorization: string, signal?: AbortSignal, beforeWrite?: () => Promise<void>) {
+export async function deliverCaldavRsvp(collection: string, saved: CaldavRsvpEvidence, authorization: string, signal?: AbortSignal, beforeWrite?: () => Promise<void>, readOnly = false) {
   enabled();
   // Reconstruct all private bytes/hashes after JSON persistence; caller input
   // cannot widen an RSVP into an unrelated content or attendee edit.
@@ -35,8 +35,17 @@ export async function deliverCaldavRsvp(collection: string, saved: CaldavRsvpEvi
     if (observed.before !== observed.after || observed.selfAddress !== evidence.selfAddress || caldavRsvpResourceHash(current.data) !== evidence.desiredResourceHash) throw new ProviderEventWriteError("provider-conflict", "unconfirmed");
     return { etag: current.etag, recovered, notificationDelivery: "unknown" as const, confirmation: { resourceHash: evidence.desiredResourceHash, scheduleTag: current.scheduleTag, selfAddress: evidence.selfAddress } };
   };
-  const current = await readCaldavRsvpResource(evidence.id, authorization, signal);
-  if (caldavRsvpResourceHash(current.data) === evidence.desiredResourceHash) return result(current, true);
+  let current: Awaited<ReturnType<typeof readCaldavRsvpResource>>;
+  try {
+    current = await readCaldavRsvpResource(evidence.id, authorization, signal);
+    if (caldavRsvpResourceHash(current.data) === evidence.desiredResourceHash) return result(current, true);
+  } catch (error) {
+    if (!readOnly) throw error;
+    throw new ProviderEventWriteError("caldav-rsvp-response-unconfirmed", "unconfirmed", error instanceof ProviderEventWriteError ? error.providerStatus : undefined, error instanceof ProviderEventWriteError ? error.retryAfterMs : undefined);
+  }
+  // A previous dispatch may have reached the provider even when its resource
+  // still reads as the baseline. Only a complete desired readback can settle it.
+  if (readOnly) throw new ProviderEventWriteError("caldav-rsvp-response-unconfirmed", "unconfirmed");
   if (current.etag !== evidence.etag || current.scheduleTag !== evidence.scheduleTag || !sameCaldavResource(current.data, evidence.before)) throw new ProviderEventWriteError("provider-conflict");
   await beforeWrite?.(); signal?.throwIfAborted(); enabled();
   let accepted = false;

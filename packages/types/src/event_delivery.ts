@@ -30,6 +30,7 @@ export const EventDeliveryTargetSchema = z.object({
   latestRevision: z.number().int().positive().nullable(),
   updatedAt: z.coerce.date().nullable(),
   retryAt: z.coerce.date().nullable(),
+  caldavRsvpPhase: z.enum(["queued", "check-only", "observed"]).optional(),
   graphRsvpPhase: z.enum(["queued", "dispatched", "accepted", "observed", "absent"]).optional(),
   organizerPhase: z.enum(["queued", "dispatched", "accepted", "observed", "absent", "unchanged"]).optional(),
   graphCreateCheck: z.literal(true).optional(),

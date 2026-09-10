@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 import express from "express";
 import { eq, sql } from "drizzle-orm";
 import { config } from "@musubi/config";
-import { CLIENT_VERSION_HEADER, PRODUCT_VERSION, ProviderEventStateResponseSchema, ProviderRsvpReceiptSchema } from "@musubi/types";
-import { db, user, caldavAccounts, events, eventOutbox, externalEvents, externalCalendars, calendarMembers, saveCaldavAccount, importExternalCalendar, replaceExternalEventResource, upsertExternalEvent, getEventSnapshot, getOwnProviderEventObservation, claimEventOutbox, completeEventOutbox, completeProviderRsvpOutbox, replaceMemberToken } from "@musubi/db";
+import { CLIENT_VERSION_HEADER, PRODUCT_VERSION, ProviderEventStateResponseSchema, ProviderRsvpReceiptSchema, CaldavRsvpDeliverySchema } from "@musubi/types";
+import { db, user, caldavAccounts, events, eventOutbox, externalEvents, externalCalendars, calendarMembers, saveCaldavAccount, importExternalCalendar, replaceExternalEventResource, upsertExternalEvent, getEventSnapshot, getOwnProviderEventObservation, claimEventOutbox, completeEventOutbox, completeProviderRsvpOutbox, replaceMemberToken, markCaldavRsvpDispatched, requestEventDeliveryRetry, getEventDeliveryStatus } from "@musubi/db";
 import { createCaldavRsvpFixture, caldavRsvpDstDurationData } from "./adapters/caldav_rsvp.fixture";
 import { normalizeCaldavResource } from "./adapters/caldav_time";
 import { caldavRsvpState } from "./adapters/caldav_rsvp";
@@ -19,6 +19,7 @@ import { handlerGetProviderEventState, handlerProviderRsvpEdit } from "../handle
 
 async function main() {
   assert.equal(process.env.ENVIRONMENT, "test");
+  for (const invalid of [null, {}, { kind: "caldav-rsvp-at-most-once", version: 2 }, { kind: "caldav-rsvp-at-most-once", version: 1, startedAt: "invalid" }, { kind: "caldav-rsvp-at-most-once", version: 1, cleared: true }]) assert.equal(CaldavRsvpDeliverySchema.safeParse(invalid).success, false);
   const flag = config.api.providerRsvpEditsEnabled, timeFlag = config.api.eventTimeEditsEnabled;
   config.api.eventTimeEditsEnabled = false;
   const app = express(); app.use(express.json());
@@ -29,7 +30,7 @@ async function main() {
   const port = api.address(); assert.ok(port && typeof port !== "string");
   const origin = `http://127.0.0.1:${port.port}`;
   try {
-    for (const scenario of ["public", "all-day", "concurrent", "lost", "metadata", "no-op", "lowercase-no-op", "echo-before-ack", "echo-dst-duration", "OPTIONS-429", "PROPFIND-503", "disabled", "worker-disabled", "viewer", "role-after", "lease-after", "revision-after", "mapping-before", "source-before", "permission-before", "account-after-read", "changed-native", "forged-ack", "pending-pull"]) {
+    for (const scenario of ["public", "all-day", "concurrent", "lost", "metadata", "no-op", "lowercase-no-op", "echo-before-ack", "echo-dst-duration", "OPTIONS-429", "PROPFIND-503", "disabled", "worker-disabled", "viewer", "role-after", "lease-after", "revision-after", "mapping-before", "source-before", "permission-before", "account-after-read", "changed-native", "forged-ack", "pending-pull", "marker-race", "marker-expired", "marker-payload", "marker-source", "marker-disconnected", "marker-flag", "marker-legacy", "marker-malformed", "marker-retry", "marker-crash", "marker-reclaim", "legacy-readonly", "legacy-recovered", "dispatch-412"]) {
       const fixture = await createCaldavRsvpFixture(), { state, collection, resource } = fixture;
       const actor = `caldav-rsvp-${randomUUID()}`, credential = issueMemberToken();
       await db.insert(user).values({ id: actor, name: "Fixture", email: `${actor}@example.test`, isExternal: true });
@@ -78,7 +79,82 @@ async function main() {
         assert.equal((await journal()).length, 1); assert.deepEqual(await savedEvents(), untouched); assert.deepEqual(await savedMaps(), originalMaps);
         const row = (await journal())[0]!;
         assert.equal(row.payload.rsvp!.request.provider, "caldav"); assert.equal(row.payload.rsvp!.baseline.before, state.data);
+        assert.equal((await getEventDeliveryStatus(actor, original.id)).targets[0]!.caldavRsvpPhase, "queued");
+        assert.deepEqual(row.payload.rsvp!.caldavDelivery, { kind: "caldav-rsvp-at-most-once", version: 1 });
         assert.equal(state.puts, 0);
+        if (scenario.startsWith("marker-")) {
+          const claimed = (await claimEventOutbox(row.id))!;
+          assert.ok(claimed.leaseToken);
+          if (scenario === "marker-expired") await db.update(eventOutbox).set({ leaseUntil: new Date(0) }).where(eq(eventOutbox.id, row.id));
+          if (scenario === "marker-payload") await db.update(eventOutbox).set({ payload: { ...claimed.payload, rsvp: { ...claimed.payload.rsvp!, baseline: { ...claimed.payload.rsvp!.baseline, changed: true } } } }).where(eq(eventOutbox.id, row.id));
+          if (scenario === "marker-source") await db.update(externalEvents).set({ etag: '"changed"' }).where(eq(externalEvents.id, mapping!.id));
+          if (scenario === "marker-disconnected") await db.delete(caldavAccounts).where(eq(caldavAccounts.id, account.id));
+          if (scenario === "marker-flag") config.api.providerRsvpEditsEnabled = false;
+          if (["marker-legacy", "marker-malformed"].includes(scenario)) {
+            if (scenario === "marker-legacy") delete claimed.payload.rsvp!.caldavDelivery;
+            else claimed.payload.rsvp!.caldavDelivery = { kind: "caldav-rsvp-at-most-once", version: 2 } as any;
+            await db.update(eventOutbox).set({ payload: claimed.payload }).where(eq(eventOutbox.id, row.id));
+          }
+          if (["marker-race", "marker-retry", "marker-crash", "marker-reclaim"].includes(scenario)) {
+            assert.deepEqual((await Promise.all([markCaldavRsvpDispatched(claimed), markCaldavRsvpDispatched(claimed)])).sort(), [false, true]);
+            const marked = (await journal())[0]!;
+            assert.ok(CaldavRsvpDeliverySchema.parse(marked.payload.rsvp!.caldavDelivery).startedAt);
+            assert.equal(marked.uncertain, true);
+            assert.equal((await getEventDeliveryStatus(actor, original.id)).targets[0]!.caldavRsvpPhase, "check-only");
+            assert.equal(await markCaldavRsvpDispatched(marked), false);
+            if (scenario === "marker-reclaim") {
+              await db.update(eventOutbox).set({ leaseUntil: new Date(0) }).where(eq(eventOutbox.id, row.id));
+              const reclaimed = (await claimEventOutbox(row.id))!;
+              assert.ok(reclaimed.reconciling);
+              assert.notEqual(reclaimed.leaseToken, claimed.leaseToken);
+              assert.deepEqual(reclaimed.payload.rsvp!.caldavDelivery, marked.payload.rsvp!.caldavDelivery);
+              assert.equal(await markCaldavRsvpDispatched(claimed), false);
+              assert.equal(await markCaldavRsvpDispatched(reclaimed), false);
+              // Let the worker reclaim the actual expired attempting row too.
+              await db.update(eventOutbox).set({ leaseUntil: new Date(0) }).where(eq(eventOutbox.id, row.id));
+              const recovered = await deliverEventOutbox(row.id, () => caldavAdapter);
+              assert.notEqual(recovered?.status, "completed");
+              const checked = (await journal())[0]!;
+              assert.equal(checked.attempts, claimed.attempts + 2);
+              assert.equal(checked.uncertain, true);
+              assert.deepEqual(checked.payload.rsvp!.caldavDelivery, marked.payload.rsvp!.caldavDelivery);
+              assert.equal((await getEventDeliveryStatus(actor, original.id)).targets[0]!.caldavRsvpPhase, "check-only");
+            }
+            if (["marker-retry", "marker-crash"].includes(scenario)) {
+              await db.update(eventOutbox).set({ status: "unconfirmed", leaseToken: null, leaseUntil: null }).where(eq(eventOutbox.id, row.id));
+              await requestEventDeliveryRetry(actor, original.id, row.id);
+              const retried = (await journal())[0]!;
+              assert.deepEqual(retried.payload, marked.payload);
+              assert.equal(retried.uncertain, true);
+              assert.equal(retried.status, "unconfirmed");
+              assert.equal((await getEventDeliveryStatus(actor, original.id)).targets[0]!.caldavRsvpPhase, "check-only");
+              if (scenario === "marker-crash") {
+                await db.update(eventOutbox).set({ nextAttemptAt: new Date(0) }).where(eq(eventOutbox.id, row.id));
+                const recovered = await deliverEventOutbox(row.id, () => caldavAdapter);
+                assert.notEqual(recovered?.status, "completed");
+                assert.deepEqual((await journal())[0]!.payload.rsvp!.caldavDelivery, marked.payload.rsvp!.caldavDelivery);
+                assert.equal((await journal())[0]!.uncertain, true);
+              }
+            }
+          } else {
+            assert.equal(await markCaldavRsvpDispatched(claimed), false);
+            assert.equal((await journal())[0]!.payload.rsvp!.caldavDelivery?.startedAt, undefined);
+          }
+          assert.equal(state.puts, 0); continue;
+        }
+        if (["legacy-readonly", "legacy-recovered"].includes(scenario)) {
+          delete row.payload.rsvp!.caldavDelivery;
+          await db.update(eventOutbox).set({ payload: row.payload }).where(eq(eventOutbox.id, row.id));
+          assert.equal((await getEventDeliveryStatus(actor, original.id)).targets[0]!.caldavRsvpPhase, "check-only");
+          if (scenario === "legacy-recovered") { state.data = String(row.payload.rsvp!.baseline.after); state.etag = '"legacy-after"'; }
+          const legacy = await deliverEventOutbox(row.id, () => caldavAdapter);
+          if (scenario === "legacy-recovered") assert.equal(legacy?.status, "completed");
+          else assert.notEqual(legacy?.status, "completed");
+          assert.equal(state.puts, 0);
+          assert.equal((await getEventDeliveryStatus(actor, original.id)).targets[0]!.caldavRsvpPhase, scenario === "legacy-recovered" ? "observed" : "check-only");
+          assert.equal((await journal())[0]!.payload.rsvp!.caldavDelivery, undefined);
+          continue;
+        }
         if (scenario === "pending-pull") { await assert.rejects(persist); assert.deepEqual(await savedEvents(), untouched); }
         if (scenario === "forged-ack") {
           const claimed = (await claimEventOutbox(row.id))!;
@@ -108,7 +184,25 @@ async function main() {
         if (scenario === "revision-after") state.onPut = async () => { await db.update(events).set({ revision: sql`${events.revision} + 1` }).where(eq(events.id, original.id)); };
         if (scenario === "lease-after") state.onPut = async () => { await db.update(eventOutbox).set({ leaseUntil: new Date(0) }).where(eq(eventOutbox.id, row.id)); };
         if (["lost", "metadata"].includes(scenario)) state.mode = scenario;
+        if (scenario === "dispatch-412") state.mode = "race";
         let delivered = await deliverEventOutbox(row.id, () => caldavAdapter);
+        if (scenario === "dispatch-412") {
+          assert.equal(delivered?.status, "conflict");
+          const marked = (await journal())[0]!;
+          assert.ok(marked.payload.rsvp!.caldavDelivery?.startedAt);
+          assert.equal(marked.uncertain, true); assert.equal(state.puts, 1);
+          assert.equal((await getEventDeliveryStatus(actor, original.id)).targets[0]!.caldavRsvpPhase, "check-only");
+          await requestEventDeliveryRetry(actor, original.id, row.id);
+          state.mode = "ok";
+          await db.update(eventOutbox).set({ nextAttemptAt: new Date(0) }).where(eq(eventOutbox.id, row.id));
+          await deliverEventOutbox(row.id, () => caldavAdapter);
+          const checked = (await journal())[0]!;
+          assert.deepEqual(checked.payload.rsvp!.caldavDelivery, marked.payload.rsvp!.caldavDelivery);
+          assert.equal(checked.uncertain, true); assert.equal(state.puts, 1);
+          assert.notEqual(checked.status, "completed");
+          assert.equal((await getEventDeliveryStatus(actor, original.id)).targets[0]!.caldavRsvpPhase, "check-only");
+          continue;
+        }
         if (["OPTIONS-429", "PROPFIND-503"].includes(scenario)) {
           assert.equal(delivered?.status, "retry"); assert.equal(state.puts, 0);
           assert.ok((await journal())[0]!.nextAttemptAt!.getTime() > Date.now() + 14000);
@@ -124,6 +218,7 @@ async function main() {
           if (scenario === "account-after-read") assert.equal(state.puts, 0);
           assert.notEqual(delivered?.status, "completed"); assert.equal((await savedMaps())[0]!.etag, scenario === "mapping-before" ? '"changed"' : mapping!.etag); continue;
         }
+        assert.equal((await getEventDeliveryStatus(actor, original.id)).targets[0]!.caldavRsvpPhase, "observed");
         assert.equal(delivered?.status, "completed"); assert.equal(state.puts, ["no-op", "lowercase-no-op"].includes(scenario) ? 0 : 1);
         assert.deepEqual(await savedEvents(), untouched);
         const [accepted] = await savedMaps(); assert.equal(accepted!.id, mapping!.id); assert.equal(accepted!.etag, state.etag);

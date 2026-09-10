@@ -1,4 +1,4 @@
-import { OrganizerDispatchSchema, ProviderOrganizerRequestSchema } from "@musubi/types";
+import { CaldavRsvpDeliverySchema, OrganizerDispatchSchema, ProviderOrganizerRequestSchema } from "@musubi/types";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { GraphRsvpDispatchSchema, ProviderRsvpEditSchema, NotFoundError } from "@musubi/types";
 import { db } from "..";
@@ -100,12 +100,15 @@ export async function requestEventDeliveryRetry(
     if (row.status === "cancelled")
       throw new EventDeliveryRetryError("delivery-destination-unavailable");
     const graphRequest = ProviderRsvpEditSchema.safeParse(row.payload.rsvp?.request);
+    const caldavPolicy = CaldavRsvpDeliverySchema.safeParse(row.payload.rsvp?.caldavDelivery);
+    const caldavCheck = row.provider === "caldav" && row.action === "update" && row.actorID === userID && graphRequest.success && graphRequest.data.provider === "caldav" &&
+      (row.payload.rsvp?.caldavDelivery === undefined || caldavPolicy.success && caldavPolicy.data.startedAt !== undefined);
     const graphCheck = row.provider === "microsoft" && row.action === "update" && row.actorID === userID && graphRequest.success && graphRequest.data.provider === "microsoft" && GraphRsvpDispatchSchema.safeParse(row.payload.rsvp?.graphDispatch).success;
     // A dispatched Graph response can only be observed again. Keep its original
     // conflict snapshot and permanent marker; this never authorizes another POST.
     const graphCreateCheck = row.provider === "microsoft" && row.action === "create" && row.actorID === userID && row.uncertain && row.payload.graphSeriesCreate?.version === 1;
     const organizerCheck = ["google", "caldav", "microsoft"].includes(row.provider) && row.payload.organizer?.request.provider === row.provider && row.payload.organizer?.dispatch?.kind === `${row.provider}-organizer-dispatch` && row.actorID === userID && ProviderOrganizerRequestSchema.safeParse(row.payload.organizer?.request).success && OrganizerDispatchSchema.safeParse(row.payload.organizer?.dispatch).success;
-    if (!graphCheck && !organizerCheck && !graphCreateCheck && (
+    if (!caldavCheck && !graphCheck && !organizerCheck && !graphCreateCheck && (
       row.status === "conflict" ||
       (row.remoteSnapshot && !row.remoteSnapshot.isEcho)
     ))
@@ -124,10 +127,10 @@ export async function requestEventDeliveryRetry(
       .update(eventOutbox)
       .set({
         status:
-          graphCheck || organizerCheck || graphCreateCheck || row.uncertain || row.status === "unconfirmed"
+          caldavCheck || graphCheck || organizerCheck || graphCreateCheck || row.uncertain || row.status === "unconfirmed"
             ? "unconfirmed"
             : "retry",
-        uncertain: graphCheck || organizerCheck || graphCreateCheck || row.uncertain || row.status === "unconfirmed",
+        uncertain: caldavCheck || graphCheck || organizerCheck || graphCreateCheck || row.uncertain || row.status === "unconfirmed",
         updatedAt: new Date(),
         // A manual click must not shorten a provider's persisted Retry-After.
         nextAttemptAt: sql`greatest(${eventOutbox.nextAttemptAt}, clock_timestamp())`,

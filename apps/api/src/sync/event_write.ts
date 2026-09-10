@@ -6,6 +6,7 @@ import {
 } from "@musubi/db";
 
 export type ProviderEventWriteCode =
+  | "caldav-rsvp-response-unconfirmed"
   | "provider-conflict"
   | "provider-version-unavailable"
   | "event-diff-unavailable"

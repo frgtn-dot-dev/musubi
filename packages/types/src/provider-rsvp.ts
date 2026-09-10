@@ -29,6 +29,7 @@ export type ProviderRsvpIntent = {
   baselineState: ProviderEventState;
   desiredState: ProviderEventState;
   mappingID: string;
+  caldavDelivery?: z.infer<typeof CaldavRsvpDeliverySchema>;
   graphDispatch?: { kind: "graph-rsvp-dispatch"; version: 1; startedAt: string; acceptedAt?: string };
 };
 export function providerRsvpDesiredState(input: ProviderEventState, copyEmail: string, response: ProviderRsvpEdit["response"]): ProviderEventState {
@@ -88,3 +89,7 @@ export function matchesMicrosoftRsvpObservedState(baseline: ProviderEventState, 
 }
 export const GraphRsvpDispatchSchema = z.object({ kind: z.literal("graph-rsvp-dispatch"), version: z.literal(1), startedAt: z.iso.datetime(), acceptedAt: z.iso.datetime().optional() }).strict();
 export type MicrosoftRsvpConfirmation = { baselineHash: string; observedResponse: string };
+
+/** Durable permission for at most one CalDAV scheduling PUT. Missing legacy
+ * policy and a started policy permit read-only recovery, never another PUT. */
+export const CaldavRsvpDeliverySchema = z.object({ kind: z.literal("caldav-rsvp-at-most-once"), version: z.literal(1), startedAt: z.iso.datetime().optional() }).strict();

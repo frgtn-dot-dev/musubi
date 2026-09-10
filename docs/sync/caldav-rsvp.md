@@ -51,15 +51,25 @@ an already identical response makes no PUT.
 
 The worker rechecks the gate, current account/source/role, lease and mapping,
 then fresh scheduling proof and the complete native resource. PUT uses strong
-`If-Match`; it does not use Schedule-Tag merge semantics. A lost response is
-reconciled by a fresh GET before another PUT. Confirmation requires the complete
+`If-Match`; it does not use Schedule-Tag merge semantics. Before the first PUT, an atomic journal update permanently records permission
+to attempt dispatch, under the live lease and current source/account checks.
+New intents carry the versioned `caldav-rsvp-at-most-once` policy. Once its
+`startedAt` marker exists, recovery only reads: it never repeats the PUT, even
+after a definite HTTP refusal. Legacy intents without that policy also recover
+read-only because their dispatch history cannot be established. A crash after
+the marker but before network I/O can therefore leave an unsent response
+unconfirmed; safety takes precedence over automatically sending it again. Confirmation requires the complete
 intended resource, allowing only validated server-owned DTSTAMP and organizer
 SCHEDULE-STATUS differences. SEQUENCE and other attendee changes remain exact.
 Desired PARTSTAT alone cannot acknowledge an intent. Pull and ACK use the same
 raw provider-state projection, preserving canonical event content and revision.
 Lease/source/revision races cannot advance the mapping after a provider write.
 
-Unrelated native changes retain an explicit durable conflict. This batch does
+Unrelated native changes retain an explicit durable conflict. Marked and legacy
+intents offer **Check response**, including after a conflict; this preserves the
+marker and uncertainty and performs no further PUT. Receipts distinguish a
+queued response request, a response needing verification and a fully observed
+response. They never infer organizer delivery from a saved attendee copy. This batch does
 not provide a CalDAV conflict overwrite confirmation. It does not expand
 Google whole-series operations, organizer writes or recurrence support.
 
@@ -74,9 +84,11 @@ step. This batch enables no flags, minima or versions and performs no live calls
 `caldav_rsvp.test.ts` covers fake HTTP scheduling discovery, namespace attacks,
 self identity, exact native preservation, strong CAS, disabled/no-op behavior,
 server metadata, lost response recovery and unrelated changes.
-`caldav_rsvp.integration.test.ts` covers 24 synthetic PostgreSQL/public API
+`caldav_rsvp.integration.test.ts` covers 38 synthetic PostgreSQL/public API
 scenarios including replay/concurrency, forged ACK, pending pull, all-day data,
-and source/lease/revision races, lowercase no-op ACK, transient discovery backoff,
+and source/lease/revision races, atomic dispatch grants, marker-preserving retry,
+legacy read-only recovery, expired-lease reclamation, crash-before-PUT and HTTP 412 without resend, receipt
+phases, lowercase no-op ACK, transient discovery backoff,
 and RSVP-only adapter pulls before ACK, including PT24H across Prague DST.
 Pending comparison carries native endpoints with the model; ordinary legacy
 imports keep their existing display endpoints. Existing Google one-off and instance RSVP suites
