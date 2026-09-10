@@ -1,3 +1,4 @@
+import { isCaldavPersonalContentOperation, isIcloudPersonalContentDestination, type CaldavPersonalContentOperation } from "../caldav_personal_content";
 import { caldavOrganizerTransport } from "./caldav_organizer_delivery";
 import { caldavAlarmScope } from "@musubi/calendar";
 import { recurrenceDateValues } from "./caldav_recurrence_dates";
@@ -62,6 +63,7 @@ import { appendEventComponent, eventComponentBytes, removeEventComponents, repla
 import {
   caldavAllows,
   caldavEventPrivileges,
+  caldavEventWritePermission,
   caldavReadAccess,
   caldavOrganizerAddresses,
 } from "../caldav_privileges";
@@ -1205,13 +1207,13 @@ async function rsvpAuthorization(userID: string, accountID: string, externalCale
   return basicAuthForAccount(accountID);
 }
 
-async function seriesAuthorization(userID: string, accountId: string, externalCalendarId: string, intent: CaldavSeriesIntent, signal?: AbortSignal, action: "update" | "delete" | "create" = "update") {
+async function seriesAuthorization(userID: string, accountId: string, externalCalendarId: string, intent: CaldavSeriesIntent, signal?: AbortSignal, action: "update" | "delete" | "create" = "update", operation?: CaldavPersonalContentOperation) {
   if (!config.api.eventTimeEditsEnabled)
     throw new EventWriteError("event-write", "unsupported");
-  return resourceAuthorization(userID, accountId, externalCalendarId, intent, signal, action);
+  return resourceAuthorization(userID, accountId, externalCalendarId, intent, signal, action, operation);
 }
 
-async function resourceAuthorization(userID: string, accountId: string, externalCalendarId: string, intent: Pick<CaldavSeriesIntent, "master" | "ref">, signal?: AbortSignal, action: "update" | "delete" | "create" = "update") {
+async function resourceAuthorization(userID: string, accountId: string, externalCalendarId: string, intent: Pick<CaldavSeriesIntent, "master" | "ref">, signal?: AbortSignal, action: "update" | "delete" | "create" = "update", operation?: CaldavPersonalContentOperation) {
   const accounts = await getCaldavAccountsByUser(userID);
   if (!accounts.some(account => account.id === accountId))
     throw new EventWriteError("event-write", "denied");
@@ -1223,7 +1225,15 @@ async function resourceAuthorization(userID: string, accountId: string, external
     throw new EventWriteError("event-write", "denied");
   const resource = caldavSeriesResourceURL(externalCalendarId, intent.ref.externalEventId);
   const authorization = await basicAuthForAccount(accountId);
-  assertEventWriteEvidence(caldavAllows(await caldavEventPrivileges(action !== "update" ? externalCalendarId : resource.href, authorization, signal, "error"), action), "event-write");
+  const account = accounts.find(account => account.id === accountId)!;
+  const eligible = config.api.icloudPersonalContentWritesEnabled && action === "update"
+    && isCaldavPersonalContentOperation(operation)
+    && isIcloudPersonalContentDestination(account.serverUrl, externalCalendarId, resource.href);
+  const permission = await caldavEventWritePermission(action !== "update" ? externalCalendarId : resource.href, authorization, signal, "error");
+  const allowed = caldavAllows(permission.privileges, action);
+  // An explicit privilege set without write-content is always a denial. Only
+  // narrowly identified missing-property evidence can use the iCloud fallback.
+  assertEventWriteEvidence(allowed === undefined && eligible && permission.missing ? true : allowed, "event-write");
   return { resource, authorization };
 }
 
@@ -1378,8 +1388,8 @@ export const caldavAdapter: CalendarAdapter = {
     const current = await readEventResource(authorization, resource.href, intent.ref, signal, "error", true);
     return caldavSeriesResolutionEvidence(current.data, intent, { ...intent.ref, etag: current.etag }, before, null);
   },
-  async readCaldavSeriesResolution(userID, accountId, externalCalendarId, intent, before, signal, targetEventID) {
-    const { resource, authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, intent, signal);
+  async readCaldavSeriesResolution(userID, accountId, externalCalendarId, intent, before, signal, targetEventID, operation) {
+    const { resource, authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, intent, signal, "update", targetEventID === undefined ? operation : undefined);
     const current = await readEventResource(authorization, resource.href, intent.ref, signal, "error", true);
     return caldavSeriesResolutionEvidence(current.data, intent, { ...intent.ref, etag: current.etag }, before, targetEventID);
   },
@@ -1394,8 +1404,8 @@ export const caldavAdapter: CalendarAdapter = {
       await beforeWrite?.();
     });
   },
-  async readCaldavSeries(userID, accountId, externalCalendarId, intent, signal) {
-    const { resource, authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, intent, signal);
+  async readCaldavSeries(userID, accountId, externalCalendarId, intent, signal, operation) {
+    const { resource, authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, intent, signal, "update", operation);
     const current = await readEventResource(authorization, resource.href, intent.ref, signal, "error");
     return caldavSeriesEvidence(current.data, intent);
   },
@@ -1432,7 +1442,7 @@ export const caldavAdapter: CalendarAdapter = {
     return createCaldavSplitResource(externalCalendarId, split, authorization, signal, beforeMutation);
   },
   async writeCaldavSeries(userID, accountId, externalCalendarId, write, signal, beforeMutation) {
-    const { authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, write.baseline, signal);
+    const { authorization } = await seriesAuthorization(userID, accountId, externalCalendarId, write.baseline, signal, "update", write);
     return deliverCaldavSeriesResource(externalCalendarId, write, authorization, signal, beforeMutation);
   },
   projectEvent(event) { return icalToNormalized({ url: event.id, data: toIcal(event) })!; },

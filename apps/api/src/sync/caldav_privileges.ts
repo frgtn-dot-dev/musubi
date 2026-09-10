@@ -14,9 +14,22 @@ async function properties(url: string, authorization: string, names: string[], s
 }
 
 export async function caldavEventPrivileges(url: string, authorization: string, signal?: AbortSignal, redirect: RequestRedirect = "follow") {
+  return (await caldavEventWritePermission(url, authorization, signal, redirect)).privileges;
+}
+
+/** Missing is deliberately narrower than unknown: only an explicit, empty DAV
+ * property with 404 status is evidence that this server omits resource ACLs.
+ * HTTP errors, malformed XML, absent properties and denied propstats stay unknown. */
+export async function caldavEventWritePermission(url: string, authorization: string, signal?: AbortSignal, redirect: RequestRedirect = "follow"): Promise<{ privileges: Set<string> | undefined; missing: boolean }> {
   const response = await properties(url, authorization, ["d:current-user-privilege-set"], signal, redirect);
+  const property = response?.properties.get(davName(DAV, "current-user-privilege-set"));
+  if (property?.status === 404 && !property.value.text && !property.value.children.length)
+    return { privileges: undefined, missing: true };
   const value = response && successfulDavProperty(response, DAV, "current-user-privilege-set");
-  if (!value || value.text) return undefined;
+  return { privileges: value && !value.text ? parseEventPrivileges(value) : undefined, missing: false };
+}
+
+function parseEventPrivileges(value: DavNode): Set<string> | undefined {
   const result = new Set<string>();
   for (const privilege of value.children) {
     if (privilege.name !== davName(DAV, "privilege") || privilege.text || privilege.children.length !== 1) return undefined;

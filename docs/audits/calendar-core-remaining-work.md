@@ -79,7 +79,6 @@ pouze do lokálního připojení, nikdy do chatu, repozitáře nebo testovacích
 | --- | --- |
 | Další Outlook acceptance a conditional-write důkaz | Vývojové OAuth a one-off create/Accept/Tentative již prošly, stejně jako [osobní zoned/all-day DAILY COUNT=3 create](calendar-personal-series-live-acceptance-20260910.md). Decline delivery, širší recurrence varianty a skutečný event conditional-write kontrakt zbývají; `changeKey` není CAS důkaz. [Invite/RSVP evidence](calendar-outlook-live-acceptance-20260910.md). |
 | Identity a konkrétní invite/RSVP scénáře pro zbývající providery | Google one-off a Outlook create/Accept/Tentative mezi schválenými účty jsou ověřené. Zbývající iCloud a recurring scénáře vyžadují odpovídající připojení a vymezené testovací adresáty; samotné připojení není důkaz doručení. |
-| iCloud resource permission kontrakt | Tři standardní DAV dotazy neposkytly positive resource write privilege. Připojení je dostupné, ale zpřístupnění scope writeru vyžaduje důvěryhodný mechanismus nebo výslovně schválený jiný kontrakt. [Živá evidence](calendar-icloud-series-live-acceptance.md#follow-up-three-standard-dav-privilege-queries) |
 | Fyzické native/OS a notification QA | Mockované callbacky a Chromium nejsou důkaz chování telefonu, OS oprávnění, klávesnice ani skutečných oznámení. |
 | Release, minimální klientské verze a produkční aktivace | Samostatné rozhodnutí až po odpovídající acceptance. Dosavadní práce nemění verze/minima 0.1.8 ani nezapíná produkční time/reminder/RSVP flagy. |
 
@@ -96,3 +95,14 @@ pro vykreslení, výběr, náhled, přesun, resize, klávesnici a dostupnost. P�
 okamžiky přecházejí také do rychlého/plného editoru a jeho URL draftu. Sdílený
 nativní layout zůstává samostatný; nejde o fyzickou native/OS acceptance.
 [Implementace a vymezené výsledky](calendar-dst-axis-acceptance-20260910.md).
+
+### Dokončený iCloud master-content kontrakt
+
+Schválený default-off `ICLOUD_PERSONAL_CONTENT_WRITES_ENABLED` umožňuje při
+výslovně chybějící resource privilege vlastnosti ponechat autorizaci na
+podmíněném PUT. Živá HTTP scope/outbox/worker/ACK acceptance prošla pro zoned,
+all-day a floating osobní série, se zachováním výjimek, úplným readbackem,
+replayem a odmítnutím změny času. Testovací kalendář a lokální data jsou
+uklizené. Ostatní operace zachovávají původní permission kontrakt; sdílené
+kalendáře a produkční aktivace nejsou touto evidencí přijaté.
+[Živá evidence](calendar-icloud-series-live-acceptance.md#accepted-authenticated-personal-master-content-path-2026-09-10).

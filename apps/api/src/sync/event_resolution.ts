@@ -285,7 +285,7 @@ async function prepare(
     const restoringExdates = savedWrite.patch.recurrence !== undefined && /(?:^|\n)(?:EXDATE|RDATE)/.test((savedWrite.baseline.master.recurrence ?? "") + "\n" + (savedWrite.patch.recurrence ?? ""));
     const localTarget = targetEventID ? family.children.find(child => child.id === targetEventID) : family.master;
     if (!localTarget) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
-    const observed = await adapter.readCaldavSeriesResolution(row.userID, row.accountID, row.externalCalendarID, { ...savedWrite.baseline, ref }, savedWrite.before, signal, zoneConversion || restoringExdates || savedWrite.newDefinition || savedWrite.cancelTarget || savedWrite.followingDelete ? null : targetEventID);
+    const observed = await adapter.readCaldavSeriesResolution(row.userID, row.accountID, row.externalCalendarID, { ...savedWrite.baseline, ref }, savedWrite.before, signal, zoneConversion || restoringExdates || savedWrite.newDefinition || savedWrite.cancelTarget || savedWrite.followingDelete ? null : targetEventID, savedWrite);
     let remoteTarget = targetEventID ? observed.baseline.children.find(child => child.id === targetEventID) : observed.baseline.master;
     if (savedWrite.newDefinition) {
       const generated = savedWrite.newDefinition;
