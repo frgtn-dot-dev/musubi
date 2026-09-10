@@ -136,6 +136,8 @@ type WorkspaceProps = {
     name: string;
   }) => Promise<SavePageResult>;
   /** Production owns drafts above route loading/redirect gates. */
+  taskCreateRequest?: number;
+  onTaskCreateRequestChange?: Dispatch<SetStateAction<number>>;
   pageDrafts?: Map<string, PageWorkingDraft>;
   onPageDraftsChange?: Dispatch<SetStateAction<Map<string, PageWorkingDraft>>>;
   onExportCalendar?: (
@@ -301,6 +303,8 @@ export function Workspace({
   onSetDefaultPage = unavailablePageDefault,
   onPatchSettings = unavailableSettings,
   onSavePage = unavailablePageSave,
+  taskCreateRequest: controlledTaskCreateRequest,
+  onTaskCreateRequestChange,
   pageDrafts: controlledPageDrafts,
   onPageDraftsChange,
   onRemoveEvent,
@@ -473,10 +477,12 @@ export function Workspace({
     );
   }
   const [createIntent, setCreateIntent] = useState<CreateIntent>();
-  const [taskCreateRequest, setTaskCreateRequest] = useState(0);
+  const [localTaskCreateRequest, setLocalTaskCreateRequest] = useState(0);
+  const taskCreateRequest = controlledTaskCreateRequest ?? localTaskCreateRequest;
+  const setTaskCreateRequest = onTaskCreateRequestChange ?? setLocalTaskCreateRequest;
   const consumeTaskCreateRequest = useCallback(
     () => setTaskCreateRequest(0),
-    [],
+    [setTaskCreateRequest],
   );
   const [scopeRequest, setScopeRequest] = useState<{
     resolve: (scope: EditScope | undefined) => void;

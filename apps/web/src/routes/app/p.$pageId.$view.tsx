@@ -78,6 +78,8 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
   const [pageDrafts, setPageDrafts] = useState<Map<string, PageWorkingDraft>>(
     () => new Map(),
   );
+  // The first Tasks fetch temporarily unmounts Workspace while loading.
+  const [taskCreateRequest, setTaskCreateRequest] = useState(0);
   useServerStream(userId);
   // Reminders ring only while a tab is open (web push is a later phase), so
   // this lives at the top of the signed-in shell rather than inside a view.
@@ -302,6 +304,8 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
       onReorderPages={pageMutations.reorderPages}
       onSavePage={pageMutations.savePage}
       onSetDefaultPage={pageMutations.setDefaultPage}
+      taskCreateRequest={taskCreateRequest}
+      onTaskCreateRequestChange={setTaskCreateRequest}
       pageDrafts={pageDrafts}
       onPageDraftsChange={setPageDrafts}
       pageId={pageId}
