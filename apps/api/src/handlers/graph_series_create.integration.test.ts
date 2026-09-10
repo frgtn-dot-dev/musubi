@@ -49,7 +49,12 @@ async function main() {
     for (const time of [{ kind: "floating", startLocal: "2026-03-27T09:00:00", endLocal: "2026-03-27T10:00:00" }, { ...request.time, startLocal: "2026-03-29T02:30:00", endLocal: "2026-03-29T03:30:00" }, { ...request.time, startLocal: "2026-10-25T02:30:00", endLocal: "2026-10-25T03:30:00" }]) {
       const invalid = make(); assert.equal((await send({ ...invalid, time })).status, 403); assert.equal(await getEventSnapshot(invalid.event.id), undefined);
     }
-    const multiple = make(); assert.equal((await send({ ...multiple, event: { ...multiple.event, calendars: [calendar.id, local.id] } })).status, 400); assert.equal(await getEventSnapshot(multiple.event.id), undefined);
+    const multiple = make();
+    const unsupportedTargets = await send({ ...multiple, event: { ...multiple.event, calendars: [calendar.id, local.id] } });
+    assert.equal(unsupportedTargets.status, 403);
+    assert.equal(unsupportedTargets.body.reason, "unsupported");
+    assert.equal(unsupportedTargets.body.capability, "event-write");
+    assert.equal(await getEventSnapshot(multiple.event.id), undefined);
     assert.equal((await history()).length, 0);
     const created = await send(request); assert.equal(created.status, 202, JSON.stringify(created.body)); assert.equal(created.body.localCommitted, true); assert.equal(created.cache, "private, no-store");
     assert.equal(created.body.id, request.event.id); assert.equal(created.body.creatorID, owner); assert.equal(created.body.organizer, owner); assert.equal(created.body.revision, 1);
@@ -77,7 +82,12 @@ async function main() {
     const localRequest = make(); const localResponse = await send({ ...localRequest, event: { ...localRequest.event, calendars: [local.id] } }); assert.equal(localResponse.status, 201);
     const google = await createCalendar({ creatorID: owner, name: "Google", color: "red" });
     await db.insert(externalCalendars).values({ provider: "google", userID: owner, accountID: owner, externalCalendarID: "google", calendarID: google.id });
-    const other = make(); assert.equal((await send({ ...other, event: { ...other.event, calendars: [google.id] } })).status, 400); assert.equal(await getEventSnapshot(other.event.id), undefined);
+    const other = make();
+    const unsupportedGoogle = await send({ ...other, event: { ...other.event, calendars: [google.id] } });
+    assert.equal(unsupportedGoogle.status, 403);
+    assert.equal(unsupportedGoogle.body.reason, "unsupported");
+    assert.equal(unsupportedGoogle.body.capability, "event-write");
+    assert.equal(await getEventSnapshot(other.event.id), undefined);
     for (const allDay of [false, true]) {
       const until = make(), untilKey = randomUUID();
       until.event.recurrence = allDay ? "FREQ=DAILY;UNTIL=20270102" : "FREQ=DAILY;UNTIL=20260330T215959Z";

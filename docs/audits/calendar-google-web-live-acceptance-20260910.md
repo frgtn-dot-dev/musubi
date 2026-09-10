@@ -81,6 +81,32 @@ were unchanged.
   lost-response recovery without duplicate PATCH. The final `pnpm check` passed.
   Independent source review reported no actionable findings.
 
+## Personal one-off reminder follow-up
+
+- The owner authorized necessary local-account tests. A fresh guest-free
+  `Musubi QA reminder 0910` event was created in the same secondary QA calendar
+  at 12:00–13:00 and refreshed through the standard Google sync.
+- With the local reminder flag enabled, the provider details exposed the editor.
+  Negative minutes produced a local validation error and retained the draft.
+  Source inspection and existing component tests establish rejection before API
+  submission; browser network instrumentation was not used for that assertion.
+- Saving a 15-minute Notification returned the explicit pending receipt while
+  the scheduler was off. The standard worker completed the single QA operation.
+  Fresh Google Calendar detail displayed “15 minut předem”; Musubi displayed
+  `popup · 15 minutes before start`. Title and time remained unchanged.
+- Switching to Off also completed through the scoped worker. A fresh Google
+  detail no longer contained the notification. This validates stored settings,
+  not an actual OS notification firing; no email reminder was selected.
+- Musubi cleanup first rejected a stale revision, then after reload explicitly
+  rejected the unsupported time-model-aware one-off provider delete. No failed
+  delete was queued. Cleanup was instead performed in Google Calendar and
+  followed by standard sync. This is not acceptance of explicit-time Google
+  one-off deletion.
+- CI exposed two additional old HTTP 400 expectations in the Graph-create
+  fixture for mixed-calendar and Google unsupported requests. They now assert
+  the structured 403 contract and no canonical event. Both full affected API/DB
+  fixtures passed; independent review found no issue with this test-only fix.
+
 ## Remaining work and retained state
 
 The secondary QA calendar and both four-occurrence provider series are retained
@@ -88,10 +114,12 @@ for subsequent tests. The first operation still has an unconfirmed receipt: its
 old intent lacks the prewrite proof. It was neither retrofitted nor blindly
 retried. The fresh operation has a confirmed receipt.
 An earlier automatic approval rejection was resolved by explicit owner approval;
-the local time flag is now enabled. Other writer flags stayed off.
+the local time flag is now enabled. The subsequent reminder test also enabled
+`PROVIDER_REMINDER_EDITS_ENABLED` locally; organizer/RSVP/CalDAV alarm flags
+remain off.
 
 This evidence covers basic legacy personal CRUD and provider-visible results.
 Known-time single-occurrence delivery, confirmation and read-only recovery passed
 for the fresh operation. This evidence does not certify conditional conflicts,
-private Google reminders, interval-only availability, invite/RSVP delivery,
+bound-instance Google reminders, interval-only availability, invite/RSVP delivery,
 iCloud/Outlook writes, OS notifications or physical-device acceptance.
