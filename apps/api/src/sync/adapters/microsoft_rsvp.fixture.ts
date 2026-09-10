@@ -32,10 +32,14 @@ export async function graphRsvpFixture() {
     assert.ok(["accept", "tentativelyAccept", "decline"].includes(action!));
     if (state.mode !== "not-observed") {
       const response = action === "accept" ? "accepted" : action === "tentativelyAccept" ? "tentativelyAccepted" : "declined";
-      state.native.responseStatus.response = response; state.native.attendees[0]!.status.response = response;
+      state.native.responseStatus.response = response;
+      if (!state.mode.startsWith("live-accept") && state.mode !== "live-tentative") state.native.attendees[0]!.status.response = response;
+      else state.native.showAs = state.mode === "live-tentative" ? "tentative" : "busy";
       state.native["@odata.etag"] = 'W/"v2"'; state.native.changeKey = "v2";
     }
-    if (state.mode === "lost") return res.destroy();
+    if (state.mode === "live-accept-foreign") state.native.attendees[1]!.status.response = "declined";
+    if (state.mode === "live-accept-content") state.native.body.content = "Concurrent content";
+    if (state.mode === "lost" || (state.mode.startsWith("live-accept") || state.mode === "live-tentative")) return res.destroy();
     if (state.mode === "changed") state.native.customPreserved.value = "concurrent change";
     return reply(null, 202);
   })().catch(error => { res.statusCode = 500; res.end(String(error)); }); });

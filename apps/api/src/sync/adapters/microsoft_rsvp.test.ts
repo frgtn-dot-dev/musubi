@@ -51,6 +51,34 @@ async function main() {
     for (const mutate of [(n: any) => n.attendees.push(n.attendees[0]), (n: any) => n.isOrganizer = true, (n: any) => n.type = "occurrence", (n: any) => n.attendees[0].type = "resource", (n: any) => n.organizer.emailAddress.address = "self@example.test"]) { const native = graphRsvpNative(); mutate(native); assert.throws(() => microsoftRsvpEvidence(native, "self@example.test", "accepted")); }
     for (const value of ["2026-02-30T08:00:00", "2026-03-28T08:00:00.0000001", "2026-03-28T08:00:00Z"]) { const invalid = graphRsvpNative(); invalid.start.dateTime = value; assert.throws(() => graphRsvpTime(invalid)); }
     const allDay = graphRsvpNative(); allDay.isAllDay = true; allDay.start.dateTime = "2026-03-28T00:00:00"; allDay.end.dateTime = "2026-03-30T00:00:00"; assert.equal(graphRsvpTime(allDay).end.toISOString(), "2026-03-29T00:00:00.000Z");
+    for (const response of ["accepted", "tentative", "declined"] as const) {
+      const baseline = graphRsvpNative(); baseline.showAs = "tentative"; baseline.attendees[0]!.status.response = "none";
+      const proof = microsoftRsvpEvidence(baseline, "self@example.test", response);
+      const actual = structuredClone(baseline); actual.responseStatus.response = response === "tentative" ? "tentativelyAccepted" : response;
+      assert.equal(matchesMicrosoftRsvp(proof, actual), true, "Self attendee may retain its baseline status");
+      actual.showAs = "busy";
+      assert.equal(matchesMicrosoftRsvp(proof, actual), response === "accepted", "Only evidenced Accept availability transition");
+      actual.showAs = "free"; assert.equal(matchesMicrosoftRsvp(proof, actual), false);
+      actual.showAs = "tentative"; actual.attendees[0]!.status.response = "declined";
+      assert.equal(matchesMicrosoftRsvp(proof, actual), response === "declined", "Arbitrary self response is rejected");
+      actual.attendees[0]!.status.response = "none"; actual.attendees[1]!.status.response = "declined";
+      assert.equal(matchesMicrosoftRsvp(proof, actual), false, "Foreign attendee must remain unchanged");
+    }
+    for (const response of ["accepted", "tentative", "declined"] as const) {
+      const baseline = graphRsvpNative(); baseline.attendees[0]!.status.response = "none";
+      const proof = microsoftRsvpEvidence(baseline, "self@example.test", response);
+      const actual = structuredClone(baseline); actual.responseStatus.response = response === "tentative" ? "tentativelyAccepted" : response;
+      actual.showAs = "tentative";
+      assert.equal(matchesMicrosoftRsvp(proof, actual), response === "tentative", "Only Tentative permits busy to tentative");
+      actual.showAs = "free"; assert.equal(matchesMicrosoftRsvp(proof, actual), false);
+    }
+    for (const original of [undefined, null, {}, 7]) {
+      const baseline: any = graphRsvpNative(); baseline.showAs = original;
+      const proof = microsoftRsvpEvidence(baseline, "self@example.test", "accepted");
+      const actual = structuredClone(baseline); actual.responseStatus.response = "accepted";
+      actual.showAs = original === null ? undefined : null;
+      assert.equal(matchesMicrosoftRsvp(proof, actual), false, "Raw availability absence/null/malformed changes are not hidden");
+    }
     const native = graphRsvpNative(), evidence = microsoftRsvpEvidence(native, "self@example.test", "accepted");
     native.responseStatus.response = "accepted"; native.attendees[0]!.status.response = "accepted";
     assert.equal(matchesMicrosoftRsvp(evidence, native), true); native.customPreserved.value = "different"; assert.equal(matchesMicrosoftRsvp(evidence, native), false);

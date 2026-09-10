@@ -4,7 +4,8 @@ The default-off `PROVIDER_RSVP_EDITS_ENABLED` gate includes the connected accoun
 own one-off Outlook meeting response. Public admission, private durable intent,
 worker, readback, delivery status and existing web/native RSVP controls are wired.
 The explicit action is **Send response to organizer**. Notification delivery
-always remains unknown. No live provider acceptance or activation is claimed.
+always remains unknown. Bounded live Accept/Tentative evidence is linked below;
+production activation is not claimed.
 
 ## Provider contract and scope
 
@@ -51,9 +52,21 @@ this deliberate tradeoff prevents an automatic duplicate response.
 
 Every later attempt with that marker is read-only. `202` may add private
 acceptance metadata but never acknowledges organizer delivery or a current
-response. A complete GET can establish the desired self/own response only when
-all other native fields match; only validated response timestamps and opaque
-server version/update metadata may differ. Unexpected changes remain unresolved.
+response. A complete GET establishes the requested response from the native
+`responseStatus.response`. The self attendee status may equal either its saved
+baseline or the requested response; arbitrary self statuses and every foreign
+attendee change remain unsupported. Live one-off Accept QA on 2026-09-10 showed
+that Graph can leave the self attendee status at `none` while setting the own
+response to `accepted`, and change `showAs` from `tentative` to `busy`. Only that
+Accept availability transition, or unchanged availability, is allowed. A subsequent
+live Tentative response on 2026-09-10 left the self attendee at
+`none`, set the own response to `tentativelyAccepted`, and changed `showAs` from
+`busy` to `tentative`. That exact Tentative transition is also allowed; no other
+availability transitions or decline side effects are inferred.
+ACK stores the actual observed provider state, including the unchanged self
+attendee status, rather than synthesizing the desired state. All other native
+fields remain frozen except validated response timestamps and opaque server
+version/update metadata. Unexpected changes remain unresolved.
 An already-matching response is a no-op with no POST. Same-operation admission
 replay preserves identity and cannot force a resend.
 
@@ -68,7 +81,11 @@ conflict resolution is not offered for this contract.
 
 The existing local source/revision/mapping/tombstone checks fence readback ACK.
 Projected sync echoes retain pending evidence without independently confirming
-raw native preservation; the worker still needs its full read. Source revocation
+raw native preservation; the worker still needs its full read. An older retained
+Graph conflict snapshot can be reconciled only after that complete native proof
+matches its exact ID, ETag, UID, provider state, content and time. Deleted,
+different-version or mismatched snapshots remain conflicts; the permanent
+response dispatch marker is preserved. Source revocation
 and disabled flags prevent provider work. No migration, new dependency, feature
 activation or compatibility-minimum change is required.
 
@@ -86,7 +103,11 @@ unchanged whitespace and legacy UID-less imports have separate regressions.
 Web/native unit and browser fixtures cover explicit choice, immutable offline
 retry, notification wording, keyboard/focus, light/dark and narrow layouts.
 
-Recurring RSVP, delegated calendars, proposed times, organizer operations and a
-human-reviewed live organizer acceptance remain separate work. Ordinary Graph
+Live one-off Accept/Tentative and their read-only recovery passed on 2026-09-10;
+the external organizer displayed both responses. Decline removed the Outlook
+copy but the organizer still showed the earlier Maybe response, so its delivery
+remains unverified. [Exact evidence and retained history](../audits/calendar-outlook-live-acceptance-20260910.md).
+Recurring RSVP, delegated calendars, proposed times and broader organizer
+operations remain separate work. Ordinary Graph
 conditional UPDATE/DELETE proof is still missing and is not supplied by these
 response actions or fake servers.

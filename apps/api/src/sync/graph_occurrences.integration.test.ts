@@ -16,6 +16,7 @@ async function main() {
   const moved = { id: "moved", type: "exception", seriesMasterId: "series", "@odata.etag": '"MOVED"', originalStart: "2026-03-29T07:00:00.0000000Z", subject: "Own title", body: { content: "Own content" }, start: { dateTime: "2026-03-29T12:00:00", timeZone: "UTC" }, end: { dateTime: "2026-03-29T14:00:00", timeZone: "UTC" } };
   let items: any[] = [moved, occurrence, master];
   let failHydration = false;
+  let omitOriginalStart = false;
   let expire = false;
   let alwaysExpire = false;
   const server = createServer((req, res) => {
@@ -25,13 +26,18 @@ async function main() {
     const json = (body: unknown) => res.end(JSON.stringify(body));
     if (url.pathname === "/v1.0/me/calendars") return json({ value: [{ id: "calendar", name: "Fixture", canEdit: true }] });
     if (url.pathname.endsWith("/events/series")) return json(master);
+    if (url.pathname.endsWith("/events/ordinary")) {
+      assert.equal(url.searchParams.get("$select"), "*,originalStart");
+      return json(omitOriginalStart ? { ...occurrence, originalStart: undefined } : occurrence);
+    }
     if (url.pathname.endsWith("/events/moved")) {
+      assert.equal(url.searchParams.get("$select"), "*,originalStart");
       if (failHydration) { res.statusCode = 503; return json({ error: { message: "fixture failure" } }); }
       return json(moved);
     }
     if (url.pathname.endsWith("/calendarView/delta") || url.pathname === "/delta") {
       if (alwaysExpire || expire && url.pathname === "/delta") { expire = false; res.statusCode = 410; return json({ error: { message: "expired" } }); }
-      return json({ value: items, "@odata.deltaLink": "https://graph.microsoft.com/delta" });
+      return json({ value: items.map(item => item.id === "ordinary" ? { ...item, originalStart: undefined } : item), "@odata.deltaLink": "https://graph.microsoft.com/delta" });
     }
     res.statusCode = 500; json({ error: { message: "Unexpected fixture route" } });
   });
@@ -80,6 +86,11 @@ async function main() {
     failHydration = true;
     await assert.rejects(sync(), /503/);
     failHydration = false;
+    assert.deepEqual(await rows(), initial);
+    assert.deepEqual(await getUserExternalCalendars("microsoft", userID, "account"), cursorBefore);
+    omitOriginalStart = true;
+    await assert.rejects(sync(), /exact millisecond/);
+    omitOriginalStart = false;
     assert.deepEqual(await rows(), initial);
     assert.deepEqual(await getUserExternalCalendars("microsoft", userID, "account"), cursorBefore);
     const validOriginal = moved.originalStart;

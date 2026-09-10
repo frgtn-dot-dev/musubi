@@ -911,3 +911,21 @@ byl ověřen na druhé straně v Google Calendar; první pozvánka i v Gmailu. O
 QA schůzky jsou uklizené. [Evidence včetně omezení a interakční chyby automatizace](calendar-google-invite-live-acceptance-20260910.md).
 Produkční flagy/verze beze změny; recurring instance, ostatní provideři a device
 QA tím nejsou převzaté.
+
+
+### Outlook živá acceptance — 2026-09-10
+
+Vývojové OAuth, primary one-off organizer create a vlastní Accept/Tentative
+prošly mezi dvěma schválenými účty s ověřením v nativních kalendářích. Živý test
+odhalil chybějící explicitní `originalStart` projekci a potvrzování skutečných
+RSVP vedlejších změn včetně pull-before-ACK; opravy mají fake HTTP/DB regrese
+a čisté nezávislé review. Decline odstranil Outlook kopii, ale Google organizátor
+dál ukazoval předchozí odpověď; nejistý záznam zůstává zachovaný. Nativní QA
+schůzky jsou uklizené, lokální nejistá kopie není vydávaná za potvrzený úspěch.
+[Úplná evidence](calendar-outlook-live-acceptance-20260910.md).
+
+Chybějící delta odstranění ACK-created mirroru má ověřenou guarded full-reset
+obnovu a deterministickou regresi. Automatická oprava vyžaduje samostatný návrh
+s ochranou souběžných ACK; příčina u providera není prokázaná.
+[Hranice a následná práce](calendar-outlook-delta-reconciliation.md). Produkční
+flagy a minima se nemění; tento výsledek neuzavírá celé K13 ani K14.

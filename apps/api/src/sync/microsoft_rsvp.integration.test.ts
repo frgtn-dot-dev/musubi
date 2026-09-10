@@ -27,7 +27,7 @@ async function main() {
   const address = api.address(); assert.ok(address && typeof address !== "string");
   const origin = `http://127.0.0.1:${address.port}`;
   try {
-    for (const scenario of ["mark-lock-role", "mark-lock-revision", "mark-lock-source", "mark-lock-account", "whitespace", "uid-backfill", "decline-pull-before-ack", "all-day", "echo-dst", "public", "accepted", "tentative", "declined", "no-op", "lost", "not-observed", "decline-absent", "changed", "before-network-restart", "echo-before-ack", "flag", "worker-flag", "account-after-read", "role-after-read", "revision-after-read", "lease-after-read"] as const) {
+    for (const scenario of ["live-tentative", "live-accept-pull", "live-accept-snapshot-mismatch", "live-accept", "live-accept-foreign", "live-accept-content", "mark-lock-role", "mark-lock-revision", "mark-lock-source", "mark-lock-account", "whitespace", "uid-backfill", "decline-pull-before-ack", "all-day", "echo-dst", "public", "accepted", "tentative", "declined", "no-op", "lost", "not-observed", "decline-absent", "changed", "before-network-restart", "echo-before-ack", "flag", "worker-flag", "account-after-read", "role-after-read", "revision-after-read", "lease-after-read"] as const) {
       const actor = `graph-rsvp-${randomUUID()}`;
       const fixture = await graphRsvpFixture();
       await db.insert(user).values({ id: actor, name: "Fixture", email: `${actor}@example.test`, isExternal: true });
@@ -35,6 +35,8 @@ async function main() {
         config.api.providerRsvpEditsEnabled = true;
         await db.insert(account).values({ id: randomUUID(), userId: actor, providerId: "microsoft", accountId: "account", scope: "Calendars.ReadWrite", refreshToken: "fixture", accessToken: "fixture", accessTokenExpiresAt: new Date(Date.now() + 3600000) });
         const calendar = await importExternalCalendar("microsoft", actor, "account", "Fixture", { externalId: "calendar", name: "Fixture", color: "red" });
+        if (scenario.startsWith("live-accept")) { fixture.state.native.showAs = "tentative"; fixture.state.native.attendees[0]!.status.response = "none"; }
+        if (scenario === "live-tentative") fixture.state.native.attendees[0]!.status.response = "none";
         if (scenario === "whitespace") { fixture.state.native.body.content = " Keep details\r\n"; fixture.state.native.location.displayName = " Room  "; }
         if (scenario === "all-day") { fixture.state.native.isAllDay = true; fixture.state.native.start.dateTime = "2026-03-28T00:00:00"; fixture.state.native.end.dateTime = "2026-03-30T00:00:00"; }
         if (scenario === "echo-dst") { fixture.state.native.start.dateTime = "2026-03-28T08:00:00"; fixture.state.native.end.dateTime = "2026-03-29T08:00:00"; }
@@ -54,7 +56,7 @@ async function main() {
           assert.equal((await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, original.id))).length, 0);
         }
         const observation = await getOwnProviderEventObservation(actor, original.id);
-        const response = scenario === "tentative" ? "tentative" : scenario === "declined" || (scenario === "decline-absent" || scenario === "decline-pull-before-ack") ? "declined" : "accepted";
+        const response = (scenario === "tentative" || scenario === "live-tentative") ? "tentative" : scenario === "declined" || (scenario === "decline-absent" || scenario === "decline-pull-before-ack") ? "declined" : "accepted";
         const request = { operationID: randomUUID(), provider: "microsoft", expectedRevision: original.revision, expectedStateVersion: observation.version!, response, notificationPolicy: "send-response" };
         if (scenario === "flag") { config.api.providerRsvpEditsEnabled = false; await assert.rejects(() => queueProviderRsvp(actor, original.id, request)); assert.equal(fixture.state.reads, 0); continue; }
         const credential = issueMemberToken(); await replaceMemberToken(actor, credential.tokenHash);
@@ -101,7 +103,36 @@ async function main() {
         const fetch = globalThis.fetch;
         globalThis.fetch = async (input, init) => { if (init?.method === "POST") fixture.state.marked = !!(await row()).payload.rsvp?.graphDispatch; return fetch(input, init); };
         await deliver();
+        if (["live-accept-pull", "live-accept-snapshot-mismatch"].includes(scenario)) {
+          await persist();
+          const retained = await row(); assert.ok(retained.remoteSnapshot); assert.ok(!retained.remoteSnapshot.isEcho);
+          if (scenario === "live-accept-snapshot-mismatch") await db.update(eventOutbox).set({ remoteSnapshot: { ...retained.remoteSnapshot, values: { ...retained.remoteSnapshot.values, title: "Unrelated content" } } }).where(eq(eventOutbox.id, queued.operationID));
+        }
         const after = await row();
+        if (scenario.startsWith("live-accept") || scenario === "live-tentative") {
+          assert.ok(["unconfirmed", "conflict"].includes(after.status));
+          const marker = after.payload.rsvp!.graphDispatch;
+          assert.ok(marker); assert.equal(fixture.state.posts, 1);
+          await db.update(eventOutbox).set({ nextAttemptAt: new Date(0) }).where(eq(eventOutbox.id, queued.operationID));
+          const retry = await fixture.originalFetch(`${endpoint}/delivery/${queued.operationID}/retry`, { method: "POST", headers, body: "{}" });
+          assert.equal(retry.status, 202);
+          for (let i = 0; i < 200; i++) {
+            const current = await row();
+            if (current.attempts > after.attempts && ["completed", "unconfirmed", "conflict"].includes(current.status) && !current.leaseToken) break;
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+          const recovered = await row();
+          assert.equal(recovered.status, ["live-accept", "live-accept-pull", "live-tentative"].includes(scenario) ? "completed" : scenario === "live-accept-snapshot-mismatch" ? "conflict" : "unconfirmed", recovered.errorCode ?? scenario);
+          assert.deepEqual(recovered.payload.rsvp!.graphDispatch, marker);
+          assert.equal(fixture.state.posts, 1, "Public Check response cannot send a second POST");
+          const [observedMapping] = await db.select().from(externalEvents).where(eq(externalEvents.id, mapping.id));
+          if (["live-accept", "live-accept-pull", "live-tentative"].includes(scenario)) {
+            assert.equal(observedMapping!.providerState!.ownResponse, scenario === "live-tentative" ? "tentativelyAccepted" : "accepted");
+            assert.equal(observedMapping!.providerState!.attendees[0]!.response, "none");
+            assert.equal(observedMapping!.providerState!.availability, scenario === "live-tentative" ? "tentative" : "busy");
+          } else assert.deepEqual(observedMapping!.providerState, mapping.providerState);
+          console.log(`Graph RSVP DB ${scenario}: OK`); continue;
+        }
         if (scenario === "decline-pull-before-ack") {
           assert.equal(after.status, "conflict"); assert.equal(after.leaseToken, null);
           assert.equal(eventDeliveryActions((await getEventDeliveryStatus(actor, original.id)).targets[0]!).retry, true);
