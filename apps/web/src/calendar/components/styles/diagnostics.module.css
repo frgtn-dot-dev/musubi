@@ -17,7 +17,7 @@
 	width: 100%;
 	overflow: auto;
 	border-radius: var(--radius-md);
-	background: var(--layer-body-block);
+	background: var(--surface-panel);
 	padding: var(--space-3);
 	color: var(--text-muted);
 	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;

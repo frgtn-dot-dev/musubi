@@ -8,5 +8,11 @@
 .taskMain small { color: var(--text-secondary); font-size: var(--text-12); }
 .done { color: var(--text-secondary); text-decoration: line-through; }
 .editor { display: grid; gap: var(--space-5); }
-.fields { display: grid; gap: var(--space-4); grid-template-columns: repeat(3, minmax(0, 1fr)); }
-@media (max-width: 599px) { .tasks { padding: var(--space-5); } .fields { grid-template-columns: 1fr; } }
+.fields { display: grid; gap: var(--space-4); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 599px) { .tasks { padding: var(--space-5); } }
+
+.scheduleFields { display: grid; gap: var(--space-5); }
+.dateTimeRow { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--space-4); }
+.dateTimeRow[data-all-day] { grid-template-columns: minmax(0, 1fr); }
+
+.deleteTask { margin-right: auto; }

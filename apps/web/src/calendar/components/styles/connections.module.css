@@ -5,6 +5,7 @@
 
 .section {
 	display: grid;
+	align-content: start;
 	padding-bottom: var(--space-4);
 }
 
@@ -46,7 +47,7 @@
 	}
 
 	.layout > [aria-labelledby="connections-accounts-title"] {
-		grid-template-rows: auto minmax(0, 1fr);
+		grid-auto-rows: max-content;
 		grid-area: 1 / 1;
 		min-height: 0;
 		overflow-y: auto;
@@ -363,3 +364,5 @@
 		margin-inline: var(--layer-inline);
 	}
 }
+
+.refreshButton { margin: var(--space-3) var(--layer-inline); justify-self: start; }

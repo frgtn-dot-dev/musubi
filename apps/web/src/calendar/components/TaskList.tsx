@@ -1,5 +1,6 @@
-import { Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { useMemo, useRef, useState, type FormEvent } from "react";
+import { providerFlavor } from "@musubi/types";
 import type {
   Calendar,
   Settings,
@@ -18,6 +19,7 @@ import { Field } from "~/ui/Field";
 import { InlineError } from "~/ui/InlineError";
 import { Select } from "~/ui/Select";
 import { TimePicker } from "~/ui/TimePicker";
+import { AccountMark } from "./ProviderIcon";
 import styles from "./TaskList.module.css";
 
 type TaskListProps = {
@@ -152,9 +154,7 @@ export function TaskList({
   if (createRequest !== handledCreateRequest) {
     setHandledCreateRequest(createRequest);
     if (createRequest && firstEditableCalendarID && !offline) {
-      setEditing(undefined);
-      setDraft(emptyDraft(firstEditableCalendarID));
-      setError("");
+      openCreate();
     }
   }
 
@@ -194,6 +194,15 @@ export function TaskList({
 
   function closeEditor() {
     if (!busy) resetEditor();
+  }
+
+  function openCreate() {
+    if (!firstEditableCalendarID || offline || busy) return;
+    setEditing(undefined);
+    setOwnedFields([]);
+    setRemovedTaskID(undefined);
+    setDraft(emptyDraft(firstEditableCalendarID));
+    setError("");
   }
 
   function openEdit(task: Task) {
@@ -264,10 +273,13 @@ export function TaskList({
     <section aria-label="Tasks" className={styles.tasks}>
       {tasks.length === 0 ? (
         <Empty
+          action={!offline && firstEditableCalendarID ? <Button icon={<Plus size={16} />} onClick={openCreate}>Create task</Button> : undefined}
           description={
             offline
               ? "Reconnect to refresh the tasks saved on this device."
-              : "Add a task for one of the calendars on this Page."
+              : firstEditableCalendarID
+                ? "Add a task for one of the calendars on this Page."
+                : "Tasks from the calendars on this Page will appear here."
           }
           headingLevel={2}
           title={offline ? "No saved tasks" : "No tasks yet"}
@@ -414,7 +426,7 @@ function TaskEditor({
 }) {
   const calendarOptions = calendars
     .filter((calendar) => editableCalendarIds.has(calendar.id))
-    .map((calendar) => ({ label: calendar.name, value: calendar.id }));
+    .map((calendar) => ({ label: calendar.name, value: calendar.id, icon: <AccountMark size="compact" flavor={providerFlavor(calendar)} /> }));
   const updateDate = (key: "start" | "due", value: string) =>
     onChange({
       ...draft,
@@ -433,6 +445,7 @@ function TaskEditor({
         <>
           {onDelete ? (
             <Button
+              className={styles.deleteTask}
               disabled={busy}
               icon={<Trash2 aria-hidden="true" size={16} />}
               variant="destructive"
@@ -471,8 +484,7 @@ function TaskEditor({
             }
           />
         </Field>
-        <div className={styles.fields}>
-          <Field label="Calendar">
+        <Field label="Calendar">
             <Select
               disabled={Boolean(editing)}
               label="Calendar"
@@ -480,7 +492,8 @@ function TaskEditor({
               value={draft.calendarID}
               onChange={(calendarID) => onChange({ ...draft, calendarID })}
             />
-          </Field>
+        </Field>
+        <div className={styles.fields}>
           <Field label="Status">
             <Select
               label="Status"
@@ -516,48 +529,31 @@ function TaskEditor({
             />
           </Field>
         </div>
-        <div className={styles.fields}>
-          <Field label="Start date">
-            <DatePicker
-              label="Start date"
-              value={taskDateKey(draft.start)}
-              weekStartsOn={settings.weekStartsOn}
-              onChange={(value) => updateDate("start", value)}
-              onClear={() => updateDate("start", "")}
-            />
-          </Field>
-          <Field label="Due date">
-            <DatePicker
-              label="Due date"
-              value={taskDateKey(draft.due)}
-              weekStartsOn={settings.weekStartsOn}
-              onChange={(value) => updateDate("due", value)}
-              onClear={() => updateDate("due", "")}
-            />
-          </Field>
-          {draft.isAllDay ? null : (
-            <Field label="Start time">
-              <TimePicker
-                label="Start time"
-                placeholder="Select time"
-                timeFormat={settings.timeFormat}
-                value={taskTime(draft.start)}
-                onChange={(value) => updateTime("start", value)}
-              />
-            </Field>
-          )}
+        <div className={styles.scheduleFields}>
+          {(["start", "due"] as const).map(endpoint => {
+            const label = endpoint === "start" ? "Start" : "Due";
+            return <div className={styles.dateTimeRow} data-all-day={draft.isAllDay || undefined} key={endpoint}>
+              <Field label={`${label} date`}>
+                <DatePicker
+                  label={`${label} date`}
+                  value={taskDateKey(draft[endpoint])}
+                  weekStartsOn={settings.weekStartsOn}
+                  onChange={value => updateDate(endpoint, value)}
+                  onClear={() => updateDate(endpoint, "")}
+                />
+              </Field>
+              {!draft.isAllDay ? <Field label={`${label} time`}>
+                <TimePicker
+                  label={`${label} time`}
+                  placeholder="Select time"
+                  timeFormat={settings.timeFormat}
+                  value={taskTime(draft[endpoint])}
+                  onChange={value => updateTime(endpoint, value)}
+                />
+              </Field> : null}
+            </div>;
+          })}
         </div>
-        {!draft.isAllDay ? (
-          <Field label="Due time">
-            <TimePicker
-              label="Due time"
-              placeholder="Select time"
-              timeFormat={settings.timeFormat}
-              value={taskTime(draft.due)}
-              onChange={(value) => updateTime("due", value)}
-            />
-          </Field>
-        ) : null}
         <Checkbox
           checked={draft.isAllDay}
           label="All day"
@@ -567,6 +563,7 @@ function TaskEditor({
         />
         <Field label="Notes">
           <textarea
+            rows={4}
             value={draft.description ?? ""}
             onChange={(event) =>
               onChange({ ...draft, description: event.target.value || null })

@@ -236,7 +236,8 @@
 	min-width: 0;
 }
 
-.fieldControl > :is(input, select, textarea, button) {
+.fieldControl > :is(input, select, textarea, button),
+.fieldControl > .timePicker .timePickerInput {
 	width: 100%;
 	min-height: var(--control-height);
 	padding-inline: var(--space-3);
@@ -248,6 +249,15 @@
 	font-size: var(--text-14);
 }
 
+/* Field owns the control skin; inline time pickers keep their lighter recipe. */
+.fieldControl > .timePicker .timePickerInput {
+  padding-right: var(--space-8);
+}
+
+.fieldControl > .timePicker .timePickerChevron {
+  right: var(--space-3);
+}
+
 .fieldControl > textarea {
 	min-height: 96px;
 	padding-block: var(--space-3);
@@ -256,12 +266,14 @@
 	resize: none;
 }
 
-.fieldControl > :is(input, select, textarea, button):focus-visible {
+.fieldControl > :is(input, select, textarea, button):focus-visible,
+.fieldControl > .timePicker .timePickerInput:focus-visible {
 	outline: var(--focus-ring);
 	outline-offset: 2px;
 }
 
-.field[data-invalid] .fieldControl > :is(input, select, textarea, button) {
+.field[data-invalid] .fieldControl > :is(input, select, textarea, button),
+.field[data-invalid] .fieldControl > .timePicker .timePickerInput {
 	border-color: var(--accent-primary);
 }
 
@@ -675,11 +687,13 @@
 	color: var(--text-muted);
 }
 
+.empty h2,
 .empty h3,
 .empty p {
 	margin: 0;
 }
 
+.empty h2,
 .empty h3 {
 	color: var(--text-primary);
 	font-family: var(--font-serif);
@@ -1163,8 +1177,24 @@
 
 .rowTrailing {
 	display: grid;
+	gap: var(--space-2);
 	flex: none;
 	place-content: center;
+}
+
+@media (max-width: 599px) {
+	.row[data-layout="responsive-actions"] {
+		flex-wrap: wrap;
+	}
+
+	.row[data-layout="responsive-actions"] > .rowCopy {
+		flex-basis: 100%;
+	}
+
+	.row[data-layout="responsive-actions"] > .rowTrailing {
+		width: 100%;
+		place-content: stretch;
+	}
 }
 
 .rowChevron {

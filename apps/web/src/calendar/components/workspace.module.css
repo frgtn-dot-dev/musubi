@@ -317,10 +317,10 @@
 }
 
 .sidebarUtilities {
-	/* Bottom of the scroll area: the visibility list used to hold this anchor. */
+	/* Stable management actions; only dates and Pages scroll above them. */
 	display: grid;
-	margin-top: auto;
-	gap: 2px;
+	flex: none;
+	gap: var(--space-1);
 	padding: 0 14px 14px;
 }
 

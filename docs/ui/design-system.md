@@ -431,3 +431,32 @@ the editor or discard an unrelated draft.
    colors and shared typography, dimension, and motion foundations complete.)*
 5. Create platform packages only when dependencies and APIs are clear.
 6. Add the React Native Web catalog, then on-device Storybook and composition.
+
+## 11. Composition contracts verified in the browser
+
+A passing unit suite does not validate composition. Inspect the production
+consumer, including real combinations of provider actions, long text and expanded
+sections, before treating a visual change as complete.
+
+- Compact rows have a 20 px icon slot. Use `AccountMark size="compact"` inside
+  them; the default 30 px framed account mark belongs in account lists. Derive
+  calendar branding with `providerFlavor(calendar)` so iCloud keeps its identity.
+- `Row layout="responsive-actions"` is for recovery rows with multiple actions.
+  It keeps their text readable by placing actions below it on narrow screens.
+  The default Row layout is unchanged. Do not concatenate unspaced buttons.
+- A Field owns the input surface and forwards label, help and error association
+  to DatePicker and TimePicker. Inline calendar pickers retain their own compact
+  appearance; feature CSS must not build another generic input skin.
+- `Empty` supports both h2 and h3 with the same visual typography. Its action
+  should invoke the existing creation flow only when permissions allow it.
+- A layer has one header/body/footer inset. A nested section must not add the
+  same inset again. A scroll region must not hide the primary action or stable
+  management navigation.
+- Color properties use color tokens; geometry uses dimension tokens. The web
+  unit pipeline checks this category contract in `css-token-contract.test.ts`.
+
+Regression examples live beside Row, Field, Empty and ProviderIcon. Check the
+actual feature at desktop and constrained widths, light and dark, with long
+labels, incomplete provider data, errors and expanded controls. Wait for opening
+animations to finish before judging a screenshot. Record observed issues and
+fixes separately from untested assumptions.

@@ -142,3 +142,33 @@ Kódové malé weekday/home controls potřebují následné touch ověření. Na
 4. **Správa a navigace:** Connections + Calendars + výškový rozpočet sidebaru. Coverage banner řešit s reálnými coverage daty, ne pouze CSS.
 
 U každého balíku jeden ucelený průchod kontrolami a nezávislé review; ne kompletní CI po každé změně mezery. Pro významné nové kompozice nejprve Storybook dle `.agents/skills/musubi-ui/SKILL.md`, potom produkční migrace. Zachovat klávesnici, návrat focusu, oba motivy, reduced motion a pravdivost providerových stavů. Tento audit sám nemění core akceptační výsledky ani nezapíná providerové schopnosti.
+
+## Navazující implementace a opakovaná vizuální kontrola
+
+Po integraci panelu uživatel odmítl jeho vizuální dotažení; samotné funkční testy
+nezachytily chyby kompozice. Merge PR #285 byl pozastaven a následoval průchod
+skutečnou aplikací i izolovanými reprezentativními stavy.
+
+Opravené příčiny:
+
+- rozdílné osy a dvojité odsazení v detailu; kalendář patří k identitě události;
+- providerové značky větší než slot kompaktního řádku; zavedena sdílená varianta;
+- nalepené providerové akce a nečitelné recovery řádky na malém okně;
+- event editor s předřazeným pokročilým časovým nastavením a různými osami polí;
+- úkol s rozdělenými datum/čas páry, neostylovaným TimePickerem a chybějícími
+  vazbami mezi Field a vnořenými pickery;
+- prázdný stav h2 mimo sdílenou typografii a chybějící akce vytvoření úkolu;
+- roztahované hlavičky skupin Calendars, rozměrové tokeny použité jako pozadí;
+- navigace správy skrytá společně se scrollujícími Pages;
+- plný nový event na tabletu s potvrzením až pod dlouhým formulářem.
+
+Vizuálně prohlédnuto: Month, Week, Day, Agenda, Tasks, detail, quick create,
+rozšířený event editor, task editor, Page settings, Connections, Calendars,
+všechny sekce Settings, search a onboarding. Přihlášené providerové stavy byly
+prohlédnuty v živém localhostu; dlouhé a chybové kombinace i menší viewporty
+používaly existující izolované testovací fixtures. Jde o webovou kontrolu, nikoli
+certifikaci nativní aplikace nebo vyčerpávající audit všech kombinací dat.
+
+Budoucí změny musí splnit konkrétní kompoziční kontrakty v části 11 dokumentu
+`docs/ui/design-system.md`. Výchozí nálezy výše zůstávají historií původního stavu;
+nejde o tvrzení, že každá dříve navržená produktová přestavba byla implementována.

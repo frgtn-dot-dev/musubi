@@ -356,7 +356,7 @@ export function ConnectionsDialog({
                   ? "Fetching the calendars from the account you just connected."
                   : importFailed
                     ? `The account is linked, but its calendars could not be fetched. ${importFailed}`
-                    : "Pick a provider on the right to see its calendars in Musubi."
+                    : "Choose a provider to see its calendars in Musubi."
               }
               icon={<Link2 size={18} strokeWidth={1.7} />}
               title={
@@ -369,6 +369,7 @@ export function ConnectionsDialog({
             />
           )}
           <Button
+            className={styles.refreshButton}
             variant="secondary"
             icon={<RefreshCw size={16} strokeWidth={1.7} />}
             disabled={busy || importing}
@@ -394,50 +395,6 @@ export function ConnectionsDialog({
             of nothing between them whenever no federated server filled the cell
             beside the invite form. */}
         <div className={styles.side}>
-          <section
-            aria-labelledby="connections-invite-title"
-            className={styles.section}
-          >
-            <SectionHeading
-              id="connections-invite-title"
-              title="Join a shared calendar"
-            />
-            {invite ? (
-              <InvitePreview
-                busy={busy}
-                invite={invite}
-                onCancel={() => {
-                  setInvite(undefined);
-                  setError("");
-                  focusInviteInput();
-                }}
-                onJoin={() => void acceptInvite()}
-              />
-            ) : (
-              <form
-                className={styles.inviteForm}
-                onSubmit={(event) => void previewInvite(event)}
-              >
-                <Field className={styles.inviteField} label="Invite link">
-                  <input
-                    disabled={busy}
-                    placeholder="https://server/invite/…"
-                    ref={inviteInputRef}
-                    value={inviteValue}
-                    onChange={(event) => setInviteValue(event.target.value)}
-                  />
-                </Field>
-                <Button
-                  className={styles.inviteSubmit}
-                  disabled={!inviteValue.trim()}
-                  loading={busy}
-                  type="submit"
-                >
-                  Open invite
-                </Button>
-              </form>
-            )}
-          </section>
           <section
             aria-labelledby="connections-add-title"
             className={styles.section}
@@ -529,7 +486,8 @@ export function ConnectionsDialog({
                     </Button>
                   </>
                 ) : null}
-              </div>
+
+        </div>
             ) : (
               <p className={styles.loading}>
                 This server does not offer external calendar connections.
@@ -545,6 +503,50 @@ export function ConnectionsDialog({
                 onSubmit={(event) => void submitCaldav(event)}
               />
             ) : null}
+          </section>
+          <section
+            aria-labelledby="connections-invite-title"
+            className={styles.section}
+          >
+            <SectionHeading
+              id="connections-invite-title"
+              title="Join a shared calendar"
+            />
+            {invite ? (
+              <InvitePreview
+                busy={busy}
+                invite={invite}
+                onCancel={() => {
+                  setInvite(undefined);
+                  setError("");
+                  focusInviteInput();
+                }}
+                onJoin={() => void acceptInvite()}
+              />
+            ) : (
+              <form
+                className={styles.inviteForm}
+                onSubmit={(event) => void previewInvite(event)}
+              >
+                <Field className={styles.inviteField} label="Invite link">
+                  <input
+                    disabled={busy}
+                    placeholder="https://server/invite/…"
+                    ref={inviteInputRef}
+                    value={inviteValue}
+                    onChange={(event) => setInviteValue(event.target.value)}
+                  />
+                </Field>
+                <Button
+                  className={styles.inviteSubmit}
+                  disabled={!inviteValue.trim()}
+                  loading={busy}
+                  type="submit"
+                >
+                  Open invite
+                </Button>
+              </form>
+            )}
           </section>
         </div>
 

@@ -803,8 +803,12 @@
   min-width: 0;
 }
 
-/* The inspector delegates its scrolling body and action region to the form. */
+/* The inspector owns one 20px icon column and an adjacent 8px text gap.
+   Date/recurrence rows add a 56px domain-label column before their controls. */
 .form[data-layout="panel"] {
+	--editor-icon-column: 20px;
+	--editor-label-column: 56px;
+	--editor-text-inset: calc(var(--editor-icon-column) + var(--space-2));
 	flex: 1;
 	min-height: 0;
 	grid-template-rows: minmax(0, 1fr) auto;
@@ -836,21 +840,74 @@
 .form[data-layout="panel"] .section {
 	display: grid;
 	align-content: start;
-	gap: var(--space-3);
+	gap: var(--space-2);
 	border: 0;
+}
+
+.form[data-layout="panel"] .sectionLabel {
+	margin-bottom: var(--space-1);
 }
 
 .form[data-layout="panel"] .detailsSection {
 	gap: var(--space-5);
 }
 
+.form[data-layout="panel"] .pickerRow,
+.form[data-layout="panel"] .timeRow {
+	grid-template-columns: var(--editor-icon-column) var(--editor-label-column) minmax(0, 1fr);
+	gap: var(--space-2);
+	min-height: var(--control-height);
+}
+
+.form[data-layout="panel"] .pickerRow > svg,
+.form[data-layout="panel"] .timeRow > svg,
+.form[data-layout="panel"] .fieldLabel > svg,
+.form[data-layout="panel"] .settingsHeading > svg {
+	width: var(--editor-icon-column);
+	flex: none;
+	color: var(--text-secondary);
+}
+
+.form[data-layout="panel"] .pickerLabel,
+.form[data-layout="panel"] .inlineField > label,
+.form[data-layout="panel"] .detailField > label {
+	font-size: var(--text-13);
+	font-weight: 400;
+	letter-spacing: normal;
+	text-transform: none;
+	color: var(--text-secondary);
+}
+
+.form[data-layout="panel"] .timeLabel {
+	display: block;
+}
+
+.form[data-layout="panel"] .pickerRow .pickerValue {
+	justify-content: flex-start;
+	text-align: left;
+}
+
+.timeRange {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+	align-items: center;
+	gap: var(--space-2);
+	min-width: 0;
+}
+
 .form[data-layout="panel"] .toggleRow {
 	border: 0;
+	gap: var(--space-2);
+	min-height: var(--control-height);
+}
+
+.form[data-layout="panel"] .timeContext {
+	padding-left: var(--editor-text-inset);
 }
 
 .form[data-layout="panel"] .inlineField {
-	grid-template-columns: auto minmax(0, 1fr);
-	column-gap: var(--space-3);
+	grid-template-columns: calc(var(--editor-text-inset) + var(--editor-label-column)) minmax(0, 1fr);
+	column-gap: var(--space-2);
 	padding: 0;
 }
 
@@ -858,11 +915,29 @@
 	align-self: center;
 }
 
+.form[data-layout="panel"] .detailField > div {
+	margin-left: var(--editor-text-inset);
+}
+
+.form[data-layout="panel"] .calendarSummary {
+	grid-template-columns: var(--editor-icon-column) minmax(0, 1fr) auto;
+	gap: var(--space-2);
+}
+
+.form[data-layout="panel"] .calendarSummaryCopy strong,
+.form[data-layout="panel"] .calendarPlacementCopy strong {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+}
+
 .form[data-layout="panel"] .calendarPlacement {
 	min-width: 0;
 }
 
 .form[data-layout="panel"] .calendarMembership {
+	grid-template-columns: 18px var(--editor-icon-column) minmax(0, 1fr);
+	gap: var(--space-2);
 	padding-left: 0;
 }
 
@@ -871,8 +946,23 @@
 	padding-inline: 0;
 }
 
+.form[data-layout="panel"] .calendarGroupHeading strong,
+.settingsHeading {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+}
+
 .form[data-layout="panel"] .calendarPlacementRow {
 	padding-right: 0;
+}
+
+.form[data-layout="panel"] .timeSettings {
+	gap: var(--space-4);
+}
+
+.form[data-layout="panel"] .timeSettings > div:not(.settingsHeading) {
+	margin-left: var(--editor-text-inset);
 }
 
 .form[data-layout="panel"] .formError {
@@ -886,4 +976,54 @@
 	padding: var(--space-4) var(--layer-inline, var(--space-6));
 	padding-bottom: calc(var(--space-4) + var(--layer-safe-bottom, env(safe-area-inset-bottom)));
 	border-top: 1px solid var(--border-subtle);
+}
+
+.form[data-layout="panel"] .expandAction {
+	margin-right: auto;
+}
+
+.form[data-layout="panel"] .calendarGroupHeading > span {
+	padding-left: var(--editor-text-inset);
+}
+
+.form[data-layout="panel"] .settingsHeading .sectionLabel {
+	margin: 0;
+}
+
+/* The wide workspace keeps its grid; smaller editors scroll only their body,
+   so the create/cancel controls do not disappear below a long form. */
+.form[data-layout="page"] .formBody { display: contents; }
+.form[data-layout="page"] .calendarMembership { grid-template-columns: 18px 20px minmax(0, 1fr); gap: var(--space-2); }
+.form[data-layout="page"] .calendarPlacementCopy strong,
+.form[data-layout="page"] .calendarGroupHeading strong { display: flex; align-items: center; gap: var(--space-2); }
+.pageTimeSettings { display: grid; gap: var(--space-3); padding-top: var(--space-4); }
+.pageTimeSettings > :first-child { padding-inline: var(--space-4); }
+
+@media (max-width: 899px) {
+	.form[data-layout="page"] { min-height: 0; grid-template-rows: minmax(0, 1fr) auto; overflow: hidden; padding: 0; }
+	.form[data-layout="page"] .formBody { display: block; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+	.form[data-layout="page"] .actions { justify-content: flex-end; padding: var(--space-4) var(--layer-inline); border-top: 1px solid var(--border-subtle); }
+}
+
+@media (min-width: 900px) {
+	.form[data-layout="page"] .whenSection { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+}
+
+@media (max-width: 899px) {
+	.form[data-layout="page"] .titleField,
+	.form[data-layout="page"] .sectionLabel,
+	.form[data-layout="page"] .pickerRow,
+	.form[data-layout="page"] .timeRow,
+	.form[data-layout="page"] .toggleRow,
+	.form[data-layout="page"] .inlineField,
+	.form[data-layout="page"] .detailsSection > div,
+	.form[data-layout="page"] .pageTimeSettings > div,
+	.form[data-layout="page"] .pageTimeSettings > :first-child,
+	.form[data-layout="page"] .calendarHint,
+	.form[data-layout="page"] .timeContext,
+	.form[data-layout="page"] .calendarPlacementHeader,
+	.form[data-layout="page"] .calendarGroupHeading { padding-inline: var(--layer-inline); }
+	.form[data-layout="page"] .calendarMembership { padding-left: var(--layer-inline); }
+	.form[data-layout="page"] .calendarPlacementRow { padding-right: var(--layer-inline); }
+	.form[data-layout="page"] .inlineField { grid-template-columns: 70px minmax(0, 1fr); column-gap: var(--space-2); }
 }

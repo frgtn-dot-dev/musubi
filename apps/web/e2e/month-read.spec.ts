@@ -1423,7 +1423,7 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
 	await page.goto("/app/p/my-calendar/agenda?date=2026-07-26");
 
 	await page.getByRole("button", { name: /Design review/ }).click();
-	await page.getByRole("button", { name: "Attendees · 1" }).click();
+	await page.locator("summary").filter({ hasText: "Attendees · 1" }).click();
 	await expect(page.getByText("Guest One")).toBeVisible();
 	await page.getByRole("button", { exact: true, name: "Answer" }).click();
 	await page.getByRole("menuitem", { name: "Going" }).click();
@@ -7392,27 +7392,50 @@ test("puts an unknown view back in the address bar", async ({ page }) => {
 	await expect(page).toHaveURL(/\/month\?date=2026-07-23$/);
 });
 
-test("keeps the sidebar's Pages label off the first page row", async ({
-	page,
-}) => {
-	await mockAuthenticatedReads(page);
-	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
-	const label = page.getByRole("heading", { name: "Pages" });
-	await label.waitFor();
-
-	// Measured, not declared: the bottom margin this used to rely on never applied
-	// once — `.sectionLabel` in the primitives sets `margin: 0` at the same
-	// specificity and lands later in the bundle, so it won on order. The space is
-	// the section's gap now, and this is what tells us if it goes away again.
-	const gap = await page.evaluate(() => {
-		const heading = window.document.querySelector("#pages-label")!;
-		const list = window.document.querySelector('[class*="pageList"]')!;
-
-		return (
-			list.getBoundingClientRect().top - heading.getBoundingClientRect().bottom
-		);
-	});
-	expect(gap).toBeGreaterThanOrEqual(8);
+for (const width of [1280, 768]) test(`keeps the sidebar's Pages label and management usable with many Pages (${width})`, async ({ page }, testInfo) => {
+  await page.setViewportSize({ width, height: 720 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await mockAuthenticatedReads(page);
+  const pages = [defaultPage, ...Array.from({ length: 20 }, (_, index) => ({
+    ...defaultPage, id: `22222222-2222-4222-8222-${String(index).padStart(12, "0")}`,
+    name: `Project ${index + 1}`, isDefault: false, position: index + 1,
+  }))];
+  await page.route("**/api/v1/pages", route => respond(route, pages));
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
+  if (width === 768) await page.getByRole("button", { name: "Open navigation" }).click();
+  const sidebar = page.getByRole("complementary", { name: "Workspace navigation" });
+  const label = sidebar.getByRole("heading", { name: "Pages" });
+  await expect(label).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: "My calendar", exact: true })).toBeInViewport({ ratio: 1 });
+  // Preserve the original label/list spacing contract as well as the new scroll contract.
+  const gap = await sidebar.evaluate(element => {
+    const heading = element.querySelector("#pages-label")!;
+    const list = element.querySelector('[class*="pageList"]')!;
+    return list.getBoundingClientRect().top - heading.getBoundingClientRect().bottom;
+  });
+  expect(gap).toBeGreaterThanOrEqual(8);
+  const management = sidebar.getByRole("navigation", { name: "Manage Musubi" });
+  const before = await management.boundingBox();
+  for (const name of ["Calendars", "Connections", "Settings"]) {
+    const button = management.getByRole("button", { name, exact: true });
+    await expect(button).toBeInViewport({ ratio: 1 });
+  }
+  await page.screenshot({ path: testInfo.outputPath(`sidebar-${width}-initial.png`), animations: "disabled" });
+  await sidebar.getByRole("button", { name: "My calendar", exact: true }).focus();
+  const last = sidebar.getByRole("button", { name: "Project 20", exact: true });
+  // Keyboard navigation must reveal off-screen Pages without moving management.
+  for (let index = 0; index < pages.length * 3; index++) {
+    if (await last.evaluate(element => element === document.activeElement)) break;
+    await page.keyboard.press("Tab");
+  }
+  await expect(last).toBeFocused();
+  await expect(last).toBeInViewport({ ratio: 1 });
+  expect(await sidebar.locator('[class*="sidebarScroll"]').evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  expect(await management.boundingBox()).toEqual(before);
+  for (const name of ["Calendars", "Connections", "Settings"]) {
+    await expect(management.getByRole("button", { name, exact: true })).toBeInViewport({ ratio: 1 });
+  }
+  await page.screenshot({ path: testInfo.outputPath(`sidebar-${width}-keyboard.png`), animations: "disabled" });
 });
 
 /**
@@ -8226,13 +8249,17 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
     await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
     const imported = event("00000000-0000-4000-8000-000000000166", "Provider meeting", "personal", "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z", { recurrence: "FREQ=DAILY;COUNT=2" });
     await mockAuthenticatedReads(page, { ...events, events: [imported] }, [{ ...calendars[0]!, provider: "microsoft", accountID: "fixture", accountLabel: "Fixture" }]);
-    await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, { state: { provider: "microsoft", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [], attendeesComplete: false, ownResponse: "notResponded", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "workingElsewhere", privacy: "confidential", status: null, eventType: "singleInstance", conferenceURLs: [] } }));
+    await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, { state: { provider: "microsoft", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [{ name: "Alex Chen", address: "alex@example.test", self: false, role: "required", response: "accepted" }, { name: "Sam Lee", address: "sam@example.test", self: false, role: "optional", response: "tentative" }], attendeesComplete: false, ownResponse: "notResponded", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "workingElsewhere", privacy: "confidential", status: null, eventType: "singleInstance", conferenceURLs: [] } }));
     await page.goto("/app/p/my-calendar/month?date=2026-07-26");
     await page.getByRole("button", { name: /Provider meeting/ }).first().click();
     await page.locator("summary").filter({ hasText: "Outlook details" }).click();
     await expect(page.getByText(/These settings describe the series/)).toBeVisible();
     await expect(page.getByText("Availability: workingElsewhere", { exact: true })).toBeVisible();
     await expect(page.getByText(/Both apps may notify/)).toBeVisible();
+    await page.locator("summary").filter({ hasText: "Outlook participants" }).click();
+    await expect(page.getByRole("list", { name: "Outlook participants" })).toBeVisible();
+    await expect(page.getByText("Alex Chen", { exact: true })).toBeVisible();
+    await expect(page.getByText("Participant list may be incomplete.", { exact: true })).toBeVisible();
     await expectNoAccessibilityViolations(page);
     await page.screenshot({ path: testInfo.outputPath("provider-details.png"), fullPage: true });
   });

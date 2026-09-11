@@ -68,7 +68,6 @@ function NewEventRoute() {
       bodyClassName={editorStyles.dialogFit}
       bodyLayout="flush"
       closeLabel="Close event editor"
-      description="Every detail of the event, on one surface."
       initialFocus={titleRef}
       onOpenChange={(open) => {
         if (!open) back();

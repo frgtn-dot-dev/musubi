@@ -61,6 +61,8 @@ function RowContent({
 export type RowProps = HTMLAttributes<HTMLDivElement> &
   RowContentProps & {
     size?: RowSize;
+    /** Keep long recovery actions below the copy on narrow screens. */
+    layout?: "default" | "responsive-actions";
   };
 
 export function Row({
@@ -69,6 +71,7 @@ export function Row({
   icon,
   label,
   size = "default",
+  layout = "default",
   trailing,
   value,
   ...rowProps
@@ -76,6 +79,7 @@ export function Row({
   return (
     <div
       {...rowProps}
+      data-layout={layout === "responsive-actions" ? layout : undefined}
       className={classNames(
         styles.row,
         size === "compact" && styles.row_compact,

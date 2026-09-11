@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ProviderEventDetails } from "./ProviderEventDetails";
 import { providerEventDetails } from "@musubi/calendar";
@@ -170,4 +170,63 @@ it("keeps panel loading and unavailable states outside a disclosure", async () =
   await act(async () => reject(new Error("offline")));
   expect(screen.getByRole("status").textContent).toContain("could not be loaded");
   expect(view.container.querySelector("details")).toBeNull();
+});
+
+
+it.each([false, true])("shows provider participants with explicit completeness and retires their private data (%s)", async attendeesComplete => {
+  const observed: ProviderEventState = { ...state, attendeesComplete, attendees: [
+    { name: "Alex", address: "alex@example.test", self: false, role: "required", response: "needsAction" },
+    { name: null, address: "room@example.test", self: false, role: "X-CUSTOM-ROLE", response: "X-CUSTOM-RESPONSE" },
+  ] };
+  fetchState.mockResolvedValueOnce({ state: observed });
+  const view = render(<ProviderEventDetails presentation="panel" eventId="event" userId="owner" revision={1} />);
+  const summary = (await screen.findByText("Outlook participants")).closest("summary")!;
+  expect(summary.querySelector("button")).toBeNull();
+  await act(async () => summary.click());
+  const list = screen.getByRole("list", { name: "Outlook participants" });
+  expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+  expect(within(list).getByText("Alex")).toBeTruthy();
+  expect(within(list).getByText("alex@example.test · required · Awaiting response")).toBeTruthy();
+  expect(within(list).getByText("X-CUSTOM-ROLE · X-CUSTOM-RESPONSE")).toBeTruthy();
+  expect(screen.queryByText("Participant list may be incomplete.") !== null).toBe(!attendeesComplete);
+  expect(screen.getAllByText(/alex@example.test/)).toHaveLength(1);
+  expect(screen.getByText("Organizer:")).toBeTruthy();
+  let finish!: (value: { state: null }) => void;
+  fetchState.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  view.rerender(<ProviderEventDetails presentation="panel" eventId="event" userId="owner" revision={2} />);
+  expect(screen.queryByText("Outlook participants")).toBeNull();
+  expect(screen.queryByText(/alex@example.test/)).toBeNull();
+  expect(screen.queryByText("Alex")).toBeNull();
+  await act(async () => finish({ state: null }));
+  expect(screen.queryByText("Provider details")).toBeNull();
+});
+
+
+it.each([
+  { provider: "caldav", flavor: "apple", title: "Apple Calendar details", mark: "apple" },
+  { provider: "caldav", flavor: undefined, title: "CalDAV details", mark: "caldav" },
+  { provider: "microsoft", flavor: "apple", title: "Outlook details", mark: "microsoft" },
+] as const)("brands $provider as $title only from matching known account identity", async ({ provider, flavor, title, mark }) => {
+  fetchState.mockResolvedValue({ state: { ...state, provider } });
+  const view = render(<ProviderEventDetails presentation="panel" providerFlavor={flavor} eventId="event" userId="owner" />);
+  const label = await screen.findByText(title);
+  expect(label.closest("summary")?.querySelector(`[data-provider="${mark}"]`)).not.toBeNull();
+  if (provider === "caldav") expect(screen.getByText(/Change these in CalDAV/)).toBeTruthy();
+  view.rerender(<ProviderEventDetails providerFlavor={flavor} eventId="event" userId="owner" />);
+  expect(screen.getByText(provider === "caldav" ? "CalDAV details" : "Outlook details")).toBeTruthy();
+  expect(fetchState).toHaveBeenCalledTimes(1);
+});
+
+
+it.each([
+  ["accepted", "Accepted"], ["declined", "Declined"], ["tentative", "Tentative"],
+  ["needsAction", "Awaiting response"], ["notResponded", "Awaiting response"],
+  ["tentativelyAccepted", "Tentative"], ["none", "Not reported"], ["X-CUSTOM-RESPONSE", "X-CUSTOM-RESPONSE"],
+])("labels read-only response %s as %s and preserves the default raw observation", async (response, label) => {
+  fetchState.mockResolvedValue({ state: { ...state, ownResponse: response, attendees: [{ name: "Guest", address: null, self: false, role: null, response }] } });
+  const view = render(<ProviderEventDetails presentation="panel" eventId="event" userId="owner" />);
+  await screen.findByText("Outlook participants");
+  expect(screen.getAllByText(label, { exact: true })).toHaveLength(2);
+  view.rerender(<ProviderEventDetails eventId="event" userId="owner" />);
+  expect(screen.getByText(response, { exact: true })).toBeTruthy();
 });

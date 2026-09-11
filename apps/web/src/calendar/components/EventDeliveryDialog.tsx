@@ -204,7 +204,7 @@ export function EventDeliveryDialog({
             ? query.data?.targets.map((target) => {
                 const actions = eventDeliveryActions(target);
                 return (
-                  <Row
+                  <Row layout="responsive-actions"
                     key={target.targetId}
                     label={`${target.calendarName ?? "Former calendar"} · ${target.provider}`}
                     detail={

@@ -10,6 +10,7 @@ import { useState } from "react";
 import { expect, userEvent, within } from "storybook/test";
 import { DESKTOP_MODES, MOBILE_MODES } from "../../.storybook/modes";
 import { Avatar } from "./Avatar";
+import { Button } from "./Button";
 import { Row, RowAction, RowOptions, RowToggle } from "./Row";
 import { SettingsSection } from "./SettingsSection";
 
@@ -192,4 +193,41 @@ export const Narrow: Story = {
     },
   },
   render: () => <InteractiveRows />,
+};
+
+/** Delivery recovery can expose several independent actions for the same target. */
+export const MultipleActions: Story = {
+  parameters: { chromatic: { modes: { ...DESKTOP_MODES, ...MOBILE_MODES } } },
+  render: () => <div className="sb-settings-preview">
+    <SettingsSection title="Saved event deliveries">
+      <Row layout="responsive-actions" data-testid="delivery-actions-row"
+        label="Team calendar · changes need attention"
+        detail="The saved event differs from the remote version. Review the changes before retrying. Provider confirmation is still pending."
+        trailing={<>
+          <Button size="compact" variant="secondary">Retry delivery</Button>
+          <Button size="compact" variant="secondary">Discard saved alarm change</Button>
+          <Button size="compact" variant="secondary">Review changes</Button>
+        </>}
+      />
+    </SettingsSection>
+  </div>,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const row = canvas.getByTestId("delivery-actions-row");
+    const buttons = canvas.getAllByRole("button");
+    const copy = row.querySelector<HTMLElement>('[data-slot="copy"]')!;
+    if (matchMedia("(max-width: 599px)").matches) {
+      await expect(buttons[0].getBoundingClientRect().top).toBeGreaterThan(copy.getBoundingClientRect().bottom);
+    }
+    await expect(row.scrollWidth - row.clientWidth).toBeLessThanOrEqual(1);
+    for (let index = 1; index < buttons.length; index++) {
+      await expect(buttons[index].getBoundingClientRect().top).toBeGreaterThan(buttons[index - 1].getBoundingClientRect().bottom);
+    }
+  },
+};
+
+export const MultipleActionsNarrow: Story = {
+  ...MultipleActions,
+  globals: { viewport: { isRotated: false, value: "mobile1" } },
+  parameters: { chromatic: { modes: MOBILE_MODES } },
 };

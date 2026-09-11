@@ -10,6 +10,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "./Popover";
 import styles from "./primitives.module.css";
 
 export type DatePickerProps = {
+  id?: string;
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean | "true" | "false";
   className?: string;
   disabled?: boolean;
   label: string;
@@ -46,6 +49,9 @@ function isAvailable(value: string, min?: string, max?: string) {
  * for people who already know the date they want.
  */
 export function DatePicker({
+  id,
+  "aria-describedby": describedBy,
+  "aria-invalid": invalid,
   className,
   disabled = false,
   label,
@@ -83,6 +89,9 @@ export function DatePicker({
     >
       <PopoverTrigger asChild>
         <button
+          id={id}
+          aria-describedby={describedBy}
+          aria-invalid={invalid}
           aria-label={`${label}: ${
             validValue ? getLongDateLabel(anchor) : placeholder
           }`}

@@ -30,3 +30,12 @@
   width: 16px;
   height: 16px;
 }
+
+/* Fits the shared compact Row icon slot without adding a second tile inset. */
+.compact {
+  width: var(--space-5);
+  height: var(--space-5);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}

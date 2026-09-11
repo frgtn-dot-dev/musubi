@@ -36,6 +36,9 @@ function dialFromHour(hour: number): number {
 }
 
 export type TimePickerProps = {
+  id?: string;
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean | "true" | "false";
   className?: string;
   disabled?: boolean;
   label: string;
@@ -135,6 +138,9 @@ function isAvailable(value: string, min?: string, max?: string) {
  * from direct typing. The stored value remains the form's canonical HH:mm.
  */
 export function TimePicker({
+  id: controlId,
+  "aria-describedby": describedBy,
+  "aria-invalid": fieldInvalid,
   className,
   disabled = false,
   label,
@@ -301,13 +307,14 @@ export function TimePicker({
       <PopoverAnchor asChild>
         <div className={classNames(styles.timePicker, className)}>
           <input
+            id={controlId}
             aria-activedescendant={open ? activeId : undefined}
             aria-autocomplete="list"
             aria-controls={`${id}-hours ${id}-minutes`}
-            aria-describedby={`${id}-hint`}
+            aria-describedby={[describedBy, `${id}-hint`].filter(Boolean).join(" ")}
             aria-expanded={open}
             aria-haspopup="listbox"
-            aria-invalid={invalid}
+            aria-invalid={invalid || (fieldInvalid ?? false)}
             aria-label={label}
             autoComplete="off"
             className={styles.timePickerInput}
