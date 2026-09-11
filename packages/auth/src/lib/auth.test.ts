@@ -1,5 +1,23 @@
 import assert from "node:assert/strict";
+import { getCookies } from "better-auth/cookies";
 import { withVerifiedLanding } from "./verified_landing";
+
+// The installed auth library owns cookie naming. An unset override must keep
+// deployed sessions usable; an explicit dev prefix must isolate every cookie
+// returned by the factory without changing its lifetime or security attributes.
+const defaultCookies = getCookies({ baseURL: "http://localhost:7531" });
+const unsetCookies = getCookies({ baseURL: "http://localhost:7531", advanced: { cookiePrefix: undefined } });
+assert.deepEqual(unsetCookies, defaultCookies);
+assert.equal(defaultCookies.sessionToken.name, "better-auth.session_token");
+assert.equal(defaultCookies.sessionToken.attributes.maxAge, 7 * 24 * 60 * 60);
+for (const baseURL of ["http://localhost:7531", "https://musubi.example.com"]) {
+  const before = getCookies({ baseURL });
+  const isolated = getCookies({ baseURL, advanced: { cookiePrefix: "musubi-browser-qa" } });
+  for (const key of Object.keys(before) as (keyof typeof before)[]) {
+    assert.equal(isolated[key].name, before[key].name.replace("better-auth", "musubi-browser-qa"));
+    assert.deepEqual(isolated[key].attributes, before[key].attributes);
+  }
+}
 
 // Better Auth builds the link itself, so this is string surgery on somebody
 // else's URL — the case worth pinning is that it only touches the default.
