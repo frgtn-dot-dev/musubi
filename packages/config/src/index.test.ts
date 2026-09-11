@@ -9,12 +9,30 @@ async function main() {
   const {
     config,
     parseAdminEmails,
+    parseDevAuthCookiePrefix,
     parseEnvironment,
     parseMediaConfig,
     validateAuthSecret,
   } = await import("./index");
 
   assert.equal(config.api.icloudRsvpEditsEnabled, false);
+  for (const environment of ["dev", "test", "prod"] as const) {
+    assert.equal(parseDevAuthCookiePrefix(environment, undefined), undefined);
+    assert.equal(parseDevAuthCookiePrefix(environment, "  "), undefined);
+  }
+  assert.equal(parseDevAuthCookiePrefix("dev", " musubi-qa_2026 "), "musubi-qa_2026");
+  assert.equal(parseDevAuthCookiePrefix("dev", "a".repeat(64)), "a".repeat(64));
+  for (const value of ["a".repeat(65), "qa.cookie", "qa;cookie", "qa cookie", "qa\ncookie"]) {
+    assert.throws(() => parseDevAuthCookiePrefix("dev", value), (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /1–64/);
+      assert.ok(!error.message.includes(value));
+      return true;
+    });
+  }
+  for (const environment of ["test", "prod"] as const) {
+    assert.throws(() => parseDevAuthCookiePrefix(environment, "musubi-qa"), /only supported in dev/);
+  }
   assert.equal(parseEnvironment("dev"), "dev");
   assert.equal(parseEnvironment("test"), "test");
   assert.equal(parseEnvironment("prod"), "prod");

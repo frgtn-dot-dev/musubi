@@ -64,6 +64,21 @@ export function validateAuthSecret(
   }
 }
 
+export function parseDevAuthCookiePrefix(
+  environment: Environment,
+  value: string | undefined,
+): string | undefined {
+  const prefix = value?.trim();
+  if (!prefix) return undefined;
+  if (environment !== "dev") {
+    throw new Error("DEV_AUTH_COOKIE_PREFIX is only supported in dev for browser QA.");
+  }
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(prefix)) {
+    throw new Error("DEV_AUTH_COOKIE_PREFIX must contain 1–64 letters, digits, underscores, or hyphens.");
+  }
+  return prefix;
+}
+
 function parseMetricsPort(value: string | undefined) {
   if (value === undefined) return 9464;
 
@@ -161,6 +176,8 @@ type PushConfig = {
 };
 
 type SecurityConfig = {
+  // Browser QA isolation only: Expo clients still expect Better Auth's default.
+  devAuthCookiePrefix: string | undefined;
   caldavEncKey: string;
   // Refuse sign-in until the address is confirmed. Off by default: a private
   // instance among people who know each other gains nothing from it, and a
@@ -331,6 +348,7 @@ export function parseAdminEmails(raw: string | undefined): string[] {
 }
 
 const securityConfig: SecurityConfig = {
+  devAuthCookiePrefix: parseDevAuthCookiePrefix(environment, process.env.DEV_AUTH_COOKIE_PREFIX),
   caldavEncKey: process.env.CALDAV_ENC_KEY ?? "", // validated at use in the crypto helper
   requireEmailVerification: parseRequireEmailVerification(),
   federationAllowPrivateHosts:

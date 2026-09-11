@@ -38,6 +38,9 @@ export const appleWebSignInEnabled = appleWebConfigured(appleWeb);
 export const auth = betterAuth({
   database: calendarAwareAdapter,
   baseURL: config.api.url,
+  advanced: {
+    cookiePrefix: config.security.devAuthCookiePrefix,
+  },
   trustedOrigins: [
     "musubi://",
     // Apple returns the browser flow as a cross-site POST from its own domain
