@@ -118,7 +118,8 @@ export function ConnectionsDialog({
   const [deliveryTrigger, setDeliveryTrigger] = useState<HTMLElement | null>(null);
   const connections = useConnections(userId);
   const federated = useFederatedWorkspace(userId);
-  const { busy, error, run, setError } = useAsyncAction();
+  const { busy: actionBusy, error, run, setError } = useAsyncAction();
+  const busy = actionBusy || connections.refreshing;
   const caldavReturnFocusRef = useRef<HTMLButtonElement>(null);
   const inviteInputRef = useRef<HTMLInputElement>(null);
   const [caldav, setCaldav] = useState<CaldavDraft>();
@@ -367,6 +368,18 @@ export function ConnectionsDialog({
               }
             />
           )}
+          <Button
+            variant="secondary"
+            icon={<RefreshCw size={16} strokeWidth={1.7} />}
+            disabled={busy || importing}
+            loading={connections.refreshing}
+            onClick={() => void run(async () => {
+              await connections.refreshConnectedCalendars();
+              onNotice("Connected calendars refreshed.");
+            }, "Could not refresh connected calendars.")}
+          >
+            Refresh connected calendars
+          </Button>
           {connections.capabilities.data?.googleAvailability ? <AvailabilitySection key={userId} userId={userId} onReconnect={() => void connectSocial("google")} /> : null}
           <Row
             label="Saved event deliveries"

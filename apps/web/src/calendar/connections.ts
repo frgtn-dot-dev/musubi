@@ -1,5 +1,5 @@
 import { GOOGLE_AVAILABILITY_SCOPE } from "@musubi/types";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import {
   connectCaldav,
@@ -129,6 +129,8 @@ export function useConnections(userId: string) {
   const queryClient = useQueryClient();
   const origin = getServerOrigin();
   const calendarsKey = queryKeys.calendars(origin, userId);
+  const syncKey = ["connections-sync", origin, userId];
+  const refreshing = useIsMutating({ mutationKey: syncKey }) > 0;
 
   const capabilities = useQuery({
     queryFn: ({ signal }) => getServerCapabilities(signal),
@@ -160,6 +162,25 @@ export function useConnections(userId: string) {
     onSuccess: refreshCalendars,
   });
 
+  const refresh = useMutation({
+    mutationKey: syncKey,
+    mutationFn: () => syncProviderCalendars(),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["availability", origin, userId] });
+      queryClient.removeQueries({ queryKey: ["availability", origin, userId, "intervals"] });
+    },
+    // A failed account may follow successful imports or a committed ACL
+    // downgrade. Reconcile every reader even when the sync request fails.
+    onSettled: async () => {
+      await Promise.all([
+        queryClient.resetQueries({ queryKey: ["availability", origin, userId] }),
+        queryClient.invalidateQueries({ queryKey: calendarsKey }),
+        queryClient.invalidateQueries({ queryKey: ["events", origin, userId] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.tasks(origin, userId) }),
+      ]);
+    },
+  });
+
   const disconnect = useMutation({
     mutationFn: (input: { accountId: string; provider: string }) =>
       disconnectAccount(input),
@@ -188,6 +209,8 @@ export function useConnections(userId: string) {
   return {
     acceptInvite: acceptInvite.mutateAsync,
     capabilities,
+    refreshConnectedCalendars: refresh.mutateAsync,
+    refreshing,
     connectCaldav: connect.mutateAsync,
     disconnectAccount: disconnect.mutateAsync,
     disconnectFederatedServer: disconnectFederated.mutateAsync,

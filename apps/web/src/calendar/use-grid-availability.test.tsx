@@ -96,3 +96,39 @@ it.each([false, true])("keeps selection suspended across close/reopen and retire
   fireEvent.click(screen.getByText("Connections"));
   await waitFor(() => expect(screen.getByRole("switch", { name: "Use Work for availability" }).getAttribute("aria-checked")).toBe(String(!initialEnabled)));
 });
+
+it("suspends the grid through a manual refresh even after Connections closes", async () => {
+  const { useConnections } = await import("./connections");
+  const { useState } = await import("react");
+  const fixture = mockReads();
+  const normal = fixture.fetcher.getMockImplementation()!;
+  let finish!: () => void;
+  fixture.fetcher.mockImplementation(async (url: string, options?: RequestInit) => {
+    if (url.endsWith("/connections/sync")) return new Promise<Response>(resolve => {
+      finish = () => { fixture.generation(2); fixture.mode("unavailable"); resolve(new Response("OK")); };
+    });
+    return normal(url, options);
+  });
+  function Combined() {
+    const connections = useConnections("owner");
+    const [open, setOpen] = useState(false);
+    return <><Harness listOpen={open} /><button onClick={() => setOpen(!open)}>Connections</button>{open ? <button onClick={() => void connections.refreshConnectedCalendars()}>Refresh</button> : null}</>;
+  }
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); clients.push(client);
+  render(<QueryClientProvider client={client}><Combined /></QueryClientProvider>);
+  await waitFor(() => expect((screen.getByText("Toggle") as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(screen.getByText("Toggle"));
+  await waitFor(() => expect(screen.getByTestId("intervals").textContent).toBe(id));
+  fireEvent.click(screen.getByText("Connections"));
+  fireEvent.click(screen.getByText("Refresh"));
+  await waitFor(() => expect(finish).toBeDefined());
+  fireEvent.click(screen.getByText("Connections"));
+  expect(screen.getByTestId("intervals").textContent).toBe("");
+  expect(screen.getByText(/Connected calendars are refreshing/)).toBeTruthy();
+  const reads = fixture.bodies.length;
+  await act(async () => { await client.resetQueries({ queryKey: ["availability"] }); });
+  expect(fixture.bodies).toHaveLength(reads);
+  await act(async () => { finish(); });
+  await screen.findByText(/Some availability sources are unavailable/);
+  expect(screen.getByTestId("intervals").textContent).toBe("");
+});

@@ -16,7 +16,8 @@ export function useGridAvailability({ userId, pageId, anchor, view, weekStartsOn
   const available = (view === "day" || view === "week") && capabilities.data?.googleAvailability === true;
   const shown = available && selectedScope === scope;
   const selecting = useIsMutating({ mutationKey: ["availability-selection", origin, userId] }) > 0;
-  const active = shown && !offline && !listOpen && !selecting;
+  const refreshing = useIsMutating({ mutationKey: ["connections-sync", origin, userId] }) > 0;
+  const active = shown && !offline && !listOpen && !selecting && !refreshing;
   const days = getTimeGridDays(anchor, view === "day" ? "day" : "week", weekStartsOn, { includeWeekend: showWeekend });
   const start = days[0]!.toISOString(), end = addDays(days[days.length - 1]!, 1).toISOString();
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -39,6 +40,7 @@ export function useGridAvailability({ userId, pageId, anchor, view, weekStartsOn
   let notice: string | undefined;
   if (shown) {
     if (offline) notice = "Availability is unavailable offline. No free time is confirmed.";
+    else if (refreshing) notice = "Connected calendars are refreshing. No free time is confirmed yet.";
     else if (selecting) notice = "Availability selection is changing. No free time is confirmed yet.";
     else if (sources.isError || result.isError) notice = "Availability could not be verified. No free time is confirmed; use Sources and interval list to retry.";
     else if (sources.isPending || sources.isFetching || result.isFetching) notice = "Checking selected availability. No free time is confirmed yet.";

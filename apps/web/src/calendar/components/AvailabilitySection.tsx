@@ -16,7 +16,9 @@ export function AvailabilitySection({ userId, onReconnect }: { userId: string; o
   const prefix = ["availability", getServerOrigin(), userId];
   const sourcesKey = [...prefix, "sources"];
   const mutationKey = ["availability-selection", getServerOrigin(), userId];
-  const busy = useIsMutating({ mutationKey }) > 0;
+  const selecting = useIsMutating({ mutationKey }) > 0;
+  const refreshing = useIsMutating({ mutationKey: ["connections-sync", getServerOrigin(), userId] }) > 0;
+  const busy = selecting || refreshing;
   const sources = useQuery({ queryKey: sourcesKey, queryFn: ({ signal }) => getAvailabilitySources(signal), retry: false, gcTime: 0, staleTime: 0, enabled: !busy, refetchInterval: busy ? false : 30000 });
   const [trigger, setTrigger] = useState<HTMLElement | null>(null);
   const [error, setError] = useState("");
@@ -27,8 +29,8 @@ export function AvailabilitySection({ userId, onReconnect }: { userId: string; o
   const overLimit = enabled.length > AVAILABILITY_SOURCE_LIMIT;
   const limitMessage = `Select up to ${AVAILABILITY_SOURCE_LIMIT} sources. ${enabled.length} selected; turn a source off before adding another.`;
   const signature = JSON.stringify(enabled.map(source => [source.id, source.generation]));
-  const result = useQuery({ queryKey: [...prefix, "intervals", requested, signature], queryFn: ({ signal }) => getAvailability(requested!.range, signal), enabled: !!trigger && !!requested && requested.signature === signature && !sources.isError && !sources.isFetching, retry: false, gcTime: 0, staleTime: 0 });
-  const current = requested?.signature === signature && !sources.isFetching && !sources.isError && !result.isFetching && !result.isError ? result.data : undefined;
+  const result = useQuery({ queryKey: [...prefix, "intervals", requested, signature], queryFn: ({ signal }) => getAvailability(requested!.range, signal), enabled: !busy && !!trigger && !!requested && requested.signature === signature && !sources.isError && !sources.isFetching, retry: false, gcTime: 0, staleTime: 0 });
+  const current = !busy && requested?.signature === signature && !sources.isFetching && !sources.isError && !result.isFetching && !result.isError ? result.data : undefined;
   function close() { setTrigger(null); setRequested(undefined); setError(""); }
   const selection = useMutation({
     mutationKey,

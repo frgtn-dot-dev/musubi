@@ -32,7 +32,7 @@ produkční aktivace. Stejný provider může podporovat jednu operaci a odmítn
 | K14 Graph private-read access | Discovery rozlišuje canEdit a tri-state canViewPrivateItems; potvrzené zúžení rediguje staré detaily před fetch a generation fence blokuje opožděný import/delete/cursor včetně rodin | Čerstvý omezený read může obnovit aktuálně povolený obsah; unknown proof neobnoví redigovaný obsah. Retained receipts/email a web/native editor drafty mají stejnou privacy hranici. Fake HTTP/DB a mounted klientské regrese nenahrazují živou Graph/device acceptance. CalDAV collection read-privilege parity je popsána v samostatném řádku níže. [Kontrakt](../sync/microsoft-calendar-access.md) |
 | K14 CalDAV collection read access | Přesné href/namespace/úspěšné propstat discovery; samostatný DAV read/free-busy/write důkaz a generační fence pro VEVENT rodiny i VTODO | Potvrzená ztráta read rediguje import před fetch, čerstvý celý resource obnovuje stejnou identitu; stale task DTO/ACK nemůže vrátit starý obsah. Web task/event a native event editory zachovávají vlastní drafty. Starší task klient po retirement dostane conflict; živé iCloud resource ACL a device acceptance zůstávají lidské ověření. [Kontrakt](../sync/caldav-read-access.md) |
 | K14 CalDAV event alarms | One-off nebo explicitní konečná COUNT master série: známý zoned/all-day osobní VEVENT, nula/jeden jednoduchý DISPLAY START-relative alarm; web/native editor a explicitní konflikt | Samostatný default-off flag, plný privátní resource proof, strong ETag CAS, durable replay/ACK a blokace neúplného pull jsou lokálně pokryté včetně disposable Radicale. Nejde o per-user preference. Master-only série zachovává přesný RRULE a vyžaduje explicitní scope; active/retired exceptions, RDATE/EXDATE, složitější recurrence, komplexní alarmy, meeting/floating resources a živá iCloud/OS acceptance zůstávají otevřené. [Kontrakt](../sync/caldav-event-alarms.md) |
-| K14 Google intervalová dostupnost | Default-off freeBusy.query API, privátní registry zdrojů a explicitní výběr do 20 zdrojů v Connections na webu i v nativním klientu; UTC intervalový dialog bez Event identit či edit akcí | Scope/owner/account/generation kontroly, reconnect-required versus unavailable versus potvrzené prázdno, bez offline cache. Web day/week nabízí explicitní session/page opt-in statických intervalů včetně přechodů DST. Vlastníkem schválená společná časová osa pokrývá události, intervaly i interakce; další grid pohledy jsou mimo tento vymezený rozsah. Nativní callback/transport regrese nejsou fyzická ani renderovaná acceptance; device QA, živý re-consent a aktivace zbývají. [Kontrakt](../sync/google-availability.md) |
+| K14 Google intervalová dostupnost | Default-off freeBusy.query API, privátní registry zdrojů a explicitní výběr do 20 zdrojů v Connections na webu i v nativním klientu; UTC intervalový dialog bez Event identit či edit akcí | Scope/owner/account/generation kontroly, reconnect-required versus unavailable versus potvrzené prázdno, bez offline cache. Web day/week nabízí explicitní session/page opt-in statických intervalů včetně přechodů DST. Vlastníkem schválená společná časová osa pokrývá události, intervaly i interakce; další grid pohledy jsou mimo tento vymezený rozsah. Nativní callback/transport regrese nejsou fyzická ani renderovaná acceptance; živý re-consent, intervalový dialog, day/week a odebrání sdílení prošly ([evidence](calendar-google-availability-live-20260911.md)); device QA a aktivace zbývají. [Kontrakt](../sync/google-availability.md) |
 | K14 Google reminders | Vlastní one-off defaults/off/custom a vázané existující instance off/custom, veřejný web/native editor, durable delivery a explicitní konflikt | Parent/original identity, známý čas, podmíněný PATCH, plná obnova a explicitní konflikt jsou pokryté lokálně. Web/native callbacky a browser/mock acceptance rozlišují výskyt a sérii. Osobní Google one-off a vázané zoned/all-day instance mají živý důkaz custom popup/off včetně zachování sousedů. Nové instance defaults jsou blokované po živém nesouladu potvrzeného stavu; [evidence](calendar-google-all-day-reminders-live-20260911.md). series, Graph native writer a skutečné OS oznámení zůstávají otevřené. [Živá evidence instance](calendar-personal-series-live-acceptance-20260910.md). Vymezený CalDAV alarm writer je samostatně popsaný výše. [Instance kontrakt](../sync/google-instance-reminders.md). Musubi reminder plánování je oddělené. [Kontrakt](../sync/provider-event-state.md#gated-personal-google-reminder-editor) |
 
 ## Závěrečné lokální ověření vymezeného rozsahu
@@ -162,9 +162,9 @@ zrušeného výskytu; master a sousedé zůstali zachované v porovnávaných po
 identity a účastníků; další metadata tento test neposuzoval.
 [Přesná evidence](calendar-google-recurring-live-acceptance-20260911.md).
 
-Nové přihlášení Musubi v browseru čeká na výslovný souhlas s rozsahem Google
-OAuth; backend evidence se nevydává za jeho náhradu. Další nezávislá práce
-směřuje k zbývajícím privacy/free-busy a reminder scénářům.
+Přihlášení a Google availability re-consent v browseru byly následně výslovně
+schválené a dokončené. Živá intervalová acceptance je popsána níže; backend
+evidence se nadále nevydává za náhradu neprovedených browser/device scénářů.
 
 ## Připomínky výskytu: živý nález a omezení — 2026-09-11
 
@@ -175,3 +175,17 @@ i v editorech; one-off defaults zůstávají zachované. Přesná historická sh
 se může pouze ověřit čtením. Prokázané smazání Google masteru umí ukončit přesně
 navázaný nepodporovaný konflikt jako zrušený, bez předstírání doručení.
 Testovací data jsou uklizená. [Evidence a hranice](calendar-google-all-day-reminders-live-20260911.md).
+
+## Google dostupnost a ruční obnova — 2026-09-11
+
+Živě prošel re-consent bez Tasks scope, objevování soukromého free/busy zdroje
+s výchozím vypnutím, explicitní výběr, intervalový dialog a day/week opt-in.
+Soukromé detaily se nezobrazily, transparentní událost neblokovala dostupnost
+a odebrané sdílení po obnově odstranilo zdroj i interval. Nové tlačítko
+Refresh connected calendars odstraňuje chybějící cestu ručního discovery;
+během obnovy nepotvrzuje starou dostupnost ani po zavření dialogu.
+
+Testovací kalendář je uklizený. Živé writer/reader privacy přechody čekají na
+výslovný souhlas s rozšířením oprávnění nového QA kalendáře, které odmítla
+automatická kontrola. Device acceptance a produkční aktivace zůstávají oddělené.
+[Přesná evidence a neověřené varianty](calendar-google-availability-live-20260911.md).
