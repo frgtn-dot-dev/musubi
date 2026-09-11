@@ -188,7 +188,7 @@ function sanitizeRecurrence(recurrence: string, start: Date): string {
 }
 
 // Google event JSON -> NormalizedEvent
-function toNormalized(item: any): NormalizedEvent {
+function toNormalized(item: any, observedAccessRole?: string): NormalizedEvent {
   if (item.status === "cancelled") {
     return {
       externalId: item.id,
@@ -218,7 +218,12 @@ function toNormalized(item: any): NormalizedEvent {
     status: "active",
     providerState: googleEventState(item),
     creationOperationID: typeof item.extendedProperties?.private?.musubiOperationID === "string" ? item.extendedProperties.private.musubiOperationID : undefined,
-    title: item.summary ?? "(untitled)",
+    // An Events.list restricted private shell has no title or organizer. Keep
+    // ordinary untitled events unchanged, including full-grant/private reads.
+    title: item.summary ?? (
+      (observedAccessRole === "reader" || observedAccessRole === "writerWithoutPrivateAccess") &&
+      item.visibility === "private" && item.organizer == null ? "Busy" : "(untitled)"
+    ),
     start,
     end,
     isAllDay,
@@ -509,6 +514,7 @@ export async function fetchGoogleChanges(
   const baseUrl = options.baseUrl ?? GCAL;
   const changes: NormalizedChange[] = [];
   const items: any[] = [];
+  const observedRoles = new WeakMap<object, string>();
   let currentCursor = cursor;
   let pageToken: string | undefined;
   let nextSyncToken: string | undefined;
@@ -540,7 +546,10 @@ export async function fetchGoogleChanges(
     if (!res.ok) throw new Error(`Google ${res.status} ${res.statusText}`);
 
     const data = await res.json();
-    for (const item of data.items ?? []) items.push(item);
+    for (const item of data.items ?? []) {
+      items.push(item);
+      if (item && typeof item === "object" && typeof data.accessRole === "string") observedRoles.set(item, data.accessRole);
+    }
 
     if (data.nextPageToken) {
       pageToken = data.nextPageToken;
@@ -562,7 +571,7 @@ export async function fetchGoogleChanges(
       items.push(master);
     }
   }
-  for (const item of items.filter(item => !options.timeModels || !item.recurringEventId || masters.get(item.recurringEventId)?.status !== "cancelled")) changes.push({ kind: "event", data: options.timeModels ? normalizeGoogleTime(item, toNormalized({ ...item, recurrence: undefined }), masters.get(item.recurringEventId)) : toNormalized(item) });
+  for (const item of items.filter(item => !options.timeModels || !item.recurringEventId || masters.get(item.recurringEventId)?.status !== "cancelled")) changes.push({ kind: "event", data: options.timeModels ? normalizeGoogleTime(item, toNormalized({ ...item, recurrence: undefined }, observedRoles.get(item)), masters.get(item.recurringEventId)) : toNormalized(item, observedRoles.get(item)) });
   if (options.organizerTimeEventIDs?.size && !options.timeModels) {
     for (const change of changes) {
       if (change.kind !== "event") continue;
