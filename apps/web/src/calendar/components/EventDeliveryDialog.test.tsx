@@ -210,6 +210,23 @@ it("requires a fresh comparison after a stale-state rejection", async () => {
   expect(previews).toBe(2);
 });
 
+it.each(["preview", "resolve"])("treats a provider-conflict envelope during %s as a safe refusal", async (stage) => {
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    const failure = { error: "Remote event version changed or is unavailable. No changes were saved. Refresh and reconcile before retrying.", code: "provider-conflict", localCommitted: false };
+    if (url.endsWith("/conflict")) return stage === "preview" ? json(failure, 409) : json(preview);
+    if (url.endsWith("/resolve")) return json(failure, 409);
+    return json(receipt);
+  }));
+  mount();
+  fireEvent.click(await screen.findByRole("button", { name: "Review changes" }));
+  if (stage === "resolve") fireEvent.click(await screen.findByRole("button", { name: "Apply saved changes" }));
+  await screen.findByText("The delivery state changed or cannot be resolved safely. Load a fresh comparison before trying again.");
+  expect(screen.queryByText(/Could not reach the server/)).toBeNull();
+  expect(screen.queryByRole("dialog", { name: "Review remote changes" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Apply saved changes" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Load comparison" })).toBeTruthy();
+});
+
 it("routes retry through the chosen federation connection without claiming remote success", async () => {
   const requests: string[] = [];
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {

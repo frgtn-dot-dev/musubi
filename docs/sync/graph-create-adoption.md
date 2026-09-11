@@ -53,7 +53,8 @@ This is an explicit local snapshot choice. Graph does not offer atomic
 whole-family reads or family compare-and-swap here; later provider edits remain
 for subsequent sync. Adoption sends no Graph POST/PATCH/DELETE and makes no
 organizer-delivery claim. Flags, versions and minimum client requirements remain
-unchanged. All evidence uses synthetic DB and fake HTTP/API fixtures.
+unchanged. The original regression evidence uses synthetic DB and fake HTTP/API
+fixtures. A later bounded live run is recorded below.
 
 ## Evidence
 
@@ -67,3 +68,13 @@ Web/native tests cover explicit confirmation and the stable request; browser
 acceptance covers desktop/light and narrow/dark keyboard, accessibility, layout
 and focus after the retired action disappears, including Cancel/Escape after a
 committed adoption loses its HTTP response.
+
+## Bounded live acceptance — 2026-09-11
+
+[Live browser evidence](../audits/calendar-outlook-adoption-browser-acceptance-20260911.md)
+covers actual Musubi all-day COUNT=3 admission, controlled response loss after a
+real Graph 201, and explicit local adoption of a changed title on a normalized
+personal UTC family, followed by stable sync and cleanup. The native Outlook
+UI rename also changed time metadata and was refused; a separate QA-only PATCH
+restored the supported time shape before the positive adoption. This does not
+certify that native UI variant or broaden the strict adoption contract.
