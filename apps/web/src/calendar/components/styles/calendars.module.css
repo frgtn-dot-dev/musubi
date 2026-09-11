@@ -123,10 +123,12 @@
 
 .groups {
 	display: grid;
+	align-content: start;
 }
 
 .group {
 	display: grid;
+	align-content: start;
 }
 
 /* A band, not a line of text. With four accounts connected the list is one long

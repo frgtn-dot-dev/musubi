@@ -88,6 +88,7 @@ export function Sidebar({
   weekStartsOn,
 }: SidebarProps) {
   const [signingOut, setSigningOut] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const pageRowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [reorderMessage, setReorderMessage] = useState("");
   /**
@@ -117,6 +118,20 @@ export function Sidebar({
   const orderedPages = committedOrder
     ? sortPagesBy(committedOrder, pages)
     : pages;
+  const hasActivePage = orderedPages.some(page => page.id === activePageId);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const scroller = scrollRef.current;
+      const row = scroller?.querySelector<HTMLElement>('[aria-current="page"]');
+      if (!scroller || !row || !scroller.clientHeight) return;
+      const viewport = scroller.getBoundingClientRect();
+      const selected = row.getBoundingClientRect();
+      if (selected.bottom > viewport.bottom) scroller.scrollTop += selected.bottom - viewport.bottom;
+      else if (selected.top < viewport.top) scroller.scrollTop -= viewport.top - selected.top;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [hasActivePage, activePageId, isOpen]);
+
   // Once the server's list agrees, the local order has nothing left to say.
   if (
     committedOrder &&
@@ -254,7 +269,7 @@ export function Sidebar({
           </IconButton>
         </div>
 
-        <div className={styles.sidebarScroll}>
+        <div className={styles.sidebarScroll} ref={scrollRef}>
           <MiniCalendar
             anchor={anchor}
             onDateChange={onDateChange}
@@ -329,6 +344,8 @@ export function Sidebar({
             </span>
           </nav>
 
+        </div>
+
           <nav className={styles.sidebarUtilities} aria-label="Manage Musubi">
             <RowAction
               className={styles.sidebarRow}
@@ -355,7 +372,6 @@ export function Sidebar({
               onClick={onOpenSettings}
             />
           </nav>
-        </div>
 
         <footer className={styles.sidebarFooter}>
           {/* The one place that says how current the calendar is. It used to be a

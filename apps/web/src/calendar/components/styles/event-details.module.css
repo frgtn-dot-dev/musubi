@@ -1,17 +1,4 @@
-.detailPopover {
-  width: min(390px, calc(100vw - 28px));
-  /* Radix reports how much room the chosen side actually has. Below a full-width
-     agenda row there is less than the card's natural height, and a bottom-side
-     placement is not repositioned — without this the footer buttons sit under
-     the viewport with no way to reach them. */
-  max-height: min(
-    620px,
-    var(--radix-popover-content-available-height, calc(100dvh - 28px))
-  );
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
+.detailPopover { min-height: 0; }
 
 .detailsHeader,
 .editorHeader {
@@ -192,7 +179,8 @@
 }
 
 .notes p,
-.attendeeSection p {
+.attendeeSection p,
+.noteText {
   margin: 0;
   color: var(--text-secondary);
   font-size: var(--text-13);
@@ -200,7 +188,8 @@
   white-space: pre-wrap;
 }
 
-.notes p {
+.notes p,
+.noteText {
   overflow-wrap: anywhere;
   padding: var(--space-3);
   border: 1px solid var(--border-subtle);
@@ -211,35 +200,6 @@
 .attendeeSection {
   display: grid;
   gap: var(--space-3);
-}
-
-.attendeeHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-/* The toggle carries the label, so it inherits the heading's type instead of
-   the button's and drops the inset that would push the label off the column. */
-/* A button that looks like one, not like the heading it lives in: it borrowed the
-   section label's uppercase tracking and lost its own padding, which is how a
-   borderless control ends up reading as a title. Both are inherited properties, so
-   they have to be turned off rather than simply not asked for. */
-.attendeeToggle {
-  gap: var(--space-2);
-  letter-spacing: normal;
-  text-transform: none;
-}
-
-/* The count and its chevron share the button's label span, where the heading's
-   uppercase tracking crams them together and the text baseline lifts the glyph
-   off centre. Reaching into Button's own span because the two live in one slot —
-   the alternative is a trailing-icon prop on Button for this one caller. */
-.attendeeToggle > span > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
 }
 
 /* The chevron shares the button's label span, where the text baseline lifts it
@@ -399,10 +359,6 @@
 }
 
 @media (max-width: 599px) {
-  .detailPopover {
-    width: 100%;
-    max-height: 86vh;
-  }
 
   .detailsHeader,
   .editorHeader {
@@ -419,3 +375,32 @@
     grid-template-columns: 24px 56px minmax(0, 1fr);
   }
 }
+
+/* Inspector anatomy: one shell axis, fixed header/actions, one detail scroller. */
+.detailPopover .detailsHeader,
+.detailPopover .editorHeader { position: relative; flex: none; padding: var(--space-6) var(--layer-inline) var(--space-4); border-bottom: 0; }
+.detailPopover .detailsHeader::before,
+.detailPopover .editorHeader::before { display: none; }
+.detailPopover .detailsBody { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; align-content: start; gap: var(--space-4); padding: var(--space-4) var(--layer-inline); }
+.detailPopover .whenList,
+.detailPopover .infoList,
+.detailPopover .notes,
+.detailPopover .attendeeSection,
+.detailPopover .calendarActions { padding: 0; border-top: 0; }
+.detailPopover .detailRow { grid-template-columns: 20px minmax(0, 1fr); }
+.detailPopover .detailRow dt { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.detailPopover .detailIcon { color: var(--text-secondary); }
+.detailPopover .detailActions { position: relative; flex: none; padding: var(--space-4) var(--layer-inline); padding-bottom: calc(var(--space-4) + var(--layer-safe-bottom, env(safe-area-inset-bottom))); }
+.detailPopover .calendarPills { padding: 0; }
+.detailPopover .calendarPill { gap: var(--space-2); min-height: var(--space-8); }
+.detailPopover .notes { display: grid; gap: var(--space-2); }
+.detailPopover .sectionHeading { min-height: var(--space-6); margin: 0; gap: var(--space-2); }
+.detailPopover .sectionHeading > svg { flex: none; width: 20px; }
+.detailPopover .detailRow { min-height: var(--space-8); align-items: center; }
+.detailPopover .detailIcon { align-self: center; padding: 0; }
+.deliveryActions { display: grid; gap: var(--space-2); }
+.deliveryActions > button { padding-inline: 0; }
+
+.detailPopover .reminderLabel { font-size: var(--text-13); letter-spacing: normal; text-transform: none; font-weight: 400; }
+
+.detailPopover .attendeeAnswer { padding-inline: 0; padding-left: calc(var(--space-5) + var(--space-2)); }

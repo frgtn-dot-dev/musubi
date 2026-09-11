@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   replaceTaskDate,
   replaceTaskTime,
@@ -25,7 +25,7 @@ describe("task editor date values", () => {
   });
 });
 
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TaskSchema } from "@musubi/types";
 import { TaskList } from "./TaskList";
@@ -100,4 +100,34 @@ it("preserves authored title and explicit note clear through separate retirement
   expect(screen.getByRole("textbox", { name: "Notes" })).toHaveProperty("value", "");
   await user.click(screen.getByRole("button", { name: "Save task" }));
   expect(onUpdate).toHaveBeenCalledWith(task.id, expect.objectContaining({ title: "My authored title", description: null, expectedProviderReadRetiredGeneration: 1 }));
+});
+
+
+afterEach(cleanup);
+
+function emptyTaskProps() {
+  return { calendars: fixtureCalendars, tasks: [], createRequest: 0, editableCalendarIds: new Set([fixtureCalendars[0]!.id]), offline: false, onCreateRequestHandled: vi.fn(), onCreate: vi.fn(async input => TaskSchema.parse({ ...input, creatorID: "owner" })), onUpdate: vi.fn(), onRemove: vi.fn(), settings: { timeFormat: "24h" as const, weekStartsOn: "monday" as const } };
+}
+
+it("creates the first task through the empty state's existing task editor", async () => {
+  const user = userEvent.setup();
+  const props = emptyTaskProps();
+  render(<TaskList {...props} />);
+  await user.click(screen.getByRole("button", { name: "Create task" }));
+  expect(screen.getByRole("dialog", { name: "New task" })).toBeTruthy();
+  await user.type(screen.getByRole("textbox", { name: "Title" }), "Prepare workshop");
+  await user.click(screen.getByRole("button", { name: "Save task" }));
+  expect(props.onCreate).toHaveBeenCalledWith(expect.objectContaining({ title: "Prepare workshop", calendarID: fixtureCalendars[0]!.id }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+it("offers no empty-state creation while offline or without an editable calendar", () => {
+  const props = emptyTaskProps();
+  const view = render(<TaskList {...props} offline />);
+  expect(screen.getByRole("heading", { name: "No saved tasks" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Create task" })).toBeNull();
+  view.rerender(<TaskList {...props} editableCalendarIds={new Set()} />);
+  expect(screen.queryByRole("button", { name: "Create task" })).toBeNull();
+  expect(screen.getByText("Tasks from the calendars on this Page will appear here.")).toBeTruthy();
+  expect(props.onCreate).not.toHaveBeenCalled();
 });

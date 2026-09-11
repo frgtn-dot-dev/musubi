@@ -106,7 +106,7 @@
 
 .settingsNav {
   overflow-y: auto;
-  background: var(--layer-body-block);
+  background: var(--surface-panel);
   border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
@@ -133,7 +133,7 @@
 }
 
 .settingsNavButton[aria-current="page"] {
-  background: var(--layer-inline);
+  background: var(--surface-raised);
   color: var(--text-primary);
 }
 

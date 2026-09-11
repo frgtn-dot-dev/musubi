@@ -10,6 +10,9 @@ export type DisclosureProps = {
   /** The row's second line, for what is folded away. */
   detail?: ReactNode;
   label: ReactNode;
+  icon?: ReactNode;
+  value?: ReactNode;
+  density?: "default" | "compact";
   /** Leave both out to let the browser own the state. */
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
@@ -28,12 +31,15 @@ export function Disclosure({
   className,
   detail,
   label,
+  icon,
+  value,
+  density = "default",
   onOpenChange,
   open,
 }: DisclosureProps) {
   return (
     <details
-      className={classNames(styles.disclosure, className)}
+      className={classNames(styles.disclosure, density === "compact" && styles.disclosure_compact, className)}
       onToggle={(event) => onOpenChange?.(event.currentTarget.open)}
       open={open}
     >
@@ -41,13 +47,10 @@ export function Disclosure({
         <Row
           className={styles.disclosureRow}
           detail={detail}
-          icon={
-            <ChevronRight
-              className={styles.disclosureChevron}
-              size={16}
-              strokeWidth={1.6}
-            />
-          }
+          size={density === "compact" ? "compact" : "default"}
+          icon={icon ?? <ChevronRight className={styles.disclosureChevron} size={16} strokeWidth={1.6} />}
+          value={value}
+          trailing={icon ? <ChevronRight className={styles.disclosureChevron} size={16} strokeWidth={1.6} aria-hidden="true" /> : undefined}
           label={label}
         />
       </summary>

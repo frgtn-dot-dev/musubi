@@ -3,6 +3,7 @@ import {
 	can,
 	DEFAULT_CALENDAR_COLOR,
 	providerDisplayName,
+	providerFlavor,
 	type Calendar,
 	type Event,
 	type Settings,
@@ -12,6 +13,9 @@ import {
 	Check,
 	ChevronDown,
 	Clock3,
+	FileText,
+	Globe2,
+	Sun,
 	House,
 	Link2,
 	MapPin,
@@ -19,6 +23,7 @@ import {
 	UsersRound,
 } from "lucide-react";
 import {
+	Fragment,
 	type FormEvent,
 	type KeyboardEvent,
 	type RefCallback,
@@ -32,9 +37,12 @@ import { Checkbox } from "~/ui/Checkbox";
 import { DatePicker } from "~/ui/DatePicker";
 import { Field } from "~/ui/Field";
 import { Select } from "~/ui/Select";
+import { Row } from "~/ui/Row";
+import { Switch } from "~/ui/Switch";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { minutesToTime, TimePicker, timeToMinutes } from "~/ui/TimePicker";
 import { groupCalendars } from "../calendar-groups";
+import { shiftDayKey } from "../date-key";
 import {
 	type EventFormValues,
 	eventBoundaries,
@@ -48,6 +56,7 @@ import {
 import { useSnapshot } from "~/offline/SnapshotProvider";
 import { createTimeGeometry } from "../time-geometry";
 import { CalendarDot } from "./CalendarDot";
+import { AccountMark } from "./ProviderIcon";
 import { RecurrenceEditor } from "./RecurrenceEditor";
 import styles from "./styles/event-editor.module.css";
 
@@ -98,8 +107,8 @@ type EventEditorFormProps = {
 	initialValues: EventFormValues;
 	/** Retain a draft across an access-change unmount without retaining provider baselines. */
 	onValuesChange?: (values: EventFormValues) => void;
-	/** Full-page editors use the viewport as a workspace instead of a long card. */
-	layout?: "page" | "popover";
+	/** Panel editors own a scrolling body and fixed actions inside an inspector. */
+	layout?: "page" | "popover" | "panel";
 	/**
 	 * The title field, for a shell that owns its own opening focus. `autoFocus`
 	 * is enough on a page; inside a dialog the shell moves focus after mount and
@@ -150,6 +159,10 @@ export function EventEditorForm({
 }: EventEditorFormProps) {
 	const id = useId();
 	const narrow = useNarrowViewport();
+	const panel = layout === "panel";
+	const fieldVariant = panel ? "plain" : "section";
+	const Body = panel ? "div" : Fragment;
+	const FormBody = layout === "popover" ? Fragment : "div";
 	// What the app knows, not what the browser guesses: a self-hosted server that
 	// is down looks online to `navigator`.
 	const { offline } = useSnapshot();
@@ -174,7 +187,8 @@ export function EventEditorForm({
 	const calendarGroups = groupCalendars(calendars);
 	const homeServer = calendarServer(selectedCalendar);
 	const calendarCount = values.calendarIds.length;
-	const showCalendarList = expanded || calendarPickerOpen;
+	const calendarDisclosure = panel || !expanded;
+	const showCalendarList = !calendarDisclosure || calendarPickerOpen;
 
 	function patch(next: Partial<EventFormValues>) {
 		const changed = (keys: (keyof EventFormValues)[]) => keys.some((key) => key in next && next[key] !== values[key]);
@@ -286,6 +300,15 @@ export function EventEditorForm({
 		}
 	}
 
+	function handleExpand() {
+		try {
+			if (onExpand) onExpand(values);
+			else setExpanded(true);
+		} catch (error) {
+			setError(onError(error, values));
+		}
+	}
+
 	function handleKeyDown(event: KeyboardEvent<HTMLFormElement>) {
 		if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
 			event.preventDefault();
@@ -293,17 +316,54 @@ export function EventEditorForm({
 		}
 	}
 
+	function changeTimeModel(next: Partial<EventFormValues>) {
+		patch({
+			...next,
+			...(panel && next.isAllDay && values.endDate <= values.date
+				? { endDate: shiftDayKey(values.date, 1) }
+				: {}),
+		});
+	}
+
+	function changeAllDay(checked: boolean) {
+		changeTimeModel(values.timeKind && values.timeKind !== "legacy-unknown"
+			? chooseEventTimeKind(values, checked ? "all-day" : "zoned")
+			: { isAllDay: checked });
+	}
+
 	// Popovers grow down; narrow sheets grow up. Keep the toggle on the
 	// anchored side of the conditional time row, with matching DOM/tab order.
-	const allDayToggle = (
+	const allDayToggle = panel ? (
+		<Row
+			className={styles.toggleRow}
+			size="compact"
+			icon={<Sun size={18} strokeWidth={1.5} />}
+			label="All day"
+			trailing={<Switch label="All day" checked={values.isAllDay} disabled={saving} onCheckedChange={changeAllDay} />}
+		/>
+	) : (
 		<Checkbox
 			checked={values.isAllDay}
 			className={styles.toggleRow}
 			disabled={saving}
 			label="All day"
-			onChange={(event) => patch(values.timeKind && values.timeKind !== "legacy-unknown" ? chooseEventTimeKind(values, event.target.checked ? "all-day" : "zoned") : { isAllDay: event.target.checked })}
+			onChange={(event) => changeAllDay(event.target.checked)}
 		/>
 	);
+
+	const timeModelFields = values.timeEditable && expanded ? (
+			<>
+				<Field label="Time model" variant={fieldVariant}>
+					<Select label="Time model" value={values.timeKind === "legacy-unknown" ? "" : values.timeKind ?? ""} placeholder="Not specified" disabled={saving}
+						options={[{ value: "zoned", label: "Event time zone" }, { value: "floating", label: "Floating local time" }, { value: "all-day", label: "All-day dates" }]}
+						onChange={kind => changeTimeModel(chooseEventTimeKind(values, kind as "zoned" | "floating" | "all-day"))} />
+				</Field>
+				{values.timeKind === "zoned" && <Field label="Event time zone" description={panel ? "For example Europe/Prague." : "For example Europe/Prague. Uses the dates and times shown below."} variant={fieldVariant}>
+					<input value={values.timeZone ?? ""} placeholder="Europe/Prague" disabled={saving} onChange={event => patch({ timeZone: event.target.value, timeLabel: event.target.value || "Choose an event time zone" })} />
+				</Field>}
+				<p className={styles.timeContext}>The selected model interprets the event dates and times. Changing it may change when the event occurs.</p>
+			</>
+	) : null;
 
 	return (
 		<form
@@ -314,11 +374,12 @@ export function EventEditorForm({
 			onKeyDown={handleKeyDown}
 			onSubmit={handleSubmit}
 		>
+			<FormBody {...(layout !== "popover" ? { className: styles.formBody } : {})}>
 			<Field
 				className={styles.titleField}
 				label="Event title"
-				labelHidden
-				variant="section"
+				labelHidden={!panel}
+				variant={fieldVariant}
 			>
 				<input
 					autoFocus
@@ -338,18 +399,8 @@ export function EventEditorForm({
 				<SectionLabel className={styles.sectionLabel} id={`${id}-when-heading`}>
 					When
 				</SectionLabel>
-			{values.timeEditable && expanded && <>
-				<Field label="Time model" variant="section">
-					<Select label="Time model" value={values.timeKind === "legacy-unknown" ? "" : values.timeKind ?? ""} placeholder="Not specified" disabled={saving}
-						options={[{ value: "zoned", label: "Event time zone" }, { value: "floating", label: "Floating local time" }, { value: "all-day", label: "All-day dates" }]}
-						onChange={kind => patch(chooseEventTimeKind(values, kind as "zoned" | "floating" | "all-day"))} />
-				</Field>
-				{values.timeKind === "zoned" && <Field label="Event time zone" description="For example Europe/Prague. Uses the dates and times shown below." variant="section">
-					<input value={values.timeZone ?? ""} placeholder="Europe/Prague" disabled={saving} onChange={event => patch({ timeZone: event.target.value, timeLabel: event.target.value || "Choose an event time zone" })} />
-				</Field>}
-				<p className={styles.timeContext}>The selected model interprets the dates and times below. Changing it may change when the event occurs.</p>
-			</>}
-			{values.timeLabel && <p className={styles.timeContext}>{values.timeLabel}</p>}
+			{layout === "popover" && timeModelFields}
+			{!panel && values.timeLabel && <p className={styles.timeContext}>{values.timeLabel}</p>}
 				<div className={styles.pickerRow}>
 					<CalendarDays aria-hidden="true" size={17} strokeWidth={1.5} />
 					<span aria-hidden="true" className={styles.pickerLabel}>
@@ -372,7 +423,7 @@ export function EventEditorForm({
 					/>
 				</div>
 
-				{!narrow ? allDayToggle : null}
+				{!narrow && !panel ? allDayToggle : null}
 
 				{!values.isAllDay ? (
 					<div className={styles.timeRow}>
@@ -383,6 +434,7 @@ export function EventEditorForm({
 						>
 							Time
 						</span>
+						<Body {...(panel ? { className: styles.timeRange } : {})}>
 						<TimePicker
 							disabled={saving}
 							label="Start time"
@@ -410,6 +462,7 @@ export function EventEditorForm({
 							value={values.endTime}
 							onChange={(endTime) => patch({ endTime })}
 						/>
+						</Body>
 					</div>
 				) : null}
 				<div className={styles.pickerRow}>
@@ -421,14 +474,18 @@ export function EventEditorForm({
 						className={styles.pickerValue}
 						disabled={saving}
 						label="Ends"
-						min={values.date}
+						min={panel && values.isAllDay ? shiftDayKey(values.date, 1) : values.date}
 						value={values.endDate}
 						weekStartsOn={weekStartsOn}
 						onChange={(endDate) => patch({ endDate })}
 					/>
 				</div>
 
-				{narrow ? allDayToggle : null}
+				{panel && values.isAllDay ? <p className={styles.timeContext}>End date is not included.</p> : null}
+
+				{narrow || panel ? allDayToggle : null}
+
+				{panel && values.timeLabel ? <p className={styles.timeContext}>{values.timeLabel}</p> : null}
 
 				{expanded ? (
 					<Field
@@ -440,7 +497,7 @@ export function EventEditorForm({
 							</span>
 						}
 						layout="inline"
-						variant="section"
+						variant={fieldVariant}
 					>
 						<RecurrenceEditor
                             rdateMaster={rdateMaster}
@@ -453,6 +510,10 @@ export function EventEditorForm({
 						/>
 					</Field>
 				) : null}
+				{layout === "page" && timeModelFields ? <div className={styles.pageTimeSettings}>
+					<SectionLabel>Time settings</SectionLabel>
+					{timeModelFields}
+				</div> : null}
 			</section>
 
 			{expanded ? (
@@ -464,6 +525,14 @@ export function EventEditorForm({
 					<SectionLabel className={styles.sectionLabel} id={`${id}-details-heading`}>
 						Details
 					</SectionLabel>
+					{panel ? <Row
+						className={styles.toggleRow}
+						size="compact"
+						icon={<UsersRound size={18} strokeWidth={1.5} />}
+						label="Allow attendance"
+						detail="Guests can respond to this event."
+						trailing={<Checkbox label="Allow attendance" labelHidden checked={values.hasAttendees} disabled={saving} onChange={event => patch({ hasAttendees: event.target.checked })} />}
+					/> : (
 					<Checkbox
 						checked={values.hasAttendees}
 						className={styles.toggleRow}
@@ -477,14 +546,16 @@ export function EventEditorForm({
 						}
 						onChange={(event) => patch({ hasAttendees: event.target.checked })}
 					/>
+					)}
 					<Field
+						className={panel ? styles.detailField : undefined}
 						label={
 							<span className={styles.fieldLabel}>
 								<MapPin aria-hidden="true" size={16} strokeWidth={1.5} />
 								Location
 							</span>
 						}
-						variant="section"
+						variant={fieldVariant}
 					>
 						<input
 							disabled={saving}
@@ -494,13 +565,14 @@ export function EventEditorForm({
 						/>
 					</Field>
 					<Field
+						className={panel ? styles.detailField : undefined}
 						label={
 							<span className={styles.fieldLabel}>
 								<Link2 aria-hidden="true" size={16} strokeWidth={1.5} />
 								Link
 							</span>
 						}
-						variant="section"
+						variant={fieldVariant}
 					>
 						<input
 							disabled={saving}
@@ -511,14 +583,14 @@ export function EventEditorForm({
 						/>
 					</Field>
 					<Field
-						className={styles.descriptionField}
-						label="Description"
-						variant="section"
+						className={`${styles.descriptionField} ${panel ? styles.detailField : ""}`}
+						label={panel ? <span className={styles.fieldLabel}><FileText size={18} strokeWidth={1.5} aria-hidden="true" />Description</span> : "Description"}
+						variant={fieldVariant}
 					>
 						<textarea
 							disabled={saving}
 							placeholder="Add notes"
-							rows={3}
+							rows={panel ? 8 : 3}
 							value={values.description}
 							onChange={(event) => patch({ description: event.target.value })}
 						/>
@@ -535,7 +607,7 @@ export function EventEditorForm({
 					Event calendars
 				</SectionLabel>
 
-				{!expanded ? (
+				{calendarDisclosure ? (
 					<button
 						aria-controls={`${id}-calendar-list`}
 						aria-expanded={calendarPickerOpen}
@@ -549,9 +621,9 @@ export function EventEditorForm({
 						type="button"
 						onClick={() => setCalendarPickerOpen((current) => !current)}
 					>
-						<CalendarDot color={selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR} />
+						{layout !== "popover" ? <AccountMark size="compact" flavor={selectedCalendar ? providerFlavor(selectedCalendar) : null} /> : <CalendarDot color={selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR} />}
 						<span className={styles.calendarSummaryCopy}>
-							<strong>{selectedCalendar?.name ?? "Choose a calendar"}</strong>
+							<strong>{layout !== "popover" ? <CalendarDot color={selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR} /> : null}{selectedCalendar?.name ?? "Choose a calendar"}</strong>
 							{/* The "home" idea only means something once an event is in more
                   than one calendar. On its own it read as a place, next to
                   "Only calendar", which read as a restriction — beside a button
@@ -581,7 +653,7 @@ export function EventEditorForm({
 
 				{showCalendarList ? (
 					<fieldset
-						aria-describedby={expanded ? `${id}-calendar-hint` : undefined}
+						aria-describedby={!calendarDisclosure ? `${id}-calendar-hint` : undefined}
 						className={styles.calendarPlacement}
 						data-ui="calendar-placement"
 						id={`${id}-calendar-list`}
@@ -598,7 +670,7 @@ export function EventEditorForm({
 							<div className={styles.calendarGroup} key={group.key}>
 								{calendarGroups.length > 1 ? (
 									<div className={styles.calendarGroupHeading}>
-										<strong>{group.title}</strong>
+										<strong>{layout !== "popover" ? <AccountMark size="compact" flavor={group.flavor} /> : null}{group.title}</strong>
 										<span>{group.detail}</span>
 									</div>
 								) : null}
@@ -634,9 +706,9 @@ export function EventEditorForm({
 													<span aria-hidden="true" className={styles.calendarMembershipBox}>
 														{checked ? <Check size={12} strokeWidth={2.2} /> : null}
 													</span>
-													<CalendarDot color={calendar.color} />
+													{layout !== "popover" ? <AccountMark size="compact" flavor={providerFlavor(calendar)} /> : <CalendarDot color={calendar.color} />}
 													<span className={styles.calendarPlacementCopy}>
-														<strong>{calendar.name}</strong>
+														<strong>{layout !== "popover" ? <CalendarDot color={calendar.color} /> : null}{calendar.name}</strong>
 														<span>{detail}</span>
 													</span>
 												</label>
@@ -692,6 +764,11 @@ export function EventEditorForm({
 				) : null}
 			</section>
 
+			{panel && timeModelFields ? <section className={`${styles.section} ${styles.timeSettings}`} aria-labelledby={`${id}-time-settings`}>
+				<div className={styles.settingsHeading}><Globe2 aria-hidden="true" size={18} strokeWidth={1.5} /><SectionLabel id={`${id}-time-settings`}>Time settings</SectionLabel></div>
+				{timeModelFields}
+			</section> : null}
+
 			{error ? (
 				<div className={styles.formError} role="alert">
 					<p>{error.message}</p>
@@ -699,7 +776,14 @@ export function EventEditorForm({
 				</div>
 			) : null}
 
+			</FormBody>
+
 			<div className={styles.actions}>
+				{panel && expanded && onExpand ? (
+					<Button className={styles.expandAction} disabled={saving} variant="ghost" onClick={handleExpand}>
+						More options
+					</Button>
+				) : null}
 				{expanded ? (
 					<Button disabled={saving} variant="secondary" onClick={onCancel}>
 						Cancel
@@ -710,14 +794,7 @@ export function EventEditorForm({
 					<Button
 						disabled={saving}
 						variant="secondary"
-						onClick={() => {
-							try {
-								if (onExpand) onExpand(values);
-								else setExpanded(true);
-							} catch (error) {
-								setError(onError(error, values));
-							}
-						}}
+						onClick={handleExpand}
 					>
 						More options
 					</Button>

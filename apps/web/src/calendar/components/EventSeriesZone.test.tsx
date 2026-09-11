@@ -16,7 +16,7 @@ it("saves UTC from a synthetic final occurrence without restarting COUNT", async
   render(<EventDetailsPopover calendar={calendar} calendars={[calendar]} event={last} getEventMaster={() => master} user={{ id: "owner", name: "Owner" }} onNotice={vi.fn()} onForkEvent={vi.fn()} onLinkEvent={vi.fn()} onUpdateEvent={vi.fn()} onRemoveEvent={vi.fn()} onRestoreEvent={vi.fn()} onSetAttendance={vi.fn()} onApplyEventScope={apply} timeFormat="24h" weekStartsOn="monday"><button>Open occurrence</button></EventDetailsPopover>);
   await user.click(screen.getByRole("button", { name: "Open occurrence" }));
   await user.click(screen.getByRole("button", { name: /^Edit$/ }));
-  await user.click(screen.getByRole("button", { name: /^More options$/ }));
+  // Panel exposes the time-zone field directly.
   const zone = screen.getByRole("textbox", { name: /^Event time zone$/ });
   await user.clear(zone); await user.type(zone, "UTC");
   await user.click(screen.getByRole("button", { name: /^Save$/ }));

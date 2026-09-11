@@ -1,9 +1,11 @@
 import { isGoogleEditorPrivacyRefresh, refreshPrivateEditorBaseline, refreshPrivateEditorValues, rememberPrivateEditorChanges, type PrivateEditorField } from "../event-editor-privacy";
+import { focusMovedToAnotherLayer } from "../layer-focus";
 import { Empty } from "~/ui/Empty";
 import { ProviderRsvpEditor } from "./ProviderRsvpEditor";
 import { ProviderReminderEditor } from "./ProviderReminderEditor";
 import { getServerOrigin } from "~/api/query-keys";
 import type { ProviderEventStateResponse } from "@musubi/types";
+import { AccountMark } from "./ProviderIcon";
 import { ProviderEventDetails } from "./ProviderEventDetails";
 import { hasKnownEventTime, type EventScopeRequest } from "@musubi/types";
 import { eventScopeRequest } from "@musubi/calendar";
@@ -22,14 +24,13 @@ import {
 	type EditScope,
 } from "@musubi/calendar";
 import type { Calendar, Event, Settings } from "@musubi/types";
-import { providerDisplayName, sameRule } from "@musubi/types";
+import { providerDisplayName, providerFlavor, sameRule } from "@musubi/types";
 import {
 	AlertTriangle,
 	ArrowLeft,
 	BellRing,
 	CalendarDays,
 	ChevronDown,
-	ChevronUp,
 	Check,
 	Clock3,
 	CopyPlus,
@@ -38,6 +39,7 @@ import {
 	MapPin,
 	Pencil,
 	Repeat2,
+	RefreshCw,
 	Star,
 	Trash2,
 	UsersRound,
@@ -55,7 +57,8 @@ import {
 import { EventDeliveryDialog } from "./EventDeliveryDialog";
 import { getEventAttendees } from "~/api/resources";
 import { Avatar } from "~/ui/Avatar";
-import { AvatarStack } from "~/ui/AvatarStack";
+import { Disclosure } from "~/ui/Disclosure";
+import { AvatarStackPreview } from "~/ui/AvatarStack";
 import { Button, IconButton } from "~/ui/Button";
 import {
 	ConfirmationDialog,
@@ -68,15 +71,10 @@ import {
 	MenuSeparator,
 	MenuTrigger,
 } from "~/ui/Menu";
-import {
-	Popover,
-	PopoverAnchor,
-	PopoverClose,
-	PopoverContent,
-	PopoverTrigger,
-} from "~/ui/Popover";
+import { Inspector as Popover, InspectorTrigger as PopoverTrigger, InspectorClose as PopoverClose, InspectorContent as PopoverContent } from "~/ui/Inspector";
+
 import { InlineError } from "~/ui/InlineError";
-import { RowAction } from "~/ui/Row";
+import { Row, RowAction } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { getEventDateLabel, getEventRangeLabel } from "../calendar-math";
 import {
@@ -85,7 +83,6 @@ import {
 	type EventFormValues,
 } from "../event-form";
 import { connectionOfCalendar } from "../federation-routing";
-import { focusMovedToAnotherLayer } from "../layer-focus";
 import {
 	canEditEvent,
 	canRemoveEvent,
@@ -153,7 +150,6 @@ function reminderLabel(reminder: EventReminder, kind: "allDay" | "timed") {
 }
 
 /** Faces before the pile turns into "+N", the same count the phone shows. */
-const FACEPILE_LIMIT = 7;
 
 type DeleteScope = "occurrence" | "following" | "series";
 type DeletePrompt = "confirm" | "scope";
@@ -178,10 +174,6 @@ type EventDetailsPopoverProps = EventActionHandlers & {
 };
 
 export function EventDetailsPopover({
-	align = "start",
-	anchorInsideTrigger = false,
-	collisionBoundary,
-	side = "right",
 	calendar,
 	calendars,
 	children,
@@ -225,6 +217,18 @@ export function EventDetailsPopover({
   const [providerRsvpEditor, setProviderRsvpEditor] = useState<{ context: string; eventId: string; occurrence: boolean; observation: ProviderEventStateResponse }>();
   const [providerReminderEditor, setProviderReminderEditor] = useState<{ context: string; eventId: string; occurrence: boolean; observation: ProviderEventStateResponse }>();
 	const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleteButtonElement, setDeleteButtonElement] = useState<HTMLButtonElement | null>(null);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
+  const wasEditing = useRef(false);
+  useEffect(() => { if (wasEditing.current && !editing && open) editButtonRef.current?.focus(); wasEditing.current = editing; }, [editing, open]);
+  const [discardAction, setDiscardAction] = useState<(() => void)>();
+  const draftDirty = editing && draft?.values && JSON.stringify(draft.values) !== JSON.stringify(eventFormValues(master.recurrence && onRestoreEvent ? occurrence : master));
+  function requestExit(after: () => void, closePanel = true) {
+    if (pendingEdit || saving || busyAction) return;
+    const finish = () => { if (closePanel) handleOpenChange(false, true); else { setEditing(false); setDraft(undefined); } after(); };
+    if (draftDirty) setDiscardAction(() => finish); else finish();
+  }
 	const [deletePrompt, setDeletePrompt] = useState<DeletePrompt>();
 	// The edit waiting for its scope answer, kept whole so nothing typed is lost
 	// if the question is dismissed.
@@ -238,7 +242,6 @@ export function EventDetailsPopover({
     if (deletePrompt) setDeletePrompt(undefined);
   }
 	const [triggerElement, setTriggerElement] = useState<HTMLElement | null>(null);
-	const [anchorPoint, setAnchorPoint] = useState<{ x: number; y: number }>();
 	const [busyAction, setBusyAction] = useState<string>();
 	const [targetAction, setTargetAction] = useState<TargetAction>();
 	const [pendingTargetId, setPendingTargetId] = useState<string>();
@@ -339,9 +342,13 @@ export function EventDetailsPopover({
 			return;
 		}
 
+    setSaving(true);
+    try {
 		await onUpdateEvent(updateEventFromForm(master, values));
 		onNotice("Event updated.");
-		handleOpenChange(false);
+    setEditing(false);
+    setDraft(undefined);
+    } finally { setSaving(false); }
 	}
 
 	/**
@@ -607,43 +614,19 @@ export function EventDetailsPopover({
 
 	return (
 		<>
-			<Popover open={open} onOpenChange={handleOpenChange}>
+			<Popover open={open} onOpenChange={handleOpenChange} onRequestClose={after => requestExit(after)}>
 				<PopoverTrigger
 					asChild
 					onClick={(clickEvent) => {
 						setTriggerElement(clickEvent.currentTarget);
-						if (anchorInsideTrigger) {
-							const bounds = clickEvent.currentTarget.getBoundingClientRect();
-							setAnchorPoint({ x: bounds.left, y: bounds.top });
-						}
+
 					}}
 				>
 					{children}
 				</PopoverTrigger>
-				{anchorInsideTrigger && anchorPoint ? (
-					<PopoverAnchor asChild>
-						<span
-							aria-hidden="true"
-							style={{
-								position: "fixed",
-								left: anchorPoint.x,
-								top: anchorPoint.y,
-							}}
-						/>
-					</PopoverAnchor>
-				) : null}
 				<PopoverContent
 					aria-labelledby={titleId}
 					className={styles.detailPopover}
-					collisionBoundary={collisionBoundary}
-					collisionPadding={14}
-					align={align}
-					/* This surface scrolls its own overflow, which makes it a scroll
-               container: an arrow poking out of its edge is clipped by the very
-               overflow rule that lets long details scroll, and still counts
-               toward scrollWidth — a phantom horizontal scrollbar for a
-               decoration nobody can see. */
-					showArrow={false}
 					onClick={(clickEvent) => clickEvent.stopPropagation()}
 					/* React portals bubble events to the React parent, not the DOM
                one: without this a press on the title reaches the day cell this
@@ -651,32 +634,24 @@ export function EventDetailsPopover({
                selecting text opened a draft instead. Click was already stopped
                for the same reason. */
 					onPointerDown={(pointerEvent) => pointerEvent.stopPropagation()}
-					/* Selecting the title or notes moves focus off the text and out of
-               the layer, which Radix reads as an interaction outside — so the
-               preview closed the moment you tried to copy anything out of it.
-               A modal opening over it still takes it away. */
-					onFocusOutside={(focusEvent) => {
-						if (!focusMovedToAnotherLayer(focusEvent.target)) {
-							focusEvent.preventDefault();
-						}
-					}}
+          accessibleTitle={editing ? "Edit event" : event.title}
+          onFocusOutside={focusEvent => focusEvent.preventDefault()}
+          onInteractOutside={outsideEvent => {
+            const target = outsideEvent.target;
+            if (editing || focusMovedToAnotherLayer(target) || (target instanceof Element && target.closest("[data-inspector-trigger]"))) outsideEvent.preventDefault();
+          }}
 					onEscapeKeyDown={(escapeEvent) => {
 						if (!targetAction) return;
 						escapeEvent.preventDefault();
 						hideTargetCalendars();
 					}}
-					/* Keep the detail surface beside its event. Collision handling may
-               flip right to left, but it no longer compresses the card into
-               the small strip above or below a late-month event. */
-					side={side}
-					sideOffset={12}
 					style={surfaceStyle}
 				>
 					{editing && !editable ? (
             <>
               <header className={styles.editorHeader}>
                 <h2 id={titleId}>This event is read-only</h2>
-                <IconButton label="Close event editor" size="compact" onClick={() => handleOpenChange(false, true)}>
+                <IconButton label="Close event editor" size="compact" onClick={() => requestExit(() => {})}>
                   <X size={17} strokeWidth={1.6} />
                 </IconButton>
               </header>
@@ -689,7 +664,7 @@ export function EventDetailsPopover({
 								<IconButton
 									label="Close event editor"
 									size="compact"
-									onClick={() => setEditing(false)}
+									onClick={() => requestExit(() => {}, false)}
 								>
 									<X size={17} strokeWidth={1.6} />
 								</IconButton>
@@ -700,11 +675,11 @@ export function EventDetailsPopover({
                 onValuesChange={(values) => setDraft(current => current ? { ...current, values, ownedFields: rememberPrivateEditorChanges(current.values ?? eventFormValues(master.recurrence && onRestoreEvent ? occurrence : master), values, current.ownedFields) } : current)}
 								calendarLocked
 								calendars={calendars}
-								compact
+                layout="panel"
 								initialValues={draft?.values ?? eventFormValues(
 									master.recurrence && onRestoreEvent ? occurrence : master,
 								)}
-								onCancel={() => setEditing(false)}
+								onCancel={() => requestExit(() => {}, false)}
 								onExpand={
 									onOpenFullEditor
 										? (values) => {
@@ -741,6 +716,37 @@ export function EventDetailsPopover({
 							<header className={styles.detailsHeader}>
 								<div className={styles.titleBlock}>
 									<h2 id={titleId}>{event.title}</h2>
+<ul aria-label="Calendars" className={styles.calendarPills}>
+									{eventCalendars.length > 0 ? (
+										eventCalendars.map((item) => (
+											<li className={styles.calendarPill} key={item.id}>
+												{/* The home calendar's mark replaces its dot rather
+                              than sitting next to it: both say "this calendar",
+                              and the star says which one owns the event — the
+                              colour, the invitations and where an edit lands. */}
+												{item.id === homeCalendarId ? (
+													<Star
+														aria-label="Home calendar"
+														className={styles.homePillMark}
+														fill={item.color}
+														size={12}
+														strokeWidth={1.6}
+														style={{ color: item.color }}
+													/>
+												) : (
+													<CalendarDot color={item.color} />
+												)}
+												{item.provider ? <AccountMark flavor={providerFlavor(item)} size="compact" /> : null}
+												{item.name}
+											</li>
+										))
+									) : (
+										<li className={styles.calendarPill}>
+											<CalendarDot color={accentColor} />
+											Calendar
+										</li>
+									)}
+								</ul>
 									{event.recurrence ? (
 										<span className={styles.recurrenceMark}>
 											<Repeat2 aria-hidden="true" size={13} />
@@ -756,8 +762,7 @@ export function EventDetailsPopover({
 							</header>
 
 							<div className={styles.detailsBody}>
-								<Button variant="ghost" size="compact" onClick={() => { setOpen(false); setDeliveryTarget({ context: providerReminderContext, eventId: event.seriesID ? event.id : liveMaster.id }); }}>{event.seriesID ? "Occurrence delivery details" : "Delivery details"}</Button>
-                {event.seriesID && liveMaster.id !== event.id ? <Button variant="ghost" size="compact" onClick={() => { setOpen(false); setDeliveryTarget({ context: providerReminderContext, eventId: liveMaster.id }); }}>Series delivery details</Button> : null}
+
 								<dl className={styles.whenList}>
 									<DetailRow
 										icon={<CalendarDays size={18} strokeWidth={1.5} />}
@@ -781,36 +786,7 @@ export function EventDetailsPopover({
 									/>
 								</dl>
 
-								<ul aria-label="Calendars" className={styles.calendarPills}>
-									{eventCalendars.length > 0 ? (
-										eventCalendars.map((item) => (
-											<li className={styles.calendarPill} key={item.id}>
-												{/* The home calendar's mark replaces its dot rather
-                              than sitting next to it: both say "this calendar",
-                              and the star says which one owns the event — the
-                              colour, the invitations and where an edit lands. */}
-												{item.id === homeCalendarId ? (
-													<Star
-														aria-label="Home calendar"
-														className={styles.homePillMark}
-														fill={item.color}
-														size={12}
-														strokeWidth={1.6}
-														style={{ color: item.color }}
-													/>
-												) : (
-													<CalendarDot color={item.color} />
-												)}
-												{item.name}
-											</li>
-										))
-									) : (
-										<li className={styles.calendarPill}>
-											<CalendarDot color={accentColor} />
-											Calendar
-										</li>
-									)}
-								</ul>
+
 
 								{event.location || event.url ? (
 									<dl className={styles.infoList}>
@@ -831,7 +807,77 @@ export function EventDetailsPopover({
 									</dl>
 								) : null}
 
-								{event.description ? (
+								                {master.hasAttendees ? (
+                  <section aria-busy={!attendees} aria-labelledby={guestsTitleId} className={styles.attendeeSection}>
+                    {attendees ? <>
+                      <Disclosure
+                        density="compact"
+                        icon={<UsersRound aria-hidden="true" size={18} strokeWidth={1.5} />}
+                        label={<span id={guestsTitleId}>{`${homeCalendar?.provider ? "Musubi attendees" : "Attendees"} · ${going.length}`}</span>}
+                        value={going.length ? <AvatarStackPreview limit={2} people={going} /> : undefined}
+                        open={attendeesOpen}
+                        onOpenChange={setAttendeesOpen}
+                      >
+                        {attendees.length ? <ul className={styles.attendeeGroups}>
+												{groupAttendees(attendees).map((group) => (
+													<li key={group.status}>
+														<p className={styles.attendeeGroupTitle}>{group.title}</p>
+														<ul className={styles.attendeeList}>
+															{group.items.map((item) => (
+																<li key={item.id}>
+																	<Avatar image={item.image} name={item.name} size="default" />
+																	<span>{item.name}</span>
+																</li>
+															))}
+														</ul>
+													</li>
+												))}
+											</ul> : <p>Be the first to answer.</p>}
+                      </Disclosure>
+                      <Row className={styles.attendeeAnswer} size="compact" label={homeCalendar?.provider ? "Your Musubi answer" : "Your answer"} trailing={<Menu>
+													<MenuTrigger asChild>
+														<Button
+															className={styles.answerTrigger}
+															loading={busyAction === "attendance"}
+															size="compact"
+															variant={mine ? "primary" : "secondary"}
+														>
+															{answerLabel(mine) ?? "Answer"}
+															<ChevronDown aria-hidden="true" size={14} />
+														</Button>
+													</MenuTrigger>
+													<MenuContent align="end" label="Your answer">
+														{ATTENDANCE_CHOICES.map((choice) => (
+															<MenuItem
+																icon={
+																	mine === choice.value ? (
+																		<Check aria-hidden="true" size={15} />
+																	) : undefined
+																}
+																key={choice.value}
+																onSelect={() => void handleAnswer(choice.value)}
+															>
+																{choice.label}
+															</MenuItem>
+														))}
+														{mine ? (
+															<>
+																<MenuSeparator />
+																<MenuItem onSelect={() => void handleAnswer("none")}>
+																	Clear answer
+																</MenuItem>
+															</>
+														) : null}
+													</MenuContent>
+												</Menu>} />
+                    </> : <>
+                      <SectionLabel id={guestsTitleId} level={3}>Attendees</SectionLabel>
+                      <p role="status">Loading guests…</p>
+                    </>}
+                  </section>
+                ) : null}
+
+{event.description ? (
 									<section aria-labelledby={notesTitleId} className={styles.notes}>
 										<div className={styles.sectionHeading}>
 											<FileText aria-hidden="true" size={17} />
@@ -839,6 +885,7 @@ export function EventDetailsPopover({
 												Notes
 											</SectionLabel>
 										</div>
+                    {event.description.length > 240 ? <><p>{event.description.slice(0, 220)}…</p><Disclosure density="compact" label="Read full notes" icon={<FileText size={18} strokeWidth={1.5} />}>
 										<p>
 											{noteParts(event.description).map((part, index) =>
 												part.href ? (
@@ -856,17 +903,35 @@ export function EventDetailsPopover({
 													part.text
 												),
 											)}
-										</p>
+										</p></Disclosure></> : <>
+										<p>
+											{noteParts(event.description).map((part, index) =>
+												part.href ? (
+													<a
+														aria-label={`Open ${part.href}`}
+														href={part.href}
+														key={`${part.href}-${index}`}
+														rel="noreferrer"
+														target="_blank"
+														title={part.href}
+													>
+														{part.text}
+													</a>
+												) : (
+													part.text
+												),
+											)}
+										</p></>}
 									</section>
 								) : null}
 
-								{homeCalendar?.provider ? <ProviderEventDetails event={event} seriesMaster={!event.seriesID && liveMaster.recurrence ? liveMaster : undefined} revision={event.seriesID ? event.revision : liveMaster.revision} occurrence={!!event.seriesID} eventId={event.seriesID ? event.id : master.id} series={!event.seriesID && !!master.recurrence} userId={user.id} connectionId={homeConnectionId} onRespond={observation => { setOpen(false); setProviderRsvpEditor({ context: providerReminderContext, occurrence: !!event.seriesID, eventId: event.seriesID ? event.id : master.id, observation }); }} onEditReminders={observation => { setOpen(false); setProviderReminderEditor({ context: providerReminderContext, occurrence: !!event.seriesID, eventId: event.seriesID ? event.id : master.id, observation }); }} /> : null}
+								{homeCalendar?.provider ? <ProviderEventDetails presentation="panel" providerFlavor={providerFlavor(homeCalendar)} event={event} seriesMaster={!event.seriesID && liveMaster.recurrence ? liveMaster : undefined} revision={event.seriesID ? event.revision : liveMaster.revision} occurrence={!!event.seriesID} eventId={event.seriesID ? event.id : master.id} series={!event.seriesID && !!master.recurrence} userId={user.id} connectionId={homeConnectionId} onRespond={observation => { setOpen(false); setProviderRsvpEditor({ context: providerReminderContext, occurrence: !!event.seriesID, eventId: event.seriesID ? event.id : master.id, observation }); }} onEditReminders={observation => { setOpen(false); setProviderReminderEditor({ context: providerReminderContext, occurrence: !!event.seriesID, eventId: event.seriesID ? event.id : master.id, observation }); }} /> : null}
 
 								{reminder ? (
 									<section aria-labelledby={reminderTitleId} className={styles.notes}>
 										<div className={styles.sectionHeading}>
 											<BellRing aria-hidden="true" size={17} />
-											<SectionLabel id={reminderTitleId} level={3}>
+											<SectionLabel className={styles.reminderLabel} id={reminderTitleId} level={3}>
 												{homeCalendar?.provider ? "Musubi reminder" : "Remind me"}
 											</SectionLabel>
 											<Menu>
@@ -912,120 +977,7 @@ export function EventDetailsPopover({
 									</section>
 								) : null}
 
-								{master.hasAttendees ? (
-									<section
-										aria-busy={!attendees}
-										aria-labelledby={guestsTitleId}
-										className={styles.attendeeSection}
-									>
-										{/* Same anatomy as the phone: the count doubles as the
-                          expand toggle, the answer sits on the right. */}
-										<div className={styles.attendeeHeader}>
-											{/* The button lives inside the heading, not the other
-                            way round: a heading is not phrasing content, so a
-                            button wrapping it is invalid markup. */}
-											<SectionLabel
-												className={styles.attendeeHeading}
-												id={guestsTitleId}
-												level={3}
-											>
-												<Button
-													aria-expanded={attendeesOpen}
-													className={styles.attendeeToggle}
-													disabled={!attendees}
-													icon={
-														<UsersRound aria-hidden="true" size={15} strokeWidth={1.6} />
-													}
-													size="compact"
-													variant="secondary"
-													onClick={() => setAttendeesOpen((open) => !open)}
-												>
-													{attendees ? `${homeCalendar?.provider ? "Musubi attendees" : "Attendees"} · ${going.length}` : "Attendees"}
-													{attendeesOpen ? (
-														<ChevronUp aria-hidden="true" size={14} />
-													) : (
-														<ChevronDown aria-hidden="true" size={14} />
-													)}
-												</Button>
-											</SectionLabel>
-											{/* A menu, not three buttons: three labels beside the
-                          heading overflowed the popover, and what fell off the
-                          edge was the answer. Radix owns the menu's focus and
-                          dismissal, and it layers above the popover it opens
-                          from — both surfaces sit at the same z-index, and this
-                          one mounts second. */}
-											{attendees ? (
-												<Menu>
-													<MenuTrigger asChild>
-														<Button
-															className={styles.answerTrigger}
-															loading={busyAction === "attendance"}
-															size="compact"
-															variant={mine ? "primary" : "secondary"}
-														>
-															{answerLabel(mine) ?? "Answer"}
-															<ChevronDown aria-hidden="true" size={14} />
-														</Button>
-													</MenuTrigger>
-													<MenuContent align="end" label="Your answer">
-														{ATTENDANCE_CHOICES.map((choice) => (
-															<MenuItem
-																icon={
-																	mine === choice.value ? (
-																		<Check aria-hidden="true" size={15} />
-																	) : undefined
-																}
-																key={choice.value}
-																onSelect={() => void handleAnswer(choice.value)}
-															>
-																{choice.label}
-															</MenuItem>
-														))}
-														{mine ? (
-															<>
-																<MenuSeparator />
-																<MenuItem onSelect={() => void handleAnswer("none")}>
-																	Clear answer
-																</MenuItem>
-															</>
-														) : null}
-													</MenuContent>
-												</Menu>
-											) : null}
-										</div>
 
-										{/* The facepile falls apart into the list — one or the
-                          other, never both. */}
-										{!attendees ? (
-											<p>Loading guests…</p>
-										) : attendees.length === 0 ? (
-											<p>Be the first to answer.</p>
-										) : attendeesOpen ? (
-											<ul className={styles.attendeeGroups}>
-												{groupAttendees(attendees).map((group) => (
-													<li key={group.status}>
-														<p className={styles.attendeeGroupTitle}>{group.title}</p>
-														<ul className={styles.attendeeList}>
-															{group.items.map((item) => (
-																<li key={item.id}>
-																	<Avatar image={item.image} name={item.name} size="default" />
-																	<span>{item.name}</span>
-																</li>
-															))}
-														</ul>
-													</li>
-												))}
-											</ul>
-										) : (
-											<AvatarStack
-												label="Show every answer"
-												limit={FACEPILE_LIMIT}
-												people={going}
-												onClick={() => setAttendeesOpen(true)}
-											/>
-										)}
-									</section>
-								) : null}
 
 								{targetAction && targetCalendars.length > 0 ? (
 									<section
@@ -1099,6 +1051,10 @@ export function EventDetailsPopover({
 									</section>
 								) : null}
 
+                <div className={styles.deliveryActions}>
+								<RowAction size="compact" icon={<RefreshCw size={18} strokeWidth={1.5} />} label={event.seriesID ? "Occurrence delivery details" : "Delivery details"} onClick={() => { setOpen(false); setDeliveryTarget({ context: providerReminderContext, eventId: event.seriesID ? event.id : liveMaster.id }); }} />
+                {event.seriesID && liveMaster.id !== event.id ? <RowAction size="compact" icon={<RefreshCw size={18} strokeWidth={1.5} />} label="Series delivery details" onClick={() => { setOpen(false); setDeliveryTarget({ context: providerReminderContext, eventId: liveMaster.id }); }} /> : null}
+                </div>
 								{actionError && !targetAction ? (
 									<InlineError
 										className={styles.actionError}
@@ -1113,9 +1069,10 @@ export function EventDetailsPopover({
 								<footer aria-label="Event actions" className={styles.detailActions}>
 									{editable ? (
 										<Button
-											icon={<Pencil size={16} strokeWidth={1.6} />}
+											ref={editButtonRef}
+                      icon={<Pencil size={16} strokeWidth={1.6} />}
 											size="compact"
-											variant="secondary"
+											variant="primary"
 											onClick={() => {
 												setDraft({
 													event: structuredClone(event),
@@ -1164,7 +1121,7 @@ export function EventDetailsPopover({
 									{removable ? (
 										<Button
 											className={styles.deleteAction}
-											icon={<Trash2 size={16} strokeWidth={1.6} />}
+											ref={setDeleteButtonElement} icon={<Trash2 size={16} strokeWidth={1.6} />}
 											loading={busyAction === "delete"}
 											size="compact"
 											// Same shape as its three neighbours; the colour is what
@@ -1187,17 +1144,18 @@ export function EventDetailsPopover({
 					)}
 				</PopoverContent>
 			</Popover>
+      <ConfirmationDialog elevated open={!!discardAction} onOpenChange={value => { if (!value) setDiscardAction(undefined); }} returnFocus={editSubmitElement} title="Discard unsaved changes?" description="Your changes have not been saved." closeLabel="Keep editing" cancelLabel="Keep editing" confirmLabel="Discard changes" onConfirm={() => { const finish = discardAction; setDiscardAction(undefined); finish?.(); }}><p>The original event will stay unchanged.</p></ConfirmationDialog>
 
             {providerRsvpEditor?.context === providerReminderContext ? <ProviderRsvpEditor
               occurrence={providerRsvpEditor.occurrence} eventId={providerRsvpEditor.eventId} connectionId={homeConnectionId}
-              observation={providerRsvpEditor.observation} returnFocus={triggerElement} onClose={() => setProviderRsvpEditor(undefined)} /> : null}
+              observation={providerRsvpEditor.observation} returnFocus={open ? deleteButtonElement : triggerElement} onClose={() => setProviderRsvpEditor(undefined)} /> : null}
             {providerReminderEditor?.context === providerReminderContext ? <ProviderReminderEditor
               key={providerReminderEditor.context} occurrence={providerReminderEditor.occurrence} eventId={providerReminderEditor.eventId} connectionId={homeConnectionId}
-              observation={providerReminderEditor.observation} returnFocus={triggerElement} onClose={() => setProviderReminderEditor(undefined)} /> : null}
+              observation={providerReminderEditor.observation} returnFocus={open ? deleteButtonElement : triggerElement} onClose={() => setProviderReminderEditor(undefined)} /> : null}
 
             {deliveryTarget?.context === providerReminderContext ? <EventDeliveryDialog key={`${user.id}:${homeConnectionId ?? "home"}:${deliveryTarget.eventId}`}
               eventId={deliveryTarget.eventId} userId={user.id} connectionId={homeConnectionId}
-              returnFocus={triggerElement} onClose={() => setDeliveryTarget(undefined)} /> : null}
+              returnFocus={open ? deleteButtonElement : triggerElement} onClose={() => setDeliveryTarget(undefined)} /> : null}
 
 			{pendingEdit ? (
 				<RecurrenceScopeDialog
@@ -1236,7 +1194,7 @@ export function EventDetailsPopover({
 							setDeletePrompt(undefined);
 						}
 					}}
-					returnFocus={triggerElement}
+					returnFocus={open ? deleteButtonElement : triggerElement}
 					title={event.title}
 				/>
 			) : null}
@@ -1249,7 +1207,7 @@ export function EventDetailsPopover({
 				onConfirm={() => void handleDelete()}
 				onOpenChange={(nextOpen) => nextOpen || setDeletePrompt(undefined)}
 				open={deletePrompt === "confirm"}
-				returnFocus={triggerElement}
+				returnFocus={open ? deleteButtonElement : triggerElement}
 				title="Delete event?"
 			>
 				<ConfirmationNotice icon={<AlertTriangle size={19} strokeWidth={1.5} />}>

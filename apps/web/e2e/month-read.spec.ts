@@ -1068,7 +1068,7 @@ test("uses the shared time grid as a one-column Day", async ({ page }) => {
 	await expect(page.getByText("Friday, July 24, 2026")).toBeVisible();
 });
 
-test("keeps Day event details beside the event inside the calendar workspace", async ({
+test("overlays Day event details without resizing the calendar", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 1280, height: 800 });
@@ -1091,19 +1091,13 @@ test("keeps Day event details beside the event inside the calendar workspace", a
 	);
 	const detailsBox = (await details.boundingBox())!;
 
-	await expect(details).toHaveAttribute("data-side", /left|right/);
-	expect(detailsBox.x).toBeGreaterThanOrEqual(areaBox.x);
-	expect(detailsBox.y).toBeGreaterThanOrEqual(areaBox.y);
-	expect(detailsBox.x + detailsBox.width).toBeLessThanOrEqual(
-		areaBox.x + areaBox.width,
-	);
-	expect(detailsBox.y + detailsBox.height).toBeLessThanOrEqual(
-		areaBox.y + areaBox.height,
-	);
-	// Day events use the whole column, so the side placement intentionally sits
-	// over the event layer instead of escaping above or below the trigger.
-	expect(detailsBox.x).toBeGreaterThanOrEqual(triggerBox.x);
-	expect(detailsBox.x).toBeLessThan(triggerBox.x + triggerBox.width);
+	expect(detailsBox.x).toBe(800);
+	expect(detailsBox.y).toBe(0);
+	expect(detailsBox.width).toBe(480);
+	expect(detailsBox.height).toBe(800);
+	expect(await calendarArea.boundingBox()).toEqual(areaBox);
+	expect(await trigger.boundingBox()).toEqual(triggerBox);
+
 });
 
 test("creates across chosen calendars, then edits and deletes through confirmed API writes", async ({
@@ -1150,7 +1144,7 @@ test("creates across chosen calendars, then edits and deletes through confirmed 
 		page.getByRole("button", { name: /Release readiness/ }),
 	).toBeVisible();
 
-	await page.getByRole("button", { name: /Release readiness/ }).click();
+	await expect(page.getByRole("dialog", { name: "Release readiness" })).toBeVisible();
 	await page.getByRole("button", { exact: true, name: "Delete" }).click();
 	await page.getByRole("button", { exact: true, name: "Delete" }).click();
 
@@ -1429,7 +1423,7 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
 	await page.goto("/app/p/my-calendar/agenda?date=2026-07-26");
 
 	await page.getByRole("button", { name: /Design review/ }).click();
-	await page.getByRole("button", { name: "Attendees · 1" }).click();
+	await page.locator("summary").filter({ hasText: "Attendees · 1" }).click();
 	await expect(page.getByText("Guest One")).toBeVisible();
 	await page.getByRole("button", { exact: true, name: "Answer" }).click();
 	await page.getByRole("menuitem", { name: "Going" }).click();
@@ -1502,16 +1496,14 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
 		.analyze();
 	expect(deleteAccessibility.violations).toEqual([]);
 
-	// Opening the modal dismisses the preview. Escape returns to the event that
-	// launched that preview, so the keyboard path has a stable place to resume.
+	// The inspector stays mounted behind the modal. Escape resumes at Delete.
 	await page.keyboard.press("Escape");
 	await expect(deleteDialog).toHaveCount(0);
-	await expect(recurringEvent).toBeFocused();
+	await expect(deleteButton).toBeFocused();
 	const deletionRequest = page.waitForRequest(
 		(request) =>
 			request.url().endsWith("/api/v1/events") && request.method() === "PATCH",
 	);
-	await recurringEvent.click();
 	await page.getByRole("button", { name: "Delete" }).click();
 	await page
 		.getByRole("dialog", { name: "Delete recurring event" })
@@ -2178,6 +2170,11 @@ test("reorders pages by dragging a row, and by keyboard", async ({ page }) => {
 	await expect(rows).toHaveCount(2);
 	await expect(order).toHaveText(["My calendar", "Work"]);
 
+	// Management stays fixed below the Pages scroller; reveal the drag target
+	// before taking viewport coordinates instead of pressing through its clip.
+	await rows.nth(1).scrollIntoViewIfNeeded();
+	await expect(rows.nth(0)).toBeInViewport({ ratio: 0.99 });
+	await expect(rows.nth(1)).toBeInViewport({ ratio: 0.99 });
 	// Drag the second row above the first.
 	const first = (await rows.nth(0).boundingBox())!;
 	const second = (await rows.nth(1).boundingBox())!;
@@ -4358,7 +4355,7 @@ test("turns anchored surfaces into sheets on a narrow viewport", async ({
 	await expectNoAccessibilityViolations(page);
 });
 
-test("keeps desktop event details full-sized beside their trigger", async ({
+test("keeps desktop event details in the right overlay without moving the calendar", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 1280, height: 800 });
@@ -4368,7 +4365,8 @@ test("keeps desktop event details full-sized beside their trigger", async ({
 	const leftTrigger = page
 		.getByRole("button", { name: /Studio retreat/ })
 		.first();
-	const leftTriggerBox = (await leftTrigger.boundingBox())!;
+	const calendarGrid = page.getByRole("grid").first();
+	const calendarBox = (await calendarGrid.boundingBox())!;
 	await leftTrigger.click();
 	const leftDetails = page.getByRole("dialog", { name: "Studio retreat" });
 	await leftDetails.evaluate((element) =>
@@ -4379,9 +4377,8 @@ test("keeps desktop event details full-sized beside their trigger", async ({
 		),
 	);
 	const leftDetailsBox = (await leftDetails.boundingBox())!;
-	expect(leftDetailsBox.x).toBeGreaterThanOrEqual(
-		leftTriggerBox.x + leftTriggerBox.width + 7,
-	);
+	expect(leftDetailsBox).toMatchObject({ x: 800, y: 0, width: 480, height: 800 });
+	expect(await calendarGrid.boundingBox()).toEqual(calendarBox);
 	expect(
 		await leftDetails.evaluate((element) => ({
 			horizontal: element.scrollWidth - element.clientWidth,
@@ -4393,7 +4390,6 @@ test("keeps desktop event details full-sized beside their trigger", async ({
 	const rightTrigger = page.getByRole("button", {
 		name: /Theatre night/,
 	});
-	const rightTriggerBox = (await rightTrigger.boundingBox())!;
 	await rightTrigger.click();
 	const rightDetails = page.getByRole("dialog", { name: "Theatre night" });
 	await rightDetails.evaluate((element) =>
@@ -4404,9 +4400,7 @@ test("keeps desktop event details full-sized beside their trigger", async ({
 		),
 	);
 	const rightDetailsBox = (await rightDetails.boundingBox())!;
-	expect(rightDetailsBox.x + rightDetailsBox.width).toBeLessThanOrEqual(
-		rightTriggerBox.x - 7,
-	);
+	expect(rightDetailsBox).toMatchObject({ x: 800, y: 0, width: 480, height: 800 });
 	expect(
 		await rightDetails.evaluate(
 			(element) => element.scrollWidth - element.clientWidth,
@@ -4499,7 +4493,7 @@ test("opens the calendar color picker as the top mobile sheet", async ({
 	await expect(trigger).toBeFocused();
 });
 
-test("opens an event's details as a sheet on a narrow viewport", async ({
+test("opens an event's details as a full-height panel on a narrow viewport", async ({
 	page,
 }) => {
 	await page.setViewportSize({ height: 720, width: 390 });
@@ -4519,8 +4513,10 @@ test("opens an event's details as a sheet on a narrow viewport", async ({
 	const box = (await sheet.boundingBox())!;
 	expect(box.x).toBe(0);
 	expect(Math.round(box.width)).toBe(390);
-	// Tall content scrolls inside the sheet instead of running off the screen.
-	expect(box.height).toBeLessThanOrEqual(720 * 0.86 + 1);
+	// The narrow inspector fills the viewport; its body owns content scrolling.
+	expect(box.y).toBe(0);
+	expect(Math.round(box.height)).toBe(720);
+	expect(await sheet.evaluate(element => element.scrollWidth - element.clientWidth)).toBe(0);
 	await expect(
 		page.getByRole("heading", { name: "Client presentation" }),
 	).toBeVisible();
@@ -4541,8 +4537,10 @@ test("opens an event's details as a sheet on a narrow viewport", async ({
 	const calendarBox = (await sheet
 		.getByRole("list", { name: "Calendars" })
 		.boundingBox())!;
-	expect([titleBox.y, dateBox.y, timeBox.y, calendarBox.y]).toEqual(
-		[titleBox.y, dateBox.y, timeBox.y, calendarBox.y].sort((a, b) => a - b),
+	// Calendar identity now belongs with the event title in the fixed header.
+	await expect(sheet.locator("header").getByRole("list", { name: "Calendars" })).toBeVisible();
+	expect([titleBox.y, calendarBox.y, dateBox.y, timeBox.y]).toEqual(
+		[titleBox.y, calendarBox.y, dateBox.y, timeBox.y].sort((a, b) => a - b),
 	);
 
 	const accessibility = await new AxeBuilder({ page })
@@ -4854,12 +4852,12 @@ for (const reload of [false, true]) {
 				.click();
 			await page.getByRole("button", { name: "Edit", exact: true }).click();
 
-			// The popover is for the high-frequency edits, matching quick create.
+			// The inspector exposes the complete form and retains the full-page handoff.
 			await expect(
 				page.getByRole("button", { name: "More options" }),
 			).toBeVisible();
-			await expect(page.getByPlaceholder("Add location")).toHaveCount(0);
-			await expect(page.getByLabel("Repeat")).toHaveCount(0);
+			await expect(page.getByPlaceholder("Add location")).toBeVisible();
+			await expect(page.getByLabel("Repeat")).toBeVisible();
 			await expect(
 				page.getByRole("button", { name: /^Choose calendars/ }),
 			).toBeVisible();
@@ -6811,7 +6809,7 @@ test("a press that dismisses a preview does not also start a draft", async ({
 	// viewport, so the point comes from the viewport rather than from its box.
 	const column = page.locator("[data-time-grid-column]").first();
 	const bounds = (await column.boundingBox())!;
-	const x = bounds.x + bounds.width / 2;
+	const x = bounds.x + 40;
 	const y = page.viewportSize()!.height - 120;
 	await page.mouse.click(x, y);
 
@@ -6834,7 +6832,7 @@ test("a press that dismisses a preview does not also start a draft", async ({
 	const cell = page
 		.getByRole("grid")
 		.first()
-		.getByRole("gridcell", { name: /July 17, 2026/ });
+		.getByRole("gridcell", { name: /July 13, 2026/ });
 	const cellBox = (await cell.boundingBox())!;
 	// Dragging out a range, which is the month grid's create gesture: the press
 	// that dismisses a preview must not begin one.
@@ -7401,27 +7399,50 @@ test("puts an unknown view back in the address bar", async ({ page }) => {
 	await expect(page).toHaveURL(/\/month\?date=2026-07-23$/);
 });
 
-test("keeps the sidebar's Pages label off the first page row", async ({
-	page,
-}) => {
-	await mockAuthenticatedReads(page);
-	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
-	const label = page.getByRole("heading", { name: "Pages" });
-	await label.waitFor();
-
-	// Measured, not declared: the bottom margin this used to rely on never applied
-	// once — `.sectionLabel` in the primitives sets `margin: 0` at the same
-	// specificity and lands later in the bundle, so it won on order. The space is
-	// the section's gap now, and this is what tells us if it goes away again.
-	const gap = await page.evaluate(() => {
-		const heading = window.document.querySelector("#pages-label")!;
-		const list = window.document.querySelector('[class*="pageList"]')!;
-
-		return (
-			list.getBoundingClientRect().top - heading.getBoundingClientRect().bottom
-		);
-	});
-	expect(gap).toBeGreaterThanOrEqual(8);
+for (const width of [1280, 768]) test(`keeps the sidebar's Pages label and management usable with many Pages (${width})`, async ({ page }, testInfo) => {
+  await page.setViewportSize({ width, height: 720 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await mockAuthenticatedReads(page);
+  const pages = [defaultPage, ...Array.from({ length: 20 }, (_, index) => ({
+    ...defaultPage, id: `22222222-2222-4222-8222-${String(index).padStart(12, "0")}`,
+    name: `Project ${index + 1}`, isDefault: false, position: index + 1,
+  }))];
+  await page.route("**/api/v1/pages", route => respond(route, pages));
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
+  if (width === 768) await page.getByRole("button", { name: "Open navigation" }).click();
+  const sidebar = page.getByRole("complementary", { name: "Workspace navigation" });
+  const label = sidebar.getByRole("heading", { name: "Pages" });
+  await expect(label).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: "My calendar", exact: true })).toBeInViewport({ ratio: 1 });
+  // Preserve the original label/list spacing contract as well as the new scroll contract.
+  const gap = await sidebar.evaluate(element => {
+    const heading = element.querySelector("#pages-label")!;
+    const list = element.querySelector('[class*="pageList"]')!;
+    return list.getBoundingClientRect().top - heading.getBoundingClientRect().bottom;
+  });
+  expect(gap).toBeGreaterThanOrEqual(8);
+  const management = sidebar.getByRole("navigation", { name: "Manage Musubi" });
+  const before = await management.boundingBox();
+  for (const name of ["Calendars", "Connections", "Settings"]) {
+    const button = management.getByRole("button", { name, exact: true });
+    await expect(button).toBeInViewport({ ratio: 1 });
+  }
+  await page.screenshot({ path: testInfo.outputPath(`sidebar-${width}-initial.png`), animations: "disabled" });
+  await sidebar.getByRole("button", { name: "My calendar", exact: true }).focus();
+  const last = sidebar.getByRole("button", { name: "Project 20", exact: true });
+  // Keyboard navigation must reveal off-screen Pages without moving management.
+  for (let index = 0; index < pages.length * 3; index++) {
+    if (await last.evaluate(element => element === document.activeElement)) break;
+    await page.keyboard.press("Tab");
+  }
+  await expect(last).toBeFocused();
+  await expect(last).toBeInViewport({ ratio: 1 });
+  expect(await sidebar.locator('[class*="sidebarScroll"]').evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  expect(await management.boundingBox()).toEqual(before);
+  for (const name of ["Calendars", "Connections", "Settings"]) {
+    await expect(management.getByRole("button", { name, exact: true })).toBeInViewport({ ratio: 1 });
+  }
+  await page.screenshot({ path: testInfo.outputPath(`sidebar-${width}-keyboard.png`), animations: "disabled" });
 });
 
 /**
@@ -8087,7 +8108,7 @@ for (const [width, theme, target] of [[1280, "light", "zoned"], [390, "dark", "a
       writes.push({ method: route.request().method(), body });
       return respond(route, { ...source, title: body.patch.title, revision: 2,
         start: target === "zoned" ? "2026-07-25T13:30:17.123Z" : "2026-07-25T00:00:00Z",
-        end: target === "zoned" ? "2026-07-25T14:30:19.456Z" : "2026-07-25T00:00:00Z",
+        end: target === "zoned" ? "2026-07-25T14:30:19.456Z" : "2026-07-26T00:00:00Z",
         isAllDay: target === "all-day", timeModel: target === "zoned" ? body.time : { kind: "all-day" },
       });
     });
@@ -8098,6 +8119,10 @@ for (const [width, theme, target] of [[1280, "light", "zoned"], [390, "dark", "a
     await page.getByRole("button", { name: "More options", exact: true }).click();
     await page.getByRole("combobox", { name: "Time model", exact: true }).click();
     await page.getByRole("option", { name: target === "zoned" ? "Event time zone" : "All-day dates", exact: true }).click();
+    if (target === "all-day") {
+      await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText("July 26, 2026");
+      await expect(page.getByText("End date is not included.")).toBeVisible();
+    }
     if (target === "zoned") {
       await expect(page.getByRole("textbox", { name: "Event time zone", exact: true })).toHaveValue("");
       await page.getByRole("button", { name: "Save", exact: true }).click();
@@ -8113,7 +8138,7 @@ for (const [width, theme, target] of [[1280, "light", "zoned"], [390, "dark", "a
     expect(writes).toHaveLength(1);
     expect(writes[0]).toEqual({ method: "PUT", body: { expectedRevision: 1, patch: { title: "Explicit complete draft" }, time: target === "zoned" ? {
       kind: "zoned", timeZone: "America/New_York", startLocal: "2026-07-25T09:30:17.123", endLocal: "2026-07-25T10:30:19.456",
-    } : { kind: "all-day", startDate: "2026-07-25", endDate: "2026-07-25" } } });
+    } : { kind: "all-day", startDate: "2026-07-25", endDate: "2026-07-26" } } });
   });
 }
 
@@ -8231,13 +8256,17 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
     await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
     const imported = event("00000000-0000-4000-8000-000000000166", "Provider meeting", "personal", "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z", { recurrence: "FREQ=DAILY;COUNT=2" });
     await mockAuthenticatedReads(page, { ...events, events: [imported] }, [{ ...calendars[0]!, provider: "microsoft", accountID: "fixture", accountLabel: "Fixture" }]);
-    await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, { state: { provider: "microsoft", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [], attendeesComplete: false, ownResponse: "notResponded", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "workingElsewhere", privacy: "confidential", status: null, eventType: "singleInstance", conferenceURLs: [] } }));
+    await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, { state: { provider: "microsoft", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [{ name: "Alex Chen", address: "alex@example.test", self: false, role: "required", response: "accepted" }, { name: "Sam Lee", address: "sam@example.test", self: false, role: "optional", response: "tentative" }], attendeesComplete: false, ownResponse: "notResponded", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "workingElsewhere", privacy: "confidential", status: null, eventType: "singleInstance", conferenceURLs: [] } }));
     await page.goto("/app/p/my-calendar/month?date=2026-07-26");
     await page.getByRole("button", { name: /Provider meeting/ }).first().click();
-    await expect(page.getByRole("heading", { name: "Outlook details" })).toBeVisible();
+    await page.locator("summary").filter({ hasText: "Outlook details" }).click();
     await expect(page.getByText(/These settings describe the series/)).toBeVisible();
-    await expect(page.getByText("Availability: workingElsewhere", { exact: true })).toBeVisible();
+    await expect(page.getByText("Availability: Working elsewhere", { exact: true })).toBeVisible();
     await expect(page.getByText(/Both apps may notify/)).toBeVisible();
+    await page.locator("summary").filter({ hasText: "Outlook participants" }).click();
+    await expect(page.getByRole("list", { name: "Outlook participants" })).toBeVisible();
+    await expect(page.getByText("Alex Chen", { exact: true })).toBeVisible();
+    await expect(page.getByText("Participant list may be incomplete.", { exact: true })).toBeVisible();
     await expectNoAccessibilityViolations(page);
     await page.screenshot({ path: testInfo.outputPath("provider-details.png"), fullPage: true });
   });
@@ -8908,6 +8937,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
       }));
       await page.goto("/app/p/my-calendar/month?date=2026-07-26");
       await page.getByRole("button", { name: /Native private title/ }).first().click();
+      await page.locator("summary").filter({ hasText: "Google Calendar details" }).click();
       await expect(page.getByText(/private-host@example.test/)).toBeVisible();
       if (openEditor) {
         await page.getByRole("button", { name: "Edit Google reminders" }).click();
@@ -8921,13 +8951,19 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
         for (const stream of active) stream.onmessage?.({ data: JSON.stringify({ type: "external_sync", payload: { calendars: ["personal"] } }) });
       });
       const busy = page.getByRole("button", { name: /Busy/ }).first();
-      await expect(busy).toBeVisible();
+      if (openEditor) await expect(busy).toBeVisible();
+      else await expect(page.getByRole("dialog", { name: "Busy", exact: true })).toBeVisible();
       await expect(page.getByText(/private-host@example.test/)).toHaveCount(0);
       await expect(page.getByText("Native private notes", { exact: true })).toHaveCount(0);
       await expect(page.getByRole("dialog", { name: "Google reminders", exact: true })).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Edit Google reminders" })).toHaveCount(0);
       if (openEditor) await expect(busy).toBeFocused();
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      if (!openEditor) {
+        await page.getByRole("button", { name: "Close event details" }).click();
+        await expect(busy).toBeVisible();
+        await expect(busy).toBeFocused();
+      }
       expect(errors).toEqual([]);
     });
   }
@@ -8994,6 +9030,9 @@ for (const mode of ["compact", "generated", "full"] as const) {
     await page.screenshot({ path: testInfo.outputPath(`${provider}-editor-${mode}.png`), fullPage: false });
     if (mode !== "full") {
       await page.keyboard.press("Escape");
+      const discard = page.getByRole("dialog", { name: "Discard unsaved changes?", exact: true });
+      await expect(discard).toBeVisible();
+      await discard.getByRole("button", { name: "Discard changes", exact: true }).click();
       await expect(page.getByRole("button", { name: provider !== "google" ? /Public permitted title/ : /Busy/ }).first()).toBeFocused();
     }
     await expect(page.locator("vite-error-overlay")).toHaveCount(0);
