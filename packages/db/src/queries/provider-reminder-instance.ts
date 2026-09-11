@@ -129,6 +129,10 @@ async function reminderInstanceTransaction(
         );
       return { kind: "replay", receipt: { operationID: previous.id, replayed: true, status: previous.status } };
     }
+    // Google materializes instance defaults as explicit reminders; that cannot
+    // confirm the requested calendar inheritance. Historical receipts stay readable.
+    if (request.reminders.useDefault)
+      throw new EventWriteError("event-write", "unsupported");
     // Native time/series evidence must be verified before accepting its ETag.
     if (event.timeModel?.kind === "floating" || event.recurrence || event.isCanceled)
       throw new EventWriteError("event-write", "unsupported");

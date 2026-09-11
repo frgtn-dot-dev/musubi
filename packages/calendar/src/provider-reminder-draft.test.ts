@@ -29,3 +29,10 @@ for (const invalid of [{ mode: "defaults" as const, overrides: [] }, { mode: "cu
 
 const series: ProviderEventStateResponse = { ...caldav, reminderEdit: { provider: "caldav", scope: "series", expectedRevision: 7, minutesBeforeStart: 15 } };
 assert.deepEqual(providerReminderRequest(series, { mode: "off", overrides: [] }, id), { provider: "caldav", scope: "series", operationID: id, expectedRevision: 7, expectedStateVersion: "a".repeat(64), alarms: { minutesBeforeStart: null } });
+
+const inherited: ProviderEventStateResponse = { ...observation, state: { ...observation.state!, reminders: { provider: "google", useDefault: true, overrides: [] } } };
+assert.equal(providerReminderDraft(inherited).mode, "defaults");
+assert.throws(() => providerReminderRequest(inherited, providerReminderDraft(inherited), id, true), /Calendar defaults cannot be saved/);
+assert.throws(() => providerReminderRequest(observation, { mode: "defaults", overrides: [] }, id, true), /Calendar defaults cannot be saved/);
+assert.deepEqual(providerReminderRequest(observation, draft, id, true), providerReminderRequest(observation, draft, id));
+assert.deepEqual(providerReminderRequest(inherited, { mode: "off", overrides: [] }, id, true), providerReminderRequest(inherited, { mode: "off", overrides: [] }, id));

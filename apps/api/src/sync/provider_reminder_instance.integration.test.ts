@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
-import { db, user, events, externalEvents, externalCalendars, calendarEvents, eventOutbox, createCalendar, upsertExternalEvent, getEventSnapshot, providerStateVersion, prepareProviderReminderInstanceEdit, commitProviderReminderInstanceEdit, completeEventOutbox, hasProviderReminderInstanceSource, calendarMembers, getEventDeliveryResolutionContext, commitEventDeliveryResolution } from "@musubi/db";
+import { db, user, events, externalEvents, externalCalendars, calendarEvents, eventOutbox, createCalendar, upsertExternalEvent, deleteExternalEvent, getEventSnapshot, providerStateVersion, prepareProviderReminderInstanceEdit, commitProviderReminderInstanceEdit, completeEventOutbox, hasProviderReminderInstanceSource, calendarMembers, getEventDeliveryResolutionContext, commitEventDeliveryResolution } from "@musubi/db";
 import { googleReminderInstanceEvidence } from "./adapters/google_reminder_instance";
 import { googleEventState } from "./adapters/provider_event_state";
 import { googleAdapter } from "./adapters/google";
@@ -13,7 +13,7 @@ async function main() {
   globalThis.fetch = async () => { calls++; throw new Error("Journal must not perform native I/O"); };
   try {
   for (const kind of ["zoned", "all-day"] as const) {
-    for (const scenario of ["queue", "concurrent", "defaults", "off", "source", "parent-revision", "parent-mapping", "parent-deleted", "parent-unlinked", "child-identity", "mapping-identity", "parent-pending", "parent-cancelled", "tamper", "grant", "child-revision", "native-id"]) {
+    for (const scenario of ["queue", "concurrent", "defaults", "legacy-defaults", "off", "source", "deleted-defaults", "deleted-defaults-binding", "deleted-defaults-mixed", "deleted-defaults-lease", "deleted-custom", "parent-revision", "parent-mapping", "parent-deleted", "parent-unlinked", "child-identity", "mapping-identity", "parent-pending", "parent-cancelled", "tamper", "grant", "child-revision", "native-id"]) {
       const owner = `reminder-instance-${randomUUID()}`;
       await db.insert(user).values({ id: owner, name: owner, email: `${owner}@example.test`, isExternal: true });
       try {
@@ -34,6 +34,13 @@ async function main() {
         const child = (await getEventSnapshot(mapping.eventID))!;
         const parent = (await getEventSnapshot(parentMapping.eventID))!;
         const request = { provider: "google", operationID: randomUUID(), expectedRevision: child.revision, expectedStateVersion: providerStateVersion(mapping), reminders: scenario === "defaults" ? { useDefault: true } : { useDefault: false, overrides: scenario === "off" ? [] : [{ method: "popup", minutes: 15 }] } };
+        if (scenario === "defaults") {
+          await assert.rejects(() => prepareProviderReminderInstanceEdit(owner, child.id, request), (error: any) => error.reason === "unsupported");
+          assert.equal((await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, child.id))).length, 0);
+          assert.deepEqual(await getEventSnapshot(child.id), child);
+          assert.deepEqual(await db.select().from(externalEvents).where(eq(externalEvents.calendarID, calendar.id)).orderBy(externalEvents.id), maps);
+          continue;
+        }
         const candidate = await prepareProviderReminderInstanceEdit(owner, child.id, request);
         assert.equal(candidate.kind, "prepared"); if (candidate.kind !== "prepared") throw new Error("Expected context");
         const binding = candidate.context.instance!;
@@ -51,7 +58,7 @@ async function main() {
         if (scenario === "child-revision") await db.update(events).set({ revision: child.revision + 1 }).where(eq(events.id, child.id));
         if (scenario === "native-id") evidence.baseline.id = "other";
         if (scenario === "tamper") candidate.context.instance!.parentRevision++;
-        if (!["queue", "concurrent", "defaults", "off", "source"].includes(scenario)) {
+        if (!scenario.startsWith("deleted-") && !["queue", "concurrent", "defaults", "legacy-defaults", "off", "source"].includes(scenario)) {
           await assert.rejects(commit);
           assert.equal((await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, child.id))).length, 0);
         } else {
@@ -69,6 +76,53 @@ async function main() {
           assert.deepEqual(await getEventSnapshot(parent.id), parent);
           assert.deepEqual(await db.select().from(externalEvents).where(eq(externalEvents.calendarID, calendar.id)).orderBy(externalEvents.id), maps);
           assert.equal((await commit()).replayed, true);
+          if (scenario.startsWith("deleted-")) {
+            const payload = structuredClone(row.payload);
+            if (scenario !== "deleted-custom") {
+              payload.reminderInstance!.request.reminders = { useDefault: true };
+              payload.reminderInstance!.desiredState.reminders = { provider: "google", useDefault: true, overrides: [] };
+            }
+            if (scenario === "deleted-defaults-binding") payload.reminderInstance!.instance.externalSeriesID = "foreign-parent";
+            await db.update(eventOutbox).set({ payload, status: "conflict", attempts: 1, uncertain: true, ...(scenario === "deleted-defaults-lease" ? { leaseToken: randomUUID(), leaseUntil: new Date(Date.now() + 60000) } : {}) }).where(eq(eventOutbox.id, row.id));
+            if (scenario === "deleted-defaults-mixed") await db.insert(eventOutbox).values({ ...row, id: randomUUID(), mutationID: randomUUID(), status: "pending" });
+            if (scenario === "deleted-defaults") {
+              assert.equal(await deleteExternalEvent("google", calendar.id, "series"), true);
+              const [retired] = await db.select().from(eventOutbox).where(eq(eventOutbox.id, row.id));
+              assert.equal(retired!.status, "cancelled");
+              assert.equal(retired!.errorCode, "source-deleted-unsupported-reminders");
+              assert.equal(retired!.uncertain, true); assert.equal(retired!.attempts, 1);
+              assert.deepEqual(retired!.payload, payload, "Deletion retains failed reminder history");
+              const deleted = await db.select().from(events).where(eq(events.id, child.id));
+              assert.ok(deleted[0]!.deletedAt);
+              assert.ok((await db.select().from(events).where(eq(events.id, parent.id)))[0]!.deletedAt);
+              assert.equal(await deleteExternalEvent("google", calendar.id, "series"), false, "Repeated accepted deletion is idempotent");
+            } else {
+              await assert.rejects(() => deleteExternalEvent("google", calendar.id, "series"));
+              assert.deepEqual(await getEventSnapshot(child.id), child);
+              assert.deepEqual(await getEventSnapshot(parent.id), parent);
+              const [retained] = await db.select().from(eventOutbox).where(eq(eventOutbox.id, row.id));
+              assert.equal(retained!.status, "conflict", "Rejected removal rolls back retirement");
+              assert.deepEqual(retained!.payload, payload);
+            }
+            assert.deepEqual(await db.select().from(externalEvents).where(eq(externalEvents.calendarID, calendar.id)).orderBy(externalEvents.id), maps);
+            continue;
+          }
+          if (scenario === "legacy-defaults") {
+            // Model a durable defaults receipt admitted by the previous version.
+            const legacyRequest = { ...candidate.context.request, reminders: { useDefault: true as const } };
+            const payload = structuredClone(row.payload);
+            payload.reminderInstance!.request = legacyRequest;
+            payload.reminderInstance!.desiredState.reminders = { provider: "google", useDefault: true, overrides: [] };
+            await db.update(eventOutbox).set({ payload, status: "conflict" }).where(eq(eventOutbox.id, row.id));
+            const replay = await prepareProviderReminderInstanceEdit(owner, child.id, legacyRequest);
+            assert.deepEqual(replay, { kind: "replay", receipt: { operationID: row.id, replayed: true, status: "conflict" } });
+            assert.equal((await getEventDeliveryResolutionContext(owner, child.id, row.id)).row.id, row.id, "Legacy receipt remains readable");
+            await assert.rejects(() => prepareProviderReminderInstanceEdit(owner, child.id, { ...legacyRequest, operationID: randomUUID() }), (error: any) => error.reason === "unsupported");
+            await db.update(calendarMembers).set({ role: "viewer" }).where(and(eq(calendarMembers.calendarID, calendar.id), eq(calendarMembers.userID, owner)));
+            await assert.rejects(() => prepareProviderReminderInstanceEdit(owner, child.id, legacyRequest), /write access/);
+            assert.equal((await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, child.id))).length, 1);
+            continue;
+          }
           await assert.rejects(() => prepareProviderReminderInstanceEdit(owner, child.id, { ...request, operationID: randomUUID() }), "Another child intent blocks admission");
           await assert.rejects(() => prepareProviderReminderInstanceEdit(owner, child.id, { ...request, reminders: { useDefault: true }, expectedRevision: 999 }), "Operation key cannot be repurposed");
           const token = randomUUID(); await db.update(eventOutbox).set({ status: "attempting", leaseToken: token, leaseUntil: new Date(Date.now() + 60000) }).where(eq(eventOutbox.id, row.id));

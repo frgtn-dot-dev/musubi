@@ -10,7 +10,12 @@ independently of a moved current start. Timed instances require an explicit know
 current zone; historical or missing zone data cannot authorize a write. Masters,
 floating/ambiguous time, partial attendee lists, locked/private-copy/special-type
 events and unknown reminder methods are refused. The requested reminder shape is
-limited to defaults/off or up to five popup/email overrides.
+limited to Off or up to five popup/email overrides. New bound-instance requests
+for calendar defaults (`useDefault:true`) are unsupported: live all-day and
+zoned probes returned explicit reminder settings instead of confirming the
+requested inheritance flag. One-off defaults remain supported. Existing native
+default state remains readable; historical exact confirmation may recover
+read-only, but must never cause another defaults PATCH.
 
 A fresh primary-calendar ownership check and exact full instance read precede
 one conditional PATCH with only `reminders` and `sendUpdates=none`. A required
@@ -127,3 +132,20 @@ while preserving both completed journals. This covers stored reminder settings,
 not notification firing, email reminders, physical devices or every instance
 variant. Earlier fixture-only sections remain evidence of their original stage.
 [Exact observations and cleanup](../audits/calendar-personal-series-live-acceptance-20260910.md).
+
+## Live defaults boundary — 2026-09-11
+
+All-day bound-instance popup15 and Off completed through standard service and
+worker, with full native preservation and unchanged canonical revisions.
+Restoring defaults produced a real conflict. Separate all-day and zoned native
+controls also failed to confirm `useDefault:true` on subsequent GETs.
+New instance defaults admission, conflict replacement and mutation are therefore
+blocked; editors retain custom/Off and display existing inherited state without
+silently converting it. Historical receipts and strict readback remain valid.
+[Live observations and limitations](../audits/calendar-google-all-day-reminders-live-20260911.md).
+
+An authoritative Google master deletion may retire only an exactly bound,
+unleased conflict/blocked historical defaults intent as cancelled with
+`source-deleted-unsupported-reminders`. Payload and attempt history remain;
+normal family tombstones follow. Mixed pending work, stale identity/revision or
+an active lease still aborts the transaction. This is not a generic discard API.

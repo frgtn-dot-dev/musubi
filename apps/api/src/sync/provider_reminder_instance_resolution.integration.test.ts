@@ -51,7 +51,7 @@ async function main() {
   const adapter = { ...googleAdapter, reminderInstance: googleReminderInstanceTransport(async () => "synthetic-instance-reminder") };
   try {
   for (const kind of ["zoned", "all-day"] as const) {
-    for (const scenario of ["deliver-resolve-resend", "deliver-resolve-recover"]) {
+    for (const scenario of ["deliver-resolve-resend", "deliver-resolve-recover", "legacy-defaults"]) {
       mode = "normal"; patches = 0; expectedPatchEtag = '"child"'; onRead = undefined; onPatch = undefined;
       config.api.providerReminderEditsEnabled = true;
       const owner = `reminder-worker-${randomUUID()}`;
@@ -92,6 +92,26 @@ async function main() {
           assert.deepEqual(await getEventSnapshot(parent.id), parent);
           assert.deepEqual(await db.select().from(externalEvents).where(eq(externalEvents.calendarID, calendar.id)).orderBy(externalEvents.id), maps);
           assert.equal((await commit()).replayed, true);
+          if (scenario === "legacy-defaults") {
+            const payload = structuredClone(row.payload);
+            payload.reminderInstance!.request.reminders = { useDefault: true };
+            payload.reminderInstance!.desiredState.reminders = { provider: "google", useDefault: true, overrides: [] };
+            await db.update(eventOutbox).set({ payload, status: "conflict" }).where(eq(eventOutbox.id, row.id));
+            const preview = await prepareEventDeliveryResolution(owner, child.id, row.id, () => adapter);
+            assert.equal(preview.preview.canResolve, false);
+            assert.equal(preview.preview.reason, "write-unsupported");
+            assert.deepEqual(preview.preview.reminderResolution!.desired, { useDefault: true });
+            assert.deepEqual(preview.preview.reminderResolution!.remote, state.reminders);
+            assert.equal(patches, 0, "Historical defaults preview remains read-only");
+            const request = { mutationId: randomUUID(), expectedLocalRevision: child.revision, expectedLatestOperationId: row.id, expectedRemoteExists: true, expectedRemoteEtag: remote.etag, expectedReminderStateVersion: preview.preview.reminderResolution!.stateVersion };
+            await assert.rejects(() => commitEventDeliveryResolution(owner, preview.proof, request), (error: any) => error.code === "delivery-resolution-unavailable");
+            const remaining = await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, child.id));
+            assert.equal(remaining.length, 1, "No replacement defaults intent");
+            assert.equal(remaining[0]!.status, "conflict");
+            assert.deepEqual(remaining[0]!.payload, payload, "Historical receipt is unchanged");
+            assert.equal(patches, 0);
+            continue;
+          }
             const loseGrant = async () => { await db.update(calendarMembers).set({ role: "viewer" }).where(and(eq(calendarMembers.calendarID, calendar.id), eq(calendarMembers.userID, owner))); };
             const nativeIdentity = async () => { remote.originalStartTime = allDay ? { date: "2026-10-26" } : { dateTime: "2026-10-26T04:30:00+01:00", timeZone: "Europe/Prague" }; };
             onPatch = async () => {

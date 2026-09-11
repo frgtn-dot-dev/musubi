@@ -17,6 +17,8 @@ export function ProviderReminderEditor({ event, observation, onClose }: { event:
   const label = caldav ? series ? "CalDAV series alarm" : "CalDAV event alarms" : "Google reminders";
   const api = useApi(); const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState(() => providerReminderDraft(observation));
+  const occurrence = !!event.seriesID;
+  const instanceDefaults = !caldav && occurrence && draft.mode === "defaults";
   const [picker, setPicker] = useState<"mode" | number | null>(null);
   const [error, setError] = useState(""); const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false); const pending = useRef(false);
@@ -27,7 +29,7 @@ export function ProviderReminderEditor({ event, observation, onClose }: { event:
     pending.current = true; setBusy(true); setError("");
     try {
       const key = JSON.stringify(draft);
-      const request = lastRequest.current?.key === key ? lastRequest.current.request : providerReminderRequest(observation, draft, uuidv7());
+      const request = lastRequest.current?.key === key ? lastRequest.current.request : providerReminderRequest(observation, draft, uuidv7(), occurrence);
       lastRequest.current = { key, request };
       const receipt = await api.editProviderReminders(event, request);
       setNotice(providerReminderReceiptMessage(receipt.status, caldav ? "caldav" : "google"));
@@ -46,6 +48,7 @@ export function ProviderReminderEditor({ event, observation, onClose }: { event:
         <Text style={copy}>{caldav ? `${series ? "This alarm applies to every occurrence in this series. " : ""}This alarm is stored on the CalDAV event and may be shared with other calendar users. Calendar apps deliver it. Musubi reminders are separate; both may notify you.` : <>{event.seriesID ? "These Google reminders apply only to this occurrence. " : ""}Personal notifications from Google Calendar. Musubi reminders are separate; both apps may notify you.</>}</Text>
         {notice ? <Text accessibilityLiveRegion="polite" style={copy}>{notice}</Text> : <>
           <Btn variant="secondary" label={`Reminder mode: ${modeLabels[draft.mode]}`} disabled={busy} onPress={() => setPicker("mode")} />
+          {!caldav && occurrence ? <Text style={copy}>Calendar defaults cannot be saved for a Google occurrence. Choose Custom or Off to change its reminders.</Text> : null}
           {draft.mode === "custom" ? <>
             {draft.overrides.map((item, index) => <View key={index} style={styles.fieldContainer}>
               <Text style={styles.fieldLabel}>Reminder {index + 1}</Text>
@@ -57,13 +60,13 @@ export function ProviderReminderEditor({ event, observation, onClose }: { event:
             <Btn variant="secondary" label="Add reminder" disabled={busy || draft.overrides.length >= (caldav ? 1 : 5)} onPress={() => setDraft(current => ({ ...current, overrides: [...current.overrides, { method: "popup", minutes: "15" }] }))} />
           </> : null}
           {error ? <Text accessibilityRole="alert" style={copy}>{error}</Text> : null}
-          <Btn label={`Save ${label}`} loading={busy} onPress={() => void save()} />
+          <Btn label={`Save ${label}`} disabled={instanceDefaults} loading={busy} onPress={() => void save()} />
         </>}
         <Btn label={notice ? `Close ${label}` : `Cancel ${label}`} variant="secondary" disabled={busy} onPress={close} />
       </ScrollView>
     </View>
     </KeyboardAvoidingView>
-    <OptionPicker visible={picker !== null} title={picker === "mode" ? "Reminder mode" : "Reminder method"} value={picker === "mode" ? draft.mode : typeof picker === "number" ? draft.overrides[picker]?.method : undefined} options={picker === "mode" ? [...(!caldav ? [{ value: "defaults", label: "Calendar defaults" }] : []), { value: "off", label: "Off" }, { value: "custom", label: "Custom" }] : [{ value: "popup", label: "Notification" }, { value: "email", label: "Email" }]} onClose={() => setPicker(null)} onSelect={value => {
+    <OptionPicker visible={picker !== null} title={picker === "mode" ? "Reminder mode" : "Reminder method"} value={picker === "mode" ? draft.mode : typeof picker === "number" ? draft.overrides[picker]?.method : undefined} options={picker === "mode" ? [...(!caldav && !occurrence ? [{ value: "defaults", label: "Calendar defaults" }] : []), { value: "off", label: "Off" }, { value: "custom", label: "Custom" }] : [{ value: "popup", label: "Notification" }, { value: "email", label: "Email" }]} onClose={() => setPicker(null)} onSelect={value => {
       setDraft(current => picker === "mode" ? { mode: value as typeof current.mode, overrides: value === "custom" && !current.overrides.length ? [{ method: "popup", minutes: "15" }] : current.overrides } : { ...current, overrides: current.overrides.map((entry, index) => index === picker ? { ...entry, method: value as "popup" | "email" } : entry) });
       setPicker(null);
     }} />

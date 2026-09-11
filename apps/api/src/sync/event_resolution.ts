@@ -213,7 +213,7 @@ async function prepare(
       eventId: row.eventID, operationId: row.id, latestOperationId: context.latest.id,
       localRevision: context.localRevision, local: { ...content(context.local), timeModel: context.local.timeModel ?? undefined },
       remote: { ...content(native), timeModel: native.timeModel }, remoteEtag: currentRef.etag,
-      action: "update", canResolve: true, reason: null,
+      action: "update", canResolve: !request.reminders.useDefault, reason: request.reminders.useDefault ? "write-unsupported" : null,
       reminderResolution: { desired: request.reminders, remote: state.reminders, stateVersion },
     };
     const proof: EventDeliveryResolutionProof = { context, ref: currentRef, remoteExists: true, action: "update", patch: {}, deletion,

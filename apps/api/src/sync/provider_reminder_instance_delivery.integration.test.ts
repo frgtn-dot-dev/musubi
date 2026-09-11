@@ -73,7 +73,7 @@ async function main() {
         const parentMapping = maps.find(item => item.externalEventID === "series")!;
         const child = (await getEventSnapshot(mapping.eventID))!;
         const parent = (await getEventSnapshot(parentMapping.eventID))!;
-        const request = { provider: "google", operationID: randomUUID(), expectedRevision: child.revision, expectedStateVersion: providerStateVersion(mapping), reminders: scenario === "deliver-defaults" ? { useDefault: true } : { useDefault: false, overrides: scenario === "deliver-off" ? [] : [{ method: "popup", minutes: 15 }] } };
+        const request = { provider: "google", operationID: randomUUID(), expectedRevision: child.revision, expectedStateVersion: providerStateVersion(mapping), reminders: { useDefault: false, overrides: scenario === "deliver-off" ? [] : [{ method: "popup", minutes: 15 }] } };
         desired = request.reminders;
         const candidate = await prepareProviderReminderInstanceEdit(owner, child.id, request);
         assert.equal(candidate.kind, "prepared"); if (candidate.kind !== "prepared") throw new Error("Expected context");
@@ -91,6 +91,13 @@ async function main() {
           assert.deepEqual(await getEventSnapshot(parent.id), parent);
           assert.deepEqual(await db.select().from(externalEvents).where(eq(externalEvents.calendarID, calendar.id)).orderBy(externalEvents.id), maps);
           assert.equal((await commit()).replayed, true);
+          if (scenario === "deliver-defaults") {
+            // Retained pending intent from before instance defaults were restricted.
+            const payload = structuredClone(row.payload);
+            payload.reminderInstance!.request.reminders = { useDefault: true };
+            payload.reminderInstance!.desiredState.reminders = { provider: "google", useDefault: true, overrides: [] };
+            await db.update(eventOutbox).set({ payload }).where(eq(eventOutbox.id, row.id));
+          }
             const parentRevision = async () => { await db.update(events).set({ revision: parent.revision + 1 }).where(eq(events.id, parent.id)); };
             const parentIdentity = async () => { await db.update(externalEvents).set({ externalEventID: "other-parent" }).where(eq(externalEvents.id, parentMapping.id)); };
             const loseGrant = async () => { await db.update(calendarMembers).set({ role: "viewer" }).where(and(eq(calendarMembers.calendarID, calendar.id), eq(calendarMembers.userID, owner))); };
@@ -126,7 +133,7 @@ async function main() {
               mode = "normal"; await db.update(eventOutbox).set({ nextAttemptAt: new Date(0) }).where(eq(eventOutbox.id, row.id));
               result = await deliverEventOutbox(row.id, () => adapter);
             }
-            const completed = ["deliver-ack-db", "deliver-concurrent", "deliver-baseline-pull", "deliver-normal", "deliver-lost", "deliver-503", "deliver-pull-echo", "deliver-defaults", "deliver-off"].includes(scenario);
+            const completed = ["deliver-ack-db", "deliver-concurrent", "deliver-baseline-pull", "deliver-normal", "deliver-lost", "deliver-503", "deliver-pull-echo", "deliver-off"].includes(scenario);
             const [accepted] = await db.select().from(externalEvents).where(eq(externalEvents.id, mapping.id));
             if (completed) {
               assert.equal(result?.status, "completed", scenario);
@@ -139,7 +146,11 @@ async function main() {
               assert.equal(accepted!.etag, native.etag, scenario);
               assert.equal(accepted!.providerState!.ownResponse, "needsAction", scenario);
             }
-            assert.equal(patches, scenario.endsWith("-before") || scenario === "deliver-flag-off" ? 0 : 1, scenario);
+            if (scenario === "deliver-defaults") {
+              assert.equal(result?.status, "blocked");
+              assert.equal(result?.errorCode, "provider-write-unsupported");
+            }
+            assert.equal(patches, scenario.endsWith("-before") || ["deliver-flag-off", "deliver-defaults"].includes(scenario) ? 0 : 1, scenario);
       } finally {
         if (failureTrigger) { await db.execute(sql.raw(`DROP TRIGGER IF EXISTS ${failureTrigger} ON external_events`)); await db.execute(sql.raw(`DROP FUNCTION ${failureTrigger}()`)); }
         await db.delete(user).where(eq(user.id, owner)); }

@@ -108,6 +108,9 @@ export function googleReminderInstanceTransport(getAuthorizedToken: (user: strin
       const ctx = await context(user, account, calendar, intent.baseline.id, signal);
       const current = await ctx.read();
       try { return { ...confirmGoogleReminderInstance(current, intent), recovered: true }; } catch { /* Only the exact baseline permits one PATCH. */ }
+      // Google can materialize instance defaults as explicit overrides. Only
+      // exact read-only confirmation is safe for historical default intents.
+      if (intent.reminders.useDefault) throw unsupported();
       if (!isDeepStrictEqual(current, intent.baseline)) throw new ProviderEventWriteError("provider-conflict");
       await beforeWrite(); signal?.throwIfAborted();
       let response: Response;

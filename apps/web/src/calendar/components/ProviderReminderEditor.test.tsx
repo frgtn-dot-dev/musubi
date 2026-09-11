@@ -58,3 +58,33 @@ it("edits one CalDAV event alarm without Google defaults or per-user promises", 
   await screen.findByText(/CalDAV confirmation is still pending/);
   expect(save.mock.calls[0]).toMatchObject(["event", { provider: "caldav", expectedRevision: 7, expectedStateVersion: "a".repeat(64), alarms: { minutesBeforeStart: 30 } }, undefined]);
 });
+
+it("keeps inherited occurrence defaults readable until an explicit custom or off choice", async () => {
+  save.mockResolvedValue({ status: "pending" });
+  render(<ProviderReminderEditor occurrence eventId="child" observation={{ ...observation, state: { ...observation.state!, reminders: { provider: "google", useDefault: true, overrides: [] } } }} onClose={vi.fn()} />);
+  const submit = screen.getByRole("button", { name: "Save Google reminders" }) as HTMLButtonElement;
+  expect(screen.getByRole("combobox", { name: "Reminder mode" }).textContent).toContain("Calendar defaults");
+  expect(submit.disabled).toBe(true);
+  fireEvent.click(submit);
+  expect(save).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("combobox", { name: "Reminder mode" }));
+  expect((screen.getByRole("option", { name: "Calendar defaults" }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole("option", { name: "Custom" }));
+  expect(submit.disabled).toBe(false);
+  fireEvent.click(screen.getByRole("combobox", { name: "Reminder mode" }));
+  expect(screen.queryByRole("option", { name: "Calendar defaults" })).toBeNull();
+  fireEvent.click(screen.getByRole("option", { name: "Off" }));
+  fireEvent.click(submit);
+  await screen.findByText(/Google confirmation is still pending/);
+  expect(save.mock.calls[0]).toMatchObject(["child", { reminders: { useDefault: false, overrides: [] } }, undefined]);
+});
+
+it("retains selectable calendar defaults for a one-off Google event", async () => {
+  save.mockResolvedValue({ status: "completed" });
+  render(<ProviderReminderEditor eventId="event" observation={observation} onClose={vi.fn()} />);
+  fireEvent.click(screen.getByRole("combobox", { name: "Reminder mode" }));
+  fireEvent.click(screen.getByRole("option", { name: "Calendar defaults" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save Google reminders" }));
+  await screen.findByText("Google reminder change confirmed.");
+  expect(save.mock.calls[0][1].reminders).toEqual({ useDefault: true });
+});

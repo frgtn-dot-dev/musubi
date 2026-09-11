@@ -4,7 +4,7 @@ import { assertExternalCalendarAccess, type ExternalCalendarAccessContext } from
 import { assertNoPendingGraphSeriesCreate } from "./graph-series-create";
 import { caldavSeriesDesired } from "./caldav-series-scope";
 import { expandRecurringEvents } from "@musubi/calendar";
-import { ProviderEventStateSchema, type ProviderEventState, type ProviderSettingTimeEvidence, hasKnownEventTime, BadRequestError, EventTimeModelSchema, OccurrenceStartSchema, type EventTimeModel, type OccurrenceStart } from "@musubi/types";
+import { ProviderReminderEditSchema, ProviderEventStateSchema, type ProviderEventState, type ProviderSettingTimeEvidence, hasKnownEventTime, BadRequestError, EventTimeModelSchema, OccurrenceStartSchema, type EventTimeModel, type OccurrenceStart } from "@musubi/types";
 import { assertLegacyEventTimePatch } from "./event-time-write";
 import { appendEventOutbox, reserveEventMutation, type EventOutboxIntent } from "./event-outbox";
 import { retainPendingEventPull, retainUnmappedCreatePull } from "./event-outbox-pull";
@@ -1118,13 +1118,38 @@ export async function deleteExternalEvent(
       return true;
     }
     // Deleting a provider master must not strand its visible exceptions. Keep
-    // mappings for stable revival and fail before any write if a child is pending.
+    // mappings for stable revival; unresolved child work normally blocks removal.
     const children = await tx.select().from(events).where(eq(events.seriesID, mapped.event.id)).orderBy(events.id).for("update");
     for (const child of children) {
       if (child.originCalendarID !== calendarID || child.creatorID !== mapped.event.creatorID)
         throw new Error("Provider family removal crosses event authority.");
-      const pending = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(eq(eventOutbox.eventID, child.id), eq(eventOutbox.calendarID, calendarID), eq(eventOutbox.provider, provider), sql`${eventOutbox.status} not in ('completed', 'not-needed', 'cancelled')`)).limit(1);
-      if (pending.length) throw new Error("Provider family removal has a pending child. Retry after reconciliation.");
+      const pending = await tx.select().from(eventOutbox).where(and(eq(eventOutbox.eventID, child.id), eq(eventOutbox.calendarID, calendarID), eq(eventOutbox.provider, provider), sql`${eventOutbox.status} not in ('completed', 'not-needed', 'cancelled')`)).orderBy(eventOutbox.id).for("update");
+      if (pending.length) {
+        // An authoritative Google master deletion makes an unsupported instance
+        // defaults intent obsolete. Retain its history as cancelled, never as
+        // delivered; all other pending work still requires explicit reconciliation.
+        const [source] = await tx.select().from(externalCalendars).where(and(eq(externalCalendars.calendarID, calendarID), eq(externalCalendars.provider, provider), eq(externalCalendars.userID, child.creatorID), eq(externalCalendars.disabled, false))).for("share");
+        const childMappings = await tx.select().from(externalEvents).where(and(eq(externalEvents.eventID, child.id), eq(externalEvents.calendarID, calendarID), eq(externalEvents.provider, provider))).for("update");
+        const childMapping = childMappings.length === 1 ? childMappings[0] : undefined;
+        const canRetire = provider === "google" && !!mapped.event.recurrence && !mapped.event.seriesID && !mapped.externalSeriesID && !mapped.originalStart && source && childMapping && pending.every(row => {
+          const intent = row.payload.reminderInstance;
+          const request = ProviderReminderEditSchema.safeParse(intent?.request);
+          return !!intent && request.success && request.data.reminders.useDefault &&
+            ["conflict", "blocked"].includes(row.status) && !row.leaseToken && !row.leaseUntil &&
+            row.action === "update" && row.actorID === child.creatorID && row.userID === child.creatorID &&
+            row.externalCalendarLinkID === source.id && row.accountID === source.accountID &&
+            row.externalCalendarID === source.externalCalendarID && childMapping.externalCalendarID === source.externalCalendarID &&
+            row.externalEventID === childMapping.externalEventID && intent.mappingID === childMapping.id &&
+            row.revision === child.revision && row.payload.event.id === child.id && row.payload.event.originCalendarID === calendarID &&
+            intent.instance.seriesID === mapped.event.id && intent.instance.parentRevision === mapped.event.revision &&
+            intent.instance.parentMappingID === mapped.id && intent.instance.externalSeriesID === externalEventID &&
+            childMapping.externalSeriesID === externalEventID && !!child.originalStart &&
+            sameTimeMetadata(intent.instance.originalStart, child.originalStart) && sameTimeMetadata(childMapping.originalStart, child.originalStart) &&
+            !row.payload.rsvp && !row.payload.organizer && !row.payload.reminderEdit;
+        });
+        if (!canRetire) throw new Error("Provider family removal has a pending child. Retry after reconciliation.");
+        for (const row of pending) await tx.update(eventOutbox).set({ status: "cancelled", errorCode: "source-deleted-unsupported-reminders", updatedAt: new Date(), remoteSnapshot: { externalEventId: row.externalEventID!, etag: null, deleted: true, observedAt: new Date().toISOString() } }).where(eq(eventOutbox.id, row.id));
+      }
     }
     for (const child of children) if (child.deletedAt === null) {
       await tx.update(events).set({ deletedAt: new Date(), revision: sql`${events.revision} + 1` }).where(eq(events.id, child.id));

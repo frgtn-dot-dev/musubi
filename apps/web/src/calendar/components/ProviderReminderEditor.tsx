@@ -16,6 +16,7 @@ export function ProviderReminderEditor({ eventId, connectionId, observation, onC
   const series = observation.reminderEdit?.provider === "caldav" && observation.reminderEdit.scope === "series";
   const label = caldav ? series ? "CalDAV series alarm" : "CalDAV event alarms" : "Google reminders";
   const [draft, setDraft] = useState(() => providerReminderDraft(observation));
+  const instanceDefaults = !caldav && occurrence && draft.mode === "defaults";
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -26,7 +27,7 @@ export function ProviderReminderEditor({ eventId, connectionId, observation, onC
     pending.current = true; setBusy(true); setError("");
     try {
       const key = JSON.stringify(draft);
-      const request = lastRequest.current?.key === key ? lastRequest.current.request : providerReminderRequest(observation, draft, crypto.randomUUID());
+      const request = lastRequest.current?.key === key ? lastRequest.current.request : providerReminderRequest(observation, draft, crypto.randomUUID(), occurrence);
       lastRequest.current = { key, request };
       const receipt = await editProviderReminders(eventId, request, connectionId);
       setNotice(providerReminderReceiptMessage(receipt.status, caldav ? "caldav" : "google"));
@@ -35,10 +36,11 @@ export function ProviderReminderEditor({ eventId, connectionId, observation, onC
   }
   return <div className={styles.layerBoundary} onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}><Dialog open title={caldav ? label : occurrence ? "Google reminders for this occurrence" : "Google reminders"} description={caldav ? `${series ? "This alarm applies to every occurrence in this series. " : ""}This alarm is stored on the CalDAV event and may be shared with other calendar users. Calendar apps deliver it. Musubi reminders are separate; both may notify you.` : `${occurrence ? "These Google reminders apply only to this occurrence. " : ""}Personal notifications from Google Calendar. Musubi reminders are separate; both apps may notify you.`} closeLabel={`Close ${label}`} returnFocus={returnFocus} onOpenChange={open => { if (!open && !pending.current) onClose(); }} size="compact" footer={<>
     <Button variant="secondary" disabled={busy} onClick={onClose}>{notice ? "Close" : "Cancel"}</Button>
-    {!notice ? <Button loading={busy} onClick={() => void save()}>Save {label}</Button> : null}
+    {!notice ? <Button loading={busy} disabled={instanceDefaults} onClick={() => void save()}>Save {label}</Button> : null}
   </>}>
     {notice ? <p role="status">{notice}</p> : <div className={styles.reminderForm}>
-      <Select label="Reminder mode" value={draft.mode} disabled={busy} options={[...(!caldav ? [{ value: "defaults", label: "Calendar defaults" }] : []), { value: "off", label: "Off" }, { value: "custom", label: "Custom" }]} onChange={value => setDraft(current => ({ mode: value as typeof current.mode, overrides: value === "custom" && !current.overrides.length ? [{ method: "popup", minutes: "15" }] : current.overrides }))} />
+      <Select label="Reminder mode" value={draft.mode} disabled={busy} options={[...(!caldav && (!occurrence || instanceDefaults) ? [{ value: "defaults", label: "Calendar defaults", disabled: occurrence }] : []), { value: "off", label: "Off" }, { value: "custom", label: "Custom" }]} onChange={value => setDraft(current => ({ mode: value as typeof current.mode, overrides: value === "custom" && !current.overrides.length ? [{ method: "popup", minutes: "15" }] : current.overrides }))} />
+      {!caldav && occurrence ? <p>Calendar defaults cannot be saved for a Google occurrence. Choose Custom or Off to change its reminders.</p> : null}
       {draft.mode === "custom" ? <>
         {draft.overrides.map((item, index) => <div key={index} className={styles.reminderFields}>
           {!caldav ? <Select label={`Reminder ${index + 1} method`} value={item.method} disabled={busy} options={[{ value: "popup", label: "Notification" }, { value: "email", label: "Email" }]} onChange={value => setDraft(current => ({ ...current, overrides: current.overrides.map((entry, position) => position === index ? { ...entry, method: value as "popup" | "email" } : entry) }))} /> : null}
