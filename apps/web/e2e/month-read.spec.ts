@@ -8917,13 +8917,19 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
         for (const stream of active) stream.onmessage?.({ data: JSON.stringify({ type: "external_sync", payload: { calendars: ["personal"] } }) });
       });
       const busy = page.getByRole("button", { name: /Busy/ }).first();
-      await expect(busy).toBeVisible();
+      if (openEditor) await expect(busy).toBeVisible();
+      else await expect(page.getByRole("dialog", { name: "Busy", exact: true })).toBeVisible();
       await expect(page.getByText(/private-host@example.test/)).toHaveCount(0);
       await expect(page.getByText("Native private notes", { exact: true })).toHaveCount(0);
       await expect(page.getByRole("dialog", { name: "Google reminders", exact: true })).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Edit Google reminders" })).toHaveCount(0);
       if (openEditor) await expect(busy).toBeFocused();
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      if (!openEditor) {
+        await page.getByRole("button", { name: "Close event details" }).click();
+        await expect(busy).toBeVisible();
+        await expect(busy).toBeFocused();
+      }
       expect(errors).toEqual([]);
     });
   }
