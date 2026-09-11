@@ -2170,6 +2170,11 @@ test("reorders pages by dragging a row, and by keyboard", async ({ page }) => {
 	await expect(rows).toHaveCount(2);
 	await expect(order).toHaveText(["My calendar", "Work"]);
 
+	// Management stays fixed below the Pages scroller; reveal the drag target
+	// before taking viewport coordinates instead of pressing through its clip.
+	await rows.nth(1).scrollIntoViewIfNeeded();
+	await expect(rows.nth(0)).toBeInViewport({ ratio: 0.99 });
+	await expect(rows.nth(1)).toBeInViewport({ ratio: 0.99 });
 	// Drag the second row above the first.
 	const first = (await rows.nth(0).boundingBox())!;
 	const second = (await rows.nth(1).boundingBox())!;
@@ -4532,8 +4537,10 @@ test("opens an event's details as a full-height panel on a narrow viewport", asy
 	const calendarBox = (await sheet
 		.getByRole("list", { name: "Calendars" })
 		.boundingBox())!;
-	expect([titleBox.y, dateBox.y, timeBox.y, calendarBox.y]).toEqual(
-		[titleBox.y, dateBox.y, timeBox.y, calendarBox.y].sort((a, b) => a - b),
+	// Calendar identity now belongs with the event title in the fixed header.
+	await expect(sheet.locator("header").getByRole("list", { name: "Calendars" })).toBeVisible();
+	expect([titleBox.y, calendarBox.y, dateBox.y, timeBox.y]).toEqual(
+		[titleBox.y, calendarBox.y, dateBox.y, timeBox.y].sort((a, b) => a - b),
 	);
 
 	const accessibility = await new AxeBuilder({ page })

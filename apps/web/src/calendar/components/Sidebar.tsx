@@ -118,11 +118,11 @@ export function Sidebar({
   const orderedPages = committedOrder
     ? sortPagesBy(committedOrder, pages)
     : pages;
-  const activeIndex = orderedPages.findIndex(page => page.id === activePageId);
+  const hasActivePage = orderedPages.some(page => page.id === activePageId);
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       const scroller = scrollRef.current;
-      const row = pageRowRefs.current[activeIndex];
+      const row = scroller?.querySelector<HTMLElement>('[aria-current="page"]');
       if (!scroller || !row || !scroller.clientHeight) return;
       const viewport = scroller.getBoundingClientRect();
       const selected = row.getBoundingClientRect();
@@ -130,7 +130,7 @@ export function Sidebar({
       else if (selected.top < viewport.top) scroller.scrollTop -= viewport.top - selected.top;
     });
     return () => cancelAnimationFrame(frame);
-  }, [activeIndex, activePageId, isOpen]);
+  }, [hasActivePage, activePageId, isOpen]);
 
   // Once the server's list agrees, the local order has nothing left to say.
   if (
