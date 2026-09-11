@@ -1,0 +1,164 @@
+import type { Meta, StoryObj } from "@storybook/tanstack-react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { expect, userEvent, waitFor, within } from "storybook/test";
+import { CalendarDays, Clock3, MapPin, UsersRound, FileText, Cloud } from "lucide-react";
+import { AvatarStackPreview } from "~/ui/AvatarStack";
+import { Avatar } from "~/ui/Avatar";
+import { Row } from "~/ui/Row";
+import { SectionLabel } from "~/ui/SectionLabel";
+import detailStyles from "./styles/event-details.module.css";
+import { Button } from "~/ui/Button";
+import { Dialog } from "~/ui/Dialog";
+import { ConfirmationDialog } from "~/ui/ConfirmationDialog";
+import { Disclosure } from "~/ui/Disclosure";
+import { Switch } from "~/ui/Switch";
+import { Select } from "~/ui/Select";
+import { ProviderIcon } from "./ProviderIcon";
+import { Field } from "~/ui/Field";
+import { DESKTOP_MODES, MOBILE_MODES } from "../../../.storybook/modes";
+import styles from "./EventPanelProposal.module.css";
+
+function shiftDate(date: string, days: number) {
+  if (!date) return "";
+  const value = new Date(`${date}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+const fixtures = [
+  { title: "Design review", date: "2026-09-11", start: "10:00", end: "11:00", location: "Studio · meeting room", notes: "Review the event panel together. Focus on the everyday flow: finding the time, reading the notes and making a small change.\n\nBring examples of long invitations and shared calendars. Keep advanced provider information available without making everyone read it first." },
+  { title: "Weekly planning", date: "2026-09-09", start: "14:00", end: "14:30", location: "Office", notes: "Agree on the next milestones and leave time for questions." },
+];
+const subscribe = (callback: () => void) => { const query = matchMedia("(max-width: 1023px)"); query.addEventListener("change", callback); return () => query.removeEventListener("change", callback); };
+
+/** Interactive local-only design proposal, deliberately not wired to providers. */
+function EventPanelProposal({ initialEdit = false, longNotes = false }: { initialEdit?: boolean; longNotes?: boolean }) {
+  const narrow = useSyncExternalStore(subscribe, () => matchMedia("(max-width: 1023px)").matches, () => false);
+  const [events, setEvents] = useState(() => fixtures.map((event, index) => ({ ...event, allDay: false, endDate: shiftDate(event.date, 1), notes: index === 0 && longNotes ? Array.from({ length: 8 }, () => event.notes).join("\n\n") : event.notes })));
+  const [selected, setSelected] = useState<number | null>(null);
+  const [editing, setEditing] = useState(initialEdit);
+  const [draft, setDraft] = useState(events[0]!);
+  const [pending, setPending] = useState<{ next: number | null; target?: HTMLButtonElement } | null>(null);
+  const [saved, setSaved] = useState(false);
+  const returnTarget = useRef<HTMLButtonElement | null>(null);
+  const titleInput = useRef<HTMLInputElement>(null);
+  const editButton = useRef<HTMLButtonElement>(null);
+  const confirmationReturn = useRef<HTMLElement | null>(null);
+  useEffect(() => { if (selected !== null) (editing ? titleInput.current : editButton.current)?.focus(); }, [editing, selected]);
+  const event = selected === null ? events[0]! : events[selected]!;
+  const dirty = editing && JSON.stringify(draft) !== JSON.stringify(event);
+  function change(next: number | null, target?: HTMLButtonElement) {
+    if (dirty) { confirmationReturn.current = titleInput.current; setPending({ next, target }); return; }
+    if (target) returnTarget.current = target;
+    setSelected(next); setEditing(false); setSaved(false);
+    if (next !== null) setDraft(events[next]!);
+  }
+  function open(index: number, target: HTMLButtonElement) {
+    if (!dirty) returnTarget.current = target;
+    if (selected === null) { setSelected(index); setDraft(events[index]!); setEditing(initialEdit); }
+    else change(index, target);
+  }
+  return <>
+    <main className={styles.workspace}>
+      <header className={styles.toolbar}><div><h1>September 7–11</h1><p>Panel proposal · changes stay in this preview</p></div><span>Week</span></header>
+      <div className={styles.week} aria-label="Illustrative calendar week">
+        {["Mon 7", "Tue 8", "Wed 9", "Thu 10", "Fri 11"].map((day, dayIndex) => <section className={styles.day} key={day}><h2>{day}</h2><div className={styles.events}>{events.map((item, index) => item.date === `2026-09-${String(7 + dayIndex).padStart(2, "0")}` ? <Button className={styles.event} key={index} variant={selected === index ? "primary" : "secondary"} aria-label={`Open ${item.title}`} aria-pressed={selected === index} onClick={e => open(index, e.currentTarget)}>{item.allDay ? "All day" : item.start} · {item.title}</Button> : null)}</div></section>)}
+      </div>
+    </main>
+    <Dialog placement="right" modal={narrow} dismissOnOutsideInteraction={false} open={selected !== null} onOpenChange={value => { if (!value) change(null); }} returnFocus={returnTarget} closeLabel="Close event panel" title={editing ? "Edit event" : event.title} description={editing ? undefined : "Team calendar"} footer={editing ? <><Button variant="secondary" onClick={() => { if (dirty) { confirmationReturn.current = titleInput.current; setPending({ next: selected }); } else setEditing(false); }}>Cancel</Button><Button type="submit" form="panel-proposal-form">Save changes</Button></> : <Button ref={editButton} onClick={() => { setDraft({ ...event }); setEditing(true); setSaved(false); }}>Edit event</Button>}>
+      {editing ? <form id="panel-proposal-form" className={styles.form} onSubmit={e => { e.preventDefault(); if (!draft.title.trim() || selected === null) return; setEvents(items => items.map((item, index) => index === selected ? { ...draft, title: draft.title.trim() } : item)); setEditing(false); setSaved(true); }}>
+        <Field label="Title"><input ref={titleInput} required pattern={".*\\S.*"} value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} /></Field>
+        <Field label="Date"><input required type="date" value={draft.date} onChange={e => { const date = e.target.value; setDraft({ ...draft, date, endDate: date && draft.endDate <= date ? shiftDate(date, 1) : draft.endDate }); }} /></Field>
+        <Row size="compact" label="All day" trailing={<Switch label="All day" checked={draft.allDay} onCheckedChange={allDay => setDraft({ ...draft, allDay })} />} />
+        {draft.allDay && <Field label="End date" description="This day is not included."><input required type="date" min={shiftDate(draft.date, 1)} value={draft.endDate} onChange={e => setDraft({ ...draft, endDate: e.target.value })} /></Field>}
+        {!draft.allDay && <div className={styles.pair}><Field label="Start"><input required type="time" value={draft.start} onChange={e => setDraft({ ...draft, start: e.target.value })} /></Field><Field label="End"><input required type="time" min={draft.start} value={draft.end} onChange={e => setDraft({ ...draft, end: e.target.value })} /></Field></div>}
+        <p className={styles.status}>{draft.allDay ? "Calendar date · single event" : "Europe/Prague · single event"}</p>
+        <Field label="Calendar"><Select label="Calendar" value="team" onChange={() => {}} options={[{ value: "team", label: "Team calendar", icon: <ProviderIcon flavor="google" /> }]} /></Field>
+        <Field label="Location"><input value={draft.location} onChange={e => setDraft({ ...draft, location: e.target.value })} /></Field>
+        <Field label="Notes"><textarea rows={8} value={draft.notes} onChange={e => setDraft({ ...draft, notes: e.target.value })} /></Field>
+      </form> : <div className={styles.content}>
+        {saved && <p role="status" className={styles.status}>Saved in this preview</p>}
+        <div className={styles.facts}>
+          <Row size="compact" icon={<CalendarDays size={18} strokeWidth={1.5} />} label={new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${event.date}T12:00:00Z`))} />
+          <Row size="compact" icon={<Clock3 size={18} strokeWidth={1.5} />} label={event.allDay ? "All day" : `${event.start}–${event.end}`} detail={event.allDay ? `Through ${shiftDate(event.endDate, -1)}` : "Europe/Prague"} />
+          <Row size="compact" icon={<MapPin size={18} strokeWidth={1.5} />} label={event.location || "Location not set"} />
+        </div>
+        <Disclosure density="compact" label="Participants" icon={<UsersRound size={18} strokeWidth={1.5} />} value={<AvatarStackPreview limit={2} people={["Alex", "You", "Sam"].map(name => ({ id: name, name }))} />}>
+          <Row size="compact" icon={<Avatar name="Alex" />} label="Alex" detail="Organizer" />
+          <Row size="compact" icon={<Avatar name="You" />} label="You" detail="Accepted" />
+          <Row size="compact" icon={<Avatar name="Sam" />} label="Sam" detail="Awaiting response" />
+        </Disclosure>
+        <section className={styles.group} aria-label="Notes">
+          <div className={styles.sectionTitle}><FileText size={17} strokeWidth={1.5} aria-hidden="true" /><SectionLabel level={3}>Notes</SectionLabel></div>
+          <p className={`${detailStyles.noteText} ${styles.notePreview}`}>{event.notes.split("\n\n")[0]}</p>
+          {event.notes && <Disclosure density="compact" label="Read full notes" icon={<FileText size={18} strokeWidth={1.5} />}><p className={detailStyles.noteText}>{event.notes}</p></Disclosure>}
+        </section>
+        <Disclosure density="compact" label="Google Calendar" icon={<Cloud size={18} strokeWidth={1.5} />}><div className={`${detailStyles.noteText} ${styles.group}`}><p>Availability: Busy</p><p>Privacy: Calendar default</p><p>Provider reminder: 10 minutes before</p><p>Musubi reminder: Off</p></div></Disclosure>
+      </div>}
+    </Dialog>
+    <ConfirmationDialog returnFocus={confirmationReturn} elevated open={pending !== null} onOpenChange={value => { if (!value) setPending(null); }} title="Discard unsaved changes?" description="Your changes have not been saved." closeLabel="Close discard confirmation" cancelLabel="Keep editing" confirmLabel="Discard changes" onConfirm={() => { const next = pending?.next ?? null; if (pending?.target) returnTarget.current = pending.target; confirmationReturn.current = next === null ? returnTarget.current : editButton.current; setPending(null); setEditing(false); setSelected(next); if (next !== null) setDraft(events[next]!); }}><p>The original event will stay unchanged.</p></ConfirmationDialog>
+  </>;
+}
+const meta = { title: "Calendar/Event panel proposal", component: EventPanelProposal, parameters: { layout: "fullscreen", chromatic: { modes: DESKTOP_MODES } }, args: { initialEdit: false, longNotes: false }, play: async ({ canvasElement }) => { const canvas = within(canvasElement); await userEvent.click(canvas.getByRole("button", { name: "Open Design review" })); await expect(within(document.body).getByRole("dialog", { name: "Design review" })).toBeVisible(); } } satisfies Meta<typeof EventPanelProposal>;
+export default meta;
+type Story = StoryObj<typeof meta>;
+export const Detail: Story = {};
+export const LongInvitation: Story = { args: { longNotes: true } };
+export const Edit: Story = { args: { initialEdit: true }, play: async ({ canvasElement }) => { await userEvent.click(within(canvasElement).getByRole("button", { name: "Open Design review" })); await expect(within(document.body).getByRole("dialog", { name: "Edit event" })).toBeVisible(); } };
+export const Narrow: Story = { parameters: { chromatic: { modes: MOBILE_MODES } } };
+
+export const DraftProtection: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(document.body);
+    await userEvent.click(canvas.getByRole("button", { name: "Open Design review" }));
+    await userEvent.click(page.getByRole("button", { name: "Edit event" }));
+    const title = page.getByRole("textbox", { name: "Title" });
+    await expect(title).toHaveFocus();
+    await userEvent.clear(title);
+    await userEvent.type(title, "Changed review");
+    await userEvent.click(page.getByRole("button", { name: "Cancel" }));
+    await userEvent.click(page.getByRole("button", { name: "Keep editing" }));
+    await expect(title).toHaveValue("Changed review");
+    await expect(title).toHaveFocus();
+    await userEvent.click(page.getByRole("button", { name: "Save changes" }));
+    await expect(page.getByRole("dialog", { name: "Changed review" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Edit event" })).toHaveFocus();
+    await userEvent.click(page.getByRole("button", { name: "Close event panel" }));
+    await expect(canvas.getByRole("button", { name: "Open Changed review" })).toHaveFocus();
+  },
+};
+
+export const SwitchWithDraft: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(document.body);
+    await userEvent.click(canvas.getByRole("button", { name: "Open Design review" }));
+    await userEvent.click(page.getByRole("button", { name: "Edit event" }));
+    await userEvent.type(page.getByRole("textbox", { name: "Title" }), " draft");
+    await userEvent.click(canvas.getByRole("button", { name: "Open Weekly planning" }));
+    await waitFor(() => expect(page.getByRole("dialog", { name: "Discard unsaved changes?" })).toBeVisible());
+    await userEvent.click(page.getByRole("button", { name: "Discard changes" }));
+    await expect(page.getByRole("dialog", { name: "Weekly planning" })).toBeVisible();
+    await userEvent.click(page.getByRole("button", { name: "Close event panel" }));
+    await expect(canvas.getByRole("button", { name: "Open Weekly planning" })).toHaveFocus();
+    await expect(canvas.getByRole("button", { name: "Open Design review" })).toBeVisible();
+  },
+};
+
+export const AllDay: Story = {
+  play: async ({ canvasElement }) => {
+    const page = within(document.body);
+    await userEvent.click(within(canvasElement).getByRole("button", { name: "Open Design review" }));
+    await userEvent.click(page.getByRole("button", { name: "Edit event" }));
+    await userEvent.click(page.getByRole("switch", { name: "All day" }));
+    await expect(page.queryByLabelText("Start")).toBeNull();
+    await expect(page.getByLabelText("End date")).toHaveValue("2026-09-12");
+    await expect(page.getByLabelText("End date")).toHaveAttribute("min", "2026-09-12");
+    await userEvent.click(page.getByRole("switch", { name: "All day" }));
+    await expect(page.getByLabelText("Start")).toHaveValue("10:00");
+    await userEvent.click(page.getByRole("switch", { name: "All day" }));
+    await userEvent.click(page.getByRole("button", { name: "Save changes" }));
+    await expect(page.getByText("All day", { exact: true })).toBeVisible();
+  },
+};

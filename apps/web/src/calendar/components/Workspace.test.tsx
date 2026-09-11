@@ -911,9 +911,7 @@ describe("Workspace", () => {
       expect.objectContaining({ id: "board-game", title: "Board games" }),
     );
 
-    // Deletion has no faithful restore operation, so it confirms before the
-    // write and never promises Undo afterwards.
-    await user.click(screen.getByRole("button", { name: /Board game pub/ }));
+    // Successful save returns to the detail; deletion still requires confirmation.
     await user.click(screen.getByRole("button", { name: "Delete" }));
     expect(onRemoveEvent).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Delete" }));

@@ -36,8 +36,6 @@ export function AvatarStack({
   type = "button",
   ...buttonProps
 }: AvatarStackProps) {
-  const shown = people.slice(0, limit);
-  const hidden = people.length - shown.length;
 
   return (
     <button
@@ -46,6 +44,20 @@ export function AvatarStack({
       className={classNames(styles.avatarStack, className)}
       type={type}
     >
+      <AvatarStackFaces people={people} limit={limit} />
+    </button>
+  );
+}
+
+/** Decorative stack inside an existing trigger, avoiding nested buttons. */
+export function AvatarStackPreview({ people, limit = DEFAULT_LIMIT }: Pick<AvatarStackProps, "people" | "limit">) {
+  return <span aria-hidden="true" className={styles.avatarStack}><AvatarStackFaces people={people} limit={limit} /></span>;
+}
+
+function AvatarStackFaces({ people, limit }: { people: readonly AvatarStackPerson[]; limit: number }) {
+  const shown = people.slice(0, Math.max(0, limit));
+  const hidden = people.length - shown.length;
+  return <>
       {shown.map((person) => (
         <Avatar
           image={person.image}
@@ -58,6 +70,5 @@ export function AvatarStack({
           +{hidden}
         </span>
       ) : null}
-    </button>
-  );
+  </>;
 }

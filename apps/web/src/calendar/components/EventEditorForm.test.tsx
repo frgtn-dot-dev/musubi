@@ -462,3 +462,69 @@ describe("EventEditorForm event boundaries", () => {
 		});
 	});
 });
+
+describe("EventEditorForm panel all-day dates", () => {
+	it("normalizes the exclusive end when choosing the all-day time model", async () => {
+		const user = userEvent.setup();
+		const changed = vi.fn();
+		render(<EventEditorForm
+			calendars={fixtureCalendars}
+			initialValues={{ ...baseValues, date: "2026-12-31", endDate: "2026-12-31", timeKind: "legacy-unknown", timeEditable: true }}
+			layout="panel"
+			onValuesChange={changed}
+			onCancel={vi.fn()}
+			onError={() => ({ message: "Save failed" })}
+			onSubmit={vi.fn(async () => {})}
+			submitLabel="Save"
+			timeFormat="24h"
+			weekStartsOn="monday"
+		/>);
+		await user.click(screen.getByRole("combobox", { name: "Time model" }));
+		await user.click(screen.getByRole("option", { name: "All-day dates" }));
+		expect(changed.mock.lastCall?.[0]).toMatchObject({
+			isAllDay: true,
+			endDate: "2027-01-01",
+			timeKind: "all-day",
+		});
+		expect(changed.mock.lastCall?.[0].timeZone).toBeUndefined();
+		expect(screen.getByRole("switch", { name: "All day" }).getAttribute("aria-checked")).toBe("true");
+	});
+
+	it.each([
+		{ timeKind: undefined, endDate: "2026-03-29", expectedEnd: "2026-03-30" },
+		{ timeKind: "legacy-unknown" as const, endDate: "2026-03-28", expectedEnd: "2026-03-30" },
+		{ timeKind: "floating" as const, endDate: "2026-03-29", expectedEnd: "2026-03-30" },
+		{ timeKind: "zoned" as const, endDate: "2026-04-02", expectedEnd: "2026-04-02" },
+	])("uses an exclusive end for $timeKind while preserving longer ranges", async ({ timeKind, endDate, expectedEnd }) => {
+		const user = userEvent.setup();
+		const changed = vi.fn();
+		render(<EventEditorForm
+			calendars={fixtureCalendars}
+			initialValues={{ ...baseValues, date: "2026-03-29", endDate, timeKind }}
+			layout="panel"
+			onValuesChange={changed}
+			onCancel={vi.fn()}
+			onError={() => ({ message: "Save failed" })}
+			onSubmit={vi.fn(async () => {})}
+			submitLabel="Save"
+			timeFormat="24h"
+			weekStartsOn="monday"
+		/>);
+		await user.click(screen.getByRole("switch", { name: "All day" }));
+		expect(changed.mock.lastCall?.[0]).toMatchObject({
+			isAllDay: true,
+			endDate: expectedEnd,
+			timeKind: timeKind && timeKind !== "legacy-unknown" ? "all-day" : timeKind,
+		});
+		expect(changed.mock.lastCall?.[0].timeZone).toBeUndefined();
+		expect(screen.getByText("End date is not included.")).toBeTruthy();
+		await user.click(screen.getByRole("button", { name: /^Ends:/ }));
+		const exactDate = screen.getByRole("textbox", { name: "Exact date" });
+		await user.clear(exactDate);
+		await user.type(exactDate, "2026-03-29");
+		expect(exactDate.getAttribute("aria-invalid")).toBe("true");
+		await user.clear(exactDate);
+		await user.type(exactDate, "2026-03-30");
+		expect(exactDate.getAttribute("aria-invalid")).toBe("false");
+	});
+});

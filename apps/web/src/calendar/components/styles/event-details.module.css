@@ -1,17 +1,4 @@
-.detailPopover {
-  width: min(390px, calc(100vw - 28px));
-  /* Radix reports how much room the chosen side actually has. Below a full-width
-     agenda row there is less than the card's natural height, and a bottom-side
-     placement is not repositioned — without this the footer buttons sit under
-     the viewport with no way to reach them. */
-  max-height: min(
-    620px,
-    var(--radix-popover-content-available-height, calc(100dvh - 28px))
-  );
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
+.detailPopover { min-height: 0; }
 
 .detailsHeader,
 .editorHeader {
@@ -192,7 +179,8 @@
 }
 
 .notes p,
-.attendeeSection p {
+.attendeeSection p,
+.noteText {
   margin: 0;
   color: var(--text-secondary);
   font-size: var(--text-13);
@@ -200,7 +188,8 @@
   white-space: pre-wrap;
 }
 
-.notes p {
+.notes p,
+.noteText {
   overflow-wrap: anywhere;
   padding: var(--space-3);
   border: 1px solid var(--border-subtle);
@@ -399,10 +388,6 @@
 }
 
 @media (max-width: 599px) {
-  .detailPopover {
-    width: 100%;
-    max-height: 86vh;
-  }
 
   .detailsHeader,
   .editorHeader {
@@ -419,3 +404,20 @@
     grid-template-columns: 24px 56px minmax(0, 1fr);
   }
 }
+
+/* Inspector anatomy: one shell axis, fixed header/actions, one detail scroller. */
+.detailPopover .detailsHeader,
+.detailPopover .editorHeader { position: relative; flex: none; padding: var(--space-6) var(--layer-inline) var(--space-4); border-bottom: 0; }
+.detailPopover .detailsHeader::before,
+.detailPopover .editorHeader::before { display: none; }
+.detailPopover .detailsBody { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; align-content: start; gap: var(--space-6); padding: var(--space-4) var(--layer-inline); }
+.detailPopover .whenList,
+.detailPopover .infoList,
+.detailPopover .notes,
+.detailPopover .attendeeSection,
+.detailPopover .calendarActions { padding: 0; border-top: 0; }
+.detailPopover .detailRow { grid-template-columns: 20px minmax(0, 1fr); }
+.detailPopover .detailRow dt { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.detailPopover .detailIcon { color: var(--text-secondary); }
+.detailPopover .detailActions { position: relative; flex: none; padding: var(--space-4) var(--layer-inline); padding-bottom: calc(var(--space-4) + var(--layer-safe-bottom, env(safe-area-inset-bottom))); }
+.deliveryActions { display: flex; flex-wrap: wrap; gap: var(--space-2); }

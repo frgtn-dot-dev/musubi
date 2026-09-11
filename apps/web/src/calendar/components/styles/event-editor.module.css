@@ -802,3 +802,88 @@
   gap: var(--space-2);
   min-width: 0;
 }
+
+/* The inspector delegates its scrolling body and action region to the form. */
+.form[data-layout="panel"] {
+	flex: 1;
+	min-height: 0;
+	grid-template-rows: minmax(0, 1fr) auto;
+	padding: 0;
+	overflow: hidden;
+}
+
+.form[data-layout="panel"] .formBody {
+	display: grid;
+	min-height: 0;
+	align-content: start;
+	gap: var(--space-6);
+	padding: var(--space-5) var(--layer-inline, var(--space-6));
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+.form[data-layout="panel"] .titleField,
+.form[data-layout="panel"] .sectionLabel,
+.form[data-layout="panel"] .pickerRow,
+.form[data-layout="panel"] .timeRow,
+.form[data-layout="panel"] .toggleRow,
+.form[data-layout="panel"] .calendarHint,
+.form[data-layout="panel"] .timeContext,
+.form[data-layout="panel"] .calendarSummary {
+	padding: 0;
+}
+
+.form[data-layout="panel"] .section {
+	display: grid;
+	align-content: start;
+	gap: var(--space-3);
+	border: 0;
+}
+
+.form[data-layout="panel"] .detailsSection {
+	gap: var(--space-5);
+}
+
+.form[data-layout="panel"] .toggleRow {
+	border: 0;
+}
+
+.form[data-layout="panel"] .inlineField {
+	grid-template-columns: auto minmax(0, 1fr);
+	column-gap: var(--space-3);
+	padding: 0;
+}
+
+.form[data-layout="panel"] .inlineField > label {
+	align-self: center;
+}
+
+.form[data-layout="panel"] .calendarPlacement {
+	min-width: 0;
+}
+
+.form[data-layout="panel"] .calendarMembership {
+	padding-left: 0;
+}
+
+.form[data-layout="panel"] .calendarPlacementHeader,
+.form[data-layout="panel"] .calendarGroupHeading {
+	padding-inline: 0;
+}
+
+.form[data-layout="panel"] .calendarPlacementRow {
+	padding-right: 0;
+}
+
+.form[data-layout="panel"] .formError {
+	margin: 0;
+}
+
+.form[data-layout="panel"] .actions {
+	justify-content: flex-end;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	padding: var(--space-4) var(--layer-inline, var(--space-6));
+	padding-bottom: calc(var(--space-4) + var(--layer-safe-bottom, env(safe-area-inset-bottom)));
+	border-top: 1px solid var(--border-subtle);
+}

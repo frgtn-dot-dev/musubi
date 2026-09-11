@@ -1068,7 +1068,7 @@ test("uses the shared time grid as a one-column Day", async ({ page }) => {
 	await expect(page.getByText("Friday, July 24, 2026")).toBeVisible();
 });
 
-test("keeps Day event details beside the event inside the calendar workspace", async ({
+test("overlays Day event details without resizing the calendar", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 1280, height: 800 });
@@ -1091,19 +1091,13 @@ test("keeps Day event details beside the event inside the calendar workspace", a
 	);
 	const detailsBox = (await details.boundingBox())!;
 
-	await expect(details).toHaveAttribute("data-side", /left|right/);
-	expect(detailsBox.x).toBeGreaterThanOrEqual(areaBox.x);
-	expect(detailsBox.y).toBeGreaterThanOrEqual(areaBox.y);
-	expect(detailsBox.x + detailsBox.width).toBeLessThanOrEqual(
-		areaBox.x + areaBox.width,
-	);
-	expect(detailsBox.y + detailsBox.height).toBeLessThanOrEqual(
-		areaBox.y + areaBox.height,
-	);
-	// Day events use the whole column, so the side placement intentionally sits
-	// over the event layer instead of escaping above or below the trigger.
-	expect(detailsBox.x).toBeGreaterThanOrEqual(triggerBox.x);
-	expect(detailsBox.x).toBeLessThan(triggerBox.x + triggerBox.width);
+	expect(detailsBox.x).toBe(800);
+	expect(detailsBox.y).toBe(0);
+	expect(detailsBox.width).toBe(480);
+	expect(detailsBox.height).toBe(800);
+	expect(await calendarArea.boundingBox()).toEqual(areaBox);
+	expect(await trigger.boundingBox()).toEqual(triggerBox);
+
 });
 
 test("creates across chosen calendars, then edits and deletes through confirmed API writes", async ({
@@ -1150,7 +1144,7 @@ test("creates across chosen calendars, then edits and deletes through confirmed 
 		page.getByRole("button", { name: /Release readiness/ }),
 	).toBeVisible();
 
-	await page.getByRole("button", { name: /Release readiness/ }).click();
+	await expect(page.getByRole("dialog", { name: "Release readiness" })).toBeVisible();
 	await page.getByRole("button", { exact: true, name: "Delete" }).click();
 	await page.getByRole("button", { exact: true, name: "Delete" }).click();
 
@@ -1502,16 +1496,14 @@ test("handles attendance, linking, forking and recurring delete scopes", async (
 		.analyze();
 	expect(deleteAccessibility.violations).toEqual([]);
 
-	// Opening the modal dismisses the preview. Escape returns to the event that
-	// launched that preview, so the keyboard path has a stable place to resume.
+	// The inspector stays mounted behind the modal. Escape resumes at Delete.
 	await page.keyboard.press("Escape");
 	await expect(deleteDialog).toHaveCount(0);
-	await expect(recurringEvent).toBeFocused();
+	await expect(deleteButton).toBeFocused();
 	const deletionRequest = page.waitForRequest(
 		(request) =>
 			request.url().endsWith("/api/v1/events") && request.method() === "PATCH",
 	);
-	await recurringEvent.click();
 	await page.getByRole("button", { name: "Delete" }).click();
 	await page
 		.getByRole("dialog", { name: "Delete recurring event" })
@@ -4358,7 +4350,7 @@ test("turns anchored surfaces into sheets on a narrow viewport", async ({
 	await expectNoAccessibilityViolations(page);
 });
 
-test("keeps desktop event details full-sized beside their trigger", async ({
+test("keeps desktop event details in the right overlay without moving the calendar", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 1280, height: 800 });
@@ -4379,9 +4371,8 @@ test("keeps desktop event details full-sized beside their trigger", async ({
 		),
 	);
 	const leftDetailsBox = (await leftDetails.boundingBox())!;
-	expect(leftDetailsBox.x).toBeGreaterThanOrEqual(
-		leftTriggerBox.x + leftTriggerBox.width + 7,
-	);
+	expect(leftDetailsBox).toMatchObject({ x: 800, y: 0, width: 480, height: 800 });
+	expect(await leftTrigger.boundingBox()).toEqual(leftTriggerBox);
 	expect(
 		await leftDetails.evaluate((element) => ({
 			horizontal: element.scrollWidth - element.clientWidth,
@@ -4393,7 +4384,6 @@ test("keeps desktop event details full-sized beside their trigger", async ({
 	const rightTrigger = page.getByRole("button", {
 		name: /Theatre night/,
 	});
-	const rightTriggerBox = (await rightTrigger.boundingBox())!;
 	await rightTrigger.click();
 	const rightDetails = page.getByRole("dialog", { name: "Theatre night" });
 	await rightDetails.evaluate((element) =>
@@ -4404,9 +4394,7 @@ test("keeps desktop event details full-sized beside their trigger", async ({
 		),
 	);
 	const rightDetailsBox = (await rightDetails.boundingBox())!;
-	expect(rightDetailsBox.x + rightDetailsBox.width).toBeLessThanOrEqual(
-		rightTriggerBox.x - 7,
-	);
+	expect(rightDetailsBox).toMatchObject({ x: 800, y: 0, width: 480, height: 800 });
 	expect(
 		await rightDetails.evaluate(
 			(element) => element.scrollWidth - element.clientWidth,
@@ -4499,7 +4487,7 @@ test("opens the calendar color picker as the top mobile sheet", async ({
 	await expect(trigger).toBeFocused();
 });
 
-test("opens an event's details as a sheet on a narrow viewport", async ({
+test("opens an event's details as a full-height panel on a narrow viewport", async ({
 	page,
 }) => {
 	await page.setViewportSize({ height: 720, width: 390 });
@@ -4519,8 +4507,10 @@ test("opens an event's details as a sheet on a narrow viewport", async ({
 	const box = (await sheet.boundingBox())!;
 	expect(box.x).toBe(0);
 	expect(Math.round(box.width)).toBe(390);
-	// Tall content scrolls inside the sheet instead of running off the screen.
-	expect(box.height).toBeLessThanOrEqual(720 * 0.86 + 1);
+	// The narrow inspector fills the viewport; its body owns content scrolling.
+	expect(box.y).toBe(0);
+	expect(Math.round(box.height)).toBe(720);
+	expect(await sheet.evaluate(element => element.scrollWidth - element.clientWidth)).toBe(0);
 	await expect(
 		page.getByRole("heading", { name: "Client presentation" }),
 	).toBeVisible();
@@ -4854,12 +4844,12 @@ for (const reload of [false, true]) {
 				.click();
 			await page.getByRole("button", { name: "Edit", exact: true }).click();
 
-			// The popover is for the high-frequency edits, matching quick create.
+			// The inspector exposes the complete form and retains the full-page handoff.
 			await expect(
 				page.getByRole("button", { name: "More options" }),
 			).toBeVisible();
-			await expect(page.getByPlaceholder("Add location")).toHaveCount(0);
-			await expect(page.getByLabel("Repeat")).toHaveCount(0);
+			await expect(page.getByPlaceholder("Add location")).toBeVisible();
+			await expect(page.getByLabel("Repeat")).toBeVisible();
 			await expect(
 				page.getByRole("button", { name: /^Choose calendars/ }),
 			).toBeVisible();
@@ -6811,7 +6801,7 @@ test("a press that dismisses a preview does not also start a draft", async ({
 	// viewport, so the point comes from the viewport rather than from its box.
 	const column = page.locator("[data-time-grid-column]").first();
 	const bounds = (await column.boundingBox())!;
-	const x = bounds.x + bounds.width / 2;
+	const x = bounds.x + 40;
 	const y = page.viewportSize()!.height - 120;
 	await page.mouse.click(x, y);
 
@@ -6834,7 +6824,7 @@ test("a press that dismisses a preview does not also start a draft", async ({
 	const cell = page
 		.getByRole("grid")
 		.first()
-		.getByRole("gridcell", { name: /July 17, 2026/ });
+		.getByRole("gridcell", { name: /July 13, 2026/ });
 	const cellBox = (await cell.boundingBox())!;
 	// Dragging out a range, which is the month grid's create gesture: the press
 	// that dismisses a preview must not begin one.

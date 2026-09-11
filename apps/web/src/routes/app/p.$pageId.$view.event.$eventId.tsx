@@ -31,6 +31,7 @@ import {
     getEventMutationError,
 } from "~/calendar/event-permissions";
 import { useWorkspaceQueries } from "~/calendar/workspace-queries";
+import { ConfirmationDialog } from "~/ui/ConfirmationDialog";
 import { Dialog } from "~/ui/Dialog";
 import { Empty } from "~/ui/Empty";
 
@@ -41,6 +42,8 @@ export const Route = createFileRoute("/app/p/$pageId/$view/event/$eventId")({
 
 function EditEventRoute() {
     const { eventId, pageId, view } = Route.useParams();
+    const [discardOpen, setDiscardOpen] = useState(false);
+    const [saving, setSaving] = useState(false);
     const titleRef = useRef<HTMLInputElement>(null);
     const search = Route.useSearch();
     const navigate = Route.useNavigate();
@@ -147,6 +150,12 @@ function EditEventRoute() {
         });
     };
 
+    const requestBack = () => {
+        if (saving) return;
+        if (event && draftValues && JSON.stringify(draftValues) !== JSON.stringify(eventFormValues(event))) setDiscardOpen(true);
+        else back();
+    };
+
     const loading =
         workspace.calendars.isPending ||
         (!event && !currentHomeCalendar && workspace.calendars.isFetching) ||
@@ -164,7 +173,7 @@ function EditEventRoute() {
               ? "Edit series"
               : "Edit event";
 
-    return (
+    return (<>
         <Dialog
             bodyClassName={editorStyles.dialogFit}
             bodyLayout="flush"
@@ -173,13 +182,13 @@ function EditEventRoute() {
             description={
                 event?.recurrence && editable
                     ? "Changes here apply to the recurring series."
-                    : "Every detail of the event, on one surface."
+                    : undefined
             }
             onOpenChange={(open) => {
-                if (!open) back();
+                if (!open) requestBack();
             }}
             open
-            size="workspace"
+            placement="right"
             title={title}
         >
             {loading && !event ? (
@@ -208,8 +217,8 @@ function EditEventRoute() {
                     calendarLocked
                     calendars={calendars}
                     initialValues={draftValues ?? eventFormValues(event)}
-                    layout="page"
-                    onCancel={back}
+                    layout="panel"
+                    onCancel={requestBack}
                     onError={(error) =>
                         getEventMutationError(
                             error,
@@ -218,6 +227,8 @@ function EditEventRoute() {
                         )
                     }
                     onSubmit={async (values: EventFormValues) => {
+                        setSaving(true);
+                        try {
                         const edited = updateEventFromForm(event, values);
                         if ((event.recurrence && event.timeModel?.kind === "zoned" && edited.timeEdit?.kind === "zoned" && event.timeModel.timeZone !== edited.timeEdit.timeZone) ||
                             (event.timeModel?.kind === "all-day" && /(?:^|\n)(?:EXDATE|RDATE)/.test((event.recurrence ?? "") + "\n" + (edited.recurrence ?? "")) && edited.recurrence !== event.recurrence)) {
@@ -225,6 +236,7 @@ function EditEventRoute() {
                             await eventMutations.applyEventScope(currentEvent, eventScopeRequest(currentEvent, event, "series", edited));
                         } else await eventMutations.updateEvent(edited);
                         back();
+                        } finally { setSaving(false); }
                     }}
                     submitLabel="Save"
                     timeFormat={workspace.settings.data?.timeFormat ?? "24h"}
@@ -235,5 +247,6 @@ function EditEventRoute() {
                 />
             )}
         </Dialog>
-    );
+        <ConfirmationDialog elevated open={discardOpen} onOpenChange={setDiscardOpen} returnFocus={titleRef} title="Discard unsaved changes?" description="Your changes have not been saved." closeLabel="Keep editing" cancelLabel="Keep editing" confirmLabel="Discard changes" onConfirm={back}><p>The original event will stay unchanged.</p></ConfirmationDialog>
+    </>);
 }

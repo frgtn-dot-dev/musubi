@@ -107,15 +107,15 @@ it("retires private details and an open editor when the event revision changes",
   expect(screen.queryByText("Provider details")).toBeNull();
 });
 
-it("opens only explicit series alarm settings from a stored master and refuses a stale refresh", async () => {
+it.each(["default", "panel"] as const)("opens only explicit series alarm settings from a stored master and refuses a stale refresh (%s)", async (presentation) => {
   const master = EventSchema.parse({ id: "00000000-0000-4000-8000-000000000301", revision: 7, isCanceled: false, title: "Series", creatorID: "owner", organizer: "", color: "red", calendars: [], start: new Date("2026-03-28T00:00:00Z"), end: new Date("2026-03-28T00:00:00Z"), isAllDay: true, timeModel: { kind: "all-day" }, recurrence: "RRULE:FREQ=DAILY;COUNT=4" });
   const observation = { state: { ...state, provider: "caldav", reminders: { provider: "caldav", alarms: [] } }, version: "a".repeat(64), reminderEdit: { provider: "caldav", scope: "series", expectedRevision: 7, minutesBeforeStart: 15 } };
   fetchState.mockResolvedValue(observation);
-  const view = render(<ProviderEventDetails eventId={master.id} userId="owner" series />);
+  const view = render(<ProviderEventDetails presentation={presentation} eventId={master.id} userId="owner" series />);
   await screen.findByText("CalDAV details");
   expect(screen.queryByRole("button", { name: "Edit CalDAV event alarms" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Series alarm settings" })).toBeNull();
-  view.rerender(<ProviderEventDetails eventId={master.id} userId="owner" series seriesMaster={master} />);
+  view.rerender(<ProviderEventDetails presentation={presentation} eventId={master.id} userId="owner" series seriesMaster={master} />);
   const action = await screen.findByRole("button", { name: "Series alarm settings" });
   await act(async () => action.click());
   expect(await screen.findByRole("dialog", { name: "CalDAV series alarm" })).toBeTruthy();
@@ -126,13 +126,48 @@ it("opens only explicit series alarm settings from a stored master and refuses a
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(await screen.findByText(/Could not refresh provider details/)).toBeTruthy();
 });
-it("refuses stale organizer occurrence observations before opening the editor", async () => {
+it.each(["default", "panel"] as const)("refuses stale organizer occurrence observations before opening the editor (%s)", async (presentation) => {
   const child = EventSchema.parse({ id: "00000000-0000-4000-8000-000000000001", revision: 7, title: "Child", start: new Date("2026-10-25T09:00:00Z"), end: new Date("2026-10-25T10:00:00Z"), creatorID: "owner", organizer: "owner", color: "red", calendars: ["source"], originCalendarID: "source", isAllDay: false, isCanceled: false, seriesID: "00000000-0000-4000-8000-000000000002", originalStart: { kind: "instant", value: "2026-10-24T08:00:00.000Z" } });
   const edit = { provider: "google", calendarID: "source", expectedRevision: 7, scope: "occurrence", instanceVersion: "b".repeat(64) };
   fetchState.mockResolvedValueOnce({ state, version: "a".repeat(64), organizerEdit: edit }).mockResolvedValueOnce({ state, version: "a".repeat(64), organizerEdit: { ...edit, expectedRevision: 8 } });
-  render(<ProviderEventDetails event={child} eventId={child.id} userId="owner" occurrence />);
+  render(<ProviderEventDetails presentation={presentation} event={child} eventId={child.id} userId="owner" occurrence />);
   const action = await screen.findByRole("button", { name: "Manage this occurrence" });
   await act(async () => action.click());
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(await screen.findByText(/Could not refresh provider details/)).toBeTruthy();
+});
+
+
+it("folds panel metadata without hiding provider actions or refresh errors", async () => {
+  const google = { ...state, provider: "google", ownResponse: "needsAction", reminders: { provider: "google", useDefault: true, overrides: [] } };
+  fetchState.mockResolvedValueOnce({ state: google, version: "a".repeat(64), reminderEdit: { provider: "google", expectedRevision: 7 }, rsvpEdit: { provider: "google", expectedRevision: 7 } }).mockRejectedValueOnce(new Error("offline"));
+  const view = render(<ProviderEventDetails presentation="panel" eventId="event" userId="owner" />);
+  const label = await screen.findByText("Google Calendar details");
+  const disclosure = label.closest("details");
+  expect(disclosure).not.toBeNull();
+  expect(disclosure?.open).toBe(false);
+  expect(disclosure?.querySelector('[data-provider="google"]')).not.toBeNull();
+  expect(screen.getByText("Awaiting response").closest("details")).toBe(disclosure);
+  const reminders = screen.getByRole("button", { name: "Edit Google reminders" });
+  expect(reminders.closest("details")).toBeNull();
+  expect(screen.getByRole("button", { name: "Respond in Google" }).closest("details")).toBeNull();
+  await act(async () => reminders.click());
+  expect(screen.getByText(/Could not refresh provider details/).closest("details")).toBeNull();
+  expect(disclosure?.open).toBe(false);
+  expect(fetchState).toHaveBeenCalledTimes(2);
+  view.rerender(<ProviderEventDetails eventId="event" userId="owner" />);
+  expect(view.container.querySelector("details")).toBeNull();
+  expect(screen.getByText("needsAction")).toBeTruthy();
+  expect(fetchState).toHaveBeenCalledTimes(2);
+});
+
+it("keeps panel loading and unavailable states outside a disclosure", async () => {
+  let reject!: (reason: Error) => void;
+  fetchState.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
+  const view = render(<ProviderEventDetails presentation="panel" eventId="event" userId="owner" />);
+  expect(screen.getByRole("status").textContent).toContain("Loading provider details");
+  expect(view.container.querySelector("details")).toBeNull();
+  await act(async () => reject(new Error("offline")));
+  expect(screen.getByRole("status").textContent).toContain("could not be loaded");
+  expect(view.container.querySelector("details")).toBeNull();
 });

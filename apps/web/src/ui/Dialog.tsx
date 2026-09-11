@@ -14,6 +14,10 @@ export type DialogSize =
 export type DialogBodyLayout = "flush" | "padded";
 
 export type DialogProps = {
+  /** Opt-in inspector anatomy; existing modal callers keep their contract. */
+  placement?: "center" | "right";
+  modal?: boolean;
+  dismissOnOutsideInteraction?: boolean;
   bodyClassName?: string;
   bodyLayout?: DialogBodyLayout;
   /**
@@ -56,6 +60,9 @@ export type DialogProps = {
  * trigger, such as moving a recurring event with the keyboard.
  */
 export function Dialog({
+  placement = "center",
+  modal = true,
+  dismissOnOutsideInteraction = true,
   bodyClassName,
   bodyLayout = "padded",
   bodyScroll = "auto",
@@ -75,7 +82,7 @@ export function Dialog({
   trigger,
 }: DialogProps) {
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+    <DialogPrimitive.Root modal={modal} open={open} onOpenChange={onOpenChange}>
       {trigger ? (
         <DialogPrimitive.Trigger asChild>{trigger}</DialogPrimitive.Trigger>
       ) : null}
@@ -95,12 +102,16 @@ export function Dialog({
             : {})}
           className={classNames(
             styles.dialog,
+            placement === "right" && styles.dialog_right,
             styles[`dialog_${size}`],
             tall && styles.dialog_tall,
             elevated && styles.dialog_elevated,
             className,
           )}
           data-body-layout={bodyLayout}
+          onInteractOutside={(event) => {
+            if (!dismissOnOutsideInteraction) event.preventDefault();
+          }}
           data-has-footer={footer ? "" : undefined}
           onOpenAutoFocus={(event) => {
             if (!initialFocus?.current) return;

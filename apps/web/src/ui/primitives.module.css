@@ -1369,6 +1369,23 @@
 	);
 }
 
+/* Inspector proposal: fixed working surface; shared regions retain ownership
+   of insets and scrolling. 480px is the inspector's domain viewport budget. */
+.dialog.dialog_right {
+	top: 0;
+	right: 0;
+	bottom: 0;
+	left: auto;
+	width: min(480px, 100vw);
+	height: 100dvh;
+	max-height: 100dvh;
+	border-radius: 0;
+	transform: none;
+	animation: none;
+}
+
+.dialog_right .dialogHeader::before { display: none; }
+
 .dialogHeader {
 	display: flex;
 	flex: none;
@@ -2411,3 +2428,11 @@
 	gap: var(--space-3);
 	padding: 0 var(--space-4) var(--space-4);
 }
+
+/* Compact disclosures share the content axis of an already padded surface. */
+.disclosure_compact .disclosureRow { padding-inline: 0; }
+.disclosure_compact .disclosureBody { padding: var(--space-2) 0; justify-items: stretch; }
+
+.disclosure_compact .disclosureSummary { border-radius: var(--radius-chip); }
+
+.inspector { z-index: 121; }

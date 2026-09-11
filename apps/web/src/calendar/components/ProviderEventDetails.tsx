@@ -1,21 +1,23 @@
 import { ProviderOrganizerEditor } from "./ProviderOrganizerEditor";
 import { ProviderRsvpEditor } from "./ProviderRsvpEditor";
 import type { Event, ProviderEventStateResponse } from "@musubi/types";
-import { assertCaldavSeriesAlarmObservation, canManageProviderOrganizer, providerEventDetails } from "@musubi/calendar";
+import { assertCaldavSeriesAlarmObservation, canManageProviderOrganizer, providerEventDetails, providerRsvpResponseLabel } from "@musubi/calendar";
 import { useEffect, useId, useRef, useState } from "react";
 import { getProviderEventState } from "~/api/resources";
 import { getServerOrigin } from "~/api/query-keys";
 import { InlineError } from "~/ui/InlineError";
 import { Button } from "~/ui/Button";
 import { ProviderReminderEditor } from "./ProviderReminderEditor";
+import { Disclosure } from "~/ui/Disclosure";
+import { ProviderIcon } from "./ProviderIcon";
 import { SectionLabel } from "~/ui/SectionLabel";
 import styles from "./styles/event-details.module.css";
 
-type Props = { event?: Event; seriesMaster?: Event; eventId: string; revision?: number; userId: string; connectionId?: string; series?: boolean; occurrence?: boolean; onEditReminders?: (observation: ProviderEventStateResponse) => void; onRespond?: (observation: ProviderEventStateResponse) => void };
+type Props = { presentation?: "default" | "panel"; event?: Event; seriesMaster?: Event; eventId: string; revision?: number; userId: string; connectionId?: string; series?: boolean; occurrence?: boolean; onEditReminders?: (observation: ProviderEventStateResponse) => void; onRespond?: (observation: ProviderEventStateResponse) => void };
 export function ProviderEventDetails(props: Props) {
   return <ProviderEventDetailsBody key={JSON.stringify([getServerOrigin(), props.eventId, props.userId, props.connectionId, props.series, props.occurrence, props.revision, props.seriesMaster?.id, props.seriesMaster?.revision])} {...props} />;
 }
-function ProviderEventDetailsBody({ event: sourceEvent, seriesMaster, eventId, userId, connectionId, series = false, occurrence = false, onEditReminders, onRespond }: Props) {
+function ProviderEventDetailsBody({ presentation = "default", event: sourceEvent, seriesMaster, eventId, userId, connectionId, series = false, occurrence = false, onEditReminders, onRespond }: Props) {
   const titleId = useId();
   const key = JSON.stringify([eventId, userId, connectionId]);
   const [result, setResult] = useState<({ key: string; failed?: boolean } & Partial<ProviderEventStateResponse>)>();
@@ -60,12 +62,20 @@ function ProviderEventDetailsBody({ event: sourceEvent, seriesMaster, eventId, u
   const current = result?.key === key ? result : undefined;
   if (current?.state === null) return null;
   const details = current?.state ? providerEventDetails(current.state) : undefined;
+  const title = details ? `${details.provider} details` : "Provider details";
+  const metadata = details ? <p className={presentation === "panel" ? styles.noteText : undefined}>{series ? "These settings describe the series, not an individual occurrence. " : occurrence ? "These settings describe this occurrence. " : ""}Imported provider settings. {current?.reminderEdit || current?.rsvpEdit ? "Available actions are shown below." : `Change these in ${details.provider}.`}{"\n\n"}
+    {details.rows.map(row => <span key={row.label}><strong>{row.label}: </strong>{presentation === "panel" && row.label === "Your provider response" ? providerRsvpResponseLabel(row.value) : row.value}{"\n"}</span>)}
+    {"\n"}Provider notifications and Musubi reminders are separate. Both apps may notify you.
+  </p> : null;
   return <section aria-labelledby={titleId} className={styles.notes}>
-    <div className={styles.sectionHeading}><SectionLabel id={titleId} level={3}>{details ? `${details.provider} details` : "Provider details"}</SectionLabel></div>
-    {details ? <p>{series ? "These settings describe the series, not an individual occurrence. " : occurrence ? "These settings describe this occurrence. " : ""}Imported provider settings. {current?.reminderEdit || current?.rsvpEdit ? "Available actions are shown below." : `Change these in ${details.provider}.`}{"\n\n"}
-      {details.rows.map(row => <span key={row.label}><strong>{row.label}: </strong>{row.value}{"\n"}</span>)}
-      {"\n"}Provider notifications and Musubi reminders are separate. Both apps may notify you.
-    </p> : <p role="status">{current?.failed ? "Provider details could not be loaded. Reopen this event to retry." : "Loading provider details…"}</p>}
+    {presentation === "panel" && details ? <Disclosure
+      density="compact"
+      icon={<ProviderIcon flavor={current?.state?.provider ?? null} />}
+      label={<span id={titleId}>{title}</span>}
+    >{metadata}</Disclosure> : <>
+      <div className={styles.sectionHeading}><SectionLabel id={titleId} level={3}>{title}</SectionLabel></div>
+      {metadata ?? <p role="status">{current?.failed ? "Provider details could not be loaded. Reopen this event to retry." : "Loading provider details…"}</p>}
+    </>}
     {openError ? <InlineError>{openError}</InlineError> : null}
     {current?.reminderEdit && current.state && current.version && !series && !(current.reminderEdit.provider === "caldav" && current.reminderEdit.scope === "series") ? <>
       <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget)}>{current?.reminderEdit?.provider === "caldav" ? "Edit CalDAV event alarms" : occurrence ? "Edit reminders for this occurrence" : "Edit Google reminders"}</Button>
