@@ -4360,7 +4360,8 @@ test("keeps desktop event details in the right overlay without moving the calend
 	const leftTrigger = page
 		.getByRole("button", { name: /Studio retreat/ })
 		.first();
-	const leftTriggerBox = (await leftTrigger.boundingBox())!;
+	const calendarGrid = page.getByRole("grid").first();
+	const calendarBox = (await calendarGrid.boundingBox())!;
 	await leftTrigger.click();
 	const leftDetails = page.getByRole("dialog", { name: "Studio retreat" });
 	await leftDetails.evaluate((element) =>
@@ -4372,7 +4373,7 @@ test("keeps desktop event details in the right overlay without moving the calend
 	);
 	const leftDetailsBox = (await leftDetails.boundingBox())!;
 	expect(leftDetailsBox).toMatchObject({ x: 800, y: 0, width: 480, height: 800 });
-	expect(await leftTrigger.boundingBox()).toEqual(leftTriggerBox);
+	expect(await calendarGrid.boundingBox()).toEqual(calendarBox);
 	expect(
 		await leftDetails.evaluate((element) => ({
 			horizontal: element.scrollWidth - element.clientWidth,
@@ -8077,7 +8078,7 @@ for (const [width, theme, target] of [[1280, "light", "zoned"], [390, "dark", "a
       writes.push({ method: route.request().method(), body });
       return respond(route, { ...source, title: body.patch.title, revision: 2,
         start: target === "zoned" ? "2026-07-25T13:30:17.123Z" : "2026-07-25T00:00:00Z",
-        end: target === "zoned" ? "2026-07-25T14:30:19.456Z" : "2026-07-25T00:00:00Z",
+        end: target === "zoned" ? "2026-07-25T14:30:19.456Z" : "2026-07-26T00:00:00Z",
         isAllDay: target === "all-day", timeModel: target === "zoned" ? body.time : { kind: "all-day" },
       });
     });
@@ -8088,6 +8089,10 @@ for (const [width, theme, target] of [[1280, "light", "zoned"], [390, "dark", "a
     await page.getByRole("button", { name: "More options", exact: true }).click();
     await page.getByRole("combobox", { name: "Time model", exact: true }).click();
     await page.getByRole("option", { name: target === "zoned" ? "Event time zone" : "All-day dates", exact: true }).click();
+    if (target === "all-day") {
+      await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText("July 26, 2026");
+      await expect(page.getByText("End date is not included.")).toBeVisible();
+    }
     if (target === "zoned") {
       await expect(page.getByRole("textbox", { name: "Event time zone", exact: true })).toHaveValue("");
       await page.getByRole("button", { name: "Save", exact: true }).click();
@@ -8103,7 +8108,7 @@ for (const [width, theme, target] of [[1280, "light", "zoned"], [390, "dark", "a
     expect(writes).toHaveLength(1);
     expect(writes[0]).toEqual({ method: "PUT", body: { expectedRevision: 1, patch: { title: "Explicit complete draft" }, time: target === "zoned" ? {
       kind: "zoned", timeZone: "America/New_York", startLocal: "2026-07-25T09:30:17.123", endLocal: "2026-07-25T10:30:19.456",
-    } : { kind: "all-day", startDate: "2026-07-25", endDate: "2026-07-25" } } });
+    } : { kind: "all-day", startDate: "2026-07-25", endDate: "2026-07-26" } } });
   });
 }
 
@@ -8224,7 +8229,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
     await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, { state: { provider: "microsoft", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [], attendeesComplete: false, ownResponse: "notResponded", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "workingElsewhere", privacy: "confidential", status: null, eventType: "singleInstance", conferenceURLs: [] } }));
     await page.goto("/app/p/my-calendar/month?date=2026-07-26");
     await page.getByRole("button", { name: /Provider meeting/ }).first().click();
-    await expect(page.getByRole("heading", { name: "Outlook details" })).toBeVisible();
+    await page.locator("summary").filter({ hasText: "Outlook details" }).click();
     await expect(page.getByText(/These settings describe the series/)).toBeVisible();
     await expect(page.getByText("Availability: workingElsewhere", { exact: true })).toBeVisible();
     await expect(page.getByText(/Both apps may notify/)).toBeVisible();
@@ -8898,6 +8903,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
       }));
       await page.goto("/app/p/my-calendar/month?date=2026-07-26");
       await page.getByRole("button", { name: /Native private title/ }).first().click();
+      await page.locator("summary").filter({ hasText: "Google Calendar details" }).click();
       await expect(page.getByText(/private-host@example.test/)).toBeVisible();
       if (openEditor) {
         await page.getByRole("button", { name: "Edit Google reminders" }).click();
@@ -8984,6 +8990,9 @@ for (const mode of ["compact", "generated", "full"] as const) {
     await page.screenshot({ path: testInfo.outputPath(`${provider}-editor-${mode}.png`), fullPage: false });
     if (mode !== "full") {
       await page.keyboard.press("Escape");
+      const discard = page.getByRole("dialog", { name: "Discard unsaved changes?", exact: true });
+      await expect(discard).toBeVisible();
+      await discard.getByRole("button", { name: "Discard changes", exact: true }).click();
       await expect(page.getByRole("button", { name: provider !== "google" ? /Public permitted title/ : /Busy/ }).first()).toBeFocused();
     }
     await expect(page.locator("vite-error-overlay")).toHaveCount(0);
