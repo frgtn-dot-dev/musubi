@@ -21,6 +21,14 @@ proof that provider permission cannot change after a response.
 
 ## Evidence and remaining privacy work
 
+[Live web acceptance](../audits/calendar-google-privacy-live-20260911.md) covers
+one private timed secondary-calendar event across reader, limited-writer and
+full-writer transitions, including same-ETag restoration, open detail/editor
+refresh and free/busy retirement. Native devices and broader variants remain
+outside that evidence. Restricted private Events.list shells without summary
+and organizer retain a Busy label using that response page's observed role;
+ordinary unnamed and full-access events retain their existing labels.
+
 `google_access.integration.test.ts` uses the actual Google adapter, a local HTTP
 fixture and disposable PostgreSQL. Held native responses cover stale upsert,
 delete, full sweep and empty delta cursor writes, including owner→limited→owner

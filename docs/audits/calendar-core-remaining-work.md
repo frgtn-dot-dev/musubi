@@ -189,3 +189,18 @@ Testovací kalendář je uklizený. Živé writer/reader privacy přechody čeka
 výslovný souhlas s rozšířením oprávnění nového QA kalendáře, které odmítla
 automatická kontrola. Device acceptance a produkční aktivace zůstávají oddělené.
 [Přesná evidence a neověřené varianty](calendar-google-availability-live-20260911.md).
+
+## Google privacy přechody — následné dokončení 2026-09-11
+
+Vlastník následně výslovně schválil konkrétní změny testovacího sdílení. Živě
+prošly writer → reader → writer a writerWithoutPrivateAccess přechody se
+zachováním identity, odstraněním soukromých polí a jejich obnovením i při stejném
+ETagu. Otevřený detail reagoval bez zavření; otevřený editor přešel na read-only
+a po návratu oprávnění zachoval vlastní rozepsanou změnu. Přechod na freeBusyReader
+odstranil běžnou událost a nabídl vypnutý zdroj dostupnosti.
+
+Nalezené označení skrytého záznamu jako `(untitled)` bylo opraveno na Busy jen
+při čerstvém důkazu omezené role a soukromého záznamu bez názvu/organizátora.
+Živý retest prošel. Fixture je uklizená; pro tento přesně vymezený privacy test
+už další souhlas nechybí. Device a širší varianty zůstávají výslovně oddělené.
+[Evidence](calendar-google-privacy-live-20260911.md).
