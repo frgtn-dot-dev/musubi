@@ -240,7 +240,43 @@ Další živý Graph privacy test potřebuje kontrolovaný sdílený kalendář 
 vlastníka. Aktuální read-only inventura jediné aktivní Graph identity našla tři
 kalendáře stejného vlastníka, všechny s `canViewPrivateItems=true`; samostatný
 owner/recipient pár pro změnu true→false→true zatím připravený není. Samotné
-`canEdit=false` u dvou kalendářů tento předpoklad nenahrazuje. Příprava vyžaduje
-součinnost vlastníka účtů; inventura neprováděla event ani permission zápisy.
+`canEdit=false` u dvou kalendářů tento předpoklad nenahrazuje. Tato inventura neprováděla event ani permission zápisy. Následující rozhodnutí
+vlastníka tuto přípravu výslovně odkládá.
 Fyzická zařízení, širší kontrakty a rozhodnutí o produkční aktivaci zůstávají
 oddělené od dokončené Google browser sady.
+
+
+## Graph private-read — odložené živé ověření podle rozhodnutí vlastníka
+
+Dne 2026-09-11 vlastník schválil ponechat přechod soukromého čtení
+`true→false→true` jako neověřený. Dostupný pracovní Microsoft 365 účet a osobní
+Outlook účet nejsou ve stejné organizaci. Nativní Outlook na novém prázdném QA
+kalendáři nabídl pro tohoto externího příjemce pouze volno/obsazeno nebo názvy
+a místa; delegaci s přístupem k soukromým detailům nenabídl. Sdílení nebylo
+odeslané a prázdný QA kalendář byl odstraněný.
+
+Vlastníkem zpřístupněný administrátorský tenant nemá licenční produkty podle
+Entra ani dokončeného seznamu licencí Microsoft 365. Nabídka měsíčního trialu
+byla pouze prohlédnutá; vlastník aktivaci odmítl. Žádný trial, nákup, testovací
+uživatel ani nové přiřazení licence nebyly provedené. Bez změny tohoto rozhodnutí
+se nemá znovu požadovat tentýž setup ani tento test označit jako prošlý.
+
+To neblokuje další vymezenou acceptance s již připojenými účty. Lokální Graph
+privacy regrese zůstávají samostatným důkazem; odklad není důkazem nefunkčnosti
+implementace ani povolením produkční aktivace. [Microsoft popisuje soukromé
+čtení delegáta a omezení na stejnou organizaci](https://learn.microsoft.com/en-us/graph/outlook-share-or-delegate-calendar).
+
+
+## Outlook celodenní UNTIL — dokončená browser acceptance 2026-09-11
+
+Obnovený URL draft v Musubi vytvořil osobní DATE sérii s inkluzivním UNTIL
+30. září. Native Outlook a Graph readback potvrdily přesně tři výskyty 28.–30.
+září, poslední s exkluzivním koncem 1. října. První worker pokus zůstal
+nepotvrzený; skutečné Check creation původní operaci následně dokončilo.
+Jeden immutable journal, master, tři děti a čtyři mapování byly stabilní po sync.
+Přesná příčina prvního nepotvrzení nebyla prokázaná; nevyžádala si změnu kódu.
+
+Série je nativně odstraněná, aktivní místní fixture řádky jsou nula a dokončená
+historie je zachovaná. Tato sada nepřebírá nový UNTIL picker, zoned UNTIL,
+Use provider version adoption ani odložený Graph private-read. [Přesná evidence,
+postup recovery a limity měření](calendar-outlook-until-browser-acceptance-20260911.md).
