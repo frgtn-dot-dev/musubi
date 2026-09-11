@@ -66,3 +66,30 @@ it("uses the native CalDAV event alarm contract without defaults or email method
   picker.props.onSelect("off"); tree = renderAlarm(); button(tree, "Save CalDAV event alarms").onPress(); await settle();
   expect(h.save.mock.calls[0][1]).toMatchObject({ provider: "caldav", alarms: { minutesBeforeStart: null } });
 });
+
+it("shows inherited occurrence defaults without offering or submitting them, then saves an explicit custom choice", async () => {
+  const child = { ...event, seriesID: "00000000-0000-4000-8000-000000000002" };
+  const inherited: ProviderEventStateResponse = { ...observation, state: { ...observation.state!, reminders: { provider: "google", useDefault: true, overrides: [] } } };
+  const renderInherited = () => { h.index = 0; return ProviderReminderEditor({ event: child, observation: inherited, onClose: h.close }); };
+  let tree = renderInherited();
+  expect(button(tree, "Save Google reminders").disabled).toBe(true);
+  button(tree, "Save Google reminders").onPress(); await settle();
+  expect(h.save).not.toHaveBeenCalled();
+  tree = renderInherited(); button(tree, "Reminder mode: Calendar defaults").onPress(); tree = renderInherited();
+  const picker = nodes(tree).find(node => node.type === "OptionPicker")!.props;
+  expect(picker.options.map((item: any) => item.value)).toEqual(["off", "custom"]);
+  picker.onSelect("custom"); tree = renderInherited();
+  expect(button(tree, "Save Google reminders").disabled).toBe(false);
+  h.save.mockResolvedValue({ status: "completed" });
+  button(tree, "Save Google reminders").onPress(); await settle();
+  expect(h.save.mock.calls[0][1].reminders).toEqual({ useDefault: false, overrides: [{ method: "popup", minutes: 15 }] });
+});
+
+it("keeps native one-off defaults available", async () => {
+  let tree = render(); button(tree, "Reminder mode: Custom").onPress(); tree = render();
+  const picker = nodes(tree).find(node => node.type === "OptionPicker")!.props;
+  expect(picker.options.map((item: any) => item.value)).toEqual(["defaults", "off", "custom"]);
+  picker.onSelect("defaults"); tree = render();
+  h.save.mockResolvedValue({ status: "completed" }); button(tree, "Save Google reminders").onPress(); await settle();
+  expect(h.save.mock.calls[0][1].reminders).toEqual({ useDefault: true });
+});

@@ -100,6 +100,11 @@ async function main() {
           const fresh = await realFetch(`${apiOrigin}/api/v1/events/${child.id}/provider-state`, { headers });
           assert.equal(fresh.headers.get("cache-control"), "private, no-store");
           assert.deepEqual((await fresh.json()).reminderEdit, { provider: "google", expectedRevision: child.revision });
+          const beforeDefaults = reads;
+          assert.equal((await post({ ...request, reminders: { useDefault: true } })).status, 403, "Bound defaults refused before native preflight");
+          assert.equal(reads, beforeDefaults);
+          assert.equal(patches, 0);
+          assert.equal((await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, child.id))).length, 0);
           if (scenario === "public-parent-race") onRead = async () => { await db.update(events).set({ revision: parent.revision + 1 }).where(eq(events.id, parent.id)); };
           if (scenario === "public-native-parent") remote.recurringEventId = "other";
           if (scenario === "public-native-original") remote.originalStartTime = allDay ? { date: "2026-10-26" } : { dateTime: "2026-10-25T02:30:00+01:00" };

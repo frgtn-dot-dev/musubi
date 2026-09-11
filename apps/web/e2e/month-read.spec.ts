@@ -8791,7 +8791,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
 }
 
 for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
-  for (const kind of ["zoned", "all-day"] as const) test(`K14 Google instance reminder editor ${kind} preserves retry: ${theme} ${width}`, async ({ page }) => {
+  for (const inherited of [false, true]) for (const kind of ["zoned", "all-day"] as const) test(`K14 Google instance reminder editor ${kind} ${inherited ? "inherited defaults" : "custom"} preserves retry: ${theme} ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
     const errors: string[] = [];
@@ -8807,7 +8807,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await mockAuthenticatedReads(page, { ...events, events: [master, imported] }, [{ ...calendars[0]!, provider: "google", accountID: "fixture", accountLabel: "Fixture" }]);
     let observations = 0;
     await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, {
-      state: { provider: "google", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [], attendeesComplete: true, ownResponse: "accepted", reminders: { provider: "google", useDefault: false, overrides: [{ method: "popup", minutes: 30 }, { method: "email", minutes: 60 }] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] },
+      state: { provider: "google", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [], attendeesComplete: true, ownResponse: "accepted", reminders: { provider: "google", useDefault: inherited, overrides: inherited ? [] : [{ method: "popup", minutes: 30 }, { method: "email", minutes: 60 }] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] },
       version: (++observations === 1 ? "b" : "a").repeat(64), reminderEdit: { provider: "google", expectedRevision: 7 },
     }));
     const writes: any[] = [];
@@ -8823,6 +8823,21 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await trigger.click();
     const editor = page.getByRole("dialog", { name: "Google reminders for this occurrence", exact: true });
     await expect(editor.getByText(/These Google reminders apply only to this occurrence/)).toBeVisible();
+    if (inherited) {
+      await expect(editor.getByRole("combobox", { name: "Reminder mode" })).toContainText("Calendar defaults");
+      await expect(editor.getByRole("button", { name: "Save Google reminders" })).toBeDisabled();
+      expect(writes).toHaveLength(0);
+      await editor.getByRole("combobox", { name: "Reminder mode" }).click();
+      await expect(page.getByRole("option", { name: "Calendar defaults", exact: true })).toBeDisabled();
+      await page.getByRole("option", { name: "Custom", exact: true }).click();
+      await editor.getByRole("textbox", { name: "Reminder 1 minutes before start" }).fill("30");
+      await editor.getByRole("button", { name: "Add reminder" }).click();
+      await editor.getByRole("textbox", { name: "Reminder 2 minutes before start" }).fill("60");
+      await chooseSelectOption(page, "Reminder 2 method", "Email");
+    }
+    await editor.getByRole("combobox", { name: "Reminder mode" }).click();
+    await expect(page.getByRole("option", { name: "Calendar defaults", exact: true })).toHaveCount(0);
+    await page.getByRole("option", { name: "Custom", exact: true }).click();
     const minutes = editor.getByRole("textbox", { name: "Reminder 1 minutes before start" });
     await expect(minutes).toHaveValue("30");
     await expect(editor.getByRole("textbox", { name: "Reminder 2 minutes before start" })).toHaveValue("60");

@@ -494,6 +494,10 @@ export async function commitEventDeliveryResolution(
         .orderBy(eventOutbox.id)
         .for("update");
       const current = await resolutionContext(tx, userID, row.eventID, row.id, true);
+      // Preserve historical replay and inspection, but never replace a bound
+      // instance defaults request with another unsupported provider mutation.
+      if (current.row.payload.reminderInstance?.request.reminders.useDefault)
+        throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
       // A retry/pull can change uncertainty without changing the local revision
       // or latest operation ID. In particular, never replace a newly ambiguous
       // create with another identity based on an earlier absence observation.

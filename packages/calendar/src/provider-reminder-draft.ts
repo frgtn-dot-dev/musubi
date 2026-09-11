@@ -16,13 +16,14 @@ export function providerReminderDraft(observation: ProviderEventStateResponse): 
   return { mode: parsed.useDefault ? "defaults" : parsed.overrides.length ? "custom" : "off", overrides: parsed.useDefault ? [] : parsed.overrides.map(item => ({ method: item.method, minutes: String(item.minutes) })) };
 }
 
-export function providerReminderRequest(observation: ProviderEventStateResponse, draft: ProviderReminderDraft, operationID: string) {
+export function providerReminderRequest(observation: ProviderEventStateResponse, draft: ProviderReminderDraft, operationID: string, occurrence = false) {
   if (!observation.reminderEdit || !observation.version) throw new Error("Refresh the event before editing Google reminders.");
   if (draft.mode === "custom" && (!draft.overrides.length || draft.overrides.some(item => !/^\d+$/.test(item.minutes) || Number(item.minutes) > 40320))) throw new Error("Use whole minutes from 0 to 40320 for each reminder.");
   if (observation.reminderEdit.provider === "caldav") {
     if (draft.mode === "defaults" || draft.mode === "custom" && (draft.overrides.length !== 1 || draft.overrides[0].method !== "popup")) throw new Error("Use one display alarm or turn the event alarm off.");
     return CaldavAlarmEditSchema.parse({ operationID, expectedRevision: observation.reminderEdit.expectedRevision, expectedStateVersion: observation.version, provider: "caldav", ...(observation.reminderEdit.scope ? { scope: observation.reminderEdit.scope } : {}), alarms: { minutesBeforeStart: draft.mode === "off" ? null : Number(draft.overrides[0].minutes) } });
   }
+  if (occurrence && draft.mode === "defaults") throw new Error("Calendar defaults cannot be saved for a Google occurrence. Choose Custom or Off.");
   return ProviderReminderEditSchema.parse({ operationID, expectedRevision: observation.reminderEdit.expectedRevision, expectedStateVersion: observation.version, provider: "google", reminders: draft.mode === "defaults" ? { useDefault: true } : { useDefault: false, overrides: draft.mode === "off" ? [] : draft.overrides.map(item => ({ method: item.method, minutes: Number(item.minutes) })) } });
 }
 

@@ -81,6 +81,37 @@ async function main() {
       const recovered = await transport.write("user", "account", calendar, proof, async () => { throw new Error("Recovery must not write"); });
       assert.equal(recovered.recovered, true); assert.equal(patches, 1); assert.equal(current.summary, "Original title"); assert.equal(current.extendedProperties.private.preserve, "yes");
     }
+    for (const day of [false, true]) {
+      reset(); current = make(day);
+      const proof = await transport.read("user", "account", calendar, expected(day), { useDefault: true });
+      const frozen = structuredClone(proof);
+      let checks = 0;
+      const unsupportedDefaults = (error: unknown) => error instanceof EventWriteError && error.reason === "unsupported";
+      // New defaults writes are unsupported even with the exact old baseline.
+      await assert.rejects(transport.write("user", "account", calendar, proof, async () => { checks++; }), unsupportedDefaults);
+      assert.equal(checks, 0); assert.equal(patches, 0); assert.equal(accepted, 0);
+      // Historical normalization to a concrete popup is not inheritance, even
+      // if its effective timing happens to match the current calendar defaults.
+      for (const minutes of [10, 27]) {
+        current = { ...make(day), etag: '\"normalized\"', reminders: { useDefault: false, overrides: [{ method: "popup", minutes }] } };
+        assert.throws(() => confirmGoogleReminderInstance(current, proof),
+          error => error instanceof ProviderEventWriteError && error.code === "provider-conflict" && error.outcome === "unconfirmed");
+        await assert.rejects(transport.write("user", "account", calendar, proof, async () => { checks++; }), unsupportedDefaults);
+        assert.equal(checks, 0); assert.equal(patches, 0); assert.equal(accepted, 0);
+      }
+      // A historical exact defaults result can still be confirmed read-only.
+      current = { ...make(day), etag: '\"confirmed\"', reminders: { useDefault: true } };
+      const recovered = await transport.write("user", "account", calendar, proof, async () => { checks++; });
+      assert.equal(recovered.recovered, true);
+      assert.equal(checks, 0); assert.equal(patches, 0); assert.equal(accepted, 0);
+      assert.deepEqual(proof, frozen);
+      // The supported explicit-off policy continues to use a conditional PATCH.
+      reset(); current = make(day);
+      const off = await transport.read("user", "account", calendar, expected(day), { useDefault: false, overrides: [] });
+      assert.equal((await transport.write("user", "account", calendar, off, async () => {})).recovered, false);
+      assert.deepEqual(current.reminders, { useDefault: false, overrides: [] });
+      assert.equal(patches, 1); assert.equal(accepted, 1);
+    }
     for (const fault of ["lost", "read", "body"] as const) {
       for (const code of ["provider-conflict", "provider-version-unavailable"] as const) {
       reset(); const proof = await read(); changedAfter = code === "provider-conflict"; weakAfter = code === "provider-version-unavailable";
