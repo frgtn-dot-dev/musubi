@@ -9819,3 +9819,75 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await expect(trigger).toBeFocused(); expect(errors).toEqual([]);
   });
 }
+
+
+for (const confirmation of ["unavailable", "missing"] as const) {
+  test(`SessionGate API 401 with ${confirmation} session confirmation`, async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    page.on("console", message => {
+      // Chromium reports the deliberately injected HTTP failures as console
+      // errors; every other browser error remains a test failure.
+      if (message.type() === "error" && !/Failed to load resource: the server responded with a status of (401|503)/.test(message.text())) {
+        errors.push(message.text());
+      }
+    });
+    // Catch every API request before installing specific fixtures: this isolated
+    // regression must never reach the live authenticated API behind Vite.
+    await page.route(url => url.pathname.startsWith("/api/"), route => respond(route, {}));
+    const item = event("session-check", "Session check event", "personal", "#b3492f",
+      "2026-07-08T09:00:00+02:00", "2026-07-08T10:00:00+02:00");
+    await mockAuthenticatedReads(page, { ...events, events: [item] });
+    await page.route("**/api/v1/availability/sources", route => respond(route, { sources: [] }));
+    let checking = false;
+    let recovered = false;
+    let signOuts = 0;
+    let checks = 0;
+    await page.route("**/api/auth/get-session", route => {
+      if (!checking || recovered) return respond(route, session);
+      checks++;
+      return confirmation === "unavailable"
+        ? respond(route, { message: "Temporary session service failure" }, 503)
+        : respond(route, null);
+    });
+    await page.route("**/api/auth/sign-out", route => {
+      signOuts++;
+      return respond(route, { success: true });
+    });
+    await page.route("**/api/v1/events", route => {
+      if (route.request().method() !== "PATCH" || recovered) return route.fallback();
+      checking = true;
+      return respond(route, { error: "Unauthorized", message: "Sign in required" }, 401);
+    });
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month/event/session-check?date=2026-07-08`);
+    await expect(page).toHaveTitle(/Musubi/);
+    const title = page.getByRole("textbox", { name: "Event title" });
+    await title.fill("Keep my draft");
+    const checked = page.waitForResponse(response => response.url().endsWith("/api/auth/get-session")
+      && response.status() === (confirmation === "unavailable" ? 503 : 200));
+    await title.press("Control+Enter");
+    await checked;
+    await expect.poll(() => checks).toBeGreaterThan(0);
+    if (confirmation === "unavailable") {
+      await expect(page.getByRole("alert")).toContainText("Sign in required");
+      await expect(title).toHaveValue("Keep my draft");
+      // A subsequent real editor interaction must still work after the failed
+      // check settles, rather than merely catching the frame before sign-out.
+      recovered = true;
+      await title.press("Control+Enter");
+      await expect(title).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "My calendar" })).toBeVisible();
+      expect(signOuts).toBe(0);
+      expect(await page.evaluate(() => localStorage.getItem("musubi:last-session") !== null)).toBe(true);
+      await expect(page).toHaveURL(/\/app\//);
+    } else {
+      await expect(page).toHaveURL(/\/login/);
+      expect(signOuts).toBeGreaterThan(0);
+      expect(await page.evaluate(() => localStorage.getItem("musubi:last-session"))).toBeNull();
+      await expect(page.getByRole("heading", { name: "My calendar" })).toHaveCount(0);
+    }
+    await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+    expect(errors).toEqual([]);
+    await page.screenshot({ path: `/tmp/musubi-session-check-${confirmation}.png` });
+  });
+}
