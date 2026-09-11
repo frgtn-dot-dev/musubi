@@ -35,11 +35,15 @@ export function SessionGate() {
       // outright answers neither question and is left to the offline path.
       void authClient
         .getSession()
-        .then((result) =>
-          result.data
+        .then((result) => {
+          // Better Auth resolves HTTP failures with { data: null, error }.
+          // Only an explicit 401 or a successful empty response confirms that
+          // the session is gone; a failed check must not erase local state.
+          if (result.error && result.error.status !== 401) return;
+          return result.data
             ? session.refetch()
-            : signOutAndReset({ queryClient }),
-        )
+            : signOutAndReset({ queryClient });
+        })
         .catch(() => undefined)
         .finally(() => router.invalidate());
     }
