@@ -5,7 +5,7 @@ import { Row } from "~/ui/Row";
 import { ProviderOrganizerEditor } from "./ProviderOrganizerEditor";
 import { ProviderRsvpEditor } from "./ProviderRsvpEditor";
 import type { Event, ProviderEventStateResponse } from "@musubi/types";
-import { assertCaldavSeriesAlarmObservation, canManageProviderOrganizer, providerEventDetails, providerRsvpResponseLabel } from "@musubi/calendar";
+import { assertCaldavSeriesAlarmObservation, canManageProviderOrganizer, providerEventDetails } from "@musubi/calendar";
 import { useEffect, useId, useRef, useState } from "react";
 import { getProviderEventState } from "~/api/resources";
 import { getServerOrigin } from "~/api/query-keys";
@@ -20,13 +20,42 @@ import { SectionLabel } from "~/ui/SectionLabel";
 import styles from "./styles/event-details.module.css";
 
 function providerResponseStateLabel(response: string) {
-  if (response === "accepted") return "Accepted";
-  if (response === "declined") return "Declined";
-  if (response === "notResponded") return "Awaiting response";
-  if (response === "tentativelyAccepted") return "Tentative";
-  // Graph can also report `none` for the organizer, so do not imply a pending RSVP.
-  if (response === "none") return "Not reported";
-  return providerRsvpResponseLabel(response);
+  switch (response.toLowerCase()) {
+    case "accepted": return "Accepted";
+    case "declined": return "Declined";
+    case "tentative":
+    case "tentativelyaccepted": return "Tentative";
+    case "needsaction":
+    case "needs-action":
+    case "notresponded": return "Awaiting response";
+    // Graph can also report `none` for the organizer, so do not imply a pending RSVP.
+    case "none": return "Not reported";
+    default: return response;
+  }
+}
+
+function providerRoleLabel(role: string | null) {
+  switch (role?.toLowerCase()) {
+    case "required":
+    case "req-participant": return "Required";
+    case "optional":
+    case "opt-participant": return "Optional";
+    case "chair": return "Chair";
+    default: return role;
+  }
+}
+
+const PROVIDER_METADATA_LABELS: Record<string, Record<string, string>> = {
+  Availability: { opaque: "Busy", transparent: "Free", workingelsewhere: "Working elsewhere" },
+  Privacy: { default: "Default", public: "Public", private: "Private", confidential: "Confidential", normal: "Normal" },
+  "Provider status": { confirmed: "Confirmed", tentative: "Tentative", cancelled: "Cancelled", canceled: "Cancelled", active: "Active" },
+  "Provider event type": { singleinstance: "Single event", seriesmaster: "Recurring series", occurrence: "Occurrence", exception: "Exception" },
+};
+
+function readableProviderPerson(person: { name: string | null; address: string | null }) {
+  const address = person.address?.replace(/^mailto:/i, "") ?? null;
+  const name = person.name?.replace(/^mailto:/i, "") || address || "Unnamed participant";
+  return { name, address: address === name ? null : address };
 }
 
 type Props = { providerFlavor?: string | null; presentation?: "default" | "panel"; event?: Event; seriesMaster?: Event; eventId: string; revision?: number; userId: string; connectionId?: string; series?: boolean; occurrence?: boolean; onEditReminders?: (observation: ProviderEventStateResponse) => void; onRespond?: (observation: ProviderEventStateResponse) => void };
@@ -81,13 +110,24 @@ function ProviderEventDetailsBody({ providerFlavor, presentation = "default", ev
   const participants = current?.state?.attendees.map((person, index) => ({
     ...person,
     id: `${index}:${person.address ?? person.name ?? "participant"}`,
-    name: person.name || person.address || "Unnamed participant",
+    ...readableProviderPerson(person),
   })) ?? [];
   const knownApple = current?.state?.provider === "caldav" && providerFlavor === "apple";
   const displayProvider = presentation === "panel" && knownApple ? "Apple Calendar" : details?.provider;
   const title = details ? `${displayProvider} details` : "Provider details";
-  const metadata = details ? <p className={presentation === "panel" ? styles.noteText : undefined}>{series ? "These settings describe the series, not an individual occurrence. " : occurrence ? "These settings describe this occurrence. " : ""}Imported provider settings. {current?.reminderEdit || current?.rsvpEdit ? "Available actions are shown below." : `Change these in ${details.provider}.`}{"\n\n"}
-    {details.rows.filter(row => presentation !== "panel" || row.label !== "Provider participants").map(row => <span key={row.label}><strong>{row.label}: </strong>{presentation === "panel" && row.label === "Your provider response" ? providerResponseStateLabel(row.value) : row.value}{"\n"}</span>)}
+  function metadataValue(row: { label: string; value: string }) {
+    if (presentation !== "panel") return row.value;
+    if (row.label === "Your provider response") return providerResponseStateLabel(row.value);
+    if (row.label === "Organizer" && current?.state?.organizer) {
+      const person = readableProviderPerson(current.state.organizer);
+      return [person.name, person.address].filter(Boolean).join(" · ");
+    }
+    const labels = PROVIDER_METADATA_LABELS[row.label];
+    const value = row.value.toLowerCase();
+    return labels && Object.hasOwn(labels, value) ? labels[value] : row.value;
+  }
+  const metadata = details ? <p className={presentation === "panel" ? styles.noteText : undefined}>{series ? "These settings describe the series, not an individual occurrence. " : occurrence ? "These settings describe this occurrence. " : ""}Imported provider settings. {current?.reminderEdit || current?.rsvpEdit ? "Available actions are shown below." : `Change these in ${displayProvider}.`}{"\n\n"}
+    {details.rows.filter(row => presentation !== "panel" || row.label !== "Provider participants").map(row => <span key={row.label}><strong>{row.label}: </strong>{metadataValue(row)}{"\n"}</span>)}
     {"\n"}Provider notifications and Musubi reminders are separate. Both apps may notify you.
   </p> : null;
   const actions = <>
@@ -118,7 +158,7 @@ function ProviderEventDetailsBody({ providerFlavor, presentation = "default", ev
           <Row
             icon={<Avatar name={person.name} />}
             label={person.name}
-            detail={[person.address !== person.name ? person.address : null, person.role, person.response ? providerResponseStateLabel(person.response) : null].filter(Boolean).join(" · ")}
+            detail={[person.address, providerRoleLabel(person.role), person.response ? providerResponseStateLabel(person.response) : null].filter(Boolean).join(" · ")}
           />
         </li>)}
       </ul>

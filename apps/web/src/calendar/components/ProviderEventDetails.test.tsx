@@ -186,7 +186,7 @@ it.each([false, true])("shows provider participants with explicit completeness a
   const list = screen.getByRole("list", { name: "Outlook participants" });
   expect(within(list).getAllByRole("listitem")).toHaveLength(2);
   expect(within(list).getByText("Alex")).toBeTruthy();
-  expect(within(list).getByText("alex@example.test · required · Awaiting response")).toBeTruthy();
+  expect(within(list).getByText("alex@example.test · Required · Awaiting response")).toBeTruthy();
   expect(within(list).getByText("X-CUSTOM-ROLE · X-CUSTOM-RESPONSE")).toBeTruthy();
   expect(screen.queryByText("Participant list may be incomplete.") !== null).toBe(!attendeesComplete);
   expect(screen.getAllByText(/alex@example.test/)).toHaveLength(1);
@@ -211,7 +211,7 @@ it.each([
   const view = render(<ProviderEventDetails presentation="panel" providerFlavor={flavor} eventId="event" userId="owner" />);
   const label = await screen.findByText(title);
   expect(label.closest("summary")?.querySelector(`[data-provider="${mark}"]`)).not.toBeNull();
-  if (provider === "caldav") expect(screen.getByText(/Change these in CalDAV/)).toBeTruthy();
+  if (provider === "caldav") expect(screen.getByText(flavor === "apple" ? /Change these in Apple Calendar/ : /Change these in CalDAV/)).toBeTruthy();
   view.rerender(<ProviderEventDetails providerFlavor={flavor} eventId="event" userId="owner" />);
   expect(screen.getByText(provider === "caldav" ? "CalDAV details" : "Outlook details")).toBeTruthy();
   expect(fetchState).toHaveBeenCalledTimes(1);
@@ -220,6 +220,7 @@ it.each([
 
 it.each([
   ["accepted", "Accepted"], ["declined", "Declined"], ["tentative", "Tentative"],
+  ["ACCEPTED", "Accepted"], ["DECLINED", "Declined"], ["TENTATIVE", "Tentative"], ["NEEDS-ACTION", "Awaiting response"],
   ["needsAction", "Awaiting response"], ["notResponded", "Awaiting response"],
   ["tentativelyAccepted", "Tentative"], ["none", "Not reported"], ["X-CUSTOM-RESPONSE", "X-CUSTOM-RESPONSE"],
 ])("labels read-only response %s as %s and preserves the default raw observation", async (response, label) => {
@@ -229,4 +230,40 @@ it.each([
   expect(screen.getAllByText(label, { exact: true })).toHaveLength(2);
   view.rerender(<ProviderEventDetails eventId="event" userId="owner" />);
   expect(screen.getByText(response, { exact: true })).toBeTruthy();
+});
+
+
+it("presents native CalDAV roles and mail addresses without changing provider observations", async () => {
+  const observed = { ...state, provider: "caldav", ownResponse: "ACCEPTED", organizer: { name: "mailto:host@example.test", address: "mailto:host@example.test", self: false }, attendees: [
+    { name: "Alex", address: "MAILTO:alex@example.test", self: false, role: "REQ-PARTICIPANT", response: "NEEDS-ACTION" },
+    { name: "mailto:sam@example.test", address: "mailto:sam@example.test", self: false, role: "OPT-PARTICIPANT", response: "ACCEPTED" },
+    { name: null, address: "mailto:chair@example.test", self: false, role: "CHAIR", response: "TENTATIVE" },
+  ] };
+  const original = structuredClone(observed);
+  fetchState.mockResolvedValue({ state: observed });
+  const view = render(<ProviderEventDetails presentation="panel" providerFlavor="apple" eventId="event" userId="owner" />);
+  await screen.findByText("Apple Calendar participants");
+  expect(screen.getByText("alex@example.test · Required · Awaiting response")).toBeTruthy();
+  expect(screen.getByText("Optional · Accepted")).toBeTruthy();
+  expect(screen.getByText("Chair · Tentative")).toBeTruthy();
+  expect(screen.getAllByText("sam@example.test")).toHaveLength(1);
+  expect(screen.getByText("host@example.test")).toBeTruthy();
+  expect(screen.queryByText(/mailto:/i)).toBeNull();
+  expect(screen.getByText(/Change these in Apple Calendar/)).toBeTruthy();
+  expect(observed).toEqual(original);
+  view.rerender(<ProviderEventDetails providerFlavor="apple" eventId="event" userId="owner" />);
+  expect(screen.getByText(/MAILTO:alex@example.test/)).toBeTruthy();
+  expect(screen.getByText(/Change these in CalDAV/)).toBeTruthy();
+});
+
+
+it("labels only known panel metadata enums and leaves unknown values verbatim", async () => {
+  fetchState.mockResolvedValue({ state: { ...state, availability: "OPAQUE", privacy: "PRIVATE", status: "CONFIRMED", eventType: "singleInstance" } });
+  const view = render(<ProviderEventDetails presentation="panel" eventId="event" userId="owner" />);
+  await screen.findByText("Outlook details");
+  for (const label of ["Busy", "Private", "Confirmed", "Single event"]) expect(screen.getByText(label, { exact: true })).toBeTruthy();
+  fetchState.mockResolvedValue({ state: { ...state, availability: "X-CUSTOM-AVAILABILITY", privacy: "X-CUSTOM-PRIVACY", status: "X-CUSTOM-STATUS", eventType: "X-CUSTOM-TYPE" } });
+  view.rerender(<ProviderEventDetails presentation="panel" eventId="other" userId="owner" />);
+  await screen.findByText("X-CUSTOM-AVAILABILITY");
+  for (const value of ["X-CUSTOM-PRIVACY", "X-CUSTOM-STATUS", "X-CUSTOM-TYPE"]) expect(screen.getByText(value)).toBeTruthy();
 });

@@ -8261,7 +8261,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
     await page.getByRole("button", { name: /Provider meeting/ }).first().click();
     await page.locator("summary").filter({ hasText: "Outlook details" }).click();
     await expect(page.getByText(/These settings describe the series/)).toBeVisible();
-    await expect(page.getByText("Availability: workingElsewhere", { exact: true })).toBeVisible();
+    await expect(page.getByText("Availability: Working elsewhere", { exact: true })).toBeVisible();
     await expect(page.getByText(/Both apps may notify/)).toBeVisible();
     await page.locator("summary").filter({ hasText: "Outlook participants" }).click();
     await expect(page.getByRole("list", { name: "Outlook participants" })).toBeVisible();
