@@ -280,3 +280,19 @@ Série je nativně odstraněná, aktivní místní fixture řádky jsou nula a d
 historie je zachovaná. Tato sada nepřebírá nový UNTIL picker, zoned UNTIL,
 Use provider version adoption ani odložený Graph private-read. [Přesná evidence,
 postup recovery a limity měření](calendar-outlook-until-browser-acceptance-20260911.md).
+
+
+## Outlook změněný create — vymezená adoption acceptance 2026-09-11
+
+Skutečné Musubi UI vytvořilo all-day COUNT=3 sérii; kontrolovaný QA transport
+simuloval ztrátu skutečné odpovědi Graph 201. Native Outlook změna názvu současně
+změnila délku a recurrence zone, proto byla správně odmítnutá. Tento nativní UI
+scénář není převzatý. Opravené hlášení dialogu nyní ukazuje serverové odmítnutí
+místo zavádějící chyby sítě, se dvěma regresními důkazy a živým opakováním.
+
+Po oddělené, výslovné QA normalizaci času jediné vlastní série prošlo skutečné
+Use provider version: jeden původní journal s adoption markerem, master a tři
+děti, čtyři mapování, zachovaný záměr a stabilní sync. Úklid je dokončený,
+aktivních fixture řádků nula. Nejde o rozšíření přísného Graph parseru nebo
+produkční writer; [evidence přesně odděluje odmítnutou UI variantu a pozitivní
+kontrolovanou fixture](calendar-outlook-adoption-browser-acceptance-20260911.md).

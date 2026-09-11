@@ -1,6 +1,7 @@
 import { discardEventAlarm } from "~/api/resources";
 import { caldavAlarmDescription } from "@musubi/calendar";
 import styles from "./styles/event-delivery.module.css";
+import { EventMutationError } from "@musubi/types";
 import type {
   EventDeliveryConflict,
   EventDeliveryContent,
@@ -90,7 +91,7 @@ export function EventDeliveryDialog({
       refreshed = (await action()) === true;
     } catch (cause) {
       setError(
-        cause instanceof ApiError
+        cause instanceof ApiError || cause instanceof EventMutationError
           ? cause.message
           : "Could not reach the server. Try again; the saved operation will keep its identity.",
       );
@@ -100,7 +101,8 @@ export function EventDeliveryDialog({
         if (discard) discardReturnFocus.current = refreshRef.current;
         if (comparison?.preview.graphCreateAdoption) adoptionReturnFocus.current = refreshRef.current;
       }
-      if (cause instanceof ApiError && cause.status === 409) {
+      if ((cause instanceof ApiError && cause.status === 409) ||
+        (cause instanceof EventMutationError && cause.code === "provider-conflict")) {
         setComparison(undefined);
         if (discard) setDiscard(undefined);
         setError(
