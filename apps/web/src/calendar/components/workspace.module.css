@@ -30,6 +30,15 @@
 	overflow: hidden;
 }
 
+/* The shared Inspector portals to body. Reserve the same width for every open
+   desktop object panel, including read-only details, without duplicating its
+   selection state in Workspace. Modal inspectors keep the full calendar below. */
+@media (min-width: 1024px) {
+	:global(body:has([data-ui="inspector"][data-state="open"]:not([aria-modal="true"]))) .workspace {
+		padding-inline-end: var(--inspector-width);
+	}
+}
+
 .sidebar {
 	--sidebar-overlay: 0;
 	position: relative;
@@ -83,7 +92,6 @@
 	flex: 1;
 	flex-direction: column;
 	overflow-y: auto;
-	scrollbar-width: thin;
 }
 
 .miniCalendar {
@@ -396,6 +404,7 @@
 }
 
 .toolbar {
+	container: calendar-toolbar / inline-size;
 	position: relative;
 	z-index: 20;
 	min-width: 0;
@@ -406,10 +415,10 @@
 .toolbarControls {
 	display: grid;
 	min-height: 72px;
-	grid-template-columns: minmax(360px, 1fr) auto;
+	grid-template-columns: minmax(0, 1fr) auto;
 	align-items: center;
-	gap: 18px;
-	padding: 10px 24px 10px 28px;
+	gap: var(--space-3);
+	padding: var(--space-3) var(--space-6);
 }
 
 .dateControls,
@@ -417,11 +426,16 @@
 	display: flex;
 	min-width: 0;
 	align-items: center;
-	gap: 10px;
+	gap: var(--space-2);
 }
 
 .toolbarActions {
 	justify-content: flex-end;
+}
+
+.dateControls > button,
+.toolbarActions > button {
+	flex: none;
 }
 
 .monthTitle {
@@ -466,7 +480,12 @@
 }
 
 .viewSwitcher > button {
-	min-width: 66px;
+	min-width: 58px;
+	padding-inline: var(--space-3);
+}
+
+.toolbar .viewSelect {
+	display: none;
 }
 
 .pageDraftBar {
@@ -579,9 +598,10 @@
 }
 
 .monthView {
+	container: month-view / inline-size;
 	display: grid;
 	height: 100%;
-	min-width: 680px;
+	min-width: 0;
 	min-height: 0;
 	grid-template-rows: 36px minmax(0, 1fr);
 }
@@ -1757,72 +1777,6 @@
 	border-radius: var(--radius-chip);
 }
 
-.quickCreateAnchor {
-	position: fixed;
-	z-index: 99;
-	width: 1px;
-	height: 1px;
-	pointer-events: none;
-}
-
-.popoverHeader {
-	display: flex;
-	align-items: flex-start;
-	justify-content: space-between;
-	gap: 16px;
-	padding: 17px 18px 11px;
-}
-
-.createPopover > .popoverHeader {
-	position: sticky;
-	z-index: 2;
-	top: 0;
-	background: var(--surface-canvas);
-	box-shadow: 0 1px var(--border-subtle);
-}
-
-/* The header doubles as the window's grip. Text selection has to go, or the
-   browser starts a selection drag instead of the gesture. */
-.popoverHeader[data-drag-handle] {
-	align-items: center;
-	cursor: grab;
-	touch-action: none;
-	user-select: none;
-}
-
-.popoverHeader[data-drag-handle]:active {
-	cursor: grabbing;
-}
-
-.dragHandleMark {
-	flex: none;
-	margin-right: -6px;
-	color: var(--text-faint);
-}
-
-/* Once moved, the window is where the user put it. The open animation has to go
-   with it: its filled final keyframe sets a transform, and a filled animation
-   outranks the inline one the drag applies. */
-.createPopover[data-moved] {
-	animation: none;
-}
-
-.popoverHeader h2 {
-	margin: 0;
-	font-family: var(--font-serif);
-	font-size: 1.16rem;
-	font-weight: 400;
-	line-height: 1.25;
-}
-
-.createPopover {
-	width: min(340px, calc(100vw - 28px));
-	max-height: min(620px, calc(100dvh - 28px));
-	overflow-x: hidden;
-	overflow-y: auto;
-	padding-bottom: 8px;
-}
-
 .workspaceToast {
 	--toast-left: calc(50% + var(--sidebar-width) / 2);
 }
@@ -1831,31 +1785,7 @@
 	composes: visuallyHidden from "../../ui/primitives.module.css";
 }
 
-@media (max-width: 1439px) {
-	.toolbarControls {
-		grid-template-columns: minmax(340px, 1fr) auto;
-		gap: 12px;
-	}
-
-	.viewSwitcher > button {
-		min-width: 58px;
-		padding: 0 11px;
-	}
-}
-
 @media (max-width: 1023px) {
-	.toolbarControls {
-		grid-template-columns: minmax(220px, 1fr) auto;
-	}
-
-	.viewSwitcher {
-		width: auto;
-	}
-
-	.toolbarActions {
-		min-width: 0;
-	}
-
 	.agendaList {
 		--agenda-date-column: 178px;
 		--agenda-inline: 22px;
@@ -1922,13 +1852,7 @@
 
 	.toolbarControls {
 		min-height: 64px;
-		grid-template-columns: minmax(0, 1fr) auto;
-		padding: 5px 14px 10px;
-	}
-
-	.monthTitle {
-		margin-left: 2px;
-		font-size: 1.42rem;
+		padding: var(--space-2) var(--space-3);
 	}
 
 	/* Today stays: R12 keeps range and navigation above everything that follows,
@@ -1978,7 +1902,6 @@
 	}
 
 	.monthView {
-		min-width: 560px;
 		grid-template-rows: 32px minmax(0, 1fr);
 	}
 
@@ -2006,8 +1929,9 @@
    anything. That is a threshold on the cell, not on the window: below 1024px the
    sidebar becomes a drawer and the cells get *wider*, so keyed to the viewport
    this hid the time at 1023px (cell 137px) while showing it at 1200px (cell
-   122px). Seven columns of 95px, with no sidebar, is 665px. */
-@media (max-width: 664px) {
+   122px). Seven columns of 95px is 665px. Measure the month itself so a docked
+   inspector gets the same compact treatment without losing any day columns. */
+@container month-view (max-width: 664px) {
 	/* Scoped to the day cell, because the cell is the thing that ran out of room:
      the same chip inside the "+N more" list has the width of a popover and keeps
      its time.
@@ -2028,26 +1952,26 @@
 	}
 }
 
+@container month-view (max-width: 599px) {
+	.weekday {
+		font-size: 0.56rem;
+	}
+
+	.dayCell {
+		padding: 5px 3px 4px;
+	}
+
+	.monthGrid {
+		--month-day-fixed-space: 35px;
+		--month-event-height: 20px;
+	}
+
+	.dayEvents {
+		--event-bleed: 4px;
+	}
+}
+
 @media (max-width: 599px) {
-	.toolbarControls {
-		gap: var(--space-2) var(--space-3);
-	}
-
-	/* Keep the full period on its own line. View and actions then share one
-     aligned row, instead of Search creating an orphan row below the date. */
-	.dateControls {
-		grid-column: 1 / -1;
-	}
-
-	/* Long month names fit at the narrowest width; a week crossing New Year
-     keeps both dates and years by balancing over two lines when needed. */
-	.monthTitle {
-		font-size: var(--text-22);
-		overflow: visible;
-		white-space: normal;
-		text-wrap: balance;
-	}
-
 	/* A phone has no width to spend on a title over a wrapped block of pills. The
      shelf becomes one sideways-scrolling strip; the label stays for the region's
      accessible name but leaves the layout. */
@@ -2058,15 +1982,6 @@
 
 	.pageDraftBar p {
 		padding-top: 7px;
-	}
-
-	.monthView {
-		min-width: 100%;
-	}
-
-	/* Persistent choices lead the action row; Search and availability end it. */
-	.viewSelect {
-		justify-self: start;
 	}
 
 	/* The create button floats over the bottom-right corner, which is a real cell
@@ -2137,23 +2052,6 @@
 		padding-inline: 4px;
 	}
 
-	.weekday {
-		font-size: 0.56rem;
-	}
-
-	.dayCell {
-		padding: 5px 3px 4px;
-	}
-
-	.monthGrid {
-		--month-day-fixed-space: 35px;
-		--month-event-height: 20px;
-	}
-
-	.dayEvents {
-		--event-bleed: 4px;
-	}
-
 	.todayLabel {
 		display: none;
 	}
@@ -2200,17 +2098,57 @@
 		box-shadow: 0 8px 22px rgb(0 0 0 / 26%);
 	}
 
-	/* Last in the R12 keep-order, so it is what gives up its labels first. */
-	.viewSwitcher > button {
-		min-width: 0;
-		padding: 0 6px;
-		font-size: 0.7rem;
-	}
-
 	.workspaceToast {
 		/* Above the create button, which owns the bottom-right corner. */
 		--toast-bottom: calc(82px + var(--layer-safe-bottom));
 		width: calc(100vw - 24px);
+	}
+}
+
+/* Available calendar width, rather than window width, decides toolbar anatomy.
+   These budgets include coverage, availability, search and Create together. */
+@container calendar-toolbar (max-width: 959px) {
+	.toolbarControls {
+		grid-template-columns: minmax(0, 1fr) auto auto;
+	}
+
+	.toolbar .viewSelect {
+		display: flex;
+		justify-self: start;
+	}
+
+	.toolbar .viewSwitcher {
+		display: none;
+	}
+
+	.monthTitle {
+		margin-inline-start: 0;
+		font-size: var(--text-22);
+	}
+}
+
+@container calendar-toolbar (max-width: 699px) {
+	.toolbarControls {
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: var(--space-2) var(--space-3);
+		padding-inline: var(--space-3);
+	}
+
+	.dateControls {
+		grid-column: 1 / -1;
+		flex-wrap: wrap;
+	}
+
+	.monthTitle {
+		flex: 1 0 min(100%, 10ch);
+		max-width: 100%;
+		overflow: visible;
+		white-space: normal;
+		text-wrap: balance;
+	}
+
+	.navPair {
+		flex: none;
 	}
 }
 

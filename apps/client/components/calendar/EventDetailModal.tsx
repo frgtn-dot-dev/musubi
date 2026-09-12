@@ -3,10 +3,11 @@ import { uuidv7 } from "uuidv7";
 import EventDeliveryModal from "./EventDeliveryModal";
 import { Btn } from "@/components/ui/Btn";
 import { remoteForCalendar } from "@/services/federation";
-import { Event, can, hasKnownEventTime } from "@musubi/types";
+import { Event, can, hasKnownEventTime, providerFlavor } from "@musubi/types";
+import { ProviderIcon } from "./ProviderIcon";
 import { colors, fonts, styles } from "@/constants/theme";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import {
 	Pressable,
 	Text,
@@ -350,9 +351,14 @@ export default function EventDetailModal({
 											const isOrigin = event?.originCalendarID === cal;
 											const locked = !can(calendar.role, "editEvents");
 											return (
-												<View key={cal} style={styles.pill}>
-													{isOrigin ? (
-														<Ionicons name="star" size={12} color={calendar.color} />
+												<View
+													key={cal}
+													accessible
+													accessibilityLabel={`${calendar.name} calendar${isOrigin ? ", Home calendar" : ""}${locked ? ", read-only" : ""}`}
+													style={[styles.pill, isOrigin && styles.pillEmphasized]}
+												>
+													{calendar.provider ? (
+														<ProviderIcon provider={providerFlavor(calendar)} color={calendar.color} />
 													) : locked ? (
 														<Feather name="lock" size={11} color={calendar.color} />
 													) : (
@@ -360,6 +366,7 @@ export default function EventDetailModal({
 															style={[styles.colorDot, { backgroundColor: calendar.color }]}
 														/>
 													)}
+													{calendar.provider && locked ? <Feather name="lock" size={11} color={colors.fg3} /> : null}
 													<Text
 														style={{
 															fontFamily: fonts.sans,

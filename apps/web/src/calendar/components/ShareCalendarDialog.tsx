@@ -17,7 +17,7 @@ import {
   ConfirmationDialog,
   ConfirmationNotice,
 } from "~/ui/ConfirmationDialog";
-import { Dialog } from "~/ui/Dialog";
+import { Dialog, DialogInfo } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
 import { InlineError } from "~/ui/InlineError";
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "~/ui/Menu";
@@ -191,7 +191,7 @@ export function ShareCalendarDialog({
         bodyClassName={styles.body}
         bodyLayout="flush"
         closeLabel="Close sharing"
-        description="Manage access and invite people to this calendar."
+        headerActions={<DialogInfo label="About calendar sharing" title="Calendar sharing">Manage access and invite people to this calendar.</DialogInfo>}
         onOpenChange={handleOpenChange}
         open={open}
         title={`Share ${calendar?.name ?? "calendar"}`}

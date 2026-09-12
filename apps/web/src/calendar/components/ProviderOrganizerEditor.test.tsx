@@ -49,6 +49,18 @@ afterEach(() => {
   cleanup();
   vi.resetAllMocks();
 });
+it("keeps meeting information behind the header control and cancellation consequences visible", async () => {
+  render(<ProviderOrganizerEditor event={event} observation={observation} calendarID={calendarID} color="red" onClose={vi.fn()} />);
+  expect(screen.queryByText(/Google will be asked to notify all guests/)).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Meeting invitation information" }));
+  const information = await screen.findByRole("dialog", { name: "Invitations" });
+  expect(within(information).getByText(/Google will be asked to notify all guests/)).toBeTruthy();
+  fireEvent.click(within(information).getByRole("button", { name: "Close meeting invitation information" }));
+  fireEvent.click(screen.getByRole("button", { name: "Cancel meeting and notify guests" }));
+  const confirmation = await screen.findByRole("dialog", { name: "Cancel Google meeting" });
+  expect(within(confirmation).getByText(/Google will be asked to cancel this meeting and notify every guest/)).toBeTruthy();
+  expect(api.save).not.toHaveBeenCalled();
+});
 it("creates with explicit external guests and freezes every field through an uncertain admission retry", async () => {
   api.save
     .mockRejectedValueOnce(new Error("offline"))
@@ -349,4 +361,15 @@ it("opens verified Outlook creation in explicit UTC", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Create and send invitations" }));
   await screen.findByRole("status");
   expect(api.save.mock.calls[0][0]).toMatchObject({ provider: "microsoft", notificationPolicy: "server-invite", time: { kind: "zoned", timeZone: "UTC" } });
+});
+
+it("delegates the verified calendar action to shared creation with its focus target", async () => {
+  api.observe.mockResolvedValue({ provider: "google", calendarID, sendUpdates: "all" });
+  const onCreate = vi.fn();
+  render(<ProviderOrganizerCreateAction calendarID={calendarID} color="red" onCreate={onCreate} />);
+  const trigger = await screen.findByRole("button", { name: "Create Google meeting" });
+  fireEvent.click(trigger);
+  expect(onCreate).toHaveBeenCalledExactlyOnceWith(trigger);
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(api.save).not.toHaveBeenCalled();
 });

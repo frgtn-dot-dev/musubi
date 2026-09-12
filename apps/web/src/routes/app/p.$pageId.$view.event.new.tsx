@@ -149,6 +149,7 @@ function NewEventForm({
   return (
     <EventEditorForm
       calendars={calendars}
+      localAccountName={user?.name || user?.email}
       initialValues={initialValues}
       layout="page"
       onCancel={back}

@@ -26,6 +26,10 @@
   color: color-mix(in srgb, var(--accent-primary) 68%, var(--text-primary));
 }
 
+.icon[data-monochrome] {
+  color: var(--provider-color);
+}
+
 .musubiMark {
   width: 16px;
   height: 16px;

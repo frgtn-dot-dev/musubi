@@ -187,6 +187,12 @@ group uses the panel surface, a subtle border, and the 14 px shared radius with
 no gradient or shadow. Rows retain their own 16 px component inset inside that
 edge; this is nested component rhythm, not a competing layer axis.
 
+Inside an already padded parent such as the default `Dialog` body, use
+`SettingsSection inset={false}`. This removes only the section's outer padding;
+the parent supplies spacing between sections, while headings, group surfaces,
+and the rows' own insets retain their normal styling. The default remains inset
+for sections inside flush layers.
+
 Only repeated rows receive dividers. The group clips its surface and dividers,
 while row focus rings draw inward so keyboard focus is never hidden by the
 rounded edge. This inset structure was chosen over a fully flush list because
@@ -225,9 +231,10 @@ that shared primitive owns their portal, collision gutter, surface, arrow,
 motion, and narrow bottom-sheet geometry. Consumers retain their role, focus
 policy, keyboard model, dimensions, and content anatomy. `Select`,
 `DatePicker`, `TimePicker`, and `ColorPicker` use this contract without being
-forced into one selection behavior. Quick Create, event details, and Month
-overflow use the same physical shell while keeping their feature-owned drag,
-focus, and event-bubbling policies. Menus use their own command-navigation
+forced into one selection behavior. Month overflow keeps the anchored shell;
+event creation and details use the shared Inspector, which reserves space beside
+the desktop calendar and becomes modal on narrow screens. Features retain their
+focus, draft, and event-bubbling policies. Menus use their own command-navigation
 contract rather than turning `Popover` into a universal interaction component.
 
 `Menu` is that non-modal command-navigation contract. Radix Dropdown Menu owns
@@ -238,6 +245,11 @@ px and below. `MenuItem` owns icon, label, optional shortcut, disabled state,
 and a named destructive tone; `MenuSeparator` divides a genuinely different
 command group. Do not use a menu for one action, persistent choices, form
 controls, or navigation that should remain visible.
+
+`Dialog.headerActions` places secondary controls beside Close on the shared
+header axis. Use `DialogInfo` for optional background explanations, opened by
+a named Info button; keep consequential action wording visible. Its popover
+supports keyboard dismissal and returns focus to the Info button.
 
 `Dialog` defaults to `bodyLayout="padded"`; use `bodyLayout="flush"` only for
 edge-to-edge rows or sections whose own readable content follows the layer
@@ -277,6 +289,20 @@ when the glyph is established in the surrounding product context; the label is
 the accessible name and supplies the native tooltip fallback unless a custom
 `title` is provided. Toggle icon buttons expose `aria-pressed`, while buttons
 that open a layer expose the expanded state supplied by that layer primitive.
+
+`HelpTooltip` is the shared question-mark control for short, non-interactive
+background explanations. Use `Field help` or `SettingsSection help` to place it
+beside a label or heading; the button remains outside the field label. Existing
+`description` and `error` content stays visible and keeps its accessibility
+association. Required formats, validation, current status, and action consequences
+must remain visible rather than moving into optional help.
+
+Help opens after 400 ms of pointer hover, immediately on keyboard focus, or on a
+tap/click. Its content remains hoverable, uses `role="tooltip"` and
+`aria-describedby`, and does not move focus. Escape dismisses it until a fresh
+hover, focus, or explicit activation. It stays anchored with collision handling
+on narrow screens. Inline help uses a 24 px desktop target to preserve label
+rhythm and the standard compact touch target on narrow or coarse-pointer screens.
 
 `Toast` is a single transient notice, never a stack or activity log. A new
 notice replaces the current one. Neutral feedback uses a polite `status`; an

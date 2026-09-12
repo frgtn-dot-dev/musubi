@@ -4,15 +4,11 @@ import {
   type Event,
   type Settings,
 } from "@musubi/types";
-import { GripHorizontal, X } from "lucide-react";
-import { useRef } from "react";
+import { X } from "lucide-react";
+import { useRef, useState } from "react";
 import { IconButton } from "~/ui/Button";
-import {
-  Popover,
-  PopoverAnchor,
-  PopoverClose,
-  PopoverContent,
-} from "~/ui/Popover";
+import { Inspector, InspectorContent } from "~/ui/Inspector";
+import { ConfirmationDialog } from "~/ui/ConfirmationDialog";
 import {
   createEventFromForm,
   defaultEventFormValues,
@@ -21,10 +17,8 @@ import {
 } from "../event-form";
 import { toDateKey } from "../date-key";
 import { getEventMutationError } from "../event-permissions";
-import { useWindowDrag } from "../use-window-drag";
-import { focusMovedToAnotherLayer } from "../layer-focus";
 import { type EventWhen, EventEditorForm } from "./EventEditorForm";
-import styles from "./workspace.module.css";
+import styles from "./styles/event-details.module.css";
 
 export type QuickCreateAnchor = {
   returnFocus?: HTMLElement | null;
@@ -41,12 +35,9 @@ type QuickCreateProps = {
   /** Keeps the block on the grid in step with the fields describing it. */
   onDraftChange?: (draft: EventWhen & { color?: string }) => void;
   onCreated: (event: Event) => void;
+  onSavingChange?: (saving: boolean) => void;
   onOpenChange: (open: boolean) => void;
-  /**
-   * Where this window may be dragged. Absent pins it where it opened.
-   */
-  bounds?: () => DOMRect | undefined;
-  /** Hand the draft to the full editor. Absent expands in place instead. */
+  /** Optional handoff to the full editor page; the panel already shows all fields. */
   onMoreOptions?: (values: EventFormValues) => void;
   exactRange?: ExactEventRange;
   endDate?: string;
@@ -56,18 +47,19 @@ type QuickCreateProps = {
   startTime?: string;
   timeFormat: Settings["timeFormat"];
   userId: string;
+  userName?: string;
   weekStartsOn: Settings["weekStartsOn"];
 };
 
 export function QuickCreate({
   anchor,
-  bounds,
   calendars,
   date,
   email,
   onCreate,
   onDraftChange,
   onCreated,
+  onSavingChange,
   onMoreOptions,
   onOpenChange,
   endDate,
@@ -78,161 +70,143 @@ export function QuickCreate({
   startTime,
   timeFormat,
   userId,
+  userName,
   weekStartsOn,
 }: QuickCreateProps) {
-  const contentRef = useRef<HTMLDivElement>(null);
-  // The window can be moved out of the way of whatever it covers, but only
-  // inside the calendar it belongs to.
-  const windowDrag = useWindowDrag({
-    bounds: () => bounds?.(),
-    element: () => contentRef.current,
-  });
+  const titleRef = useRef<HTMLInputElement>(null);
+  const saving = useRef(false);
+  const handoff = useRef(false);
+  const confirmationReturnFocus = useRef<HTMLElement | null>(null);
+  const [draft, setDraft] = useState<EventFormValues>();
+  const [submissionState, setSubmissionState] = useState<{ saving: boolean; error?: ReturnType<typeof getEventMutationError> }>({ saving: false });
+  const [discardAction, setDiscardAction] = useState<(() => void)>();
   const defaultCalendar =
     calendars.find((calendar) => calendar.isDefault) ?? calendars[0];
-  const initialValues = defaultEventFormValues(
+  const whenValues = defaultEventFormValues(
     defaultCalendar?.id ?? "",
     date,
     startTime,
     { endDate: exactRange ? toDateKey(exactRange.end) : endDate, endTime, isAllDay, exactRange },
   );
 
+  const [initialValues] = useState(whenValues);
+  const when = {
+    date,
+    exactRange,
+    endDate: whenValues.endDate,
+    endTime: whenValues.endTime,
+    isAllDay: whenValues.isAllDay,
+    startTime: whenValues.startTime,
+  };
+  const [initialWhen] = useState(when);
+  const whenSignature = JSON.stringify(when);
+  const [syncedWhen, setSyncedWhen] = useState(whenSignature);
+  if (syncedWhen !== whenSignature) {
+    setSyncedWhen(whenSignature);
+    // Radix remounts the form when switching between modal and nonmodal.
+    // Keep the current grid time together with the user's fields for that mount.
+    setDraft(current => ({ ...(current ?? initialValues), ...when, invalidatedExactEndpoints: undefined }));
+  }
+  const dirty = JSON.stringify(when) !== JSON.stringify(initialWhen) || (draft &&
+    [...new Set([...Object.keys(initialValues), ...Object.keys(draft)])].some(key => {
+      if (key === "createID" || key === "invalidatedExactEndpoints") return false;
+      const field = key as keyof EventFormValues;
+      return JSON.stringify(draft[field]) !== JSON.stringify(initialValues[field]);
+    }));
+
+  function requestClose(after: () => void) {
+    if (saving.current) return;
+    const finish = () => { onOpenChange(false); after(); };
+    if (dirty) { confirmationReturnFocus.current = titleRef.current; setDiscardAction(() => finish); }
+    else finish();
+  }
+
   async function handleSubmit(values: EventFormValues) {
-    const calendar = calendars.find(
-      (item) => item.id === values.calendarId,
-    );
-    const event = createEventFromForm(
-      values,
-      { email, userId },
-      calendar?.color ?? DEFAULT_CALENDAR_COLOR,
-    );
-    const created = await onCreate(event);
-    onCreated(created);
-    onOpenChange(false);
+    if (saving.current) return;
+    const calendar = calendars.find(item => item.id === values.calendarId);
+    saving.current = true;
+    onSavingChange?.(true);
+    setSubmissionState({ saving: true });
+    try {
+      const event = createEventFromForm(values, { email, userId }, calendar?.color ?? DEFAULT_CALENDAR_COLOR);
+      const created = await onCreate(event);
+      onCreated(created);
+      onOpenChange(false);
+      setSubmissionState({ saving: false });
+    } catch (error) {
+      setSubmissionState({ saving: false, error: getEventMutationError(error, "create", calendar) });
+    } finally {
+      saving.current = false;
+      onSavingChange?.(false);
+    }
   }
 
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverAnchor asChild>
-        <span
-          className={styles.quickCreateAnchor}
-          style={{ left: anchor.x, top: anchor.y }}
-        />
-      </PopoverAnchor>
-        <PopoverContent
-          className={styles.createPopover}
-          data-moved={windowDrag.moved ? "" : undefined}
-          /* The bubble scrolls its own overflow, so it is a scroll container:
-             an arrow poking out of its edge is clipped by that very rule and
-             still widens scrollWidth, which is a horizontal scrollbar for a
-             decoration nobody can see. Moving the window would orphan it
-             anyway. */
-          showArrow={false}
-          ref={contentRef}
-          style={{
-            transform: windowDrag.moved
-              ? `translate(${windowDrag.offset.x}px, ${windowDrag.offset.y}px)`
-              : undefined,
-          }}
-          align="start"
-          /* Beside the slot, not on top of it: the draft underneath stays
-             grabbable, so its time can still be dragged while this is open.
-             Radix flips to the other side when there is no room. */
-          side="right"
-          sideOffset={12}
-          collisionPadding={14}
-          aria-label="Create event"
-          onClick={(clickEvent) => clickEvent.stopPropagation()}
-          /* Same as the click above: a portal bubbles into its React parent, so
-             without this a press in the form starts the grid's create gesture. */
-          onPointerDown={(pointerEvent) => pointerEvent.stopPropagation()}
-          /* Focus wandering out is not a decision to discard a draft — pressing
-             outside or Escape is. It especially must not be, because a draft this
-             one replaces restores focus to its own origin as it unmounts, which
-             would otherwise dismiss the replacement the instant it arrives. */
-          onFocusOutside={(focusEvent) => {
-            if (!focusMovedToAnotherLayer(focusEvent.target)) {
-              focusEvent.preventDefault();
-            }
-          }}
-          onInteractOutside={(interaction) => {
-            // Grabbing the draft this popover describes is not "outside" it —
-            // that gesture changes the time in the form, so it must not dismiss.
-            if (
-              interaction.target instanceof Element &&
-              interaction.target.closest("[data-draft]")
-            ) {
-              interaction.preventDefault();
-            }
-          }}
-          onCloseAutoFocus={(event) => {
+    <>
+      <Inspector open={open} onOpenChange={onOpenChange} onRequestClose={requestClose}>
+        <InspectorContent
+          accessibleTitle="Create event"
+          persistent
+          className={styles.detailPopover}
+          onClick={event => event.stopPropagation()}
+          onPointerDown={event => event.stopPropagation()}
+          onOpenAutoFocus={event => { event.preventDefault(); titleRef.current?.focus(); }}
+          // The grid remains interactive: moving this draft changes its time,
+          // and opening another object goes through the shared draft guard.
+          onFocusOutside={event => event.preventDefault()}
+          onInteractOutside={event => event.preventDefault()}
+          onCloseAutoFocus={event => {
             event.preventDefault();
-            anchor.returnFocus?.focus();
+            if (!handoff.current && anchor.returnFocus?.isConnected) anchor.returnFocus.focus();
           }}
         >
-          <div
-            className={styles.popoverHeader}
-            data-drag-handle={bounds ? "" : undefined}
-            onPointerDown={(pointerEvent) => {
-              if (
-                !bounds ||
-                pointerEvent.button !== 0 ||
-                (pointerEvent.target instanceof Element &&
-                  pointerEvent.target.closest("button"))
-              ) {
-                return;
-              }
-              windowDrag.begin({
-                pointerId: pointerEvent.pointerId,
-                x: pointerEvent.clientX,
-                y: pointerEvent.clientY,
-              });
-            }}
-          >
-            {bounds ? (
-              <GripHorizontal
-                aria-hidden="true"
-                className={styles.dragHandleMark}
-                size={15}
-                strokeWidth={1.6}
-              />
-            ) : null}
+          <header className={styles.editorHeader}>
             <h2>New event</h2>
-            <PopoverClose asChild>
-              <IconButton label="Close new event" size="compact">
-                <X aria-hidden="true" size={17} strokeWidth={1.6} />
-              </IconButton>
-            </PopoverClose>
-          </div>
+            <IconButton label="Close new event" size="compact" onClick={() => requestClose(() => {})}>
+              <X aria-hidden="true" size={17} strokeWidth={1.6} />
+            </IconButton>
+          </header>
           <EventEditorForm
             calendars={calendars}
-            compact
-            onExpand={onMoreOptions}
-            initialValues={initialValues}
-            when={{
-              date,
-              exactRange,
-              endDate: initialValues.endDate,
-              endTime: initialValues.endTime,
-              isAllDay: initialValues.isAllDay,
-              startTime: initialValues.startTime,
-            }}
-            onCancel={() => onOpenChange(false)}
+            localAccountName={userName?.trim() || email}
+            layout="panel"
+            titleRef={titleRef}
+            onExpand={onMoreOptions ? values => { handoff.current = true; onMoreOptions(values); } : undefined}
+            initialValues={draft ?? initialValues}
+            onValuesChange={values => { setDraft(values); setSubmissionState({ saving: false }); }}
+            submissionState={submissionState}
+            when={when}
+            onCancel={() => requestClose(() => {})}
             onDraftChange={onDraftChange}
             onError={(error, values) =>
-              getEventMutationError(
-                error,
-                "create",
-                calendars.find(
-                  (calendar) => calendar.id === values.calendarId,
-                ),
-              )
+              getEventMutationError(error, "create", calendars.find(calendar => calendar.id === values.calendarId))
             }
             onSubmit={handleSubmit}
             submitLabel="Create"
             timeFormat={timeFormat}
             weekStartsOn={weekStartsOn}
           />
-        </PopoverContent>
-    </Popover>
+        </InspectorContent>
+      </Inspector>
+      <ConfirmationDialog
+        elevated
+        open={!!discardAction}
+        onOpenChange={next => { if (!next) setDiscardAction(undefined); }}
+        returnFocus={confirmationReturnFocus}
+        title="Discard new event?"
+        description="This event has not been created."
+        closeLabel="Keep editing"
+        cancelLabel="Keep editing"
+        confirmLabel="Discard event"
+        onConfirm={() => {
+          confirmationReturnFocus.current = null;
+          const finish = discardAction;
+          setDiscardAction(undefined);
+          finish?.();
+        }}
+      >
+        <p>Your draft will be lost.</p>
+      </ConfirmationDialog>
+    </>
   );
 }

@@ -628,6 +628,10 @@
 	padding-top: var(--space-8);
 }
 
+.settingsSection[data-inset="false"] {
+	padding: 0;
+}
+
 /* Sits between the section heading and its rows, so it reads as a caveat for the
    whole group rather than a detail of the first setting in it. */
 .settingsSectionDescription {
@@ -976,7 +980,6 @@
 	);
 	overflow-y: auto;
 	padding: var(--space-1);
-	scrollbar-width: thin;
 	touch-action: pan-y;
 	overscroll-behavior: contain;
 }
@@ -1253,7 +1256,7 @@
    `elevated`. */
 .dialogOverlay {
 	position: fixed;
-	z-index: 120;
+	z-index: var(--layer-dialog-overlay-z);
 	inset: 0;
 	background: rgb(0 0 0 / 42%);
 	backdrop-filter: blur(3px);
@@ -1277,7 +1280,7 @@
 
 .dialog {
 	position: fixed;
-	z-index: 121;
+	z-index: var(--layer-dialog-z);
 	top: 50%;
 	left: 50%;
 	display: flex;
@@ -1303,11 +1306,11 @@
 /* Opened from a popover, so it has to clear the 140 that popover sits at —
    otherwise the question hides behind the surface that asked it. */
 .dialogOverlay_elevated {
-	z-index: 150;
+	z-index: var(--layer-dialog-overlay-elevated-z);
 }
 
 .dialog_elevated {
-	z-index: 151;
+	z-index: var(--layer-dialog-elevated-z);
 }
 
 .dialog_compact {
@@ -1392,14 +1395,13 @@
 	);
 }
 
-/* Inspector proposal: fixed working surface; shared regions retain ownership
-   of insets and scrolling. 480px is the inspector's domain viewport budget. */
+/* The right surface and its workspace reservation share one width contract. */
 .dialog.dialog_right {
 	top: 0;
 	right: 0;
 	bottom: 0;
 	left: auto;
-	width: min(480px, 100vw);
+	width: min(var(--inspector-width), 100vw);
 	height: 100dvh;
 	max-height: 100dvh;
 	border-radius: 0;
@@ -1449,6 +1451,23 @@
 	margin: -7px -7px 0 0;
 }
 
+.dialogHeaderActions {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: var(--space-1);
+	/* Keep the existing Close glyph's optical alignment for the whole group. */
+	margin: -7px -7px 0 0;
+}
+
+.dialogHeaderActions .dialogClose {
+	margin: 0;
+}
+
+.dialogInfo {
+	width: min(var(--popover-width), calc(100vw - var(--space-6)));
+}
+
 .dialogCloseGlyph {
 	display: block;
 	font-family: var(--font-sans);
@@ -1469,6 +1488,7 @@
 	overflow-x: hidden;
 	overflow-y: auto;
 	overscroll-behavior: contain;
+	scroll-padding-block: var(--layer-body-block);
 }
 
 /* The body of a dialog whose own children scroll: a list on one side, controls on
@@ -1490,6 +1510,13 @@
 	padding: 0;
 }
 
+/* Inset groups need a closing gutter before a footer or the shell edge.
+   Edge-to-edge fields/rows and independently scrolling panels keep their own
+   anatomy. Safe-area padding remains on the shell, outside this content gap. */
+.dialogBody_flush > .settingsSection:last-child:not([data-inset="false"]) {
+	padding-bottom: var(--layer-body-block);
+}
+
 /* A first-level section supplies the flush body's row boundary, not a second
    content axis. Nested section fields keep their local component inset. */
 .dialogBody_flush > .field_section,
@@ -1509,7 +1536,9 @@
 	align-items: center;
 	justify-content: flex-end;
 	gap: var(--space-2);
-	padding: 0 var(--layer-inline)
+	/* This gutter belongs outside the scrolling body, so controls never meet
+	   the clipping edge while a long form is being scrolled. */
+	padding: var(--space-3) var(--layer-inline)
 		calc(var(--layer-footer-block) + var(--layer-safe-bottom));
 }
 
@@ -1883,7 +1912,6 @@
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	padding: var(--space-1);
-	scrollbar-width: thin;
 }
 
 .timePickerSheetTitle {
@@ -2462,4 +2490,38 @@
 
 .disclosure_compact .disclosureSummary { border-radius: var(--radius-chip); }
 
-.inspector { z-index: 121; }
+.inspector { z-index: var(--layer-dialog-z); }
+
+@media (min-width: 1024px) {
+	.inspector {
+		border-block: 0;
+		border-inline-end: 0;
+		box-shadow: none;
+	}
+}
+
+/* Optional help sits beside its label without changing the label association. */
+.labelWithHelp {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	gap: var(--space-1);
+}
+
+/* Inline help uses a 24px desktop target to keep short labels compact. */
+.iconButton.helpTooltipTrigger {
+	width: var(--space-6);
+	min-width: var(--space-6);
+	min-height: var(--space-6);
+	height: var(--space-6);
+	flex: none;
+}
+
+@media (max-width: 599px), (pointer: coarse) {
+	.iconButton.helpTooltipTrigger {
+		width: var(--compact-control-height);
+		min-width: var(--compact-control-height);
+		min-height: var(--compact-control-height);
+		height: var(--compact-control-height);
+	}
+}

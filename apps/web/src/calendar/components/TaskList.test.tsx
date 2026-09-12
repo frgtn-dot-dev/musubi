@@ -129,7 +129,7 @@ it("keeps a folded imported recurrence unchanged when saving another field", asy
   const props = { ...emptyTaskProps(), tasks: [task], onUpdate: vi.fn(async () => task) };
   render(<TaskList {...props} />);
   await user.click(screen.getByRole("button", { name: /Plan workshop/ }));
-  expect(screen.getByText("Custom recurrence")).toBeTruthy();
+  expect(screen.getAllByText("Custom recurrence").length).toBeGreaterThan(0);
   expect(screen.getByRole("textbox", { name: "Recurrence rule" }).closest("details")).toHaveProperty("open", false);
   await user.type(screen.getByRole("textbox", { name: "Title" }), " together");
   await user.click(screen.getByRole("button", { name: "Save task" }));
@@ -157,4 +157,17 @@ it("offers no empty-state creation while offline or without an editable calendar
   expect(screen.queryByRole("button", { name: "Create task" })).toBeNull();
   expect(screen.getByText("Tasks from the calendars on this Page will appear here.")).toBeTruthy();
   expect(props.onCreate).not.toHaveBeenCalled();
+});
+
+it("keeps due-only recurrence anchored without adding a start", async () => {
+  const user = userEvent.setup();
+  const task = TaskSchema.parse({ id: "task", creatorID: "owner", calendarID: fixtureCalendars[0]!.id, title: "Weekly review", due: new Date(2026, 8, 14), start: null });
+  const props = { ...emptyTaskProps(), tasks: [task], onUpdate: vi.fn(async () => task) };
+  render(<TaskList {...props} />);
+  await user.click(screen.getByRole("button", { name: /Weekly review/ }));
+  await user.click(screen.getByText("Recurrence", { exact: true }));
+  await user.click(screen.getByRole("combobox", { name: "Repeat" }));
+  await user.click(screen.getByRole("option", { name: "Every week" }));
+  await user.click(screen.getByRole("button", { name: "Save task" }));
+  expect(props.onUpdate).toHaveBeenCalledWith(task.id, expect.objectContaining({ recurrence: "FREQ=WEEKLY;BYDAY=MO", start: null }));
 });

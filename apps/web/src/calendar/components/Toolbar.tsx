@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ListTodo,
+  Users,
   Menu as MenuIcon,
   Plus,
   Search,
@@ -19,15 +20,19 @@ import { Segmented } from "~/ui/Segmented";
 import { Select } from "~/ui/Select";
 import { useNarrowViewport } from "~/design/use-narrow-viewport";
 import { offeredViews, type CalendarViewId } from "../view-registry";
+import { CalendarCoverageInfo } from "./CalendarCoverageInfo";
 import styles from "./workspace.module.css";
 
 type ToolbarProps = {
   availability?: { shown: boolean; onToggle: () => void; onOpenList: (target: HTMLElement | null) => void };
   activeView: CalendarViewId;
   canCreateEvents: boolean;
+  canCreateMeetings: boolean;
   canCreateTasks: boolean;
+  coverageNotice?: string | null;
   navigationTriggerRef?: RefObject<HTMLButtonElement | null>;
   onCreateEvent: (target: HTMLElement) => void;
+  onCreateMeeting: (target: HTMLElement) => void;
   onCreateTask: () => void;
   onOpenSearch: () => void;
   onOpenSidebar: () => void;
@@ -45,9 +50,12 @@ export function Toolbar({
   availability,
   activeView,
   canCreateEvents,
+  canCreateMeetings,
   canCreateTasks,
+  coverageNotice,
   navigationTriggerRef,
   onCreateEvent,
+  onCreateMeeting,
   onCreateTask,
   onOpenSearch,
   onOpenSidebar,
@@ -63,7 +71,7 @@ export function Toolbar({
   // A flick moves the period on touch, so the arrows are desktop furniture.
   const narrow = useNarrowViewport();
   const createTriggerRef = useRef<HTMLButtonElement>(null);
-  const createEventAfterClose = useRef(false);
+  const createAfterClose = useRef<"event" | "meeting" | null>(null);
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
   const availabilityTriggerRef = useRef<HTMLButtonElement>(null);
   const availabilityListAfterClose = useRef(false);
@@ -116,28 +124,27 @@ export function Toolbar({
           </p>
         </div>
 
-        {/* Keep the narrow view choice compact. The date gets a complete line;
-            this picker shares the next one with search and availability. */}
-        {narrow ? (
-          <Select
-            className={styles.viewSelect}
-            label="Calendar view"
-            options={offeredViews().map((view) => ({
-              label: view.label,
-              value: view.id as CalendarViewId,
-            }))}
-            size="compact"
-            value={activeView}
-            onChange={(value) => onViewChange(value as CalendarViewId)}
-          />
-        ) : null}
+        {/* Container queries expose exactly one view choice. The calendar can
+            be compact beside an inspector even on a wide desktop window. */}
+        <Select
+          className={styles.viewSelect}
+          label="Calendar view"
+          options={offeredViews().map((view) => ({
+            label: view.label,
+            value: view.id as CalendarViewId,
+          }))}
+          size="compact"
+          value={activeView}
+          onChange={(value) => onViewChange(value as CalendarViewId)}
+        />
 
         <div className={styles.toolbarActions}>
+          {coverageNotice ? <CalendarCoverageInfo message={coverageNotice} /> : null}
           {availability ? <Popover open={availabilityOpen} onOpenChange={setAvailabilityOpen}>
             <PopoverTrigger asChild><IconButton label="Availability" ref={availabilityTriggerRef} size="compact"><Clock aria-hidden="true" size={17} strokeWidth={1.6} /></IconButton></PopoverTrigger>
             <PopoverContent aria-label="Grid availability" align="end" onCloseAutoFocus={event => { if (availabilityListAfterClose.current) { event.preventDefault(); availabilityListAfterClose.current = false; availabilityTriggerRef.current?.focus(); availability.onOpenList(availabilityTriggerRef.current); } }}>
-              <SettingsSection title="Availability">
-                <Row label="Show selected availability" detail="Only on this page in this session" trailing={<Switch label="Show selected availability" checked={availability.shown} onCheckedChange={availability.onToggle} />} />
+              <SettingsSection title="Availability" help="Selected availability is shown only on this page in this session.">
+                <Row label="Show selected availability" trailing={<Switch label="Show selected availability" checked={availability.shown} onCheckedChange={availability.onToggle} />} />
                 <Button variant="secondary" onClick={() => { availabilityListAfterClose.current = true; setAvailabilityOpen(false); }}>Sources and interval list</Button>
               </SettingsSection>
             </PopoverContent>
@@ -151,24 +158,22 @@ export function Toolbar({
           >
             <Search aria-hidden="true" size={17} strokeWidth={1.6} />
           </IconButton>
-          {narrow ? null : (
-            <Segmented<CalendarViewId>
-              className={styles.viewSwitcher}
-              label="Calendar view"
-              options={offeredViews().map((view) => ({
-                label: view.label,
-                value: view.id as CalendarViewId,
-              }))}
-              value={activeView}
-              onChange={onViewChange}
-            />
-          )}
-          {canCreateEvents || canCreateTasks ? (
+          <Segmented<CalendarViewId>
+            className={styles.viewSwitcher}
+            label="Calendar view"
+            options={offeredViews().map((view) => ({
+              label: view.label,
+              value: view.id as CalendarViewId,
+            }))}
+            value={activeView}
+            onChange={onViewChange}
+          />
+          {canCreateEvents || canCreateMeetings || canCreateTasks ? (
             <Menu>
               <MenuTrigger asChild>
                 <IconButton
                   className={styles.eventButton}
-                  label="Create event or task"
+                  label="Create event, meeting or task"
                   ref={createTriggerRef}
                   size="compact"
                   variant="primary"
@@ -181,24 +186,35 @@ export function Toolbar({
                 label="Create"
                 mobileSurface="anchored"
                 onCloseAutoFocus={(event) => {
-                  if (!createEventAfterClose.current) return;
-                  createEventAfterClose.current = false;
+                  const action = createAfterClose.current;
+                  if (!action) return;
+                  createAfterClose.current = null;
                   const target = createTriggerRef.current;
                   if (!target) return;
                   // Finish the outgoing menu's focus lifecycle before mounting
                   // the form, so it cannot dismiss the newly opened popover.
                   event.preventDefault();
-                  onCreateEvent(target);
+                  if (action === "meeting") onCreateMeeting(target);
+                  else onCreateEvent(target);
                 }}
               >
                 <MenuItem
                   disabled={!canCreateEvents}
                   icon={<CalendarPlus size={16} strokeWidth={1.7} />}
                   onSelect={() => {
-                    createEventAfterClose.current = true;
+                    createAfterClose.current = "event";
                   }}
                 >
                   Event
+                </MenuItem>
+                <MenuItem
+                  disabled={!canCreateMeetings}
+                  icon={<Users size={16} strokeWidth={1.7} />}
+                  onSelect={() => {
+                    createAfterClose.current = "meeting";
+                  }}
+                >
+                  Meeting
                 </MenuItem>
                 <MenuItem
                   disabled={!canCreateTasks}

@@ -216,6 +216,7 @@ function EditEventRoute() {
                     }}
                     calendarLocked
                     calendars={calendars}
+                    localAccountName={user?.name || user?.email}
                     initialValues={draftValues ?? eventFormValues(event)}
                     layout="panel"
                     onCancel={requestBack}

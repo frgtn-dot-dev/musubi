@@ -43,14 +43,14 @@ scroll ani aktivní objekt.
 | Vrstva | Otázka | Závaznost | V Musubi |
 | --- | --- | --- | --- |
 | Slot / buňka | Kdy? | velmi nízká | selection v gridu |
-| Quick create | Co a kdy? | nízká | `QuickCreate` popover |
-| Preview | Co to je, co teď můžu? | nízká–střední | `EventDetailsPopover` |
+| Nový event | Co, kdy a kam? | nízká–střední | `QuickCreate` v pravém `Inspector` panelu |
+| Preview | Co to je, co teď můžu? | nízká–střední | `EventDetailsPopover` v pravém `Inspector` panelu |
 | Full editor | Jak se to má přesně chovat? | vysoká | `EventEditorForm` |
 | Dialog dopadu | Koho/co to ovlivní? | velmi vysoká | recurrence scope, nevratné |
 
-**R4 — Lokální akce má lokální reakci.** Klik na slot otevře vrstvu u slotu, ne
-uprostřed obrazovky. Validace u pole, které ji způsobilo. Drag ukazuje čas u
-taženého objektu.
+**R4 — Lokální akce má lokální reakci.** Klik na slot zachová výběr v gridu a
+otevře pravý panel s jeho datem a časem. Panel na desktopu vyhradí místo vpravo a zúží kalendář i jeho horní lištu,
+aby ovládání zůstalo dostupné. Validace je u pole, které ji způsobilo. Drag ukazuje čas u taženého objektu.
 
 **R5 — Dvě rychlosti, bez ztráty draftu.** Quick create ↔ full editor si předají
 všechno rozpracované. Editor nikdy nezakládá nový prázdný draft.
@@ -160,6 +160,42 @@ Layer and form spacing, responsive density, and ownership of shared alignment
 axes are defined in [`design-system.md` section 4](./design-system.md#4-geometry-and-rhythm).
 Those rules apply to every calendar layer; feature CSS must not establish a
 competing inset or rhythm.
+
+Web portal ordering uses `--layer-*-z` tokens. An elevated shared Dialog passes
+its layer context to descendant Popover and Menu surfaces, including their
+Radix positioning wrappers. Child pickers must remain clickable above the
+dialog in both anchored and narrow sheet layouts; features do not set z-index.
+
+Event creation uses the same right Inspector and complete EventEditorForm as
+editing. Desktop panels reserve their shared width in the workspace; the
+toolbar adapts to its available container width, keeping every action reachable.
+The month grid also fits that width with all seven days visible; compact chip
+anatomy follows the month container width instead of the browser window.
+Narrow screens retain a modal panel. Toolbar, search, keyboard, month cells and time-grid gestures preserve
+their date/time defaults and return focus. The header and actions stay fixed;
+fields share one scroller. The displayed all-day end date is exclusive; the
+form adapts it to Musubi’s inclusive last date for drafts and writes. More options may
+hand the same draft to the full editor page, including exact DST-fold instants.
+
+Only one object inspector is active. Clicking outside event details keeps them
+open; the close button or Escape dismisses them, and another event trigger
+switches the selected object. Imperative creation entry points use
+`requestInspectorTransition` so an edited event or new draft can guard a
+replacement. A new range gesture retains the old draft until the user accepts
+the replacement; moving the existing draft changes the same form. Unsaved
+changes require an explicit discard, and pending saves prevent closing or
+moving the draft. Persistent desktop editors do not consume grid presses as layer dismissals;
+read-only details, modal inspectors and nested pickers still do.
+
+Meeting creation has one workspace dialog with a calendar picker. The toolbar
+Create menu opens it without a preset; a calendar row's meeting icon presets
+that calendar. Only verified provider capabilities appear in the picker. A
+missing preset requires an explicit alternative, switching preserves draft
+content and intended instants, and submitted retries retain their original
+calendar and request. Closing returns focus to the entry point. Background
+invitation information lives behind the header’s Info button; the primary action
+still explicitly says it sends invitations. Cancellation confirmations retain
+their consequences in the visible description.
 
 `--hour-height` nastavuje renderer z téhož `TimeGeometry`, který používá
 hit-testing, event layout i drag. Není dovoleno zavést druhou pixelovou
@@ -1080,3 +1116,47 @@ vzešlo a nedá se vyčíst z kódu:
 - Drag zapisuje na server při každém pointer move.
 - All-day jako půlnoční timestamp místo date range.
 - Refetch zavře otevřený popover.
+
+### September feedback: quiet calendar chrome
+
+Standing provider coverage limits live behind the toolbar’s “Calendar sync
+coverage” info action. Offline, update, and live availability warnings retain
+their visible banners. App scrollbars are visually hidden at the global web
+layer; overflow, wheel, touch, and keyboard scrolling stay intact in calendars,
+forms, lists, and portaled surfaces.
+
+Event calendar pickers identify each account once, with a provider mark and
+account label in a single-line group heading. Local Musubi uses its mark and the
+signed-in account name. The default calendar does not repeat a “Personal calendar”
+subtitle. Each heading and its calendar rows share one rounded
+surface, using the notes surface tokens, with consistent space between accounts.
+Individual rows show calendar colour and name without repeating the provider
+logo or subtitle. Event-detail calendar pills use a calendar-coloured provider
+mark instead of a second colour dot, and a stronger outline identifies the home
+calendar on web and native.
+
+
+### Connection choices and availability setup
+
+Connections presents optional Tasks consent as one full-width toggle button above
+provider buttons, with a checked icon and `aria-pressed`; the choice still controls
+only the requested Google/Microsoft Tasks scope. The permanent helper sentence is
+removed.
+
+Google availability uses the standard grouped rows. An empty list offers **How to
+set up** instead of an unusable check action. The setup dialog explains sharing
+busy times without details, accepting the Google sharing link in the connected
+account, refreshing connected calendars, and selecting the discovered calendar.
+Calendars with readable event details remain in normal event sync. Instructions
+link to the [Google sharing guide](https://support.google.com/calendar/answer/37082?hl=en).
+Refresh failures stay in the setup dialog; successful discovery returns to the
+source list. Checking intervals remains explicit, with range fields in the body
+and the read action in the footer.
+
+
+Inset section groups at the end of a flush dialog keep a shared body-sized closing
+gap before the footer or shell edge, including delivery records and saved-change
+lists. Safe-area padding remains a separate shell/footer responsibility. Dialog
+and nested settings, calendar and inspector scrollers reserve scroll padding so
+keyboard focus does not land against the clipping edge. Scroll padding supplements
+physical content padding; it does not replace the final visible gap.

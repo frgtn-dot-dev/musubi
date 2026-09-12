@@ -741,7 +741,7 @@ describe("Workspace", () => {
     render(<Workspace {...commonProps} onCreateEvent={onCreateEvent} />);
 
     await user.click(
-      screen.getByRole("button", { name: "Create event or task" }),
+      screen.getByRole("button", { name: "Create event, meeting or task" }),
     );
     await user.click(screen.getByRole("menuitem", { name: "Event" }));
     await user.type(
@@ -772,7 +772,7 @@ describe("Workspace", () => {
 
     expect(screen.queryByRole("heading", { name: "Tasks" })).toBeNull();
     await user.click(
-      screen.getByRole("button", { name: "Create event or task" }),
+      screen.getByRole("button", { name: "Create event, meeting or task" }),
     );
     await user.click(screen.getByRole("menuitem", { name: "Task" }));
 
@@ -797,14 +797,14 @@ describe("Workspace", () => {
       );
     }
     render(<LoadingRoute />);
-    await user.click(screen.getByRole("button", { name: "Create event or task" }));
+    await user.click(screen.getByRole("button", { name: "Create event, meeting or task" }));
     await user.click(screen.getByRole("menuitem", { name: "Task" }));
     expect(screen.queryByRole("dialog", { name: "New task" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Finish loading tasks" }));
     expect(screen.getByRole("dialog", { name: "New task" })).not.toBeNull();
     await user.click(within(screen.getByRole("dialog", { name: "New task" })).getByRole("button", { name: "Close task editor" }));
     expect(screen.queryByRole("dialog", { name: "New task" })).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Create event or task" }));
+    await user.click(screen.getByRole("button", { name: "Create event, meeting or task" }));
     await user.click(screen.getByRole("menuitem", { name: "Task" }));
     expect(screen.getByRole("dialog", { name: "New task" })).not.toBeNull();
   });
@@ -826,7 +826,7 @@ describe("Workspace", () => {
     );
 
     await user.click(
-      screen.getByRole("button", { name: "Create event or task" }),
+      screen.getByRole("button", { name: "Create event, meeting or task" }),
     );
     expect(
       screen
@@ -953,26 +953,19 @@ describe("Workspace", () => {
     expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
   });
 
-  it("reveals the rest of the create form in place when there is no editor page", async () => {
+  it("shows the full create form in the panel without an editor page", async () => {
     const user = userEvent.setup();
 
     render(<Workspace {...commonProps} />);
 
     await user.click(
-      screen.getByRole("button", { name: "Create event or task" }),
+      screen.getByRole("button", { name: "Create event, meeting or task" }),
     );
     await user.click(screen.getByRole("menuitem", { name: "Event" }));
     await user.type(
       screen.getByRole("textbox", { name: "Event title" }),
       "Studio time",
     );
-    // Quick create carries only the essentials.
-    expect(screen.queryByPlaceholderText("Add location")).toBeNull();
-
-    // Without an editor page wired in, the disclosure expands here — and the
-    // draft is the same form state, so what was typed stays.
-    await user.click(screen.getByRole("button", { name: "More options" }));
-
     expect(screen.getByPlaceholderText("Add location")).not.toBeNull();
     expect(
       (screen.getByRole("textbox", { name: "Event title" }) as HTMLInputElement)
@@ -987,7 +980,7 @@ describe("Workspace", () => {
     render(<Workspace {...commonProps} onOpenFullEditor={onOpenFullEditor} />);
 
     await user.click(
-      screen.getByRole("button", { name: "Create event or task" }),
+      screen.getByRole("button", { name: "Create event, meeting or task" }),
     );
     await user.click(screen.getByRole("menuitem", { name: "Event" }));
     await user.type(
@@ -1014,7 +1007,7 @@ describe("Workspace", () => {
     render(<Workspace {...commonProps} calendars={viewerCalendars} />);
 
     expect(
-      screen.queryByRole("button", { name: "Create event or task" }),
+      screen.queryByRole("button", { name: "Create event, meeting or task" }),
     ).toBeNull();
 
     await user.click(screen.getByRole("button", { name: /Board game pub/ }));
@@ -1084,7 +1077,7 @@ describe("Workspace", () => {
     );
 
     await user.click(
-      screen.getByRole("button", { name: "Create event or task" }),
+      screen.getByRole("button", { name: "Create event, meeting or task" }),
     );
     await user.click(screen.getByRole("menuitem", { name: "Event" }));
     await user.type(

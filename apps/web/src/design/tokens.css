@@ -44,6 +44,8 @@
   --event-radius: 6px;
 
   --sidebar-width: 244px;
+  /* One width for the object inspector and the workspace space it reserves. */
+  --inspector-width: 480px;
   --toolbar-height: 132px;
   --date-header-height: 48px;
   --popover-width: 360px;
@@ -51,6 +53,13 @@
   --layer-inline: var(--space-6);
   --layer-body-block: var(--space-5);
   --layer-footer-block: var(--space-4);
+  /* Web portal ordering: child pickers stay above their owning dialog. */
+  --layer-dialog-overlay-z: 120;
+  --layer-dialog-z: 121;
+  --layer-popover-z: 140;
+  --layer-dialog-overlay-elevated-z: 150;
+  --layer-dialog-elevated-z: 151;
+  --layer-popover-elevated-z: 152;
   /* Indirection on purpose: env() cannot be set, so a story cannot show what a
      notch does to a shell. Overriding this can. */
   --layer-safe-bottom: env(safe-area-inset-bottom);

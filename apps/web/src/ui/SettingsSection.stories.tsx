@@ -1,8 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import { ExternalLink, UserRound } from "lucide-react";
 import { useState } from "react";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, screen, userEvent, waitFor, within } from "storybook/test";
 import { DESKTOP_MODES, MOBILE_MODES } from "../../.storybook/modes";
+import { Button } from "./Button";
+import { Dialog } from "./Dialog";
+import { Field } from "./Field";
 import { Row, RowAction, RowOptions, RowToggle } from "./Row";
 import { SettingsSection } from "./SettingsSection";
 
@@ -73,6 +76,21 @@ function SettingsExample({ disabled = false }: { disabled?: boolean }) {
   );
 }
 
+function PaddedDialogExample() {
+  const [open, setOpen] = useState(false);
+  const [weekNumbers, setWeekNumbers] = useState(true);
+  return <Dialog open={open} onOpenChange={setOpen} title="Calendar settings" closeLabel="Close calendar settings"
+    trigger={<Button variant="secondary">Open calendar settings</Button>}>
+    <Field label="Calendar name"><input defaultValue="Family" /></Field>
+    <SettingsSection inset={false} title="Display">
+      <RowToggle label="Show week numbers" checked={weekNumbers} onCheckedChange={setWeekNumbers} />
+    </SettingsSection>
+    <SettingsSection inset={false} title="About">
+      <Row label="Owner" value="Alex" />
+    </SettingsSection>
+  </Dialog>;
+}
+
 const meta = {
   args: {
     children: null,
@@ -138,4 +156,33 @@ export const Narrow: Story = {
     await expect(control.scrollWidth).toBeLessThanOrEqual(control.clientWidth);
   },
   render: () => <SettingsExample />,
+};
+
+export const PaddedDialog: Story = {
+  parameters: { chromatic: { modes: DESKTOP_MODES } },
+  render: () => <PaddedDialogExample />,
+  play: async ({ canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole("button", { name: "Open calendar settings" }));
+    const dialog = await screen.findByRole("dialog", { name: "Calendar settings" });
+    await waitFor(() => expect(dialog).toBeVisible());
+    const content = within(dialog);
+    const fieldLeft = content.getByRole("textbox", { name: "Calendar name" }).getBoundingClientRect().left;
+    const titleLeft = content.getByRole("heading", { name: "Calendar settings" }).getBoundingClientRect().left;
+    for (const name of ["Display", "About"]) {
+      const section = content.getByRole("region", { name });
+      await expect(section.getBoundingClientRect().left).toBeCloseTo(titleLeft, 0);
+      await expect(within(section).getByRole("heading", { name }).getBoundingClientRect().left).toBeCloseTo(fieldLeft, 0);
+      await expect(getComputedStyle(section).paddingTop).toBe("0px");
+    }
+    const toggle = content.getByRole("switch", { name: "Show week numbers" });
+    await expect(Number.parseFloat(getComputedStyle(toggle).paddingLeft)).toBeGreaterThan(0);
+    await userEvent.click(toggle);
+    await expect(toggle).toHaveAttribute("aria-checked", "false");
+  },
+};
+
+export const NarrowPaddedDialog: Story = {
+  ...PaddedDialog,
+  globals: { viewport: { isRotated: false, value: "mobile1" } },
+  parameters: { chromatic: { modes: MOBILE_MODES } },
 };

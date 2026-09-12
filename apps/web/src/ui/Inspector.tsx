@@ -4,8 +4,14 @@ import { classNames } from "./class-names";
 import styles from "./primitives.module.css";
 
 type ActiveInspector = { id: symbol; close: (after: () => void) => void };
-const InspectorIdentity = createContext<symbol | undefined>(undefined);
+const InspectorContext = createContext<{ id: symbol; modal: boolean } | undefined>(undefined);
 let activeInspector: ActiveInspector | undefined;
+/** Admit imperative entry points through the same guard as an inspector trigger. */
+export function requestInspectorTransition(after: () => void) {
+  if (activeInspector) activeInspector.close(after);
+  else after();
+}
+
 const subscribe = (callback: () => void) => {
   const query = matchMedia("(max-width: 1023px)");
   query.addEventListener("change", callback);
@@ -29,23 +35,24 @@ export function Inspector({ open, onOpenChange, onRequestClose, children }: {
     activeInspector = { id: identity, close: after => close.current(after) };
     return () => { if (activeInspector?.id === identity) activeInspector = undefined; };
   }, [open, id]);
-  return <InspectorIdentity.Provider value={id}><DialogPrimitive.Root modal={modal} open={open} onOpenChange={next => {
+  return <InspectorContext.Provider value={{ id, modal }}><DialogPrimitive.Root modal={modal} open={open} onOpenChange={next => {
     if (!next) { onRequestClose(() => {}); return; }
     if (activeInspector && activeInspector.id !== id) activeInspector.close(() => onOpenChange(true));
     else onOpenChange(true);
-  }}>{children}</DialogPrimitive.Root></InspectorIdentity.Provider>;
+  }}>{children}</DialogPrimitive.Root></InspectorContext.Provider>;
 }
 
 export const InspectorTrigger = forwardRef<ElementRef<typeof DialogPrimitive.Trigger>, ComponentPropsWithoutRef<typeof DialogPrimitive.Trigger>>(function InspectorTrigger(props, ref) { return <DialogPrimitive.Trigger {...props} data-inspector-trigger="" ref={ref} />; });
 export const InspectorClose = DialogPrimitive.Close;
 export const InspectorTitle = DialogPrimitive.Title;
 
-export const InspectorContent = forwardRef<ElementRef<typeof DialogPrimitive.Content>, ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { accessibleTitle: string }>(
-  function InspectorContent({ className, children, accessibleTitle, ...props }, ref) {
-    const identity = useContext(InspectorIdentity);
+export const InspectorContent = forwardRef<ElementRef<typeof DialogPrimitive.Content>, ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { accessibleTitle: string; persistent?: boolean }>(
+  function InspectorContent({ className, children, accessibleTitle, persistent = false, ...props }, ref) {
+    const inspector = useContext(InspectorContext);
+    const identity = inspector?.id;
     return <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay data-dialog-overlay="" className={styles.dialogOverlay} />
-      <DialogPrimitive.Content aria-describedby={undefined} {...props} onCloseAutoFocus={event => { props.onCloseAutoFocus?.(event); if (activeInspector && activeInspector.id !== identity) event.preventDefault(); }} ref={ref} className={classNames(styles.dialog, styles.dialog_right, styles.inspector, className)}>
+      <DialogPrimitive.Content aria-modal={inspector?.modal || undefined} data-ui="inspector" data-inspector-persistent={persistent ? "" : undefined} aria-describedby={undefined} {...props} onCloseAutoFocus={event => { if (activeInspector && activeInspector.id !== identity) { event.preventDefault(); return; } props.onCloseAutoFocus?.(event); }} ref={ref} className={classNames(styles.dialog, styles.dialog_right, styles.inspector, className)}>
         <DialogPrimitive.Title className={styles.visuallyHidden} aria-hidden="true">{accessibleTitle}</DialogPrimitive.Title>
         {children}
       </DialogPrimitive.Content>

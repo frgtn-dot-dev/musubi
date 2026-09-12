@@ -7,6 +7,7 @@ import {
   useId,
 } from "react";
 import { classNames } from "./class-names";
+import { HelpTooltip } from "./HelpTooltip";
 import styles from "./primitives.module.css";
 
 type FieldControlProps = {
@@ -19,6 +20,8 @@ export type FieldProps = Omit<HTMLAttributes<HTMLDivElement>, "children"> & {
   children: ReactElement<FieldControlProps>;
   description?: ReactNode;
   error?: ReactNode;
+  /** Optional background help; descriptions and errors remain visible. */
+  help?: ReactNode;
   label: ReactNode;
   labelHidden?: boolean;
   layout?: "stack" | "inline";
@@ -35,6 +38,7 @@ export function Field({
   className,
   description,
   error,
+  help,
   label,
   labelHidden = false,
   layout = "stack",
@@ -60,6 +64,11 @@ export function Field({
     id: controlId,
   });
 
+  const fieldLabel = <label
+    className={classNames(styles.fieldLabel, labelHidden && styles.visuallyHidden)}
+    htmlFor={controlId}
+  >{label}</label>;
+
   return (
     <div
       {...containerProps}
@@ -71,15 +80,10 @@ export function Field({
       )}
       data-invalid={error ? "" : undefined}
     >
-      <label
-        className={classNames(
-          styles.fieldLabel,
-          labelHidden && styles.visuallyHidden,
-        )}
-        htmlFor={controlId}
-      >
-        {label}
-      </label>
+      {help ? <div className={styles.labelWithHelp}>
+        {fieldLabel}
+        <HelpTooltip label={typeof label === "string" ? `Help for ${label}` : "Field help"}>{help}</HelpTooltip>
+      </div> : fieldLabel}
       <div className={styles.fieldControl}>{control}</div>
       {description ? (
         <p className={styles.fieldDescription} id={descriptionId}>

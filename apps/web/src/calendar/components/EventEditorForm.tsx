@@ -36,6 +36,7 @@ import { Button } from "~/ui/Button";
 import { Checkbox } from "~/ui/Checkbox";
 import { DatePicker } from "~/ui/DatePicker";
 import { Field } from "~/ui/Field";
+import { HelpTooltip } from "~/ui/HelpTooltip";
 import { Select } from "~/ui/Select";
 import { Row } from "~/ui/Row";
 import { Switch } from "~/ui/Switch";
@@ -92,6 +93,7 @@ type EventEditorFormProps = {
 	rdateMaster?: Event;
 	calendarLocked?: boolean;
 	calendars: Calendar[];
+	localAccountName?: string;
 	/**
 	 * Quick create: only what a new event cannot do without — name, when, which
 	 * calendar — with the rest behind one disclosure. Same form, same validation,
@@ -131,6 +133,8 @@ type EventEditorFormProps = {
 	onCancel: () => void;
 	onError: (error: unknown, values: EventFormValues) => FormError;
 	onSubmit: (values: EventFormValues) => Promise<void>;
+	/** A remounting shell may keep write state above the form. */
+	submissionState?: { saving: boolean; error?: FormError };
 	submitLabel: string;
 	submitRef?: RefCallback<HTMLButtonElement>;
 	timeFormat: Settings["timeFormat"];
@@ -141,6 +145,7 @@ export function EventEditorForm({
 	rdateMaster,
 	calendarLocked = false,
 	calendars,
+	localAccountName,
 	compact = false,
 	initialValues,
 	onValuesChange,
@@ -150,6 +155,7 @@ export function EventEditorForm({
 	onExpand,
 	onError,
 	onSubmit,
+	submissionState,
 	submitLabel,
 	submitRef,
 	timeFormat,
@@ -178,8 +184,10 @@ export function EventEditorForm({
 		setSyncedWhen(whenSignature);
 		setValues((current) => ({ ...current, ...when, invalidatedExactEndpoints: undefined }));
 	}
-	const [error, setError] = useState<FormError>();
-	const [saving, setSaving] = useState(false);
+	const [localError, setError] = useState<FormError>();
+	const [localSaving, setSaving] = useState(false);
+	const saving = submissionState?.saving ?? localSaving;
+	const error = submissionState?.error ?? localError;
 	const selectedCalendar = calendars.find(
 		(calendar) => calendar.id === values.calendarId,
 	);
@@ -319,8 +327,8 @@ export function EventEditorForm({
 	function changeTimeModel(next: Partial<EventFormValues>) {
 		patch({
 			...next,
-			...(panel && next.isAllDay && values.endDate <= values.date
-				? { endDate: shiftDayKey(values.date, 1) }
+			...(panel && next.isAllDay && values.endDate < values.date
+				? { endDate: values.date }
 				: {}),
 		});
 	}
@@ -353,15 +361,14 @@ export function EventEditorForm({
 
 	const timeModelFields = values.timeEditable && expanded ? (
 			<>
-				<Field label="Time model" variant={fieldVariant}>
+				<Field label="Time model" help="The selected model interprets the event dates and times. Changing it may change when the event occurs." variant={fieldVariant}>
 					<Select label="Time model" value={values.timeKind === "legacy-unknown" ? "" : values.timeKind ?? ""} placeholder="Not specified" disabled={saving}
 						options={[{ value: "zoned", label: "Event time zone" }, { value: "floating", label: "Floating local time" }, { value: "all-day", label: "All-day dates" }]}
 						onChange={kind => changeTimeModel(chooseEventTimeKind(values, kind as "zoned" | "floating" | "all-day"))} />
 				</Field>
-				{values.timeKind === "zoned" && <Field label="Event time zone" description={panel ? "For example Europe/Prague." : "For example Europe/Prague. Uses the dates and times shown below."} variant={fieldVariant}>
+				{values.timeKind === "zoned" && <Field label="Event time zone" help={panel ? "For example Europe/Prague." : "For example Europe/Prague. Uses the dates and times shown below."} variant={fieldVariant}>
 					<input value={values.timeZone ?? ""} placeholder="Europe/Prague" disabled={saving} onChange={event => patch({ timeZone: event.target.value, timeLabel: event.target.value || "Choose an event time zone" })} />
 				</Field>}
-				<p className={styles.timeContext}>The selected model interprets the event dates and times. Changing it may change when the event occurs.</p>
 			</>
 	) : null;
 
@@ -465,6 +472,8 @@ export function EventEditorForm({
 						</Body>
 					</div>
 				) : null}
+				{/* The panel displays an exclusive all-day end; drafts and writes keep
+				    Musubi's inclusive last date, just like grid selections. */}
 				<div className={styles.pickerRow}>
 					<CalendarDays aria-hidden="true" size={17} strokeWidth={1.5} />
 					<span aria-hidden="true" className={styles.pickerLabel}>
@@ -475,9 +484,9 @@ export function EventEditorForm({
 						disabled={saving}
 						label="Ends"
 						min={panel && values.isAllDay ? shiftDayKey(values.date, 1) : values.date}
-						value={values.endDate}
+						value={panel && values.isAllDay ? shiftDayKey(values.endDate, 1) : values.endDate}
 						weekStartsOn={weekStartsOn}
-						onChange={(endDate) => patch({ endDate })}
+						onChange={(endDate) => patch({ endDate: panel && values.isAllDay ? shiftDayKey(endDate, -1) : endDate })}
 					/>
 				</div>
 
@@ -525,28 +534,13 @@ export function EventEditorForm({
 					<SectionLabel className={styles.sectionLabel} id={`${id}-details-heading`}>
 						Details
 					</SectionLabel>
-					{panel ? <Row
+					<Row
 						className={styles.toggleRow}
 						size="compact"
 						icon={<UsersRound size={18} strokeWidth={1.5} />}
-						label="Allow attendance"
-						detail="Guests can respond to this event."
-						trailing={<Checkbox label="Allow attendance" labelHidden checked={values.hasAttendees} disabled={saving} onChange={event => patch({ hasAttendees: event.target.checked })} />}
-					/> : (
-					<Checkbox
-						checked={values.hasAttendees}
-						className={styles.toggleRow}
-						description="Guests can respond to this event."
-						disabled={saving}
-						label={
-							<span className={styles.fieldLabel}>
-								<UsersRound aria-hidden="true" size={16} strokeWidth={1.5} />
-								Allow attendance
-							</span>
-						}
-						onChange={(event) => patch({ hasAttendees: event.target.checked })}
+						label={<span className={styles.fieldLabel}><label htmlFor={`${id}-attendance`}>Allow attendance</label> <HelpTooltip label="Help for Allow attendance">Guests can respond to this event.</HelpTooltip></span>}
+						trailing={<Checkbox id={`${id}-attendance`} label="Allow attendance" labelHidden checked={values.hasAttendees} disabled={saving} onChange={event => patch({ hasAttendees: event.target.checked })} />}
 					/>
-					)}
 					<Field
 						className={panel ? styles.detailField : undefined}
 						label={
@@ -604,7 +598,7 @@ export function EventEditorForm({
 				data-editor-section="calendars"
 			>
 				<SectionLabel className={styles.sectionLabel} id={`${id}-calendar-heading`}>
-					Event calendars
+					<span className={styles.fieldLabel}>Event calendars <HelpTooltip label="Help for Event calendars">Choose where the event appears. Its home calendar owns updates, invitations, and the event color.</HelpTooltip></span>
 				</SectionLabel>
 
 				{calendarDisclosure ? (
@@ -644,16 +638,10 @@ export function EventEditorForm({
 							/>
 						</span>
 					</button>
-				) : (
-					<p className={styles.calendarHint} id={`${id}-calendar-hint`}>
-						Choose where the event appears. Its home calendar owns updates,
-						invitations, and the event color.
-					</p>
-				)}
+				) : null}
 
 				{showCalendarList ? (
 					<fieldset
-						aria-describedby={!calendarDisclosure ? `${id}-calendar-hint` : undefined}
 						className={styles.calendarPlacement}
 						data-ui="calendar-placement"
 						id={`${id}-calendar-list`}
@@ -670,8 +658,16 @@ export function EventEditorForm({
 							<div className={styles.calendarGroup} key={group.key}>
 								{calendarGroups.length > 1 ? (
 									<div className={styles.calendarGroupHeading}>
-										<strong><AccountMark size="compact" flavor={group.flavor} />{group.title}</strong>
-										<span>{group.detail}</span>
+										<strong>
+											<AccountMark size="compact" flavor={group.flavor} />
+											<span className={styles.calendarGroupTitle}>{group.key === "musubi" ? localAccountName?.trim() || group.title : group.title}</span>
+											{group.key === "musubi" && localAccountName?.trim() ? (
+												<span className={styles.visuallyHidden}> · Musubi</span>
+											) : null}
+											{group.flavor && group.title !== group.detail ? (
+												<span className={styles.visuallyHidden}> · {group.detail}</span>
+											) : null}
+										</strong>
 									</div>
 								) : null}
 								<ul>
@@ -685,7 +681,7 @@ export function EventEditorForm({
 											saving || calendarLocked || !can(calendar.role, "editEvents");
 										const detail = !compatible
 											? "Choose as home to switch Musubi server"
-											: calendarSourceDetail(calendar);
+											: calendarGroups.length > 1 && calendar.provider ? null : calendarSourceDetail(calendar);
 
 										return (
 											<li className={styles.calendarPlacementRow} key={calendar.id}>
@@ -706,10 +702,9 @@ export function EventEditorForm({
 													<span aria-hidden="true" className={styles.calendarMembershipBox}>
 														{checked ? <Check size={12} strokeWidth={2.2} /> : null}
 													</span>
-													<AccountMark size="compact" flavor={providerFlavor(calendar)} />
 													<span className={styles.calendarPlacementCopy}>
 														<strong><CalendarDot color={calendar.color} /><span className={styles.calendarName}>{calendar.name}</span></strong>
-														<span>{detail}</span>
+														{detail ? <span>{detail}</span> : null}
 													</span>
 												</label>
 
@@ -826,6 +821,6 @@ function calendarServer(calendar: Calendar | undefined) {
 
 function calendarSourceDetail(calendar: Calendar) {
 	if (calendar.provider) return providerDisplayName(calendar);
-	if (calendar.isDefault) return "Personal calendar";
+	if (calendar.isDefault) return null;
 	return calendar.role === "owner" ? "Your calendar" : "Shared calendar";
 }

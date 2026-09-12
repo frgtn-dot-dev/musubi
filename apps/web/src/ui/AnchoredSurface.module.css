@@ -1,5 +1,5 @@
 .surface {
-  z-index: 140;
+  z-index: var(--layer-popover-z);
   overflow: hidden;
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-card);
@@ -11,7 +11,15 @@
 }
 
 :global([data-radix-popper-content-wrapper]):has(.surface) {
-  z-index: 140 !important;
+  z-index: var(--layer-popover-z) !important;
+}
+
+.surface[data-layer-elevated] {
+  z-index: var(--layer-popover-elevated-z);
+}
+
+:global([data-radix-popper-content-wrapper]):has(.surface[data-layer-elevated]) {
+  z-index: var(--layer-popover-elevated-z) !important;
 }
 
 .arrow {
@@ -32,7 +40,6 @@
     .surface[data-mobile-surface="sheet"]
   ) {
     position: fixed !important;
-    z-index: 140 !important;
     top: auto !important;
     right: 0 !important;
     bottom: 0 !important;

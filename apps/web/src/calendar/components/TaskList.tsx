@@ -29,6 +29,7 @@ import { Row, RowAction } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { TimePicker } from "~/ui/TimePicker";
 import { AccountMark } from "./ProviderIcon";
+import { RecurrenceEditor } from "./RecurrenceEditor";
 import styles from "./TaskList.module.css";
 
 type TaskListProps = {
@@ -617,8 +618,23 @@ function TaskEditor({
           label="Recurrence"
           detail={taskRecurrenceSummary(draft.recurrence, draft.start)}
         >
-          <Field label="Recurrence rule" description="Uses iCalendar recurrence syntax.">
+          {!draft.start && !draft.due ? <p>Choose a start or due date to set repetition.</p> : null}
+          <RecurrenceEditor
+            followStartDate={false}
+            date={taskDateKey(draft.start) || taskDateKey(draft.due) || toDateKey(new Date())}
+            allDay={draft.isAllDay}
+            weekStartsOn={settings.weekStartsOn}
+            disabled={busy || unavailable || (!draft.start && !draft.due)}
+            value={draft.recurrence ?? ""}
+            onChange={(recurrence) => onChange({
+              ...draft,
+              recurrence: recurrence || null,
+            })}
+          />
+          <Disclosure density="compact" label="Advanced rule">
+          <Field label="Recurrence rule" help="Uses iCalendar recurrence syntax.">
             <textarea
+              disabled={busy || unavailable}
               placeholder="RRULE:FREQ=WEEKLY"
               rows={2}
               spellCheck={false}
@@ -628,6 +644,7 @@ function TaskEditor({
               }
             />
           </Field>
+          </Disclosure>
         </Disclosure>
         {error ? <InlineError>{error}</InlineError> : null}
       </form>

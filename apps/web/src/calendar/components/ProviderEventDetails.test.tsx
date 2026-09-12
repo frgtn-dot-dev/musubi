@@ -13,7 +13,9 @@ it("shows native values and distinguishes independent reminders", async () => {
   expect(await screen.findByText("Outlook details")).toBeTruthy();
   expect(screen.getByText("workingElsewhere")).toBeTruthy();
   expect(screen.getByText("0 minutes before start")).toBeTruthy();
-  expect(screen.getByText(/Both apps may notify/)).toBeTruthy();
+  expect(screen.queryByText(/Both apps may notify/)).toBeNull();
+  await act(async () => screen.getByRole("button", { name: "About Outlook settings" }).click());
+  expect(within(screen.getByRole("tooltip")).getByText(/Both apps may notify/)).toBeTruthy();
 });
 it("never displays a previous account's late result", async () => {
   let resolve!: (value: { state: ProviderEventState }) => void;
@@ -211,7 +213,11 @@ it.each([
   const view = render(<ProviderEventDetails presentation="panel" providerFlavor={flavor} eventId="event" userId="owner" />);
   const label = await screen.findByText(title);
   expect(label.closest("summary")?.querySelector(`[data-provider="${mark}"]`)).not.toBeNull();
-  if (provider === "caldav") expect(screen.getByText(flavor === "apple" ? /Change these in Apple Calendar/ : /Change these in CalDAV/)).toBeTruthy();
+  if (provider === "caldav") {
+    await act(async () => label.closest("summary")!.click());
+    await act(async () => screen.getByRole("button", { name: flavor === "apple" ? "About Apple Calendar settings" : "About CalDAV settings" }).click());
+    expect(within(screen.getByRole("tooltip")).getByText(flavor === "apple" ? /Change these in Apple Calendar/ : /Change these in CalDAV/)).toBeTruthy();
+  }
   view.rerender(<ProviderEventDetails providerFlavor={flavor} eventId="event" userId="owner" />);
   expect(screen.getByText(provider === "caldav" ? "CalDAV details" : "Outlook details")).toBeTruthy();
   expect(fetchState).toHaveBeenCalledTimes(1);
@@ -249,11 +255,14 @@ it("presents native CalDAV roles and mail addresses without changing provider ob
   expect(screen.getAllByText("sam@example.test")).toHaveLength(1);
   expect(screen.getByText("host@example.test")).toBeTruthy();
   expect(screen.queryByText(/mailto:/i)).toBeNull();
-  expect(screen.getByText(/Change these in Apple Calendar/)).toBeTruthy();
+  await act(async () => screen.getByText("Apple Calendar details").closest("summary")!.click());
+  await act(async () => screen.getByRole("button", { name: "About Apple Calendar settings" }).click());
+  expect(within(screen.getByRole("tooltip")).getByText(/Change these in Apple Calendar/)).toBeTruthy();
   expect(observed).toEqual(original);
   view.rerender(<ProviderEventDetails providerFlavor="apple" eventId="event" userId="owner" />);
   expect(screen.getByText(/MAILTO:alex@example.test/)).toBeTruthy();
-  expect(screen.getByText(/Change these in CalDAV/)).toBeTruthy();
+  await act(async () => screen.getByRole("button", { name: "About CalDAV settings" }).click());
+  expect(within(screen.getByRole("tooltip")).getByText(/Change these in CalDAV/)).toBeTruthy();
 });
 
 
