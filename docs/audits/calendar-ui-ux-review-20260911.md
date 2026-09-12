@@ -172,3 +172,39 @@ certifikaci nativní aplikace nebo vyčerpávající audit všech kombinací dat
 Budoucí změny musí splnit konkrétní kompoziční kontrakty v části 11 dokumentu
 `docs/ui/design-system.md`. Výchozí nálezy výše zůstávají historií původního stavu;
 nejde o tvrzení, že každá dříve navržená produktová přestavba byla implementována.
+
+## Průchod celým webem — 2026-09-12
+
+Na navazující požadavek uživatele proběhl další průchod po úlohách a obrazovkách.
+Tři paralelní implementační oblasti sdílely existující primitives; následovalo
+nezávislé review s čistým kontextem. Změny navazují na schválený styl Musubi.
+
+| Oblast | Výsledek průchodu |
+| --- | --- |
+| Calendars, vytvoření, úprava, import/export | Seznam je první; přenosy jsou existující Disclosure v zaoblené sekci. Akce mají skutečný prostor i touch target. Import už při pozdním přečtení souboru nepřepíše vlastní název. |
+| Sdílení a členové | E-mail má vlastní široké pole. Role zůstává viditelná; převod vlastnictví a odebrání jsou v Menu. Dlouhá jména, pozvánky i návrat focusu po zrušení potvrzení jsou ověřené. |
+| Connections | Refresh patří do hlavičky, stav synchronizace k účtu, providerové volby do kompaktní skupiny. Prohlédnuté připojené, chybové, federation i iCloud formulářové stavy. |
+| Settings a diagnostics | Menší dialog, oddělené Appearance a Date & time; delší seznam připomínek používá Select. Diagnostické akce jsou před podrobnými výsledky. |
+| Účet a Pages | Dlouhé hodnoty pod labely, viditelné Cancel, zaoblené SettingsSection, přepínače a zalamované volby kalendářů s touch targety. |
+| Úkoly a hledání | Sdílené řádky, počty, stav, celý termín včetně času/roku; klidnější Delete a čitelná priorita. Opakování má souhrn a přesnou původní syntaxi v rozbalení. Search odděluje název od data/místa. |
+| Navigace a okrajové stavy | Úzká navigace má datum v prvním řádku a pohled s hledáním ve druhém. Září i týden přes hranici roku zůstávají čitelné při 320 px. Prohlédnuté onboarding, offline, nenalezená stránka, rozšířené opakování a providerové retry. |
+| Quick Create a event editor | Providerové značky jsou ve všech variantách výběru kalendáře. Dlouhé názvy mají vlastní textový slot, aby ellipsis fungovala i vedle barevné tečky. |
+| Přihlášení a veřejná pozvánka | Standardní tlačítka bez lokálního zmenšování, sdílená chyba, kontrast drobných titulků a skutečně omezené vnitřní gridy. Dlouhý obsah nesmí vytlačit akci mimo kartu. |
+| Administrace a zkratky | Návrat do kalendáře, správné úrovně nadpisů, přehlednější editor a responzivní akce. Selhané načtení oznámení nabízí retry; zkratky používají společnou typografii a mezery. |
+
+Vizuální fixtures zahrnují 320/390/768/1280 px a obě témata; každodenní pracovní
+toky navíc kombinují dlouhé názvy, stav pouze pro čtení, rozbalené formuláře a
+klávesnici. Živý localhost byl proklikán bez nových zápisů u providerů. Veřejné
+scénáře používají smyšlené účty a pozvánky, nikoli skutečné odesílání.
+
+Při ručním čtení snímků se opravilo vnitřní ořezání pozvánky, které kontrola
+šířky dokumentu neodhalila. Z testování skutečné asynchronní volby také vznikla
+oprava Select focusu po uložení; ikona responzivního Row už neodsouvá text na
+samostatný řádek. Tyto kontrakty jsou doplněné do design systému a regresních
+kontrol. Kontrola webu nenahrazuje nativní mobilní ani živé providerové akceptace.
+
+Poslední kontrola skutečného seznamu kalendářů přesunula vytvoření providerové
+schůzky ze souhrnu synchronizace do samostatné zarovnané akce pod kalendářem.
+Schopnosti, význam stavu a provedení operace zůstávají stejné; regresní testy
+zachycují požadavky v lokálních mockách. Nezávislé závěrečné review nenašlo
+nevyřešený nález P1/P2.

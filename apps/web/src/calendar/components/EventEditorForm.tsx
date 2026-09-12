@@ -621,9 +621,9 @@ export function EventEditorForm({
 						type="button"
 						onClick={() => setCalendarPickerOpen((current) => !current)}
 					>
-						{layout !== "popover" ? <AccountMark size="compact" flavor={selectedCalendar ? providerFlavor(selectedCalendar) : null} /> : <CalendarDot color={selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR} />}
+						<AccountMark size="compact" flavor={selectedCalendar ? providerFlavor(selectedCalendar) : null} />
 						<span className={styles.calendarSummaryCopy}>
-							<strong>{layout !== "popover" ? <CalendarDot color={selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR} /> : null}{selectedCalendar?.name ?? "Choose a calendar"}</strong>
+							<strong><CalendarDot color={selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR} /><span className={styles.calendarName}>{selectedCalendar?.name ?? "Choose a calendar"}</span></strong>
 							{/* The "home" idea only means something once an event is in more
                   than one calendar. On its own it read as a place, next to
                   "Only calendar", which read as a restriction — beside a button
@@ -670,7 +670,7 @@ export function EventEditorForm({
 							<div className={styles.calendarGroup} key={group.key}>
 								{calendarGroups.length > 1 ? (
 									<div className={styles.calendarGroupHeading}>
-										<strong>{layout !== "popover" ? <AccountMark size="compact" flavor={group.flavor} /> : null}{group.title}</strong>
+										<strong><AccountMark size="compact" flavor={group.flavor} />{group.title}</strong>
 										<span>{group.detail}</span>
 									</div>
 								) : null}
@@ -706,9 +706,9 @@ export function EventEditorForm({
 													<span aria-hidden="true" className={styles.calendarMembershipBox}>
 														{checked ? <Check size={12} strokeWidth={2.2} /> : null}
 													</span>
-													{layout !== "popover" ? <AccountMark size="compact" flavor={providerFlavor(calendar)} /> : <CalendarDot color={calendar.color} />}
+													<AccountMark size="compact" flavor={providerFlavor(calendar)} />
 													<span className={styles.calendarPlacementCopy}>
-														<strong>{layout !== "popover" ? <CalendarDot color={calendar.color} /> : null}{calendar.name}</strong>
+														<strong><CalendarDot color={calendar.color} /><span className={styles.calendarName}>{calendar.name}</span></strong>
 														<span>{detail}</span>
 													</span>
 												</label>

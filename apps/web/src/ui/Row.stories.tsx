@@ -201,6 +201,7 @@ export const MultipleActions: Story = {
   render: () => <div className="sb-settings-preview">
     <SettingsSection title="Saved event deliveries">
       <Row layout="responsive-actions" data-testid="delivery-actions-row"
+        icon={<Bell size={18} />}
         label="Team calendar · changes need attention"
         detail="The saved event differs from the remote version. Review the changes before retrying. Provider confirmation is still pending."
         trailing={<>
@@ -216,7 +217,10 @@ export const MultipleActions: Story = {
     const row = canvas.getByTestId("delivery-actions-row");
     const buttons = canvas.getAllByRole("button");
     const copy = row.querySelector<HTMLElement>('[data-slot="copy"]')!;
+    const icon = row.querySelector<HTMLElement>('[data-slot="icon"]')!;
     if (matchMedia("(max-width: 599px)").matches) {
+      await expect(icon.getBoundingClientRect().bottom).toBeGreaterThan(copy.getBoundingClientRect().top);
+      await expect(icon.getBoundingClientRect().top).toBeLessThan(copy.getBoundingClientRect().bottom);
       await expect(buttons[0].getBoundingClientRect().top).toBeGreaterThan(copy.getBoundingClientRect().bottom);
     }
     await expect(row.scrollWidth - row.clientWidth).toBeLessThanOrEqual(1);

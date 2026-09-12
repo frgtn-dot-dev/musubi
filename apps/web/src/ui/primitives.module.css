@@ -317,7 +317,8 @@
 
 .pageEyebrow {
 	margin: 0;
-	color: var(--accent-primary);
+	/* The raw accent is only 4.32:1 on the dark authentication card. */
+	color: color-mix(in srgb, var(--accent-primary) 72%, var(--text-primary));
 	font-size: var(--text-11);
 	font-weight: 500;
 	letter-spacing: 0.18em;
@@ -427,11 +428,15 @@
 
 .authCopy {
 	grid-area: copy;
+	min-width: 0;
+	overflow-wrap: anywhere;
 }
 
 .authContent {
 	grid-area: form;
+	min-width: 0;
 	display: grid;
+	grid-template-columns: minmax(0, 1fr);
 	align-content: start;
 	gap: var(--space-4);
 }
@@ -522,14 +527,7 @@
 
 .authForm {
 	display: grid;
-	gap: var(--space-4);
-}
-
-.authMessage {
-	min-height: 19px;
-	color: var(--accent-primary);
-	font-size: var(--text-12);
-	line-height: 1.45;
+	gap: var(--space-5);
 }
 
 .authSubmit {
@@ -567,31 +565,16 @@
 	line-height: 1.45;
 }
 
-.authHint button {
-	min-height: 28px;
-	padding-inline: 0;
-	color: var(--text-secondary);
-	text-decoration: underline;
-	text-underline-offset: 3px;
-}
-
 .authSwitch {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	justify-content: center;
-	gap: var(--space-1);
+	gap: var(--space-2);
 	margin: 0;
 	color: var(--text-secondary);
 	font-size: var(--text-12);
 	text-align: center;
-}
-
-.authSwitch button {
-	min-height: 36px;
-	padding-inline: var(--space-1);
-	color: var(--text-primary);
-	text-decoration: underline;
-	text-underline-offset: 3px;
 }
 
 @media (max-width: 599px) {
@@ -933,9 +916,9 @@
 
 .select_compact {
 	width: auto;
-	min-height: 32px;
+	min-height: var(--compact-control-height);
 	padding-inline: var(--space-2);
-	border-radius: var(--radius-sm);
+	border-radius: var(--radius-control);
 	font-size: var(--text-11);
 }
 
@@ -1184,14 +1167,24 @@
 
 @media (max-width: 599px) {
 	.row[data-layout="responsive-actions"] {
-		flex-wrap: wrap;
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
 	}
 
 	.row[data-layout="responsive-actions"] > .rowCopy {
-		flex-basis: 100%;
+		grid-column: 2;
+	}
+
+	.row[data-layout="responsive-actions"]:not(:has(> .rowIcon)) > .rowCopy {
+		grid-column: 1 / -1;
+	}
+
+	.row[data-layout="responsive-actions"] > .rowValue {
+		grid-column: 1 / -1;
 	}
 
 	.row[data-layout="responsive-actions"] > .rowTrailing {
+		grid-column: 1 / -1;
 		width: 100%;
 		place-content: stretch;
 	}
@@ -2434,6 +2427,10 @@
 
 .disclosureSummary:hover {
 	background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
+}
+
+.disclosureSummary:hover .rowDetail {
+	color: var(--text-primary);
 }
 
 .disclosureSummary:focus-visible {

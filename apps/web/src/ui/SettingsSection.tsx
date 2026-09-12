@@ -10,6 +10,8 @@ export type SettingsSectionProps = Omit<
   children: ReactNode;
   /** One line under the heading, for what the whole group does or does not do. */
   description?: ReactNode;
+  /** Use 2 directly under a page title; dialogs normally use 3. */
+  headingLevel?: 2 | 3;
   title: ReactNode;
 };
 
@@ -23,6 +25,7 @@ export function SettingsSection({
   children,
   className,
   description,
+  headingLevel = 3,
   title,
   ...sectionProps
 }: SettingsSectionProps) {
@@ -34,7 +37,7 @@ export function SettingsSection({
       aria-labelledby={headingId}
       className={classNames(styles.settingsSection, className)}
     >
-      <SectionLabel id={headingId} level={3}>
+      <SectionLabel id={headingId} level={headingLevel}>
         {title}
       </SectionLabel>
       {description ? (

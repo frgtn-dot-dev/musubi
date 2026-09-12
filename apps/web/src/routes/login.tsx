@@ -277,9 +277,7 @@ function LoginRoute() {
         >
           {resent ? "Link sent again" : "Send the link again"}
         </AuthSubmit>
-        <AuthMessage>
-          {resent ? "Give it a minute, then look in spam." : ""}
-        </AuthMessage>
+        {resent ? <AuthHint>Give it a minute, then look in spam.</AuthHint> : null}
       </AuthShell>
     );
   }
@@ -373,7 +371,7 @@ function LoginRoute() {
             <Button
               disabled={submitting}
               size="compact"
-              variant="secondary"
+              variant="ghost"
               onClick={() => void requestReset()}
             >
               Forgotten your passphrase?

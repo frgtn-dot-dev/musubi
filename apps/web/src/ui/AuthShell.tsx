@@ -5,6 +5,7 @@ import type {
 } from "react";
 import { BrandMark } from "~/components/BrandMark";
 import { Button, type ButtonProps } from "./Button";
+import { InlineError } from "./InlineError";
 import { classNames } from "./class-names";
 import styles from "./primitives.module.css";
 
@@ -100,16 +101,15 @@ export function AuthMessage({
   className,
   ...messageProps
 }: HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div
+  return children ? (
+    <InlineError
       {...messageProps}
-      className={classNames(styles.authMessage, className)}
-      role="alert"
+      className={className}
       aria-live="polite"
     >
       {children}
-    </div>
-  );
+    </InlineError>
+  ) : null;
 }
 
 /** The provider buttons, stacked, in the aside column. */
@@ -169,7 +169,7 @@ export function AuthSwitch({
   return (
     <p className={styles.authSwitch}>
       <span>{children}</span>
-      <Button size="compact" variant="secondary" onClick={onAction}>
+      <Button size="compact" variant="ghost" onClick={onAction}>
         {action}
       </Button>
     </p>

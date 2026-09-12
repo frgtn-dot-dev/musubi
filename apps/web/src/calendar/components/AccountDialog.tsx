@@ -6,13 +6,7 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react";
-import {
-  type FormEvent,
-  type RefObject,
-  useId,
-  useRef,
-  useState,
-} from "react";
+import { type FormEvent, type RefObject, useRef, useState } from "react";
 import { deleteAccount, uploadAvatar } from "~/api/resources";
 import { authClient } from "~/auth/auth-client";
 import { Avatar } from "~/ui/Avatar";
@@ -65,7 +59,7 @@ export function AccountDialog({
 }: AccountDialogProps) {
   const session = authClient.useSession();
   const user = session.data?.user;
-  const avatarInputId = useId();
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const nameActionRef = useRef<HTMLButtonElement>(null);
   const emailActionRef = useRef<HTMLButtonElement>(null);
   const deleteActionRef = useRef<HTMLButtonElement>(null);
@@ -132,7 +126,8 @@ export function AccountDialog({
               aria-label="Change profile photo"
               className={styles.visuallyHidden}
               disabled={busy}
-              id={avatarInputId}
+              ref={avatarInputRef}
+              tabIndex={-1}
               type="file"
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -140,28 +135,24 @@ export function AccountDialog({
                 if (file) void changeAvatar(file);
               }}
             />
-            <label
-              className={styles.avatarControl}
-              htmlFor={avatarInputId}
-            >
-              <Avatar
-                image={user?.image}
-                name={user?.name ?? "Musubi"}
-                size="profile"
-              />
-              <span className={styles.cameraBadge} aria-hidden="true">
-                <Camera size={13} strokeWidth={2} />
-              </span>
-            </label>
+            <Avatar
+              image={user?.image}
+              name={user?.name ?? "Musubi"}
+              size="profile"
+            />
             <div className={styles.identityCopy}>
               <strong>{user?.name ?? "Your profile"}</strong>
               <span>{user?.email ?? "Loading account…"}</span>
-              <label
+              <Button
                 className={styles.changePhotoControl}
-                htmlFor={avatarInputId}
+                disabled={!user || busy}
+                icon={<Camera aria-hidden="true" size={15} strokeWidth={1.7} />}
+                onClick={() => avatarInputRef.current?.click()}
+                size="compact"
+                variant="ghost"
               >
                 Change photo
-              </label>
+              </Button>
             </div>
           </div>
 
@@ -170,8 +161,8 @@ export function AccountDialog({
               disabled={!user || busy}
               icon={<Pencil size={17} strokeWidth={1.7} />}
               label="Display name"
+              detail={<span className={styles.profileValue}>{user?.name}</span>}
               ref={nameActionRef}
-              value={user?.name}
               onClick={() => {
                 setError("");
                 setNameEditorOpen(true);
@@ -179,15 +170,12 @@ export function AccountDialog({
             />
             <RowAction
               detail={
-                user?.emailVerified
-                  ? "We’ll ask the current address to approve it"
-                  : "We’ll send a confirmation to the new address"
+                <span className={styles.profileValue}>{user?.email}</span>
               }
               disabled={!user || busy}
               icon={<Mail size={17} strokeWidth={1.7} />}
               label="Email"
               ref={emailActionRef}
-              value={user?.email}
               onClick={() => {
                 setError("");
                 setEmailEditorOpen(true);
@@ -309,9 +297,16 @@ function EditNameDialog({
   return (
     <Dialog
       closeLabel="Close display name"
-      description="This is how other people will recognize you in shared calendars."
+      description="How people recognize you in shared calendars."
       footer={
         <>
+          <Button
+            disabled={busy}
+            onClick={() => onOpenChange(false)}
+            variant="secondary"
+          >
+            Cancel
+          </Button>
           <Button
             disabled={!canSave}
             form="display-name-form"
@@ -334,10 +329,7 @@ function EditNameDialog({
         id="display-name-form"
         onSubmit={(event) => void saveName(event)}
       >
-        <Field
-          description="Use the name people already know you by."
-          label="Display name"
-        >
+        <Field label="Display name">
           <input
             autoComplete="name"
             disabled={busy}
@@ -347,9 +339,7 @@ function EditNameDialog({
             onChange={(event) => setName(event.target.value)}
           />
         </Field>
-        {error ? (
-          <InlineError>{error}</InlineError>
-        ) : null}
+        {error ? <InlineError>{error}</InlineError> : null}
       </form>
     </Dialog>
   );
@@ -402,9 +392,7 @@ function DeleteAccountDialog({
         id="delete-account-form"
         onSubmit={(event) => void removeAccount(event)}
       >
-        <ConfirmationNotice
-          icon={<UserRound size={19} strokeWidth={1.6} />}
-        >
+        <ConfirmationNotice icon={<UserRound size={19} strokeWidth={1.6} />}>
           <p>
             Type <strong>{userName}</strong> exactly to continue.
           </p>
@@ -443,7 +431,8 @@ function EditEmailDialog({
   const { busy, error, run } = useAsyncAction();
   const next = email.trim().toLowerCase();
   const canSave =
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next) && next !== user.email.toLowerCase();
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next) &&
+    next !== user.email.toLowerCase();
 
   async function saveEmail(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -475,12 +464,24 @@ function EditEmailDialog({
       closeLabel="Close email"
       description={
         user.emailVerified
-          ? "Your current address has to approve the move, so a stolen session cannot take the account somewhere you can't reach."
+          ? "We’ll email your current address to approve this change."
           : "We'll send a link to the new address. The change happens when you open it."
       }
       footer={
         <>
-          <Button disabled={!canSave} form="email-form" loading={busy} type="submit">
+          <Button
+            disabled={busy}
+            onClick={() => onOpenChange(false)}
+            variant="secondary"
+          >
+            Cancel
+          </Button>
+          <Button
+            disabled={!canSave}
+            form="email-form"
+            loading={busy}
+            type="submit"
+          >
             Send the link
           </Button>
         </>
@@ -500,6 +501,7 @@ function EditEmailDialog({
         <Field description={`Currently ${user.email}.`} label="New email">
           <input
             autoComplete="email"
+            disabled={busy}
             inputMode="email"
             placeholder="you@example.com"
             ref={inputRef}
@@ -508,7 +510,7 @@ function EditEmailDialog({
             onChange={(event) => setEmail(event.target.value)}
           />
         </Field>
-        {error ? <p role="alert">{error}</p> : null}
+        {error ? <InlineError>{error}</InlineError> : null}
       </form>
     </Dialog>
   );

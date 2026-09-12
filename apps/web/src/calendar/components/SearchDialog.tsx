@@ -10,6 +10,7 @@ const eventDate = new Intl.DateTimeFormat("en", {
 	day: "numeric",
 	month: "short",
 	weekday: "short",
+	year: "numeric",
 });
 
 type SearchDialogProps = {
@@ -91,7 +92,6 @@ export function SearchDialog({
 		<Dialog
 			bodyClassName={styles.body}
 			closeLabel="Close search"
-			description="Find an event or run a calendar action."
 			initialFocus={inputRef}
 			onOpenChange={onOpenChange}
 			open={open}
@@ -120,7 +120,6 @@ export function SearchDialog({
 						target.focus();
 					}}
 				/>
-				<kbd>/</kbd>
 			</label>
 
 			<div className={styles.results} onKeyDown={moveResultFocus}>
@@ -161,8 +160,10 @@ export function SearchDialog({
 										onClick={() => run(() => onEventSelect(event))}
 									>
 										<CalendarDays aria-hidden="true" size={16} />
-										<span>{event.title}</span>
-										<small>{eventDate.format(event.start)}</small>
+										<span className={styles.eventCopy}>
+											<span>{event.title}</span>
+											<small>{[eventDate.format(event.start), event.location].filter(Boolean).join(" · ")}</small>
+										</span>
 									</button>
 								))}
 							</div>

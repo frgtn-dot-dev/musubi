@@ -86,6 +86,10 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+export const PageSection: Story = {
+  args: { headingLevel: 2, title: "Published announcements", children: <Row label="Upcoming maintenance" detail="Everyone on this server" /> },
+};
+
 export const Overview: Story = {
   parameters: {
     chromatic: {

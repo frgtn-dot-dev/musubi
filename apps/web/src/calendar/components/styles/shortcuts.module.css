@@ -5,7 +5,7 @@
 .shortcutGroups {
   display: grid;
   padding: 0;
-  gap: 16px;
+  gap: var(--space-6);
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 
@@ -13,23 +13,23 @@
 .shortcutGroupTitle {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 0.76rem;
+  font-size: var(--text-13);
   font-weight: 600;
 }
 
 .shortcutList {
   display: flex;
   flex-direction: column;
-  margin: 6px 0 0;
-  gap: 5px;
-  font-size: 0.74rem;
+  margin: var(--space-3) 0 0;
+  gap: var(--space-2);
+  font-size: var(--text-13);
 }
 
 .shortcutList > div {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 .shortcutList dt {
@@ -41,12 +41,12 @@
 }
 
 .shortcutList kbd {
-  padding: 1px 6px;
+  padding: var(--space-1) var(--space-2);
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-sm);
   background: var(--surface-raised);
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 0.68rem;
+  font-size: var(--text-11);
   white-space: nowrap;
 }

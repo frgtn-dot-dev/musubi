@@ -78,8 +78,9 @@
 }
 
 .sectionHeading {
-	display: grid;
-	align-content: start;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
 	gap: var(--space-1);
 	padding: var(--space-5) var(--layer-inline) var(--space-3);
 }
@@ -111,8 +112,15 @@
 	padding-inline: var(--layer-inline);
 }
 
-.connectionRow > span:first-child {
-	width: 30px;
+.connectionRow [data-slot="label"] {
+	overflow-wrap: anywhere;
+}
+
+.accountDetail {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
 }
 
 .rowLabel {
@@ -252,7 +260,7 @@
 
 .providerButtons button {
 	justify-content: center;
-	min-height: 52px;
+	min-height: var(--control-height);
 	padding-inline: var(--space-3);
 }
 
@@ -351,7 +359,6 @@
 	}
 
 	.providerButtons {
-		grid-template-columns: minmax(0, 1fr);
 		padding-inline: var(--layer-inline);
 	}
 
@@ -364,5 +371,3 @@
 		margin-inline: var(--layer-inline);
 	}
 }
-
-.refreshButton { margin: var(--space-3) var(--layer-inline); justify-self: start; }

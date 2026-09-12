@@ -40,11 +40,13 @@ import {
 	ConfirmationNotice,
 } from "~/ui/ConfirmationDialog";
 import { Dialog } from "~/ui/Dialog";
+import { Disclosure } from "~/ui/Disclosure";
 import { Field } from "~/ui/Field";
 import { InlineError } from "~/ui/InlineError";
 import { Row, RowOptions } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { Select } from "~/ui/Select";
+import { SettingsSection } from "~/ui/SettingsSection";
 import type { ReminderControl } from "~/calendar/reminder-control";
 import { connectionOfCalendar } from "../federation-routing";
 import { CalendarDot } from "./CalendarDot";
@@ -107,22 +109,12 @@ function exportFilename(calendar: Calendar) {
 
 function calendarDetail(calendar: Calendar, external: boolean) {
 	if (calendar.syncStatus === "reconnect_required") {
-		return "Reconnect this account in Connections";
+		return "Reconnect in Connections";
 	}
-	if (external) {
-		return `Managed in ${providerDisplayName(calendar)}`;
-	}
-
-	const access =
-		calendar.role === "owner"
-			? "You own this calendar"
-			: calendar.role === "editor"
-				? // Not "edit this calendar": an editor can add and change events but not
-					// rename or recolour the calendar itself (`packages/types/permissions`),
-					// and the row shows no rename button to match.
-					"You can add and change events"
-				: "View only";
-	return calendar.isDefault ? `Personal calendar · ${access}` : access;
+	if (external) return `Synced with ${providerDisplayName(calendar)}`;
+	if (calendar.role === "owner") return "Owner";
+	// Editors can change events, but only the owner can rename the calendar.
+	return calendar.role === "editor" ? "Can edit events" : "View only";
 }
 
 export function CalendarTransferDialog({
@@ -258,9 +250,8 @@ export function CalendarTransferDialog({
 		const text = await file.text();
 		setIcs(text);
 		setImportFileName(file.name);
-		if (!importName) {
-			setImportName(file.name.replace(/\.ics$/i, ""));
-		}
+		// Reading a file is asynchronous; keep a name edited while it was loading.
+		setImportName((current) => current || file.name.replace(/\.ics$/i, ""));
 	}
 
 	async function handleCreate(submitEvent: FormEvent<HTMLFormElement>) {
@@ -398,7 +389,7 @@ export function CalendarTransferDialog({
 				bodyLayout="flush"
 				bodyScroll="panels"
 				closeLabel="Close calendars"
-				description="Create and organize calendars from Musubi and your connected accounts."
+				description="Organize calendars across your accounts."
 				onOpenChange={handleOpenChange}
 				open={open}
 				size="spacious"
@@ -482,15 +473,12 @@ export function CalendarTransferDialog({
 					</div>
 				</section>
 
-				<section className={styles.transferSection}>
-					<div className={styles.sectionHeading}>
-						<div>
-							<SectionLabel level={2}>Move calendars</SectionLabel>
-							<p>Use standard .ics files to take events in or out of Musubi.</p>
-						</div>
-					</div>
-
-					<div className={styles.transferGrid}>
+				<SettingsSection className={styles.transferSection} title="Import & export">
+					<Disclosure
+						detail="Download a calendar as an .ics file."
+						icon={<Download size={18} strokeWidth={1.7} />}
+						label="Export calendar"
+					>
 						<form
 							className={styles.transferCard}
 							onSubmit={(event) => {
@@ -498,13 +486,6 @@ export function CalendarTransferDialog({
 								void handleExport();
 							}}
 						>
-							<div className={styles.cardHeading}>
-								<Download aria-hidden="true" size={18} strokeWidth={1.7} />
-								<div>
-									<h3>Export</h3>
-									<p>Download one calendar and all its events.</p>
-								</div>
-							</div>
 							<Field className={styles.cardField} label="Calendar to export">
 								<Select
 									disabled={Boolean(busy)}
@@ -528,15 +509,13 @@ export function CalendarTransferDialog({
 								Export .ics
 							</Button>
 						</form>
-
+					</Disclosure>
+					<Disclosure
+						detail="Create a calendar from an .ics file."
+						icon={<FileUp size={18} strokeWidth={1.7} />}
+						label="Import calendar"
+					>
 						<form className={styles.transferCard} onSubmit={handleImport}>
-							<div className={styles.cardHeading}>
-								<FileUp aria-hidden="true" size={18} strokeWidth={1.7} />
-								<div>
-									<h3>Import</h3>
-									<p>Create a calendar from an .ics file.</p>
-								</div>
-							</div>
 							<div className={styles.cardFieldGroup}>
 								<span className={styles.cardControlLabel}>Calendar file</span>
 								<label
@@ -593,8 +572,8 @@ export function CalendarTransferDialog({
 								</Button>
 							</div>
 						</form>
-					</div>
-				</section>
+					</Disclosure>
+				</SettingsSection>
 
 				{error ? <ErrorMessage error={error} /> : null}
 			</Dialog>
@@ -698,7 +677,7 @@ function CalendarGroup({
 						<li key={calendar.id}>
 							<Row
 								className={styles.calendarRow}
-								detail={<>{calendarDetail(calendar, external)}{["google", "caldav", "microsoft"].includes(calendar.provider ?? "") && calendar.role === "owner" && !federatedId ? <ProviderOrganizerCreateAction calendarID={calendar.id} color={calendar.color} /> : null}</>}
+								detail={calendarDetail(calendar, external)}
 								icon={
 									<span
 										className={styles.calendarSwatch}
@@ -708,7 +687,7 @@ function CalendarGroup({
 								}
 								label={
 									<span className={styles.calendarName}>
-										<span>{calendar.name}</span>
+										<span title={calendar.name}>{calendar.name}</span>
 										{calendar.isDefault ? (
 											<span className={styles.badge}>Personal</span>
 										) : null}
@@ -789,6 +768,11 @@ function CalendarGroup({
 									</span>
 								}
 							/>
+                            {["google", "caldav", "microsoft"].includes(calendar.provider ?? "") && calendar.role === "owner" && !federatedId ? (
+                              <div className={styles.calendarMeeting}>
+                                <ProviderOrganizerCreateAction calendarID={calendar.id} color={calendar.color} />
+                              </div>
+                            ) : null}
 						</li>
 					);
 				})}

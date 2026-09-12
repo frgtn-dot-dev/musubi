@@ -1544,12 +1544,14 @@ test("exports and imports iCalendar files from calendar management", async ({
 		page.getByRole("heading", { name: "Your calendars" }),
 	).toBeVisible();
 
+	await page.getByText("Export calendar", { exact: true }).click();
 	await chooseSelectOption(page, "Calendar to export", "Studio");
 	const downloadPromise = page.waitForEvent("download");
 	await page.getByRole("button", { name: "Export .ics" }).click();
 	const download = await downloadPromise;
 	expect(download.suggestedFilename()).toBe("Studio.ics");
 
+	await page.getByText("Import calendar", { exact: true }).click();
 	await page.getByLabel("Choose .ics file").setInputFiles({
 		buffer: Buffer.from(
 			"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nSUMMARY:Roadmap\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
@@ -1609,14 +1611,15 @@ test("saves revisioned settings and applies display preferences", async ({
 		has: page.getByRole("heading", { exact: true, name: "Reminders" }),
 	});
 	await expect(
-		remindersSection.getByRole("radiogroup", { name: "Timed events" }),
-	).toBeVisible();
+		remindersSection.getByRole("combobox", { name: "Timed events" }),
+	).toHaveText("10 min");
 	await expect(
-		remindersSection.getByRole("radio", { name: "10 min" }),
-	).toHaveAttribute("aria-checked", "true");
+		remindersSection.getByRole("combobox", { name: "All-day events" }),
+	).toHaveText("Evening before");
+	await chooseSelectOption(page, "Timed events", "30 min");
 	await expect(
-		remindersSection.getByRole("radio", { name: "Evening before" }),
-	).toHaveAttribute("aria-checked", "true");
+		remindersSection.getByRole("combobox", { name: "Timed events" }),
+	).toHaveText("30 min");
 
 	// Settings answers for events in general. What one calendar does is a fact
 	// about that calendar, and is asked there.
@@ -2587,6 +2590,8 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
 		),
 	).toBeLessThanOrEqual(1);
 
+	await calendarDialog.getByText("Export calendar", { exact: true }).click();
+	await calendarDialog.getByText("Import calendar", { exact: true }).click();
 	const exportSelect = calendarDialog.getByRole("combobox", {
 		name: "Calendar to export",
 	});
@@ -2791,7 +2796,7 @@ test("groups calendars by server and connected account", async ({ page }) => {
 		googleGroup.getByText("Google Calendar", { exact: true }),
 	).toBeVisible();
 	await expect(
-		googleGroup.getByText("Managed in Google Calendar", {
+		googleGroup.getByText("Synced with Google Calendar", {
 			exact: true,
 		}),
 	).toHaveCount(2);
@@ -3056,29 +3061,18 @@ test("manages members and invite links for a calendar", async ({ page }) => {
 		name: "How many people",
 	});
 	await expect(expiryInput).toHaveValue("7");
-	await expect(
-		expiryInput.locator("xpath=..").getByText("days", { exact: true }),
-	).toBeVisible();
-	await expiryInput.fill("1");
-	await expect(
-		expiryInput.locator("xpath=..").getByText("day", { exact: true }),
-	).toBeVisible();
+	await expect(sharingDialog.getByText("Expires after (days)")).toBeVisible();
 	await expiryInput.fill("10");
 	await peopleInput.fill("5");
 	const createInviteButton = sharingDialog.getByRole("button", {
 		name: "Create invite link",
 	});
-	const limitsBox = (await peopleInput.boundingBox())!;
-	const createBox = (await createInviteButton.boundingBox())!;
-	const optionsBox = (await createInviteButton
-		.locator("xpath=..")
-		.boundingBox())!;
-	expect(createBox.x - (limitsBox.x + limitsBox.width)).toBeGreaterThanOrEqual(
-		24,
-	);
-	expect(
-		optionsBox.x + optionsBox.width - (createBox.x + createBox.width),
-	).toBeCloseTo(24, 0);
+	const emailInput = sharingDialog.getByRole("textbox", { name: "Email an invitation" });
+	const emailBox = (await emailInput.boundingBox())!;
+	const sendBox = (await sharingDialog.getByRole("button", { name: "Send", exact: true }).boundingBox())!;
+	// Email stays readable and uses the same control height as its action.
+	expect(emailBox.width).toBeGreaterThan(240);
+	expect(Math.abs(emailBox.height - sendBox.height)).toBeLessThanOrEqual(1);
 	await createInviteButton.click();
 	await expect(page.getByRole("textbox", { name: "Invite link" })).toHaveValue(
 		/\/invite\/invite-1$/,
@@ -3094,7 +3088,8 @@ test("manages members and invite links for a calendar", async ({ page }) => {
 	);
 
 	// Remove Sam entirely.
-	await page.getByRole("button", { name: "Remove Sam Rivers" }).click();
+	await page.getByRole("button", { name: "Actions for Sam Rivers" }).click();
+	await page.getByRole("menuitem", { name: "Remove Sam Rivers" }).click();
 	await expect(page.getByText("Sam Rivers", { exact: true })).toHaveCount(0);
 });
 
@@ -3128,8 +3123,9 @@ test("keeps calendar sharing usable as a mobile sheet", async ({ page }) => {
 		sheet.getByRole("radiogroup", { name: "Sam Rivers role" }),
 	).toBeVisible();
 
-	const transfer = sheet.getByRole("button", { name: "Make owner" });
+	const transfer = sheet.getByRole("button", { name: "Actions for Sam Rivers" });
 	await transfer.click();
+	await page.getByRole("menuitem", { name: "Make owner" }).click();
 	const confirmation = page.getByRole("dialog", {
 		name: "Make Sam Rivers the owner?",
 	});
@@ -3174,7 +3170,8 @@ test("transfers calendar ownership", async ({ page }) => {
 	await page.getByRole("button", { name: "Share Studio" }).click();
 	await expect(page.getByText("Sam Rivers", { exact: true })).toBeVisible();
 
-	await page.getByRole("button", { name: "Make owner" }).click();
+	await page.getByRole("button", { name: "Actions for Sam Rivers" }).click();
+	await page.getByRole("menuitem", { name: "Make owner" }).click();
 	const transferDialog = page.getByRole("dialog", {
 		name: "Make Sam Rivers the owner?",
 	});
@@ -3277,7 +3274,8 @@ test("connects and disconnects calendar providers", async ({ page }) => {
 			.getByRole("heading", { name: title })
 			.locator("..")
 			.boundingBox();
-		expect(titleBox!.height).toBeLessThanOrEqual(60);
+		// The account heading includes a full-sized refresh target.
+		expect(titleBox!.height).toBeLessThanOrEqual(80);
 	}
 
 	// Capability-gated add buttons.
@@ -4318,6 +4316,49 @@ test("blocks the phone web app with a full-screen app download", async ({
 	await page.reload();
 	await expect(blocker).toBeVisible();
 });
+
+for (const width of [320, 390]) {
+  for (const theme of ["light", "dark"]) {
+    test(`keeps narrow toolbar date and actions legible at ${width}px ${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+      await mockAuthenticatedReads(page);
+
+      for (const [view, date] of [
+        ["month", "2026-09-23"], ["week", "2026-09-23"],
+        ["day", "2026-09-23"], ["agenda", "2026-09-23"],
+        ["week", "2026-12-30"],
+      ] as const) {
+        await page.goto(`/app/p/${DEFAULT_PAGE_ID}/${view}?date=${date}`);
+        const today = page.getByRole("button", { name: "Today", exact: true });
+        const dateControls = today.locator("..");
+        const period = dateControls.locator("p");
+        const picker = page.getByRole("combobox", { name: "Calendar view" });
+        const search = page.getByRole("button", { name: "Search events and actions" });
+        await expect(today).toBeVisible();
+        await expect(picker).toBeVisible();
+        await expect(search).toBeVisible();
+        // Fractional serif line metrics can round scrollHeight up by one pixel.
+        expect(await period.evaluate(node =>
+          node.scrollWidth <= node.clientWidth && node.scrollHeight <= node.clientHeight + 1,
+        )).toBe(true);
+        const dateBox = (await dateControls.boundingBox())!;
+        const pickerBox = (await picker.boundingBox())!;
+        const searchBox = (await search.boundingBox())!;
+        expect(dateBox.y + dateBox.height).toBeLessThanOrEqual(pickerBox.y);
+        expect(pickerBox.y + pickerBox.height / 2).toBe(searchBox.y + searchBox.height / 2);
+        expect(pickerBox.x).toBeLessThan(searchBox.x);
+      }
+
+      await page.getByRole("button", { name: "Search events and actions" }).click();
+      const searchDialog = page.getByRole("dialog", { name: "Search Musubi" });
+      await expect(searchDialog.getByRole("searchbox")).toBeFocused();
+      await searchDialog.press("Escape");
+      await expect(page.getByRole("button", { name: "Search events and actions" })).toBeFocused();
+      await expectNoAccessibilityViolations(page);
+    });
+  }
+}
 
 test("turns anchored surfaces into sheets on a narrow viewport", async ({
 	page,
@@ -6042,7 +6083,7 @@ test("keeps a previously loaded task list readable offline", async ({
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/tasks?date=2026-07-26`);
 	await expect(
 		page.getByRole("button", {
-			name: "Pack the offline checklist Personal · Due 28/07/2026",
+			name: "Pack the offline checklist Personal · Due 28 Jul 2026, 18:00",
 		}),
 	).toBeVisible();
 	await expect.poll(() => snapshotQueryNames(page)).toContain("tasks");
@@ -6581,6 +6622,34 @@ test("shows an invitation in the browser and joins it", async ({ page }) => {
 		body: { token: INVITE_TOKEN },
 		url: expect.stringContaining("/calendars/members/shared-calendar"),
 	});
+});
+
+test("keeps a long public invitation readable at 320px", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.route("**/api/auth/get-session", route => respond(route, null));
+  const preview = invitePreview();
+  preview.name = "Studio planning and a deliberately long calendar name";
+  preview.members[0]!.name = "AReallyLongUnbrokenDisplayNameToCheckNarrowWrapping";
+  preview.events[0]!.title = "Design review and launch coordination with the entire team";
+  await page.route(`**/api/v1/calendars/tokens/${INVITE_TOKEN}`, route => respond(route, preview));
+  await page.goto(`/invite/${INVITE_TOKEN}`);
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByRole("heading", { name: preview.name })).toBeVisible();
+  const people = page.getByRole("list", { name: "People on this calendar" });
+  const join = page.getByRole("button", { name: "Create an account to join" });
+  for (const target of [people, join]) {
+    const box = (await target.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(320);
+    expect(await target.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+  }
+  const eventTitle = page.getByText(preview.events[0]!.title, { exact: true });
+  const eventBox = (await eventTitle.boundingBox())!;
+  expect(eventBox.x + eventBox.width).toBeLessThanOrEqual(320);
+  expect(await eventTitle.evaluate(node => getComputedStyle(node).textOverflow)).toBe("ellipsis");
+  const name = people.locator("li > span:last-child");
+  expect(await name.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+  await expectNoAccessibilityViolations(page);
 });
 
 test("carries an invitation through sign in", async ({ page }) => {
@@ -7653,7 +7722,7 @@ for (const { provider, width, theme } of [
 		const checkbox = dialog.getByRole("checkbox", { name: /Include Tasks/ });
 		await expect(checkbox).toBeChecked();
 		await expect(dialog).toContainText(
-			"Previously granted access is not revoked.",
+			"Existing permissions stay active.",
 		);
 		const connect = dialog.getByRole("button", {
 			name: provider === "google" ? "Google Calendar" : "Outlook",

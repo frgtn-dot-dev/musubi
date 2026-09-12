@@ -443,7 +443,9 @@ sections, before treating a visual change as complete.
   calendar branding with `providerFlavor(calendar)` so iCloud keeps its identity.
 - `Row layout="responsive-actions"` is for recovery rows with multiple actions.
   It keeps their text readable by placing actions below it on narrow screens.
-  The default Row layout is unchanged. Do not concatenate unspaced buttons.
+  The icon stays beside the copy in the first row. The same contract supports
+  settings controls that need their own line. The default Row layout is unchanged.
+  Do not concatenate unspaced buttons.
 - A Field owns the input surface and forwards label, help and error association
   to DatePicker and TimePicker. Inline calendar pickers retain their own compact
   appearance; feature CSS must not build another generic input skin.
@@ -454,6 +456,19 @@ sections, before treating a visual change as complete.
   management navigation.
 - Color properties use color tokens; geometry uses dimension tokens. The web
   unit pipeline checks this category contract in `css-token-contract.test.ts`.
+- Authentication actions use ordinary Button variants and minimum targets;
+  consumers must not turn a secondary button into a tiny underlined link with
+  descendant CSS. AuthMessage composes InlineError. Empty alerts occupy no space.
+- Nested grids that contain long identity text or a button need explicit
+  `minmax(0, 1fr)` tracks. A page with no horizontal scrollbar can still clip its
+  inner content: inspect the content and action bounds, not only document width.
+- A flex heading with a color dot uses a separate shrinking text slot for
+  ellipsis. The dot and provider mark remain visible; the accessible name stays
+  complete.
+- A Select that saves immediately returns focus after its temporary disabled
+  state ends. It must not reclaim focus if the person moved elsewhere meanwhile.
+- SettingsSection defaults to h3 within a dialog; `headingLevel={2}` is for a
+  section directly below a page h1. Heading level does not change typography.
 
 Regression examples live beside Row, Field, Empty and ProviderIcon. Check the
 actual feature at desktop and constrained widths, light and dark, with long

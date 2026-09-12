@@ -4,6 +4,7 @@ import {
   replaceTaskTime,
   taskDateKey,
   taskTime,
+  taskRecurrenceSummary,
 } from "./TaskList";
 
 describe("task editor date values", () => {
@@ -22,6 +23,18 @@ describe("task editor date values", () => {
 
     expect(taskDateKey(next)).toBe("2026-01-02");
     expect(taskTime(next)).toBe("09:05");
+  });
+});
+
+describe("task recurrence summaries", () => {
+  it("describes known rules without inventing a weekday for an undated task", () => {
+    expect(taskRecurrenceSummary("FREQ=WEEKLY")).toBe("Every week");
+    expect(taskRecurrenceSummary("FREQ=WEEKLY;BYDAY=MO,WE;COUNT=5")).toBe("Every week on Mon, Wed, 5 times");
+  });
+
+  it("does not approximate imported rules or omit their exceptions", () => {
+    expect(taskRecurrenceSummary("FREQ=MONTHLY;BYDAY=2MO")).toBe("Custom recurrence");
+    expect(taskRecurrenceSummary("RRULE:FREQ=DAILY\nEXDATE:20260912T090000Z")).toBe("Custom recurrence");
   });
 });
 
@@ -108,6 +121,20 @@ afterEach(cleanup);
 function emptyTaskProps() {
   return { calendars: fixtureCalendars, tasks: [], createRequest: 0, editableCalendarIds: new Set([fixtureCalendars[0]!.id]), offline: false, onCreateRequestHandled: vi.fn(), onCreate: vi.fn(async input => TaskSchema.parse({ ...input, creatorID: "owner" })), onUpdate: vi.fn(), onRemove: vi.fn(), settings: { timeFormat: "24h" as const, weekStartsOn: "monday" as const } };
 }
+
+it("keeps a folded imported recurrence unchanged when saving another field", async () => {
+  const user = userEvent.setup();
+  const recurrence = "RRULE:FREQ=MONTHLY;BYDAY=2MO\nEXDATE:20260914T090000Z";
+  const task = TaskSchema.parse({ id: "task", creatorID: "owner", calendarID: fixtureCalendars[0]!.id, title: "Plan workshop", recurrence });
+  const props = { ...emptyTaskProps(), tasks: [task], onUpdate: vi.fn(async () => task) };
+  render(<TaskList {...props} />);
+  await user.click(screen.getByRole("button", { name: /Plan workshop/ }));
+  expect(screen.getByText("Custom recurrence")).toBeTruthy();
+  expect(screen.getByRole("textbox", { name: "Recurrence rule" }).closest("details")).toHaveProperty("open", false);
+  await user.type(screen.getByRole("textbox", { name: "Title" }), " together");
+  await user.click(screen.getByRole("button", { name: "Save task" }));
+  expect(props.onUpdate).toHaveBeenCalledWith(task.id, expect.objectContaining({ title: "Plan workshop together", recurrence }));
+});
 
 it("creates the first task through the empty state's existing task editor", async () => {
   const user = userEvent.setup();

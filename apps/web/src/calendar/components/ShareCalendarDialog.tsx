@@ -2,6 +2,7 @@ import { can, type Calendar } from "@musubi/types";
 import {
   Copy,
   Link2,
+  MoreHorizontal,
   Send,
   ShieldCheck,
   Trash2,
@@ -17,8 +18,9 @@ import {
   ConfirmationNotice,
 } from "~/ui/ConfirmationDialog";
 import { Dialog } from "~/ui/Dialog";
-import { Empty } from "~/ui/Empty";
+import { Field } from "~/ui/Field";
 import { InlineError } from "~/ui/InlineError";
+import { Menu, MenuContent, MenuItem, MenuTrigger } from "~/ui/Menu";
 import { Row } from "~/ui/Row";
 import { Segmented } from "~/ui/Segmented";
 import { SectionLabel } from "~/ui/SectionLabel";
@@ -63,6 +65,7 @@ export function ShareCalendarDialog({
     (value) => value === "" || (Number.isInteger(Number(value)) && Number(value) > 0),
   );
   const transferReturnFocusRef = useRef<HTMLButtonElement>(null);
+  const memberActionTriggers = useRef(new Map<string, HTMLButtonElement>());
 
   const open = Boolean(calendar);
   const canManage = can(calendar?.role, "manageMembers");
@@ -188,7 +191,7 @@ export function ShareCalendarDialog({
         bodyClassName={styles.body}
         bodyLayout="flush"
         closeLabel="Close sharing"
-        description="Choose who can view or edit this calendar, and manage links for new members."
+        description="Manage access and invite people to this calendar."
         onOpenChange={handleOpenChange}
         open={open}
         title={`Share ${calendar?.name ?? "calendar"}`}
@@ -259,23 +262,48 @@ export function ShareCalendarDialog({
                                 value={access}
                                 onChange={(role) => void changeRole(member, role)}
                               />
-                              {canTransfer ? (
-                                <Button
-                                  className={styles.transferButton}
-                                  disabled={busy}
-                                  size="compact"
-                                  variant="secondary"
-                                  onClick={(event) => {
-                                    transferReturnFocusRef.current =
-                                      event.currentTarget;
-                                    setError("");
-                                    setTransferMember(member);
-                                  }}
-                                >
-                                  Make owner
-                                </Button>
-                              ) : null}
-                              {removable ? (
+                              {canTransfer && removable ? (
+                                <Menu>
+                                  <MenuTrigger asChild>
+                                    <IconButton
+                                      disabled={busy}
+                                      label={`Actions for ${member.name}`}
+                                      size="compact"
+                                      ref={(button) => {
+                                        if (button) memberActionTriggers.current.set(member.id, button);
+                                        else memberActionTriggers.current.delete(member.id);
+                                      }}
+                                    >
+                                      <MoreHorizontal size={18} strokeWidth={1.7} />
+                                    </IconButton>
+                                  </MenuTrigger>
+                                  <MenuContent
+                                    align="end"
+                                    label={`${member.name} access`}
+                                    onCloseAutoFocus={(event) => {
+                                      if (transferMember) event.preventDefault();
+                                    }}
+                                  >
+                                    <MenuItem
+                                      icon={<ShieldCheck size={16} strokeWidth={1.7} />}
+                                      onSelect={() => {
+                                        transferReturnFocusRef.current = memberActionTriggers.current.get(member.id) ?? null;
+                                        setError("");
+                                        setTransferMember(member);
+                                      }}
+                                    >
+                                      Make owner
+                                    </MenuItem>
+                                    <MenuItem
+                                      icon={<UserRoundMinus size={16} strokeWidth={1.7} />}
+                                      tone="destructive"
+                                      onSelect={() => void removeMember(member)}
+                                    >
+                                      Remove {member.name}
+                                    </MenuItem>
+                                  </MenuContent>
+                                </Menu>
+                              ) : removable ? (
                                 <IconButton
                                   className={styles.removeButton}
                                   disabled={busy}
@@ -283,7 +311,7 @@ export function ShareCalendarDialog({
                                   size="compact"
                                   onClick={() => void removeMember(member)}
                                 >
-                                  <Trash2 size={15} strokeWidth={1.7} />
+                                  <UserRoundMinus size={16} strokeWidth={1.7} />
                                 </IconButton>
                               ) : null}
                             </div>
@@ -321,15 +349,42 @@ export function ShareCalendarDialog({
             >
               <div className={styles.sectionHeading}>
                 <SectionLabel id="sharing-invites-title">
-                  Invite links
+                  Invite people
                 </SectionLabel>
               </div>
 
-              {/* Empty means no limit; positive whole numbers are sent as-is. */}
               <div className={styles.inviteOptions}>
-                <label className={styles.inviteLimit}>
-                  <span>Expires after</span>
-                  <span className={styles.inviteNumber}>
+                <form
+                  className={styles.emailInvite}
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (validLimits && !busy) void emailInvite();
+                  }}
+                >
+                  <Field label="Invite by email">
+                    <input
+                      aria-label="Email an invitation"
+                      autoComplete="email"
+                      disabled={busy}
+                      placeholder="name@example.com"
+                      required
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(event) => setInviteEmail(event.target.value)}
+                    />
+                  </Field>
+                  <Button
+                    disabled={!validLimits || !inviteEmail.trim()}
+                    icon={<Send size={16} strokeWidth={1.7} />}
+                    loading={busy}
+                    type="submit"
+                  >
+                    Send
+                  </Button>
+                </form>
+                {/* Empty means no limit; positive whole numbers are sent as-is. */}
+                <div className={styles.inviteLimits}>
+                  <Field label="Expires after (days)">
                     <input
                       aria-label="Expires after days"
                       disabled={busy}
@@ -341,56 +396,27 @@ export function ShareCalendarDialog({
                       value={expiresInDays}
                       onChange={(event) => setExpiresInDays(event.target.value)}
                     />
-                    {expiresInDays ? (
-                      <span aria-hidden="true">
-                        {expiresInDays === "1" ? "day" : "days"}
-                      </span>
-                    ) : null}
-                  </span>
-                </label>
-                <label className={styles.inviteLimit}>
-                  <span>People limit</span>
-                  <input
-                    aria-label="How many people"
-                    disabled={busy}
-                    inputMode="numeric"
-                    min="1"
-                    placeholder="No limit"
-                    step="1"
-                    type="number"
-                    value={maxUses}
-                    onChange={(event) => setMaxUses(event.target.value)}
-                  />
-                </label>
-                <label className={styles.inviteLimit}>
-                  <span>Invite by email</span>
-                  <input
-                    aria-label="Email an invitation"
-                    disabled={busy}
-                    placeholder="name@example.com"
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(event) => setInviteEmail(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") void emailInvite();
-                    }}
-                  />
-                </label>
-                <Button
-                  disabled={!validLimits || !inviteEmail.trim()}
-                  icon={<Send size={16} strokeWidth={1.7} />}
-                  loading={busy}
-                  size="compact"
-                  onClick={() => void emailInvite()}
-                >
-                  Send
-                </Button>
+                  </Field>
+                  <Field label="People limit">
+                    <input
+                      aria-label="How many people"
+                      disabled={busy}
+                      inputMode="numeric"
+                      min="1"
+                      placeholder="No limit"
+                      step="1"
+                      type="number"
+                      value={maxUses}
+                      onChange={(event) => setMaxUses(event.target.value)}
+                    />
+                  </Field>
+                </div>
                 <Button
                   className={styles.createInviteButton}
                   disabled={!validLimits}
                   icon={<Link2 size={16} strokeWidth={1.7} />}
                   loading={busy}
-                  size="compact"
+                  variant="secondary"
                   onClick={() => void createInvite()}
                 >
                   Create invite link
@@ -441,11 +467,10 @@ export function ShareCalendarDialog({
                   ))}
                 </ul>
               ) : (
-                <Empty
-                  className={styles.empty}
-                  description="Create a link when you want to invite someone without entering their details."
+                <Row
+                  className={styles.emptyLinks}
                   icon={<Link2 size={18} strokeWidth={1.7} />}
-                  title="No active invite links"
+                  label="No active invite links"
                 />
               )}
             </section>

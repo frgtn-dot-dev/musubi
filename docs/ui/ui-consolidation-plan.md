@@ -4,6 +4,12 @@
   `RowGroup` still has one consumer, and the `Dialog` size rule only applies to
   whoever adds the next variant.**
 - Scope: `apps/web`
+- Follow-up, 2026-09-12: the comprehensive screen refinement reused this system
+  for management, settings, accounts, tasks, search and public routes. The earlier
+  P1.3 conclusion below is historical: PR #285 introduced a real Field/DatePicker/
+  TimePicker consumer in the task editor and completed that missing contract.
+  Current composition rules, including responsive row actions and async Select
+  focus return, live in `design-system.md` section 11.
 - Previous restructure:
   [`ui-restructure-handoff.md`](./ui-restructure-handoff.md) is complete; do not
   reopen it as a redesign.

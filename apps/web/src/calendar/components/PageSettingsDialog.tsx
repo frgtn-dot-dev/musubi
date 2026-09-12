@@ -8,7 +8,6 @@ import type {
 import { AlertTriangle, Check, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "~/ui/Button";
-import { Checkbox } from "~/ui/Checkbox";
 import {
   ConfirmationDialog,
   ConfirmationNotice,
@@ -16,8 +15,8 @@ import {
 import { Dialog } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
 import { InlineError } from "~/ui/InlineError";
-import { Row } from "~/ui/Row";
-import { SectionLabel } from "~/ui/SectionLabel";
+import { Row, RowToggle } from "~/ui/Row";
+import { SettingsSection } from "~/ui/SettingsSection";
 import { Select } from "~/ui/Select";
 import type { Notify } from "../notice";
 import {
@@ -292,6 +291,13 @@ export function PageSettingsDialog({
                 </Button>
               ) : null}
               <Button
+                disabled={busy}
+                onClick={() => requestClose(false)}
+                variant="secondary"
+              >
+                Cancel
+              </Button>
+              <Button
                 disabled={!canSave}
                 form="page-settings-form"
                 loading={busy}
@@ -326,158 +332,139 @@ export function PageSettingsDialog({
             </div>
           ) : null}
 
-          <Field label="Page name" variant="section">
-            <input
+          <div className={styles.identityFields}>
+            <Field label="Page name">
+              <input
+                disabled={busy}
+                maxLength={80}
+                ref={nameRef}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </Field>
+
+            <IconField
               disabled={busy}
-              maxLength={80}
-              ref={nameRef}
-              value={name}
-              onChange={(event) => setName(event.target.value)}
+              name="page-settings-icon"
+              value={icon}
+              onChange={setIcon}
             />
-          </Field>
+          </div>
 
-          <IconField
-            disabled={busy}
-            name="page-settings-icon"
-            value={icon}
-            onChange={setIcon}
-          />
+          <SettingsSection title="General">
+            <Row
+              label="Default page"
+              detail="Open this page when Musubi starts"
+              layout="responsive-actions"
+              trailing={
+                isDefault ? (
+                  <span className={styles.defaultStatus}>
+                    <Check aria-hidden="true" size={14} strokeWidth={1.8} />
+                    Default
+                  </span>
+                ) : (
+                  <Button
+                    disabled={busy}
+                    loading={settingDefault}
+                    size="compact"
+                    variant="secondary"
+                    onClick={() => void setAsDefault()}
+                  >
+                    Set as default
+                  </Button>
+                )
+              }
+            />
+          </SettingsSection>
 
-          <section className={styles.section}>
-            <SectionLabel className={styles.sectionHeading} level={3}>
-              General
-            </SectionLabel>
-            <div className={styles.sectionRows}>
+          <SettingsSection title="Presentation">
+            {"density" in view ? (
               <Row
-                label="Default page"
-                detail="Opened when a link does not name one"
+                label="Row height"
+                detail="Hour spacing in the calendar grid"
+                layout="responsive-actions"
                 trailing={
-                  isDefault ? (
-                    <span className={styles.defaultStatus}>
-                      <Check aria-hidden="true" size={14} strokeWidth={1.8} />
-                      Default
-                    </span>
-                  ) : (
-                    <Button
-                      disabled={busy}
-                      loading={settingDefault}
-                      size="compact"
-                      variant="secondary"
-                      onClick={() => void setAsDefault()}
-                    >
-                      Set as default
-                    </Button>
+                  <Select
+                    disabled={busy}
+                    label="Row height"
+                    options={DENSITY_OPTIONS}
+                    size="compact"
+                    value={view.density}
+                    onChange={(value) =>
+                      setView((current) =>
+                        "density" in current
+                          ? { ...current, density: value as Density }
+                          : current,
+                      )
+                    }
+                  />
+                }
+              />
+            ) : null}
+            {"weeks" in view ? (
+              <Row
+                label="Weeks shown"
+                layout="responsive-actions"
+                trailing={
+                  <Select
+                    disabled={busy}
+                    label="Weeks shown"
+                    options={WEEKS_OPTIONS}
+                    size="compact"
+                    value={String(view.weeks)}
+                    onChange={(value) =>
+                      setView((current) =>
+                        "weeks" in current
+                          ? { ...current, weeks: Number(value) }
+                          : current,
+                      )
+                    }
+                  />
+                }
+              />
+            ) : null}
+            {"weekend" in view ? (
+              <RowToggle
+                checked={view.weekend}
+                detail="Show Saturday and Sunday"
+                disabled={busy}
+                label="Weekend"
+                onCheckedChange={(weekend) =>
+                  setView((current) =>
+                    "weekend" in current ? { ...current, weekend } : current,
                   )
                 }
               />
-            </div>
-          </section>
+            ) : null}
+            {"showAdjacentDays" in view ? (
+              <RowToggle
+                checked={view.showAdjacentDays}
+                detail="Show days from the previous and next months"
+                disabled={busy}
+                label="Nearby months"
+                onCheckedChange={(showAdjacentDays) =>
+                  setView((current) =>
+                    "showAdjacentDays" in current
+                      ? { ...current, showAdjacentDays }
+                      : current,
+                  )
+                }
+              />
+            ) : null}
+          </SettingsSection>
 
-          <section className={styles.section}>
-            <SectionLabel className={styles.sectionHeading} level={3}>
-              Presentation
-            </SectionLabel>
-            <div className={styles.sectionRows}>
-              {"density" in view ? (
-                <Row
-                  label="Row height"
-                  detail="How tall an hour is in the day and week grids"
-                  trailing={
-                    <Select
-                      disabled={busy}
-                      label="Row height"
-                      options={DENSITY_OPTIONS}
-                      size="compact"
-                      value={view.density}
-                      onChange={(value) =>
-                        setView((current) =>
-                          "density" in current
-                            ? { ...current, density: value as Density }
-                            : current,
-                        )
-                      }
-                    />
-                  }
-                />
-              ) : null}
-              {"weeks" in view ? (
-                <Row
-                  label="Weeks shown"
-                  detail="How far ahead this page looks, in whole weeks"
-                  trailing={
-                    <Select
-                      disabled={busy}
-                      label="Weeks shown"
-                      options={WEEKS_OPTIONS}
-                      size="compact"
-                      value={String(view.weeks)}
-                      onChange={(value) =>
-                        setView((current) =>
-                          "weeks" in current
-                            ? { ...current, weeks: Number(value) }
-                            : current,
-                        )
-                      }
-                    />
-                  }
-                />
-              ) : null}
-              {"weekend" in view ? (
-                <Row
-                  label="Weekend"
-                  detail="Show Saturday and Sunday columns"
-                  trailing={
-                    <Checkbox
-                      checked={view.weekend}
-                      disabled={busy}
-                      label="Weekend"
-                      labelHidden
-                      onChange={(event) =>
-                        setView((current) =>
-                          "weekend" in current
-                            ? { ...current, weekend: event.target.checked }
-                            : current,
-                        )
-                      }
-                    />
-                  }
-                />
-              ) : null}
-              {"showAdjacentDays" in view ? (
-                <Row
-                  label="Nearby months"
-                  detail="Fill the month grid with neighbouring days"
-                  trailing={
-                    <Checkbox
-                      checked={view.showAdjacentDays}
-                      disabled={busy}
-                      label="Nearby months"
-                      labelHidden
-                      onChange={(event) =>
-                        setView((current) =>
-                          "showAdjacentDays" in current
-                            ? {
-                                ...current,
-                                showAdjacentDays: event.target.checked,
-                              }
-                            : current,
-                        )
-                      }
-                    />
-                  }
-                />
-              ) : null}
-            </div>
-          </section>
-
-          <section className={styles.section}>
-            <SectionLabel className={styles.sectionHeading} level={3}>
-              Filters
-            </SectionLabel>
+          <SettingsSection
+            title="Filters"
+            description={`${visibleCalendarIds.length} of ${calendars.length} calendars shown on this page`}
+          >
             {/* Calendar visibility belongs to the Page, so it is configured here
               with its other saved presentation choices instead of in the
               calendar toolbar. */}
-            <div className={styles.pillGrid}>
+            <fieldset
+              aria-label="Calendars shown on this page"
+              className={styles.pillGrid}
+              disabled={busy}
+            >
               {calendars.map((calendar) => (
                 <CalendarVisibilityPill
                   calendar={calendar}
@@ -490,13 +477,16 @@ export function PageSettingsDialog({
                   }
                 />
               ))}
-            </div>
-          </section>
+              {calendars.length === 0 ? (
+                <p className={styles.emptyCalendars}>
+                  No calendars available yet.
+                </p>
+              ) : null}
+            </fieldset>
+          </SettingsSection>
 
           {error ? (
-            <p className={styles.error} role="alert">
-              {error}
-            </p>
+            <InlineError className={styles.error}>{error}</InlineError>
           ) : null}
         </form>
       </Dialog>
@@ -644,6 +634,13 @@ export function NewPageDialog({
       footer={
         <>
           <Button
+            disabled={busy}
+            onClick={() => onOpenChange(false)}
+            variant="secondary"
+          >
+            Cancel
+          </Button>
+          <Button
             disabled={!trimmedName || busy}
             form="new-page-form"
             loading={busy}
@@ -664,22 +661,24 @@ export function NewPageDialog({
         id="new-page-form"
         onSubmit={(event) => void submit(event)}
       >
-        <Field label="Page name" variant="section">
-          <input
+        <div className={styles.identityFields}>
+          <Field label="Page name">
+            <input
+              disabled={busy}
+              maxLength={80}
+              placeholder="Work, Family, Training…"
+              ref={nameRef}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </Field>
+          <IconField
             disabled={busy}
-            maxLength={80}
-            placeholder="Work, Family, Training…"
-            ref={nameRef}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
+            name="new-page-icon"
+            value={icon}
+            onChange={setIcon}
           />
-        </Field>
-        <IconField
-          disabled={busy}
-          name="new-page-icon"
-          value={icon}
-          onChange={setIcon}
-        />
+        </div>
         {error ? (
           <p className={styles.error} role="alert">
             {error}

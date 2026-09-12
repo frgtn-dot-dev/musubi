@@ -36,16 +36,6 @@
 	color: var(--text-muted);
 }
 
-.searchBox kbd {
-	padding: 2px 7px;
-	border: 1px solid var(--border-subtle);
-	border-radius: var(--radius-sm);
-	background: var(--surface-canvas);
-	color: var(--text-secondary);
-	font-family: var(--font-mono);
-	font-size: var(--text-11);
-}
-
 .results {
 	display: grid;
 	max-height: min(420px, 52vh);
@@ -65,7 +55,7 @@
 
 .result {
 	display: grid;
-	min-height: 44px;
+	min-height: var(--control-height);
 	grid-template-columns: auto minmax(0, 1fr) auto;
 	align-items: center;
 	gap: var(--space-2);
@@ -96,6 +86,18 @@
 
 .result small {
 	font-size: var(--text-11);
+}
+
+.eventCopy {
+	display: grid;
+	min-width: 0;
+	gap: var(--space-1);
+	overflow-wrap: anywhere;
+}
+
+.eventCopy small {
+	font-size: var(--text-12);
+	line-height: 1.4;
 }
 
 .empty,

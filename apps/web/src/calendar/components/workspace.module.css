@@ -505,11 +505,12 @@
    of choices, so the pill itself carries the state. */
 .filterPill {
 	display: inline-flex;
-	min-height: var(--filter-pill-height, 32px);
+	min-height: var(--compact-control-height);
+	max-width: 100%;
 	flex: none;
 	align-items: center;
-	gap: 7px;
-	padding: 0 var(--space-3);
+	gap: var(--space-2);
+	padding: var(--space-2) var(--space-3);
 	border: 1px solid var(--border-subtle);
 	border-radius: var(--radius-pill);
 	background: transparent;
@@ -518,10 +519,21 @@
 	color: var(--text-secondary);
 	font: inherit;
 	font-size: var(--text-11);
+	text-align: left;
 	cursor: pointer;
 }
 
-.filterPill:hover:not([aria-pressed="true"]) {
+.filterPillLabel {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.filterPill:disabled {
+	cursor: not-allowed;
+	opacity: 0.5;
+}
+
+.filterPill:hover:not(:disabled):not([aria-pressed="true"]) {
 	border-color: var(--border-medium);
 	color: var(--text-primary);
 }
@@ -532,7 +544,7 @@
 	color: var(--text-primary);
 }
 
-.filterPill[aria-pressed="true"]:hover {
+.filterPill[aria-pressed="true"]:hover:not(:disabled) {
 	border-color: var(--border-strong);
 }
 
@@ -2018,7 +2030,22 @@
 
 @media (max-width: 599px) {
 	.toolbarControls {
-		gap: 8px;
+		gap: var(--space-2) var(--space-3);
+	}
+
+	/* Keep the full period on its own line. View and actions then share one
+     aligned row, instead of Search creating an orphan row below the date. */
+	.dateControls {
+		grid-column: 1 / -1;
+	}
+
+	/* Long month names fit at the narrowest width; a week crossing New Year
+     keeps both dates and years by balancing over two lines when needed. */
+	.monthTitle {
+		font-size: var(--text-22);
+		overflow: visible;
+		white-space: normal;
+		text-wrap: balance;
 	}
 
 	/* A phone has no width to spend on a title over a wrapped block of pills. The
@@ -2037,10 +2064,9 @@
 		min-width: 100%;
 	}
 
-	/* One row of chrome: the view picker sits beside the date rather than taking a
-     band of its own under it. */
+	/* Persistent choices lead the action row; Search and availability end it. */
 	.viewSelect {
-		justify-self: end;
+		justify-self: start;
 	}
 
 	/* The create button floats over the bottom-right corner, which is a real cell

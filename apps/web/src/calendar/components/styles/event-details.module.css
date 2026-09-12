@@ -333,7 +333,7 @@
    column width — colour alone says the next press cannot be taken back. A left
    margin only shrank this one button out of alignment with its neighbours. */
 .deleteAction {
-  color: var(--accent-primary);
+	color: color-mix(in srgb, var(--accent-primary) 72%, var(--text-primary));
 }
 
 .deleteAction:hover:not(:disabled) {
@@ -347,7 +347,7 @@
     var(--accent-primary) 8%,
     var(--surface-raised)
   );
-  color: var(--accent-primary);
+  color: color-mix(in srgb, var(--accent-primary) 72%, var(--text-primary));
 }
 
 .viewOnly {

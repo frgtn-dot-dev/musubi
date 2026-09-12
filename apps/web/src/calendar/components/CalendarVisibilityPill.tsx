@@ -28,7 +28,7 @@ export function CalendarVisibilityPill({
       onClick={() => onVisibleChange(!visible)}
     >
       <span aria-hidden="true" className={styles.filterPillDot} />
-      {calendar.name}
+      <span className={styles.filterPillLabel}>{calendar.name}</span>
     </button>
   );
 }

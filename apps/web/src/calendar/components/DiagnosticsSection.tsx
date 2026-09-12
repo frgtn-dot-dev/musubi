@@ -104,6 +104,7 @@ export function DiagnosticsSection({
   /** Re-check on demand, which is the one path that has to raise the flag. */
   const rerun = () => {
     setRunning(true);
+    setCopied(false);
     void collect();
   };
 
@@ -127,9 +128,11 @@ export function DiagnosticsSection({
           }
           icon={running ? undefined : <StatusIcon status={overall} />}
           label="System status"
+          layout="responsive-actions"
           trailing={
             <Button
-              disabled={running}
+              disabled={running || action.busy}
+              loading={running}
               onClick={rerun}
               size="compact"
               variant="secondary"
@@ -139,23 +142,15 @@ export function DiagnosticsSection({
           }
         />
 
-        {checks.map((check) => (
-          <Row
-            detail={check.detail}
-            icon={<StatusIcon status={check.status} />}
-            key={check.id}
-            label={check.label}
-          />
-        ))}
-
-        {action.error ? <InlineError>{action.error}</InlineError> : null}
-
         <Row
           detail="Confirm that this browser can show reminder notifications"
           label="Test notification"
+          layout="responsive-actions"
           trailing={
             <Button
-              disabled={action.busy}
+              disabled={
+                action.busy || running || typeof Notification === "undefined"
+              }
               onClick={() =>
                 act(
                   "The test notification could not be shown.",
@@ -165,11 +160,27 @@ export function DiagnosticsSection({
               size="compact"
               variant="secondary"
             >
-              Show
+              Show notification
             </Button>
           }
         />
+        {action.error ? (
+          <InlineError className={styles.error}>{action.error}</InlineError>
+        ) : null}
       </SettingsSection>
+
+      {checks.length > 0 ? (
+        <SettingsSection title="Checks">
+          {checks.map((check) => (
+            <Row
+              detail={check.detail}
+              icon={<StatusIcon status={check.status} />}
+              key={check.id}
+              label={check.label}
+            />
+          ))}
+        </SettingsSection>
+      ) : null}
 
       {/* Its own group: the evidence is a different kind of thing from the
           verdicts above it, and the checks read as one list only while nothing

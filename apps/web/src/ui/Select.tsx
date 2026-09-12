@@ -4,6 +4,7 @@ import {
 	type ButtonHTMLAttributes,
 	type KeyboardEvent,
 	type ReactNode,
+	useEffect,
 	useId,
 	useRef,
 	useState,
@@ -61,6 +62,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
 	) {
 		const generatedId = useId();
 		const triggerRef = useRef<HTMLButtonElement | null>(null);
+		const returnFocusAfterChoice = useRef(false);
 		const optionRefs = useRef(new Map<string, HTMLButtonElement>());
 		const typeahead = useRef({ at: 0, query: "" });
 		const [open, setOpen] = useState(false);
@@ -73,6 +75,33 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
 				: enabledOptions[0]?.value) ?? "";
 		const listboxId = `${generatedId}-listbox`;
 		const titleId = `${generatedId}-title`;
+
+		// Saving a preference may disable its trigger before the list closes.
+		// Keep that focus destination until saving ends, unless the person has
+		// already moved to another control or the select has been removed.
+		useEffect(() => {
+			if (open || !returnFocusAfterChoice.current) return;
+			const trigger = triggerRef.current;
+			if (!trigger) return;
+			const doc = trigger.ownerDocument;
+			const cancelIfMoved = (event: FocusEvent) => {
+				if (event.target !== doc.body && event.target !== trigger) {
+					returnFocusAfterChoice.current = false;
+				}
+			};
+			doc.addEventListener("focusin", cancelIfMoved);
+			const frame = requestAnimationFrame(() => {
+				if (trigger.disabled || !returnFocusAfterChoice.current) return;
+				returnFocusAfterChoice.current = false;
+				if (doc.activeElement === doc.body || doc.activeElement === trigger) {
+					trigger.focus();
+				}
+			});
+			return () => {
+				cancelAnimationFrame(frame);
+				doc.removeEventListener("focusin", cancelIfMoved);
+			};
+		}, [disabled, open]);
 
 		function setTriggerRef(node: HTMLButtonElement | null) {
 			triggerRef.current = node;
@@ -97,10 +126,10 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
 		function choose(nextValue: string) {
 			const option = options.find((item) => item.value === nextValue);
 			if (!option || option.disabled) return;
+			returnFocusAfterChoice.current = true;
 			onChange(nextValue);
 			setActiveValue(nextValue);
 			setOpen(false);
-			requestAnimationFrame(() => triggerRef.current?.focus());
 		}
 
 		function moveActive(key: "ArrowDown" | "ArrowUp" | "End" | "Home") {
