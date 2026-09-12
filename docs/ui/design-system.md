@@ -225,9 +225,10 @@ that shared primitive owns their portal, collision gutter, surface, arrow,
 motion, and narrow bottom-sheet geometry. Consumers retain their role, focus
 policy, keyboard model, dimensions, and content anatomy. `Select`,
 `DatePicker`, `TimePicker`, and `ColorPicker` use this contract without being
-forced into one selection behavior. Quick Create, event details, and Month
-overflow use the same physical shell while keeping their feature-owned drag,
-focus, and event-bubbling policies. Menus use their own command-navigation
+forced into one selection behavior. Month overflow keeps the anchored shell;
+event creation and details use the shared Inspector, which reserves space beside
+the desktop calendar and becomes modal on narrow screens. Features retain their
+focus, draft, and event-bubbling policies. Menus use their own command-navigation
 contract rather than turning `Popover` into a universal interaction component.
 
 `Menu` is that non-modal command-navigation contract. Radix Dropdown Menu owns

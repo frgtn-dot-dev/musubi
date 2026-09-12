@@ -348,7 +348,7 @@
 	font-weight: 500;
 }
 
-.calendarGroupHeading strong > span:last-child {
+.calendarGroupTitle {
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;

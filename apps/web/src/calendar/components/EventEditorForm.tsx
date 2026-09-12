@@ -679,7 +679,10 @@ export function EventEditorForm({
 									<div className={styles.calendarGroupHeading}>
 										<strong>
 											<AccountMark size="compact" flavor={group.flavor} />
-											<span className={group.key === "musubi" ? styles.visuallyHidden : undefined}>{group.title}</span>
+											<span className={group.key === "musubi" ? styles.visuallyHidden : styles.calendarGroupTitle}>{group.title}</span>
+											{group.flavor && group.title !== group.detail ? (
+												<span className={styles.visuallyHidden}> · {group.detail}</span>
+											) : null}
 										</strong>
 									</div>
 								) : null}
