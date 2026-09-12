@@ -131,6 +131,8 @@ type EventEditorFormProps = {
 	onCancel: () => void;
 	onError: (error: unknown, values: EventFormValues) => FormError;
 	onSubmit: (values: EventFormValues) => Promise<void>;
+	/** A remounting shell may keep write state above the form. */
+	submissionState?: { saving: boolean; error?: FormError };
 	submitLabel: string;
 	submitRef?: RefCallback<HTMLButtonElement>;
 	timeFormat: Settings["timeFormat"];
@@ -150,6 +152,7 @@ export function EventEditorForm({
 	onExpand,
 	onError,
 	onSubmit,
+	submissionState,
 	submitLabel,
 	submitRef,
 	timeFormat,
@@ -178,8 +181,10 @@ export function EventEditorForm({
 		setSyncedWhen(whenSignature);
 		setValues((current) => ({ ...current, ...when, invalidatedExactEndpoints: undefined }));
 	}
-	const [error, setError] = useState<FormError>();
-	const [saving, setSaving] = useState(false);
+	const [localError, setError] = useState<FormError>();
+	const [localSaving, setSaving] = useState(false);
+	const saving = submissionState?.saving ?? localSaving;
+	const error = submissionState?.error ?? localError;
 	const selectedCalendar = calendars.find(
 		(calendar) => calendar.id === values.calendarId,
 	);
@@ -319,8 +324,8 @@ export function EventEditorForm({
 	function changeTimeModel(next: Partial<EventFormValues>) {
 		patch({
 			...next,
-			...(panel && next.isAllDay && values.endDate <= values.date
-				? { endDate: shiftDayKey(values.date, 1) }
+			...(panel && next.isAllDay && values.endDate < values.date
+				? { endDate: values.date }
 				: {}),
 		});
 	}
@@ -465,6 +470,8 @@ export function EventEditorForm({
 						</Body>
 					</div>
 				) : null}
+				{/* The panel displays an exclusive all-day end; drafts and writes keep
+				    Musubi's inclusive last date, just like grid selections. */}
 				<div className={styles.pickerRow}>
 					<CalendarDays aria-hidden="true" size={17} strokeWidth={1.5} />
 					<span aria-hidden="true" className={styles.pickerLabel}>
@@ -475,9 +482,9 @@ export function EventEditorForm({
 						disabled={saving}
 						label="Ends"
 						min={panel && values.isAllDay ? shiftDayKey(values.date, 1) : values.date}
-						value={values.endDate}
+						value={panel && values.isAllDay ? shiftDayKey(values.endDate, 1) : values.endDate}
 						weekStartsOn={weekStartsOn}
-						onChange={(endDate) => patch({ endDate })}
+						onChange={(endDate) => patch({ endDate: panel && values.isAllDay ? shiftDayKey(endDate, -1) : endDate })}
 					/>
 				</div>
 
@@ -670,8 +677,10 @@ export function EventEditorForm({
 							<div className={styles.calendarGroup} key={group.key}>
 								{calendarGroups.length > 1 ? (
 									<div className={styles.calendarGroupHeading}>
-										<strong><AccountMark size="compact" flavor={group.flavor} />{group.title}</strong>
-										<span>{group.detail}</span>
+										<strong>
+											<AccountMark size="compact" flavor={group.flavor} />
+											<span className={group.key === "musubi" ? styles.visuallyHidden : undefined}>{group.title}</span>
+										</strong>
 									</div>
 								) : null}
 								<ul>
@@ -685,7 +694,7 @@ export function EventEditorForm({
 											saving || calendarLocked || !can(calendar.role, "editEvents");
 										const detail = !compatible
 											? "Choose as home to switch Musubi server"
-											: calendarSourceDetail(calendar);
+											: calendarGroups.length > 1 && calendar.provider ? null : calendarSourceDetail(calendar);
 
 										return (
 											<li className={styles.calendarPlacementRow} key={calendar.id}>
@@ -706,10 +715,9 @@ export function EventEditorForm({
 													<span aria-hidden="true" className={styles.calendarMembershipBox}>
 														{checked ? <Check size={12} strokeWidth={2.2} /> : null}
 													</span>
-													<AccountMark size="compact" flavor={providerFlavor(calendar)} />
 													<span className={styles.calendarPlacementCopy}>
 														<strong><CalendarDot color={calendar.color} /><span className={styles.calendarName}>{calendar.name}</span></strong>
-														<span>{detail}</span>
+														{detail ? <span>{detail}</span> : null}
 													</span>
 												</label>
 

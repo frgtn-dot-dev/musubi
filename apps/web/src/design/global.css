@@ -1,5 +1,11 @@
 * {
  box-sizing: border-box;
+ /* App surfaces retain native scrolling without visible scrollbar chrome. */
+ scrollbar-width: none;
+}
+
+*::-webkit-scrollbar {
+ display: none;
 }
 
 /* Check verdicts. Colour never carries a verdict alone; the icon's shape does. */

@@ -953,7 +953,7 @@ describe("Workspace", () => {
     expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
   });
 
-  it("reveals the rest of the create form in place when there is no editor page", async () => {
+  it("shows the full create form in the panel without an editor page", async () => {
     const user = userEvent.setup();
 
     render(<Workspace {...commonProps} />);
@@ -966,13 +966,6 @@ describe("Workspace", () => {
       screen.getByRole("textbox", { name: "Event title" }),
       "Studio time",
     );
-    // Quick create carries only the essentials.
-    expect(screen.queryByPlaceholderText("Add location")).toBeNull();
-
-    // Without an editor page wired in, the disclosure expands here — and the
-    // draft is the same form state, so what was typed stays.
-    await user.click(screen.getByRole("button", { name: "More options" }));
-
     expect(screen.getByPlaceholderText("Add location")).not.toBeNull();
     expect(
       (screen.getByRole("textbox", { name: "Event title" }) as HTMLInputElement)

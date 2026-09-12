@@ -304,6 +304,7 @@
 
 .calendarPlacement {
 	display: grid;
+	gap: var(--space-3);
 	margin: 0;
 	padding: 0;
 	border: 0;
@@ -314,7 +315,7 @@
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) 54px;
 	gap: var(--space-2);
-	padding: var(--space-2) var(--space-4) 5px;
+	padding: var(--space-2) var(--space-3) 0;
 	color: var(--text-secondary);
 	font-size: var(--text-10);
 	font-weight: 500;
@@ -326,23 +327,32 @@
 	text-align: center;
 }
 
+.calendarGroup {
+	min-width: 0;
+	align-self: start;
+	overflow: hidden;
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-md);
+	background: var(--surface-raised);
+}
+
 .calendarGroupHeading {
-	display: grid;
-	gap: 2px;
-	padding: var(--space-2) var(--space-4);
-	border-top: 1px solid var(--border-subtle);
-	background: color-mix(in srgb, var(--surface-raised) 42%, transparent);
+	padding: var(--space-2) var(--space-3);
+	border-bottom: 1px solid var(--border-subtle);
 }
 
 .calendarGroupHeading strong {
+	min-width: 0;
 	color: var(--text-secondary);
 	font-size: var(--text-11);
 	font-weight: 500;
 }
 
-.calendarGroupHeading span {
-	color: var(--text-muted);
-	font-size: var(--text-10);
+.calendarGroupHeading strong > span:last-child {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .calendarGroup ul {
@@ -358,23 +368,27 @@
 	grid-template-columns: minmax(0, 1fr) 54px;
 	align-items: stretch;
 	box-sizing: border-box;
-	padding-right: var(--space-4);
+	padding-right: var(--space-3);
 	border-bottom: 1px solid var(--border-subtle);
+}
+
+.calendarPlacementRow:last-child {
+	border-bottom: 0;
 }
 
 .calendarMembership {
 	position: relative;
 	display: grid;
 	min-width: 0;
-	grid-template-columns: 18px 20px minmax(0, 1fr);
+	grid-template-columns: 18px minmax(0, 1fr);
 	align-items: center;
 	gap: var(--space-3);
-	padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+	padding: var(--space-2) var(--space-3);
 	cursor: pointer;
 }
 
 .calendarMembership:hover:not([data-disabled]) {
-	background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
+	background: var(--surface-panel);
 }
 
 .calendarMembership[data-disabled] {
@@ -551,7 +565,6 @@
 	max-height: min(280px, 40dvh);
 	overflow-y: auto;
 	overscroll-behavior: contain;
-	scrollbar-width: thin;
 }
 
 .form[data-compact] .calendarPlacementHeader {
@@ -936,14 +949,8 @@
 }
 
 .form[data-layout="panel"] .calendarMembership {
-	grid-template-columns: 18px var(--editor-icon-column) minmax(0, 1fr);
+	grid-template-columns: 18px minmax(0, 1fr);
 	gap: var(--space-2);
-	padding-left: 0;
-}
-
-.form[data-layout="panel"] .calendarPlacementHeader,
-.form[data-layout="panel"] .calendarGroupHeading {
-	padding-inline: 0;
 }
 
 .calendarGroupHeading strong,
@@ -951,10 +958,6 @@
 	display: flex;
 	align-items: center;
 	gap: var(--space-2);
-}
-
-.form[data-layout="panel"] .calendarPlacementRow {
-	padding-right: 0;
 }
 
 .form[data-layout="panel"] .timeSettings {
@@ -982,10 +985,6 @@
 	margin-right: auto;
 }
 
-.form[data-layout="panel"] .calendarGroupHeading > span {
-	padding-left: var(--editor-text-inset);
-}
-
 .form[data-layout="panel"] .settingsHeading .sectionLabel {
 	margin: 0;
 }
@@ -993,7 +992,7 @@
 /* The wide workspace keeps its grid; smaller editors scroll only their body,
    so the create/cancel controls do not disappear below a long form. */
 .form[data-layout="page"] .formBody { display: contents; }
-.form[data-layout="page"] .calendarMembership { grid-template-columns: 18px 20px minmax(0, 1fr); gap: var(--space-2); }
+.form[data-layout="page"] .calendarMembership { grid-template-columns: 18px minmax(0, 1fr); gap: var(--space-2); }
 .pageTimeSettings { display: grid; gap: var(--space-3); padding-top: var(--space-4); }
 .pageTimeSettings > :first-child { padding-inline: var(--space-4); }
 
@@ -1018,11 +1017,7 @@
 	.form[data-layout="page"] .pageTimeSettings > div,
 	.form[data-layout="page"] .pageTimeSettings > :first-child,
 	.form[data-layout="page"] .calendarHint,
-	.form[data-layout="page"] .timeContext,
-	.form[data-layout="page"] .calendarPlacementHeader,
-	.form[data-layout="page"] .calendarGroupHeading { padding-inline: var(--layer-inline); }
-	.form[data-layout="page"] .calendarMembership { padding-left: var(--layer-inline); }
-	.form[data-layout="page"] .calendarPlacementRow { padding-right: var(--layer-inline); }
+	.form[data-layout="page"] .timeContext { padding-inline: var(--layer-inline); }
 	.form[data-layout="page"] .inlineField { grid-template-columns: 70px minmax(0, 1fr); column-gap: var(--space-2); }
 }
 

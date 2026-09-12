@@ -79,3 +79,80 @@ it("keeps the untouched second-fold start when the end is edited", async () => {
   expect(onCreate).toHaveBeenCalledOnce();
   expect(onCreate.mock.calls[0]![0]).toMatchObject({ start: new Date("2026-10-25T01:30:00Z"), end: new Date("2026-10-25T02:30:00Z") });
 });
+
+const panelProps = {
+  anchor: { x: 10, y: 10 }, calendars: fixtureCalendars, date: "2026-09-11", email: "alex@example.com",
+  onCreated: vi.fn(), open: true, timeFormat: "24h" as const, userId: "alex", weekStartsOn: "monday" as const,
+};
+
+it("keeps a new event draft through Escape until discard is confirmed", async () => {
+  const user = userEvent.setup();
+  const onOpenChange = vi.fn();
+  render(<QuickCreate {...panelProps} onCreate={async event => event} onOpenChange={onOpenChange} />);
+  await user.type(screen.getByRole("textbox", { name: "Event title" }), "Unfinished event");
+  await user.keyboard("{Escape}");
+  expect(onOpenChange).not.toHaveBeenCalled();
+  expect(screen.getByRole("dialog", { name: "Discard new event?" })).toBeTruthy();
+  await user.click(screen.getAllByRole("button", { name: "Keep editing" }).at(-1)!);
+  expect((screen.getByRole("textbox", { name: "Event title" }) as HTMLInputElement).value).toBe("Unfinished event");
+  await user.click(screen.getByRole("button", { name: "Cancel" }));
+  await user.click(screen.getByRole("button", { name: "Discard event" }));
+  expect(onOpenChange).toHaveBeenCalledWith(false);
+});
+
+it("closes a reverted empty draft without a discard prompt", async () => {
+  const user = userEvent.setup();
+  const onOpenChange = vi.fn();
+  render(<QuickCreate {...panelProps} onCreate={async event => event} onOpenChange={onOpenChange} />);
+  const title = screen.getByRole("textbox", { name: "Event title" });
+  await user.type(title, "Changed my mind");
+  await user.clear(title);
+  await user.click(screen.getByRole("button", { name: "Close new event" }));
+  expect(screen.queryByRole("dialog", { name: "Discard new event?" })).toBeNull();
+  expect(onOpenChange).toHaveBeenCalledWith(false);
+});
+
+it("protects changes made by dragging the grid draft", async () => {
+  const user = userEvent.setup();
+  const onOpenChange = vi.fn();
+  const view = render(<QuickCreate {...panelProps} onCreate={async event => event} onOpenChange={onOpenChange} />);
+  view.rerender(<QuickCreate {...panelProps} date="2026-09-12" onCreate={async event => event} onOpenChange={onOpenChange} />);
+  await user.keyboard("{Escape}");
+  expect(onOpenChange).not.toHaveBeenCalled();
+  expect(screen.getByRole("dialog", { name: "Discard new event?" })).toBeTruthy();
+});
+
+it("keeps the panel open while saving and retains the draft after a failed write", async () => {
+  const user = userEvent.setup();
+  const onOpenChange = vi.fn();
+  const onSavingChange = vi.fn();
+  let fail!: (error: Error) => void;
+  const onCreate = vi.fn(() => new Promise<never>((_, reject) => { fail = reject; }));
+  render(<QuickCreate {...panelProps} onCreate={onCreate} onOpenChange={onOpenChange} onSavingChange={onSavingChange} />);
+  await user.type(screen.getByRole("textbox", { name: "Event title" }), "Retryable draft");
+  await user.click(screen.getByRole("button", { name: "Create" }));
+  await user.keyboard("{Escape}");
+  await user.click(screen.getByRole("button", { name: "Close new event" }));
+  expect(onOpenChange).not.toHaveBeenCalled();
+  expect(onSavingChange).toHaveBeenLastCalledWith(true);
+  fail(new Error("Write failed"));
+  await screen.findByRole("alert");
+  expect(onSavingChange).toHaveBeenLastCalledWith(false);
+  expect((screen.getByRole("textbox", { name: "Event title" }) as HTMLInputElement).value).toBe("Retryable draft");
+});
+
+
+it("shows next-day Ends for a one-day event but writes only the selected day", async () => {
+  const user = userEvent.setup();
+  const onCreate = vi.fn(async event => event);
+  render(<QuickCreate {...panelProps} onCreate={onCreate} onOpenChange={vi.fn()} />);
+  await user.type(screen.getByRole("textbox", { name: "Event title" }), "One-day plan");
+  await user.click(screen.getByRole("switch", { name: "All day" }));
+  expect(screen.getByRole("button", { name: /^Ends:/ }).textContent).toContain("Saturday, September 12, 2026");
+  await user.click(screen.getByRole("button", { name: "Create" }));
+  expect(onCreate.mock.calls[0]?.[0]).toMatchObject({
+    isAllDay: true,
+    start: new Date("2026-09-11T00:00:00.000Z"),
+    end: new Date("2026-09-11T00:00:00.000Z"),
+  });
+});

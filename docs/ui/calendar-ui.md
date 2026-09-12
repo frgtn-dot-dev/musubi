@@ -43,14 +43,14 @@ scroll ani aktivní objekt.
 | Vrstva | Otázka | Závaznost | V Musubi |
 | --- | --- | --- | --- |
 | Slot / buňka | Kdy? | velmi nízká | selection v gridu |
-| Quick create | Co a kdy? | nízká | `QuickCreate` popover |
-| Preview | Co to je, co teď můžu? | nízká–střední | `EventDetailsPopover` |
+| Nový event | Co, kdy a kam? | nízká–střední | `QuickCreate` v pravém `Inspector` panelu |
+| Preview | Co to je, co teď můžu? | nízká–střední | `EventDetailsPopover` v pravém `Inspector` panelu |
 | Full editor | Jak se to má přesně chovat? | vysoká | `EventEditorForm` |
 | Dialog dopadu | Koho/co to ovlivní? | velmi vysoká | recurrence scope, nevratné |
 
-**R4 — Lokální akce má lokální reakci.** Klik na slot otevře vrstvu u slotu, ne
-uprostřed obrazovky. Validace u pole, které ji způsobilo. Drag ukazuje čas u
-taženého objektu.
+**R4 — Lokální akce má lokální reakci.** Klik na slot zachová výběr v gridu a
+otevře pravý panel s jeho datem a časem. Panel na desktopu vyhradí místo vpravo a zúží kalendář i jeho horní lištu,
+aby ovládání zůstalo dostupné. Validace je u pole, které ji způsobilo. Drag ukazuje čas u taženého objektu.
 
 **R5 — Dvě rychlosti, bez ztráty draftu.** Quick create ↔ full editor si předají
 všechno rozpracované. Editor nikdy nezakládá nový prázdný draft.
@@ -165,6 +165,27 @@ Web portal ordering uses `--layer-*-z` tokens. An elevated shared Dialog passes
 its layer context to descendant Popover and Menu surfaces, including their
 Radix positioning wrappers. Child pickers must remain clickable above the
 dialog in both anchored and narrow sheet layouts; features do not set z-index.
+
+Event creation uses the same right Inspector and complete EventEditorForm as
+editing. Desktop panels reserve their shared width in the workspace; the
+toolbar adapts to its available container width, keeping every action reachable.
+The month grid also fits that width with all seven days visible; compact chip
+anatomy follows the month container width instead of the browser window.
+Narrow screens retain a modal panel. Toolbar, search, keyboard, month cells and time-grid gestures preserve
+their date/time defaults and return focus. The header and actions stay fixed;
+fields share one scroller. The displayed all-day end date is exclusive; the
+form adapts it to Musubi’s inclusive last date for drafts and writes. More options may
+hand the same draft to the full editor page, including exact DST-fold instants.
+
+Only one object inspector is active. Clicking outside event details keeps them
+open; the close button or Escape dismisses them, and another event trigger
+switches the selected object. Imperative creation entry points use
+`requestInspectorTransition` so an edited event or new draft can guard a
+replacement. A new range gesture retains the old draft until the user accepts
+the replacement; moving the existing draft changes the same form. Unsaved
+changes require an explicit discard, and pending saves prevent closing or
+moving the draft. Persistent desktop editors do not consume grid presses as layer dismissals;
+read-only details, modal inspectors and nested pickers still do.
 
 Meeting creation has one workspace dialog with a calendar picker. The toolbar
 Create menu opens it without a preset; a calendar row's meeting icon presets
@@ -1092,3 +1113,20 @@ vzešlo a nedá se vyčíst z kódu:
 - Drag zapisuje na server při každém pointer move.
 - All-day jako půlnoční timestamp místo date range.
 - Refetch zavře otevřený popover.
+
+### September feedback: quiet calendar chrome
+
+Standing provider coverage limits live behind the toolbar’s “Calendar sync
+coverage” info action. Offline, update, and live availability warnings retain
+their visible banners. App scrollbars are visually hidden at the global web
+layer; overflow, wheel, touch, and keyboard scrolling stay intact in calendars,
+forms, lists, and portaled surfaces.
+
+Event calendar pickers identify each account once, with a provider mark and
+account label in a single-line group heading. Local Musubi uses its mark alone
+with an accessible name. Each heading and its calendar rows share one rounded
+surface, using the notes surface tokens, with consistent space between accounts.
+Individual rows show calendar colour and name without repeating the provider
+logo or subtitle. Event-detail calendar pills use a calendar-coloured provider
+mark instead of a second colour dot, and a stronger outline identifies the home
+calendar on web and native.

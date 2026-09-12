@@ -1,8 +1,9 @@
 import { Calendar, providerFlavor } from "@musubi/types";
+import { ProviderIcon } from "./ProviderIcon";
 import { colors, fonts, styles } from "@/constants/theme";
 import { Tap } from "@/components/ui/Tap";
 import { tap as tapHaptic, thump } from "@/lib/haptics";
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -43,14 +44,6 @@ type Props = {
   /** Called with the full new flat calendar-id order after any drag. */
   onReorder: (ids: string[]) => void;
 };
-
-export function ProviderIcon({ provider }: { provider?: string | null }) {
-  if (provider === "google") return <Ionicons name="logo-google" size={13} color={colors.fg3} />;
-  if (provider === "microsoft") return <Ionicons name="logo-microsoft" size={13} color={colors.fg3} />;
-  if (provider === "apple") return <Ionicons name="logo-apple" size={14} color={colors.fg3} />;
-  if (provider === "caldav") return <Ionicons name="cloud" size={14} color={colors.fg3} />;
-  return <Feather name="calendar" size={13} color={colors.fg3} />;
-}
 
 // Every item (group header or calendar row) is ABSOLUTELY positioned and its
 // top lives in a shared value — one coordinate system, driven from one place.

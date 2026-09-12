@@ -44,6 +44,8 @@
   --event-radius: 6px;
 
   --sidebar-width: 244px;
+  /* One width for the object inspector and the workspace space it reserves. */
+  --inspector-width: 480px;
   --toolbar-height: 132px;
   --date-header-height: 48px;
   --popover-width: 360px;

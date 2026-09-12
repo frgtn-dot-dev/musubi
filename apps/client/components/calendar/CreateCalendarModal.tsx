@@ -4,7 +4,7 @@ import { Calendar, MICROSOFT_CALENDAR_COLORS, nearestMicrosoftCalendarColor, pro
 import { useServer } from "@/contexts/ServerContext";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useCalendarsStore } from "@/store/useCalendarsStore";
-import { ProviderIcon } from "@/components/calendar/ReorderableCalendarList";
+import { ProviderIcon } from "@/components/calendar/ProviderIcon";
 import { useEffect, useMemo, useState } from "react";
 import { Text, Pressable, ScrollView, View, TextInput, Alert } from "react-native";
 import { ModalPortal as Modal } from "@/components/ui/ModalPortal";

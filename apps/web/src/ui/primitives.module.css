@@ -976,7 +976,6 @@
 	);
 	overflow-y: auto;
 	padding: var(--space-1);
-	scrollbar-width: thin;
 	touch-action: pan-y;
 	overscroll-behavior: contain;
 }
@@ -1392,14 +1391,13 @@
 	);
 }
 
-/* Inspector proposal: fixed working surface; shared regions retain ownership
-   of insets and scrolling. 480px is the inspector's domain viewport budget. */
+/* The right surface and its workspace reservation share one width contract. */
 .dialog.dialog_right {
 	top: 0;
 	right: 0;
 	bottom: 0;
 	left: auto;
-	width: min(480px, 100vw);
+	width: min(var(--inspector-width), 100vw);
 	height: 100dvh;
 	max-height: 100dvh;
 	border-radius: 0;
@@ -1883,7 +1881,6 @@
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	padding: var(--space-1);
-	scrollbar-width: thin;
 }
 
 .timePickerSheetTitle {
@@ -2463,3 +2460,11 @@
 .disclosure_compact .disclosureSummary { border-radius: var(--radius-chip); }
 
 .inspector { z-index: var(--layer-dialog-z); }
+
+@media (min-width: 1024px) {
+	.inspector {
+		border-block: 0;
+		border-inline-end: 0;
+		box-shadow: none;
+	}
+}

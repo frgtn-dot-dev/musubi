@@ -464,7 +464,7 @@ describe("EventEditorForm event boundaries", () => {
 });
 
 describe("EventEditorForm panel all-day dates", () => {
-	it("normalizes the exclusive end when choosing the all-day time model", async () => {
+	it("displays an exclusive end while keeping the canonical last date when choosing all-day", async () => {
 		const user = userEvent.setup();
 		const changed = vi.fn();
 		render(<EventEditorForm
@@ -483,19 +483,20 @@ describe("EventEditorForm panel all-day dates", () => {
 		await user.click(screen.getByRole("option", { name: "All-day dates" }));
 		expect(changed.mock.lastCall?.[0]).toMatchObject({
 			isAllDay: true,
-			endDate: "2027-01-01",
+			endDate: "2026-12-31",
 			timeKind: "all-day",
 		});
+		expect(screen.getByRole("button", { name: /^Ends:/ }).textContent).toContain("Friday, January 1, 2027");
 		expect(changed.mock.lastCall?.[0].timeZone).toBeUndefined();
 		expect(screen.getByRole("switch", { name: "All day" }).getAttribute("aria-checked")).toBe("true");
 	});
 
 	it.each([
-		{ timeKind: undefined, endDate: "2026-03-29", expectedEnd: "2026-03-30" },
-		{ timeKind: "legacy-unknown" as const, endDate: "2026-03-28", expectedEnd: "2026-03-30" },
-		{ timeKind: "floating" as const, endDate: "2026-03-29", expectedEnd: "2026-03-30" },
+		{ timeKind: undefined, endDate: "2026-03-29", expectedEnd: "2026-03-29" },
+		{ timeKind: "legacy-unknown" as const, endDate: "2026-03-28", expectedEnd: "2026-03-29" },
+		{ timeKind: "floating" as const, endDate: "2026-03-29", expectedEnd: "2026-03-29" },
 		{ timeKind: "zoned" as const, endDate: "2026-04-02", expectedEnd: "2026-04-02" },
-	])("uses an exclusive end for $timeKind while preserving longer ranges", async ({ timeKind, endDate, expectedEnd }) => {
+	])("keeps inclusive draft dates for $timeKind and adapts the exclusive panel picker", async ({ timeKind, endDate, expectedEnd }) => {
 		const user = userEvent.setup();
 		const changed = vi.fn();
 		render(<EventEditorForm

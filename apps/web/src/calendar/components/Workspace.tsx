@@ -75,6 +75,7 @@ import { ConnectionsDialog } from "./ConnectionsDialog";
 import { MonthCalendar } from "./MonthCalendar";
 import { MultiWeekCalendar } from "./MultiWeekCalendar";
 import { NewPageDialog, PageSettingsDialog } from "./PageSettingsDialog";
+import { requestInspectorTransition } from "~/ui/Inspector";
 import { QuickCreate, type QuickCreateAnchor } from "./QuickCreate";
 import { RecurrenceScopeDialog } from "./RecurrenceScopeDialog";
 import { SearchDialog } from "./SearchDialog";
@@ -483,6 +484,7 @@ export function Workspace({
     );
   }
   const [createIntent, setCreateIntent] = useState<CreateIntent>();
+  const createSaving = useRef(false);
   const [localTaskCreateRequest, setLocalTaskCreateRequest] = useState(0);
   const taskCreateRequest = controlledTaskCreateRequest ?? localTaskCreateRequest;
   const setTaskCreateRequest = onTaskCreateRequestChange ?? setLocalTaskCreateRequest;
@@ -784,11 +786,9 @@ export function Workspace({
     }
 
     const bounds = target.getBoundingClientRect();
-    setCreateIntent({
+    requestInspectorTransition(() => setCreateIntent({
       anchor: {
         returnFocus: target,
-        // Beside the slot, level with its top: the popover opens next to what it
-        // describes instead of on top of it, so the draft stays grabbable.
         x: point?.x ?? bounds.right,
         y: point?.y ?? bounds.top,
       },
@@ -798,11 +798,11 @@ export function Workspace({
       endTime,
       id: Date.now(),
       startTime,
-    });
+    }));
   }
 
   /**
-   * Move the open draft to a new slot. The intent keeps its id, so the popover
+   * Move the open draft to a new slot. The intent keeps its id, so the panel
    * is not remounted and a title already typed into it survives the drag.
    */
   function moveCreateDraft(when: {
@@ -813,7 +813,7 @@ export function Workspace({
     endTime?: string;
     startTime?: string;
   }) {
-    setCreateIntent((current) => current && { ...current, ...when });
+    if (!createSaving.current) setCreateIntent((current) => current && { ...current, ...when });
   }
 
   function handleWorkspaceKeyDown(event: globalThis.KeyboardEvent) {
@@ -1002,6 +1002,7 @@ export function Workspace({
       <main
         className={styles.main}
         id="main-content"
+        tabIndex={-1}
         inert={sidebarModal ? true : undefined}
         ref={mainRef}
       >
@@ -1021,6 +1022,7 @@ export function Workspace({
         <Toolbar
           activeView={activeView}
           availability={gridAvailability.available ? { shown: gridAvailability.shown, onToggle: gridAvailability.toggle, onOpenList: target => { setConnectionsReturnFocus(target); setConnectionsOpen(true); } } : undefined}
+          coverageNotice={activeView === "tasks" ? null : coverageNotice}
           canCreateEvents={editableCalendars.length > 0}
           canCreateMeetings={!offline && calendars.some(isMeetingCalendarCandidate)}
           canCreateTasks={!offline && editableTaskCalendars.length > 0}
@@ -1087,7 +1089,6 @@ export function Workspace({
         ) : null}
 
         {gridAvailability.notice ? <CoverageBanner message={gridAvailability.notice} /> : null}
-        {coverageNotice && activeView !== "tasks" ? <CoverageBanner message={coverageNotice} /> : null}
         <div
           className={`${styles.calendarArea} ${
             activeView === "month" ? styles.calendarAreaMonth : ""
@@ -1185,7 +1186,6 @@ export function Workspace({
                       )
                   : undefined
               }
-              onCancelDraft={() => setCreateIntent(undefined)}
               onNotice={notify}
               onOpenFullEditor={onOpenFullEditor}
               onRemoveEvent={onRemoveEvent}
@@ -1252,7 +1252,6 @@ export function Workspace({
                       })
                   : undefined
               }
-              onCancelDraft={() => setCreateIntent(undefined)}
               onMonthChange={changePeriod}
               onMoveDraft={moveCreateDraft}
               pendingCreate={
@@ -1335,8 +1334,6 @@ export function Workspace({
       {createIntent ? (
         <QuickCreate
           anchor={createIntent.anchor}
-          // Movable, but only within the calendar it belongs to.
-          bounds={() => mainRef.current?.getBoundingClientRect()}
           calendars={editableCalendars}
           date={createIntent.date}
           email={user.email}
@@ -1346,6 +1343,7 @@ export function Workspace({
           isAllDay={Boolean(createIntent.endDate)}
           key={createIntent.id}
           onCreate={onCreateEvent}
+          onSavingChange={saving => { createSaving.current = saving; }}
           onCreated={() => notify("Event created.")}
           // The block on the grid and the fields in here describe one event, so
           // editing the time, the length or the calendar moves and recolours it.

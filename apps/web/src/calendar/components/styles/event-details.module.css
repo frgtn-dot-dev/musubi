@@ -148,11 +148,11 @@
   font-size: var(--text-11);
 }
 
-/* Stands where the colour dot would: it is the same signal plus one, so the pill
-   keeps its shape and the calendar keeps its colour. */
-.homePillMark {
-  flex: none;
-  margin-left: -1px;
+/* The home calendar uses a doubled rule as a non-colour signal. Compensate its
+   extra pixel inside the pill so the stronger border keeps the same footprint. */
+.calendarPill[data-home] {
+  padding-inline: calc(var(--space-3) - 1px);
+  border: 2px solid var(--border-strong);
 }
 
 .notes,

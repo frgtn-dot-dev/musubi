@@ -20,6 +20,7 @@ import { Segmented } from "~/ui/Segmented";
 import { Select } from "~/ui/Select";
 import { useNarrowViewport } from "~/design/use-narrow-viewport";
 import { offeredViews, type CalendarViewId } from "../view-registry";
+import { CalendarCoverageInfo } from "./CalendarCoverageInfo";
 import styles from "./workspace.module.css";
 
 type ToolbarProps = {
@@ -28,6 +29,7 @@ type ToolbarProps = {
   canCreateEvents: boolean;
   canCreateMeetings: boolean;
   canCreateTasks: boolean;
+  coverageNotice?: string | null;
   navigationTriggerRef?: RefObject<HTMLButtonElement | null>;
   onCreateEvent: (target: HTMLElement) => void;
   onCreateMeeting: (target: HTMLElement) => void;
@@ -50,6 +52,7 @@ export function Toolbar({
   canCreateEvents,
   canCreateMeetings,
   canCreateTasks,
+  coverageNotice,
   navigationTriggerRef,
   onCreateEvent,
   onCreateMeeting,
@@ -121,23 +124,22 @@ export function Toolbar({
           </p>
         </div>
 
-        {/* Keep the narrow view choice compact. The date gets a complete line;
-            this picker shares the next one with search and availability. */}
-        {narrow ? (
-          <Select
-            className={styles.viewSelect}
-            label="Calendar view"
-            options={offeredViews().map((view) => ({
-              label: view.label,
-              value: view.id as CalendarViewId,
-            }))}
-            size="compact"
-            value={activeView}
-            onChange={(value) => onViewChange(value as CalendarViewId)}
-          />
-        ) : null}
+        {/* Container queries expose exactly one view choice. The calendar can
+            be compact beside an inspector even on a wide desktop window. */}
+        <Select
+          className={styles.viewSelect}
+          label="Calendar view"
+          options={offeredViews().map((view) => ({
+            label: view.label,
+            value: view.id as CalendarViewId,
+          }))}
+          size="compact"
+          value={activeView}
+          onChange={(value) => onViewChange(value as CalendarViewId)}
+        />
 
         <div className={styles.toolbarActions}>
+          {coverageNotice ? <CalendarCoverageInfo message={coverageNotice} /> : null}
           {availability ? <Popover open={availabilityOpen} onOpenChange={setAvailabilityOpen}>
             <PopoverTrigger asChild><IconButton label="Availability" ref={availabilityTriggerRef} size="compact"><Clock aria-hidden="true" size={17} strokeWidth={1.6} /></IconButton></PopoverTrigger>
             <PopoverContent aria-label="Grid availability" align="end" onCloseAutoFocus={event => { if (availabilityListAfterClose.current) { event.preventDefault(); availabilityListAfterClose.current = false; availabilityTriggerRef.current?.focus(); availability.onOpenList(availabilityTriggerRef.current); } }}>
@@ -156,18 +158,16 @@ export function Toolbar({
           >
             <Search aria-hidden="true" size={17} strokeWidth={1.6} />
           </IconButton>
-          {narrow ? null : (
-            <Segmented<CalendarViewId>
-              className={styles.viewSwitcher}
-              label="Calendar view"
-              options={offeredViews().map((view) => ({
-                label: view.label,
-                value: view.id as CalendarViewId,
-              }))}
-              value={activeView}
-              onChange={onViewChange}
-            />
-          )}
+          <Segmented<CalendarViewId>
+            className={styles.viewSwitcher}
+            label="Calendar view"
+            options={offeredViews().map((view) => ({
+              label: view.label,
+              value: view.id as CalendarViewId,
+            }))}
+            value={activeView}
+            onChange={onViewChange}
+          />
           {canCreateEvents || canCreateMeetings || canCreateTasks ? (
             <Menu>
               <MenuTrigger asChild>

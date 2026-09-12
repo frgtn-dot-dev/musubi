@@ -1,5 +1,4 @@
 import { isGoogleEditorPrivacyRefresh, refreshPrivateEditorBaseline, refreshPrivateEditorValues, rememberPrivateEditorChanges, type PrivateEditorField } from "../event-editor-privacy";
-import { focusMovedToAnotherLayer } from "../layer-focus";
 import { Empty } from "~/ui/Empty";
 import { ProviderRsvpEditor } from "./ProviderRsvpEditor";
 import { ProviderReminderEditor } from "./ProviderReminderEditor";
@@ -40,7 +39,6 @@ import {
 	Pencil,
 	Repeat2,
 	RefreshCw,
-	Star,
 	Trash2,
 	UsersRound,
 	X,
@@ -635,11 +633,9 @@ export function EventDetailsPopover({
                for the same reason. */
 					onPointerDown={(pointerEvent) => pointerEvent.stopPropagation()}
           accessibleTitle={editing ? "Edit event" : event.title}
+          persistent={editing}
           onFocusOutside={focusEvent => focusEvent.preventDefault()}
-          onInteractOutside={outsideEvent => {
-            const target = outsideEvent.target;
-            if (editing || focusMovedToAnotherLayer(target) || (target instanceof Element && target.closest("[data-inspector-trigger]"))) outsideEvent.preventDefault();
-          }}
+          onInteractOutside={outsideEvent => outsideEvent.preventDefault()}
 					onEscapeKeyDown={(escapeEvent) => {
 						if (!targetAction) return;
 						escapeEvent.preventDefault();
@@ -719,24 +715,16 @@ export function EventDetailsPopover({
 <ul aria-label="Calendars" className={styles.calendarPills}>
 									{eventCalendars.length > 0 ? (
 										eventCalendars.map((item) => (
-											<li className={styles.calendarPill} key={item.id}>
-												{/* The home calendar's mark replaces its dot rather
-                              than sitting next to it: both say "this calendar",
-                              and the star says which one owns the event — the
-                              colour, the invitations and where an edit lands. */}
-												{item.id === homeCalendarId ? (
-													<Star
-														aria-label="Home calendar"
-														className={styles.homePillMark}
-														fill={item.color}
-														size={12}
-														strokeWidth={1.6}
-														style={{ color: item.color }}
-													/>
-												) : (
-													<CalendarDot color={item.color} />
-												)}
-												{item.provider ? <AccountMark flavor={providerFlavor(item)} size="compact" /> : null}
+											<li
+												className={styles.calendarPill}
+												data-home={item.id === homeCalendarId ? "" : undefined}
+												aria-label={item.id === homeCalendarId ? `${item.name} · Home calendar` : undefined}
+												title={item.id === homeCalendarId ? "Home calendar" : undefined}
+												key={item.id}
+											>
+												{item.provider ? (
+													<AccountMark flavor={providerFlavor(item)} size="compact" color={item.color} />
+												) : <CalendarDot color={item.color} />}
 												{item.name}
 											</li>
 										))
