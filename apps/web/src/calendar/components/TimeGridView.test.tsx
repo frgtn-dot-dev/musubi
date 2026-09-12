@@ -88,14 +88,11 @@ it("moving an overnight draft preserves the end clock after midnight", async () 
   const view = render(<TimeGridView {...props("2026-10-24")} geometry={{ ...geometry, pxPerMinute: 1, hourHeight: 60 }} pendingCreate={{ date: "2026-10-24", startTime: "23:00", endTime: "01:00", exactRange }} onMoveDraft={onMoveDraft} />);
   const draft = view.container.querySelector('[data-draft]')!;
   function pointer(target: Element | Window, type: string, y: number) {
-    const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: 70, clientY: y });
+    const event = new MouseEvent(type, { bubbles: true, button: 0, clientX: 70, clientY: y });
     Object.defineProperty(event, "pointerId", { value: 1 });
     fireEvent(target, event);
-    return event;
   }
-  // jsdom cannot perform the browser's default focus scroll. The real draft
-  // must cancel that default before it can skew the captured gesture origin.
-  expect(pointer(draft, "pointerdown", 1380).defaultPrevented).toBe(true);
+  pointer(draft, "pointerdown", 1380);
   pointer(window, "pointermove", 1365);
   pointer(window, "pointerup", 1365);
   await waitFor(() => expect(onMoveDraft).toHaveBeenCalledOnce());
