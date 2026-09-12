@@ -31,7 +31,7 @@ import {
 } from "~/calendar/connections";
 import { useFederatedWorkspace } from "~/calendar/federated-workspace";
 import { Button, IconButton } from "~/ui/Button";
-import { Dialog } from "~/ui/Dialog";
+import { Dialog, DialogInfo } from "~/ui/Dialog";
 import { Empty } from "~/ui/Empty";
 import { Field } from "~/ui/Field";
 import { InlineError } from "~/ui/InlineError";
@@ -282,7 +282,7 @@ export function ConnectionsDialog({
       bodyLayout="flush"
       bodyScroll="panels"
       closeLabel="Close connections"
-      description="Connect accounts or join a shared calendar."
+      headerActions={<DialogInfo label="About connections" title="Connections">Connect accounts or join a shared calendar.</DialogInfo>}
       onOpenChange={handleOpenChange}
       open={open}
       size="spacious"

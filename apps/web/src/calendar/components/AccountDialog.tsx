@@ -15,7 +15,7 @@ import {
   ConfirmationDialog,
   ConfirmationNotice,
 } from "~/ui/ConfirmationDialog";
-import { Dialog } from "~/ui/Dialog";
+import { Dialog, DialogInfo } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
 import { InlineError } from "~/ui/InlineError";
 import { RowAction } from "~/ui/Row";
@@ -125,7 +125,7 @@ export function AccountDialog({
       <Dialog
         bodyLayout="flush"
         closeLabel="Close account"
-        description="Your profile is visible to people you share calendars with."
+        headerActions={<DialogInfo label="About your profile" title="Your profile">Your profile is visible to people you share calendars with.</DialogInfo>}
         onOpenChange={handleOpenChange}
         open={open}
         title="Account"

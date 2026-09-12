@@ -402,51 +402,6 @@ export function CalendarTransferDialog({
 						<SectionLabel level={2}>Your calendars</SectionLabel>
 					</div>
 
-					<div className={styles.create}>
-					<form className={styles.createBar} onSubmit={handleCreate}>
-						<label
-							className={styles.visuallyHidden}
-							htmlFor="new-calendar-name"
-						>
-							New calendar name
-						</label>
-						<input
-							disabled={busy === "create"}
-							id="new-calendar-name"
-							placeholder="New calendar"
-							value={newName}
-							onChange={(event) => setNewName(event.target.value)}
-						/>
-						<Select
-							className={styles.destination}
-							disabled={busy === "create"}
-							label="Account"
-							options={destinationOptions}
-							value={destinationKey}
-							onChange={setDestinationKey}
-						/>
-						<ColorPicker
-							className={styles.formColorPicker}
-							disabled={busy === "create"}
-							label="New calendar color"
-							/* Outlook accepts nine preset colours and nothing else, so the
-                 picker follows the destination rather than offering a colour the
-                 provider will refuse. */
-							provider={destination?.provider ?? null}
-							value={newColor}
-							onChange={setNewColor}
-						/>
-						<Button
-							icon={<Plus size={16} strokeWidth={1.8} />}
-							loading={busy === "create"}
-							type="submit"
-						>
-							Add
-						</Button>
-					</form>
-					{createError ? <ErrorMessage error={createError} /> : null}
-					</div>
-
 					<div className={styles.groups}>
 						{groups.map((group) => (
 							<CalendarGroup
@@ -476,9 +431,57 @@ export function CalendarTransferDialog({
 					</div>
 				</section>
 
-				<SettingsSection className={styles.transferSection} title="Import & export">
+				<SettingsSection className={styles.transferSection} title="Calendar actions">
 					<Disclosure
-						detail="Download a calendar as an .ics file."
+						icon={<Plus size={18} strokeWidth={1.7} />}
+						label="New calendar"
+					>
+						<form className={styles.transferCard} onSubmit={handleCreate}>
+							<div className={styles.createNameRow}>
+								<Field label="New calendar name">
+									<input
+										disabled={Boolean(busy)}
+										id="new-calendar-name"
+										placeholder="New calendar"
+										value={newName}
+										onChange={(event) => setNewName(event.target.value)}
+									/>
+								</Field>
+								<ColorPicker
+									className={styles.formColorPicker}
+									disabled={Boolean(busy)}
+									label="New calendar color"
+									/* Match the destination provider's supported palette. */
+									provider={destination?.provider ?? null}
+									value={newColor}
+									onChange={setNewColor}
+								/>
+							</div>
+							<Field label="Account">
+								<Select
+									disabled={Boolean(busy)}
+									label="Account"
+									options={destinationOptions}
+									value={destinationKey}
+									onChange={setDestinationKey}
+								/>
+							</Field>
+							{createError ? (
+								<InlineError requestId={createError.requestId}>
+									{createError.message}
+								</InlineError>
+							) : null}
+							<Button
+								className={styles.cardAction}
+								disabled={Boolean(busy) && busy !== "create"}
+								loading={busy === "create"}
+								type="submit"
+							>
+								Create
+							</Button>
+						</form>
+					</Disclosure>
+					<Disclosure
 						icon={<Download size={18} strokeWidth={1.7} />}
 						label="Export calendar"
 					>
@@ -489,7 +492,7 @@ export function CalendarTransferDialog({
 								void handleExport();
 							}}
 						>
-							<Field className={styles.cardField} label="Calendar to export">
+							<Field className={styles.cardField} help="Download a calendar as an .ics file." label="Calendar to export">
 								<Select
 									disabled={Boolean(busy)}
 									label="Calendar to export"
@@ -514,7 +517,6 @@ export function CalendarTransferDialog({
 						</form>
 					</Disclosure>
 					<Disclosure
-						detail="Create a calendar from an .ics file."
 						icon={<FileUp size={18} strokeWidth={1.7} />}
 						label="Import calendar"
 					>
@@ -539,7 +541,7 @@ export function CalendarTransferDialog({
 									/>
 								</label>
 							</div>
-							<Field className={styles.cardField} label="Import into">
+							<Field className={styles.cardField} help="Create a calendar from an .ics file in the selected account." label="Import into">
 								<Select
 									disabled={Boolean(busy)}
 									label="Import into account"
@@ -880,7 +882,7 @@ function EditCalendarDialog({
 				onSubmit={(event) => void handleSubmit(event)}
 			>
 				{/* Name and colour are the same decision — what this calendar looks like
-            in a list — so they share one bar, the way a new calendar is made. */}
+            in a list — so they share one bar. */}
 				{editable ? (
 					<div className={styles.editBar}>
 						<input

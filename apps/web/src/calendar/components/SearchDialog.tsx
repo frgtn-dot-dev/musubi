@@ -1,7 +1,7 @@
 import type { Event } from "@musubi/types";
 import { ArrowRight, CalendarDays, Search } from "lucide-react";
 import type { KeyboardEvent, RefObject } from "react";
-import { Dialog } from "~/ui/Dialog";
+import { Dialog, DialogInfo } from "~/ui/Dialog";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { offeredViews, type CalendarViewId } from "../view-registry";
 import styles from "./styles/search-dialog.module.css";
@@ -97,6 +97,7 @@ export function SearchDialog({
 			open={open}
 			returnFocus={returnFocus}
 			title="Search Musubi"
+			headerActions={<DialogInfo label="About search" title="Search Musubi">Type to find events in the loaded calendar range.</DialogInfo>}
 		>
 			<label className={styles.searchBox}>
 				<Search aria-hidden="true" size={18} strokeWidth={1.6} />
@@ -171,9 +172,7 @@ export function SearchDialog({
 							<p className={styles.empty}>No matching events in this view.</p>
 						)}
 					</section>
-				) : (
-					<p className={styles.hint}>Type to find events in the loaded calendar range.</p>
-				)}
+				) : null}
 			</div>
 		</Dialog>
 	);

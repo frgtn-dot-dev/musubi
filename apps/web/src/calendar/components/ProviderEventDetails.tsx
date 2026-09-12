@@ -1,3 +1,4 @@
+import { HelpTooltip } from "~/ui/HelpTooltip";
 import { UsersRound } from "lucide-react";
 import { Avatar } from "~/ui/Avatar";
 import { AvatarStackPreview } from "~/ui/AvatarStack";
@@ -126,9 +127,14 @@ function ProviderEventDetailsBody({ providerFlavor, presentation = "default", ev
     const value = row.value.toLowerCase();
     return labels && Object.hasOwn(labels, value) ? labels[value] : row.value;
   }
-  const metadata = details ? <p className={presentation === "panel" ? styles.noteText : undefined}>{series ? "These settings describe the series, not an individual occurrence. " : occurrence ? "These settings describe this occurrence. " : ""}Imported provider settings. {current?.reminderEdit || current?.rsvpEdit ? "Available actions are shown below." : `Change these in ${displayProvider}.`}{"\n\n"}
+  const metadata = details ? <p className={presentation === "panel" ? styles.noteText : undefined}>
+    {series ? "Series settings" : occurrence ? "Occurrence settings" : "Imported settings"}
+    <HelpTooltip label={`About ${displayProvider} settings`}>
+      {series ? "These settings describe the series, not an individual occurrence. " : occurrence ? "These settings describe this occurrence. " : ""}
+      Imported provider settings. {current?.reminderEdit || current?.rsvpEdit ? "Available actions are shown below." : `Change these in ${displayProvider}.`}
+      {" "}Provider notifications and Musubi reminders are separate. Both apps may notify you.
+    </HelpTooltip>{"\n\n"}
     {details.rows.filter(row => presentation !== "panel" || row.label !== "Provider participants").map(row => <span key={row.label}><strong>{row.label}: </strong>{metadataValue(row)}{"\n"}</span>)}
-    {"\n"}Provider notifications and Musubi reminders are separate. Both apps may notify you.
   </p> : null;
   const actions = <>
     {current?.reminderEdit && current.state && current.version && !series && !(current.reminderEdit.provider === "caldav" && current.reminderEdit.scope === "series") ? <>

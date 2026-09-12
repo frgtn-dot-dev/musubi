@@ -143,8 +143,8 @@ export function Toolbar({
           {availability ? <Popover open={availabilityOpen} onOpenChange={setAvailabilityOpen}>
             <PopoverTrigger asChild><IconButton label="Availability" ref={availabilityTriggerRef} size="compact"><Clock aria-hidden="true" size={17} strokeWidth={1.6} /></IconButton></PopoverTrigger>
             <PopoverContent aria-label="Grid availability" align="end" onCloseAutoFocus={event => { if (availabilityListAfterClose.current) { event.preventDefault(); availabilityListAfterClose.current = false; availabilityTriggerRef.current?.focus(); availability.onOpenList(availabilityTriggerRef.current); } }}>
-              <SettingsSection title="Availability">
-                <Row label="Show selected availability" detail="Only on this page in this session" trailing={<Switch label="Show selected availability" checked={availability.shown} onCheckedChange={availability.onToggle} />} />
+              <SettingsSection title="Availability" help="Selected availability is shown only on this page in this session.">
+                <Row label="Show selected availability" trailing={<Switch label="Show selected availability" checked={availability.shown} onCheckedChange={availability.onToggle} />} />
                 <Button variant="secondary" onClick={() => { availabilityListAfterClose.current = true; setAvailabilityOpen(false); }}>Sources and interval list</Button>
               </SettingsSection>
             </PopoverContent>

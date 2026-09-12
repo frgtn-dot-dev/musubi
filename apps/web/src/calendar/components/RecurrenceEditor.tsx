@@ -1,3 +1,4 @@
+import { HelpTooltip } from "~/ui/HelpTooltip";
 import type { Event, Settings } from "@musubi/types";
 import { DatePicker } from "~/ui/DatePicker";
 import { allDayAdditionalDate, setAllDayAdditionalDate, allDayExclusionDates, restoreAllDayExclusion } from "@musubi/calendar";
@@ -216,7 +217,7 @@ export function RecurrenceEditor({
 			{allDay && allDayExclusionDates(value)?.map(date => <Row key={date} className={styles.excludedDateRow} label={date} detail="Excluded from this series" size="compact" trailing={<Button type="button" disabled={disabled} size="compact" variant="ghost" aria-label={`Restore ${date}`} onClick={() => { restoreFocus.current = true; emit(restoreAllDayExclusion(value, date)); }}>Restore</Button>} />)}
 
 			{additional ? <div className={styles.additionalDate}>
-				<Row label="Additional series date" detail="Adds one occurrence. The regular repeat count stays unchanged." size="compact" trailing={additional.date ? <Button type="button" disabled={disabled} size="compact" variant="ghost" onClick={() => changeAdditionalDate(null)}>Remove additional date</Button> : undefined} />
+				<Row label={<>Additional series date <HelpTooltip label="About additional series dates">Adds one occurrence. The regular repeat count stays unchanged.</HelpTooltip></>} size="compact" trailing={additional.date ? <Button type="button" disabled={disabled} size="compact" variant="ghost" onClick={() => changeAdditionalDate(null)}>Remove additional date</Button> : undefined} />
 				<DatePicker label="Additional series date" value={additional.date ?? ""} disabled={disabled || !!additional.date} min={rdateMaster!.start.toISOString().slice(0,10)} max={additional.limit} weekStartsOn={weekStartsOn} onChange={changeAdditionalDate} />
 				{dateError ? <p role="alert" className={styles.recurrenceHint}>{dateError}</p> : null}
 			</div> : null}

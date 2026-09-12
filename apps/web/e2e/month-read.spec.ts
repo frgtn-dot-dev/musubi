@@ -2543,11 +2543,13 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
 		page.getByRole("heading", { name: "Your calendars" }),
 	).toBeVisible();
 	const calendarDialog = page.getByRole("dialog", { name: "Calendars" });
+	await expect(calendarDialog.getByPlaceholder("New calendar")).toBeHidden();
+	await calendarDialog.getByText("New calendar", { exact: true }).click();
 	const newName = calendarDialog.getByPlaceholder("New calendar");
 	const newColor = calendarDialog.getByRole("button", {
 		name: /New calendar color:/,
 	});
-	const add = calendarDialog.getByRole("button", { name: "Add" });
+	const add = calendarDialog.getByRole("button", { name: "Create" });
 	const [nameBox, colorBox, addBox] = await Promise.all([
 		newName.boundingBox(),
 		newColor.boundingBox(),
@@ -2557,7 +2559,10 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
 	expect(colorBox).not.toBeNull();
 	expect(addBox).not.toBeNull();
 	expect(Math.abs(nameBox!.y - colorBox!.y)).toBeLessThanOrEqual(1);
-	expect(Math.abs(colorBox!.y - addBox!.y)).toBeLessThanOrEqual(1);
+	expect(colorBox!.x).toBeGreaterThan(nameBox!.x + nameBox!.width);
+	expect(addBox!.y).toBeGreaterThan(colorBox!.y);
+	const listBox = await calendarDialog.locator('[class*="calendarSection"]').boundingBox();
+	expect(nameBox!.x).toBeGreaterThanOrEqual(listBox!.x + listBox!.width);
 	expect(Math.abs(nameBox!.height - colorBox!.height)).toBeLessThanOrEqual(1);
 	expect(Math.abs(colorBox!.height - addBox!.height)).toBeLessThanOrEqual(1);
 
@@ -2638,7 +2643,7 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
 			request.method() === "POST" &&
 			new URL(request.url()).pathname === "/api/v1/calendars",
 	);
-	await page.getByRole("button", { name: "Add" }).click();
+	await page.getByRole("button", { name: "Create" }).click();
 	expect((await createRequest).postDataJSON()).toMatchObject({
 		color: "#A8B5A0",
 		name: "Travel",
@@ -2690,6 +2695,37 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
 	).toHaveCount(0);
 });
 
+test("calendar actions scroll independently with every form expanded", async ({ page }) => {
+	await page.setViewportSize({ width: 1280, height: 600 });
+	await mockAuthenticatedReads(page);
+	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+	await page.getByRole("button", { name: "Calendars" }).click();
+	const dialog = page.getByRole("dialog", { name: "Calendars" });
+	const actions = dialog.getByRole("region", { name: "Calendar actions" });
+	for (const label of ["New calendar", "Export calendar", "Import calendar"]) {
+		await actions.getByText(label, { exact: true }).click();
+	}
+	const list = dialog.locator('[class*="groups"]').first();
+	const listTop = await list.evaluate((element) => element.getBoundingClientRect().top);
+	const scroll = await actions.evaluate((element) => {
+		element.scrollTop = element.scrollHeight;
+		return {
+			top: element.scrollTop,
+			height: element.clientHeight,
+			content: element.scrollHeight,
+			padding: Number.parseFloat(getComputedStyle(element).paddingBottom),
+		};
+	});
+	expect(scroll.content).toBeGreaterThan(scroll.height);
+	expect(scroll.top).toBeGreaterThan(0);
+	const panelBox = (await actions.boundingBox())!;
+	const importButton = actions.getByRole("button", { name: "Import", exact: true });
+	const buttonBox = (await importButton.boundingBox())!;
+	expect(buttonBox.y).toBeGreaterThanOrEqual(panelBox.y);
+	expect(buttonBox.y + buttonBox.height).toBeLessThanOrEqual(panelBox.y + panelBox.height - scroll.padding);
+	expect(await list.evaluate((element) => element.getBoundingClientRect().top)).toBe(listTop);
+});
+
 test("creates a calendar inside a connected account", async ({ page }) => {
 	const withAccount = [
 		calendars[0]!,
@@ -2727,12 +2763,12 @@ test("creates a calendar inside a connected account", async ({ page }) => {
 	await page.getByRole("button", { name: "Calendars" }).click();
 	const dialog = page.getByRole("dialog", { name: "Calendars" });
 
+	await dialog.getByText("New calendar", { exact: true }).click();
 	await dialog.getByPlaceholder("New calendar").fill("Studio hours");
-	// The destination is offered because an account is connected; with none, the
-	// control is not there at all.
+	// The destination includes the connected account alongside Musubi.
 	await dialog.getByRole("combobox", { name: "Account", exact: true }).click();
 	await page.getByRole("option", { name: "work@example.com" }).click();
-	await dialog.getByRole("button", { name: "Add", exact: true }).click();
+	await dialog.getByRole("button", { name: "Create", exact: true }).click();
 
 	// Provider and account go with it, which is what makes the server create it on
 	// Google first and import the mirror. The cleared field is the flow finishing:
@@ -4534,6 +4570,7 @@ test("opens the calendar color picker as the top mobile sheet", async ({
 
 	await page.getByRole("button", { name: "Open navigation" }).click();
 	await page.getByRole("button", { name: "Calendars" }).click();
+	await page.getByText("New calendar", { exact: true }).click();
 	const trigger = page.getByRole("button", {
 		name: "New calendar color: #B3A48A",
 	});
@@ -8348,6 +8385,12 @@ for (const [width, theme, target] of [[1280, "light", "zoned"], [390, "dark", "a
     await page.getByRole("button", { name: "Edit", exact: true }).click();
     await page.getByRole("textbox", { name: "Event title" }).fill("Explicit complete draft");
     await page.getByRole("button", { name: "More options", exact: true }).click();
+    const timeHelp = page.getByRole("button", { name: "Help for Time model", exact: true });
+    await expect(page.getByText("The selected model interprets", { exact: false })).toHaveCount(0);
+    await timeHelp.focus();
+    await expect(page.getByRole("tooltip")).toContainText("Changing it may change when the event occurs.");
+    await timeHelp.press("Escape");
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
     await page.getByRole("combobox", { name: "Time model", exact: true }).click();
     await page.getByRole("option", { name: target === "zoned" ? "Event time zone" : "All-day dates", exact: true }).click();
     if (target === "all-day") {

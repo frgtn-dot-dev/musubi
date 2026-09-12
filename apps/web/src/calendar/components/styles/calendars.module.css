@@ -22,7 +22,7 @@
 	}
 
 	.calendarSection {
-		grid-template-rows: auto auto minmax(0, 1fr);
+		grid-template-rows: auto minmax(0, 1fr);
 		min-height: 0;
 		padding-bottom: 0;
 	}
@@ -36,7 +36,9 @@
 	}
 
 	.transferSection {
-		grid-template-rows: auto auto;
+		/* Keep the rounded group at content height so its overflow clipping does
+		   not swallow expanded forms; this column owns the scrolling. */
+		grid-template-rows: max-content max-content;
 		min-height: 0;
 		overflow-y: auto;
 		scroll-padding-block: var(--layer-body-block);
@@ -70,23 +72,10 @@
 	line-height: 1.45;
 }
 
-/* Bar and its complaint share one block, so the message lands under the field
-   that caused it rather than at the far bottom of the dialog. */
-.create {
+.editBar {
 	display: grid;
-	gap: var(--space-2);
-	margin: 0 var(--layer-inline) var(--space-5);
-}
-
-.create > .error {
-	margin: 0;
-}
-
-.createBar {
-	display: grid;
-	/* Name, where, colour, add. The destination column collapses to nothing when
-     there is no connected account to choose between. */
-	grid-template-columns: minmax(0, 1fr) auto auto auto;
+	grid-template-columns: minmax(0, 1fr) auto;
+	margin: var(--space-4) var(--layer-inline);
 	align-items: center;
 	gap: var(--space-2);
 	padding: var(--space-2);
@@ -95,7 +84,7 @@
 	background: var(--surface-panel);
 }
 
-.createBar > input {
+.editBar > input {
 	min-width: 0;
 	min-height: var(--control-height);
 	padding-inline: var(--space-3);
@@ -107,13 +96,9 @@
 	font-size: var(--text-14);
 }
 
-.createBar > input:focus-visible {
+.editBar > input:focus-visible {
 	outline: var(--focus-ring);
 	outline-offset: 1px;
-}
-
-.destination {
-	max-width: 11rem;
 }
 
 .groups {
@@ -150,8 +135,8 @@
 
 .groupHeader h3 {
 	color: var(--text-primary);
-	font-size: var(--text-13);
-	font-weight: 600;
+	font-size: var(--text-14);
+	font-weight: 500;
 }
 
 .groupHeader p {
@@ -306,6 +291,13 @@
 	font-weight: 500;
 }
 
+.createNameRow {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: end;
+	gap: var(--space-2);
+}
+
 .importControls {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
@@ -324,13 +316,6 @@
 	height: var(--control-height);
 }
 
-/* The create bar, two columns instead of four: name, then its colour. */
-.editBar {
-	composes: createBar;
-	grid-template-columns: minmax(0, 1fr) auto;
-	margin: var(--space-4) var(--layer-inline);
-}
-
 /* A settings row inside a form, so it drops the list divider the primitive
    draws for a run of rows and lines up with the bar above it. */
 .reminderRow {
@@ -346,35 +331,10 @@
 	margin: var(--space-4);
 }
 
-.visuallyHidden {
-	composes: visuallyHidden from "../../../ui/primitives.module.css";
-}
-
 @media (max-width: 599px) {
 	.sectionHeading,
 	.groupHeader {
 		padding-inline: var(--layer-inline);
-	}
-
-	.create .createBar {
-		grid-template-columns: minmax(0, 1fr) auto;
-	}
-
-	.create .formColorPicker {
-		grid-column: 2;
-		grid-row: 1;
-		justify-self: end;
-	}
-
-	.create .destination {
-		grid-column: 1;
-		grid-row: 2;
-		max-width: none;
-	}
-
-	.create .createBar > button:last-child {
-		grid-column: 2;
-		grid-row: 2;
 	}
 
 	.calendarName {

@@ -12,7 +12,7 @@ import {
   ConfirmationDialog,
   ConfirmationNotice,
 } from "~/ui/ConfirmationDialog";
-import { Dialog } from "~/ui/Dialog";
+import { Dialog, DialogInfo } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
 import { InlineError } from "~/ui/InlineError";
 import { Row, RowToggle } from "~/ui/Row";
@@ -253,7 +253,7 @@ export function PageSettingsDialog({
       <Dialog
         bodyLayout="flush"
         closeLabel="Close page settings"
-        description="Applies to this page only, on every device."
+        headerActions={<DialogInfo label="About page settings" title="Page settings">Applies to this page only, on every device.</DialogInfo>}
         footer={
           conflict ? (
             <>
@@ -351,10 +351,9 @@ export function PageSettingsDialog({
             />
           </div>
 
-          <SettingsSection title="General">
+          <SettingsSection title="General" help="The default page opens when Musubi starts.">
             <Row
               label="Default page"
-              detail="Open this page when Musubi starts"
               layout="responsive-actions"
               trailing={
                 isDefault ? (
@@ -377,11 +376,10 @@ export function PageSettingsDialog({
             />
           </SettingsSection>
 
-          <SettingsSection title="Presentation">
+          <SettingsSection title="Presentation" help="Row height sets hour spacing in the calendar grid. Weekend shows Saturday and Sunday. Nearby months shows days from the previous and next months.">
             {"density" in view ? (
               <Row
                 label="Row height"
-                detail="Hour spacing in the calendar grid"
                 layout="responsive-actions"
                 trailing={
                   <Select
@@ -426,7 +424,6 @@ export function PageSettingsDialog({
             {"weekend" in view ? (
               <RowToggle
                 checked={view.weekend}
-                detail="Show Saturday and Sunday"
                 disabled={busy}
                 label="Weekend"
                 onCheckedChange={(weekend) =>
@@ -439,7 +436,6 @@ export function PageSettingsDialog({
             {"showAdjacentDays" in view ? (
               <RowToggle
                 checked={view.showAdjacentDays}
-                detail="Show days from the previous and next months"
                 disabled={busy}
                 label="Nearby months"
                 onCheckedChange={(showAdjacentDays) =>
@@ -630,7 +626,7 @@ export function NewPageDialog({
     <Dialog
       bodyLayout="flush"
       closeLabel="Close new page"
-      description="It starts from the calendars you can see right now."
+      headerActions={<DialogInfo label="About new pages" title="New page">It starts from the calendars you can see right now.</DialogInfo>}
       footer={
         <>
           <Button

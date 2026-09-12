@@ -36,6 +36,7 @@ import { Button } from "~/ui/Button";
 import { Checkbox } from "~/ui/Checkbox";
 import { DatePicker } from "~/ui/DatePicker";
 import { Field } from "~/ui/Field";
+import { HelpTooltip } from "~/ui/HelpTooltip";
 import { Select } from "~/ui/Select";
 import { Row } from "~/ui/Row";
 import { Switch } from "~/ui/Switch";
@@ -360,7 +361,7 @@ export function EventEditorForm({
 
 	const timeModelFields = values.timeEditable && expanded ? (
 			<>
-				<Field label="Time model" variant={fieldVariant}>
+				<Field label="Time model" help="The selected model interprets the event dates and times. Changing it may change when the event occurs." variant={fieldVariant}>
 					<Select label="Time model" value={values.timeKind === "legacy-unknown" ? "" : values.timeKind ?? ""} placeholder="Not specified" disabled={saving}
 						options={[{ value: "zoned", label: "Event time zone" }, { value: "floating", label: "Floating local time" }, { value: "all-day", label: "All-day dates" }]}
 						onChange={kind => changeTimeModel(chooseEventTimeKind(values, kind as "zoned" | "floating" | "all-day"))} />
@@ -368,7 +369,6 @@ export function EventEditorForm({
 				{values.timeKind === "zoned" && <Field label="Event time zone" help={panel ? "For example Europe/Prague." : "For example Europe/Prague. Uses the dates and times shown below."} variant={fieldVariant}>
 					<input value={values.timeZone ?? ""} placeholder="Europe/Prague" disabled={saving} onChange={event => patch({ timeZone: event.target.value, timeLabel: event.target.value || "Choose an event time zone" })} />
 				</Field>}
-				<p className={styles.timeContext}>The selected model interprets the event dates and times. Changing it may change when the event occurs.</p>
 			</>
 	) : null;
 
@@ -534,28 +534,13 @@ export function EventEditorForm({
 					<SectionLabel className={styles.sectionLabel} id={`${id}-details-heading`}>
 						Details
 					</SectionLabel>
-					{panel ? <Row
+					<Row
 						className={styles.toggleRow}
 						size="compact"
 						icon={<UsersRound size={18} strokeWidth={1.5} />}
-						label="Allow attendance"
-						detail="Guests can respond to this event."
-						trailing={<Checkbox label="Allow attendance" labelHidden checked={values.hasAttendees} disabled={saving} onChange={event => patch({ hasAttendees: event.target.checked })} />}
-					/> : (
-					<Checkbox
-						checked={values.hasAttendees}
-						className={styles.toggleRow}
-						description="Guests can respond to this event."
-						disabled={saving}
-						label={
-							<span className={styles.fieldLabel}>
-								<UsersRound aria-hidden="true" size={16} strokeWidth={1.5} />
-								Allow attendance
-							</span>
-						}
-						onChange={(event) => patch({ hasAttendees: event.target.checked })}
+						label={<span className={styles.fieldLabel}><label htmlFor={`${id}-attendance`}>Allow attendance</label> <HelpTooltip label="Help for Allow attendance">Guests can respond to this event.</HelpTooltip></span>}
+						trailing={<Checkbox id={`${id}-attendance`} label="Allow attendance" labelHidden checked={values.hasAttendees} disabled={saving} onChange={event => patch({ hasAttendees: event.target.checked })} />}
 					/>
-					)}
 					<Field
 						className={panel ? styles.detailField : undefined}
 						label={
@@ -613,7 +598,7 @@ export function EventEditorForm({
 				data-editor-section="calendars"
 			>
 				<SectionLabel className={styles.sectionLabel} id={`${id}-calendar-heading`}>
-					Event calendars
+					<span className={styles.fieldLabel}>Event calendars <HelpTooltip label="Help for Event calendars">Choose where the event appears. Its home calendar owns updates, invitations, and the event color.</HelpTooltip></span>
 				</SectionLabel>
 
 				{calendarDisclosure ? (
@@ -653,16 +638,10 @@ export function EventEditorForm({
 							/>
 						</span>
 					</button>
-				) : (
-					<p className={styles.calendarHint} id={`${id}-calendar-hint`}>
-						Choose where the event appears. Its home calendar owns updates,
-						invitations, and the event color.
-					</p>
-				)}
+				) : null}
 
 				{showCalendarList ? (
 					<fieldset
-						aria-describedby={!calendarDisclosure ? `${id}-calendar-hint` : undefined}
 						className={styles.calendarPlacement}
 						data-ui="calendar-placement"
 						id={`${id}-calendar-list`}

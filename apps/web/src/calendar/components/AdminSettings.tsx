@@ -146,9 +146,8 @@ export function AdminSettings({ headingLevel = 3 }: { headingLevel?: 2 | 3 }) {
     <div className={styles.content}>
       {/* Writing comes first: it is why an admin opens this page, and the list
           below is what they check afterwards. */}
-      <SettingsSection headingLevel={headingLevel} title={editing ? "Edit announcement" : "New announcement"}>
+      <SettingsSection headingLevel={headingLevel} title={editing ? "Edit announcement" : "New announcement"} help="Everyone signed in to this server sees it once.">
         <Disclosure
-          detail="Everyone signed in to this server sees it once"
           icon={<Megaphone size={16} />}
           label={editing ? "Edit announcement" : "Write an announcement"}
           onOpenChange={setComposerOpen}
@@ -194,7 +193,8 @@ export function AdminSettings({ headingLevel = 3 }: { headingLevel?: 2 | 3 }) {
             </Field>
 
             <Field
-              description="Leave empty for everyone. Otherwise, publish with that release: newer announcements can supersede this one for older clients."
+              description="Leave empty for everyone."
+              help="Otherwise, publish with that release: newer announcements can supersede this one for older clients."
               label="Minimum version"
             >
               <input
