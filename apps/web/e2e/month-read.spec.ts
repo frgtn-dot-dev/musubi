@@ -1068,7 +1068,7 @@ test("uses the shared time grid as a one-column Day", async ({ page }) => {
 	await expect(page.getByText("Friday, July 24, 2026")).toBeVisible();
 });
 
-test("overlays Day event details without resizing the calendar", async ({
+test("docks Day event details and restores the calendar on close", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 1280, height: 800 });
@@ -1095,6 +1095,15 @@ test("overlays Day event details without resizing the calendar", async ({
 	expect(detailsBox.y).toBe(0);
 	expect(detailsBox.width).toBe(480);
 	expect(detailsBox.height).toBe(800);
+	const dockedArea = (await calendarArea.boundingBox())!;
+	expect(dockedArea.x).toBe(areaBox.x);
+	expect(dockedArea.width).toBe(areaBox.width - detailsBox.width);
+	expect(dockedArea.x + dockedArea.width).toBe(detailsBox.x);
+	await expect(trigger).toBeVisible();
+	await expect(page).toHaveURL(/day\?date=2026-07-23/);
+	await details.getByRole("button", { name: "Close event details" }).click();
+	await expect(details).toHaveCount(0);
+	await expect(trigger).toBeFocused();
 	expect(await calendarArea.boundingBox()).toEqual(areaBox);
 	expect(await trigger.boundingBox()).toEqual(triggerBox);
 
@@ -2298,6 +2307,7 @@ test("cancels a drag with Escape and leaves the event alone", async ({
 	// Escape cancels the drag, not the screen: nothing is written and the block
 	// returns to where it was.
 	expect(writes).toBe(0);
+	await expect(page.getByRole("dialog", { name: "Project check-in" })).toHaveCount(0);
 	const after = (await block.boundingBox())!;
 	expect(Math.abs(after.y - before.y)).toBeLessThan(2);
 });
@@ -4021,7 +4031,7 @@ test("drags across month days to create an all-day range", async ({ page }) => {
 		"Tuesday, July 28, 2026",
 	);
 	await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText(
-		"Thursday, July 30, 2026",
+		"Friday, July 31, 2026",
 	);
 	// The same pill stays put, now grabbable and owned by the open draft.
 	await expect(page.locator("[data-live]")).toHaveCount(0);
@@ -4057,7 +4067,7 @@ test("dragging backwards across month days still creates a forward range", async
 		"Tuesday, July 28, 2026",
 	);
 	await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText(
-		"Thursday, July 30, 2026",
+		"Friday, July 31, 2026",
 	);
 });
 
@@ -4901,7 +4911,7 @@ test("leaves a draggable pill on the month grid", async ({ page }) => {
 		"Wednesday, July 29, 2026",
 	);
 	await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText(
-		"Friday, July 31, 2026",
+		"Saturday, August 1, 2026",
 	);
 	await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue(
 		"Retreat",
@@ -8546,9 +8556,14 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
     await page.goto("/app/p/my-calendar/month?date=2026-07-26");
     await page.getByRole("button", { name: /Provider meeting/ }).first().click();
     await page.locator("summary").filter({ hasText: "Outlook details" }).click();
-    await expect(page.getByText(/These settings describe the series/)).toBeVisible();
+    await expect(page.getByText(/These settings describe the series/)).toHaveCount(0);
+    await page.getByRole("button", { name: "About Outlook settings" }).click();
+    const help = page.getByRole("tooltip");
+    await expect(help).toContainText("These settings describe the series");
+    await expect(help).toContainText("Both apps may notify");
+    await page.keyboard.press("Escape");
+    await expect(help).toHaveCount(0);
     await expect(page.getByText("Availability: Working elsewhere", { exact: true })).toBeVisible();
-    await expect(page.getByText(/Both apps may notify/)).toBeVisible();
     await page.locator("summary").filter({ hasText: "Outlook participants" }).click();
     await expect(page.getByRole("list", { name: "Outlook participants" })).toBeVisible();
     await expect(page.getByText("Alex Chen", { exact: true })).toBeVisible();

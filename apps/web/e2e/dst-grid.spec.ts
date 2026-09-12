@@ -104,6 +104,9 @@ test("DST spring hole rejects pointer creation and retains an existing draft aft
   await page.mouse.click(valid.x, valid.y);
   await page.getByRole("textbox", { name: "Event title" }).fill("Keep spring draft");
   const draft = page.locator('[data-time-grid-column="2026-03-29"] [data-draft]').first();
+  // The docked panel narrows the week; bring the last column into view
+  // before hit-testing its draft rather than pointing underneath the panel.
+  await draft.scrollIntoViewIfNeeded();
   const box = (await draft.boundingBox())!;
   expect(await page.evaluate(({x,y}) => document.elementFromPoint(x,y)?.closest("[data-draft]")?.outerHTML, {x:box.x+box.width-3,y:box.y+14})).toContain("data-draft");
   await page.mouse.move(box.x + box.width - 3, box.y + 14);
@@ -204,7 +207,9 @@ test("DST cross-midnight draft move keeps next-day 00:45 endpoint when saved", a
   const scale = (await column.boundingBox())!.height / 1500;
   const draft = column.locator("[data-draft]").first();
   const box = (await draft.boundingBox())!;
-  const grab = { x: box.x + 20, y: box.y + 20 };
+  // Stay outside the bottom auto-scroll zone: this checks a precise pointer
+  // delta, not a combination of that delta and elapsed edge scrolling.
+  const grab = { x: box.x + 20, y: box.y + 10 };
   expect(await page.evaluate(({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest("[data-draft]")), grab)).toBe(true);
   await page.mouse.move(grab.x, grab.y);
   await page.mouse.down();
