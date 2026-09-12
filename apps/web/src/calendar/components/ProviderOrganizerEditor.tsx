@@ -1,5 +1,6 @@
 import { getServerOrigin } from "~/api/query-keys";
 import { useEffect, useRef, useState } from "react";
+import { CalendarPlus } from "lucide-react";
 import type {
   Event,
   ProviderEventStateResponse,
@@ -12,7 +13,7 @@ import {
   type OrganizerDraft,
 } from "@musubi/calendar";
 import { editProviderOrganizer, getOrganizerCalendar } from "~/api/resources";
-import { Button } from "~/ui/Button";
+import { Button, IconButton } from "~/ui/Button";
 import { Dialog } from "~/ui/Dialog";
 import { ConfirmationDialog } from "~/ui/ConfirmationDialog";
 import { Field } from "~/ui/Field";
@@ -23,6 +24,7 @@ export function ProviderOrganizerCreateAction(props: {
   calendarID: string;
   color: string;
   connectionId?: string;
+  onCreate?: (target: HTMLElement) => void;
 }) {
   return (
     <OrganizerCreateActionBody
@@ -39,10 +41,12 @@ function OrganizerCreateActionBody({
   calendarID,
   color,
   connectionId,
+  onCreate,
 }: {
   calendarID: string;
   color: string;
   connectionId?: string;
+  onCreate?: (target: HTMLElement) => void;
 }) {
   const [available, setAvailable] = useState<"google" | "caldav" | "microsoft" | null>(null),
     [trigger, setTrigger] = useState<HTMLElement | null>(null);
@@ -57,13 +61,16 @@ function OrganizerCreateActionBody({
   }, [calendarID, connectionId]);
   return available ? (
     <>
-      <Button
-        variant="secondary"
+      <IconButton
+        label={`Create ${available === "caldav" ? "CalDAV" : available === "microsoft" ? "Outlook" : "Google"} meeting`}
         size="compact"
-        onClick={(event) => setTrigger(event.currentTarget)}
+        onClick={(event) => {
+          if (onCreate) onCreate(event.currentTarget);
+          else setTrigger(event.currentTarget);
+        }}
       >
-        Create {available === "caldav" ? "CalDAV" : available === "microsoft" ? "Outlook" : "Google"} meeting
-      </Button>
+        <CalendarPlus size={16} strokeWidth={1.7} />
+      </IconButton>
       {trigger ? (
         <ProviderOrganizerEditor
           provider={available}
@@ -235,83 +242,15 @@ export function ProviderOrganizerEditor({
           <p role="status">{notice}</p>
         ) : (
           <>
-            {(
-              [
-                ["title", "Title"],
-                ["description", "Notes"],
-                ["location", "Location"],
-              ] as const
-            ).map(([key, label]) => (
-              <Field key={key} label={label}>
-                <input
-                  value={draft[key]}
-                  disabled={locked}
-                  onChange={(event) => patch(key, event.target.value)}
-                />
-              </Field>
-            ))}
-            {!event && (
-              <Field
-                label="Guest email addresses"
-                description="Separate required guests with commas. Guest-list changes after creation are not supported here."
-              >
-                <textarea
-                  value={draft.guests}
-                  disabled={locked}
-                  onChange={(event) => patch("guests", event.target.value)}
-                />
-              </Field>
-            )}
-            {(provider === "caldav" && event && !canEditTime) || occurrence ? (
-              <p>{occurrence ? "Only this occurrence will change. Series timing and guests stay unchanged." : "Meeting time and guests are preserved."}</p>
-            ) : (
-              <>
-                {provider === "caldav" && event ? (
-                  <p>
-                    Changing time asks guests to respond again. Their existing
-                    responses will reset.
-                  </p>
-                ) : null}
-                {provider !== "google" && !event && !draft.allDay ? (
-                  <p>New timed meetings use UTC.</p>
-                ) : null}
-                <Checkbox
-                  label="All day"
-                  checked={draft.allDay}
-                  disabled={locked || (provider === "caldav" && !!event)}
-                  onChange={(event) => patch("allDay", event.target.checked)}
-                />
-                <Field label="Start">
-                  <input
-                    type={draft.allDay ? "date" : "datetime-local"}
-                    value={
-                      draft.allDay ? draft.start.slice(0, 10) : draft.start
-                    }
-                    disabled={locked}
-                    onChange={(event) => patch("start", event.target.value)}
-                  />
-                </Field>
-                <Field label="End">
-                  <input
-                    type={draft.allDay ? "date" : "datetime-local"}
-                    value={draft.allDay ? draft.end.slice(0, 10) : draft.end}
-                    disabled={locked}
-                    onChange={(event) => patch("end", event.target.value)}
-                  />
-                </Field>
-                {!draft.allDay && (
-                  <Field label="Event time zone">
-                    <input
-                      value={draft.timeZone}
-                      disabled={locked || provider !== "google"}
-                      onChange={(event) =>
-                        patch("timeZone", event.target.value)
-                      }
-                    />
-                  </Field>
-                )}
-              </>
-            )}
+            <ProviderOrganizerFields
+              draft={draft}
+              event={event}
+              provider={provider}
+              locked={locked}
+              canEditTime={canEditTime}
+              occurrence={occurrence}
+              onChange={patch}
+            />
             {canDelete && !submitted && (
               <Button variant="secondary" onClick={() => setConfirm(true)}>
                 {occurrence ? "Cancel this occurrence and notify guests" : "Cancel meeting and notify guests"}
@@ -338,4 +277,103 @@ export function ProviderOrganizerEditor({
       )}
     </div>
   );
+}
+
+/** The provider management and shared creation flows keep one field contract. */
+export function ProviderOrganizerFields({
+  draft,
+  event,
+  provider,
+  locked,
+  canEditTime = true,
+  occurrence = false,
+  onChange,
+}: {
+  draft: OrganizerDraft;
+  event?: Event;
+  provider: "google" | "caldav" | "microsoft";
+  locked: boolean;
+  canEditTime?: boolean;
+  occurrence?: boolean;
+  onChange: <Key extends keyof OrganizerDraft>(key: Key, value: OrganizerDraft[Key]) => void;
+}) {
+  return <>
+            {(
+              [
+                ["title", "Title"],
+                ["description", "Notes"],
+                ["location", "Location"],
+              ] as const
+            ).map(([key, label]) => (
+              <Field key={key} label={label}>
+                <input
+                  value={draft[key]}
+                  disabled={locked}
+                  onChange={(event) => onChange(key, event.target.value)}
+                />
+              </Field>
+            ))}
+            {!event && (
+              <Field
+                label="Guest email addresses"
+                description="Separate required guests with commas. Guest-list changes after creation are not supported here."
+              >
+                <textarea
+                  value={draft.guests}
+                  disabled={locked}
+                  onChange={(event) => onChange("guests", event.target.value)}
+                />
+              </Field>
+            )}
+            {(provider === "caldav" && event && !canEditTime) || occurrence ? (
+              <p>{occurrence ? "Only this occurrence will change. Series timing and guests stay unchanged." : "Meeting time and guests are preserved."}</p>
+            ) : (
+              <>
+                {provider === "caldav" && event ? (
+                  <p>
+                    Changing time asks guests to respond again. Their existing
+                    responses will reset.
+                  </p>
+                ) : null}
+                {provider !== "google" && !event && !draft.allDay ? (
+                  <p>New timed meetings use UTC.</p>
+                ) : null}
+                <Checkbox
+                  label="All day"
+                  checked={draft.allDay}
+                  disabled={locked || (provider === "caldav" && !!event)}
+                  onChange={(event) => onChange("allDay", event.target.checked)}
+                />
+                <Field label="Start">
+                  <input
+                    type={draft.allDay ? "date" : "datetime-local"}
+                    value={
+                      draft.allDay ? draft.start.slice(0, 10) : draft.start
+                    }
+                    disabled={locked}
+                    onChange={(event) => onChange("start", event.target.value)}
+                  />
+                </Field>
+                <Field label="End">
+                  <input
+                    type={draft.allDay ? "date" : "datetime-local"}
+                    value={draft.allDay ? draft.end.slice(0, 10) : draft.end}
+                    disabled={locked}
+                    onChange={(event) => onChange("end", event.target.value)}
+                  />
+                </Field>
+                {!draft.allDay && (
+                  <Field label="Event time zone">
+                    <input
+                      value={draft.timeZone}
+                      disabled={locked || provider !== "google"}
+                      onChange={(event) =>
+                        onChange("timeZone", event.target.value)
+                      }
+                    />
+                  </Field>
+                )}
+              </>
+            )}
+  </>;
 }

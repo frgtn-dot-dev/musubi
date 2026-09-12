@@ -5,9 +5,11 @@ import {
   type ElementRef,
   type ReactNode,
   useId,
+  useContext,
 } from "react";
 import anchoredStyles from "./AnchoredSurface.module.css";
 import { classNames } from "./class-names";
+import { ElevatedDialogContext } from "./layer-context";
 import styles from "./Menu.module.css";
 
 const DEFAULT_COLLISION_PADDING = 12;
@@ -60,6 +62,7 @@ export const MenuContent = forwardRef<
   forwardedRef,
 ) {
   const titleId = useId();
+  const elevated = useContext(ElevatedDialogContext);
 
   return (
     <MenuPrimitive.Portal>
@@ -74,6 +77,7 @@ export const MenuContent = forwardRef<
         )}
         collisionPadding={collisionPadding}
         data-mobile-surface={mobileSurface}
+        data-layer-elevated={elevated ? "" : undefined}
         data-ui="menu-content"
         loop={loop}
         ref={forwardedRef}

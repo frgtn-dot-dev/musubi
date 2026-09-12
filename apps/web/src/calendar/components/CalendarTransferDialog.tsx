@@ -70,6 +70,7 @@ export type CalendarTransferDialogProps = {
 		provider?: string;
 	}) => Promise<Calendar>;
 	onDisconnect: (calendar: Calendar) => Promise<unknown>;
+	onCreateMeeting?: (calendar: Calendar, target: HTMLElement) => void;
 	onExport: (calendarId: string, connectionId?: string) => Promise<string>;
 	onImport: (input: ImportInput) => Promise<ImportedCalendar>;
 	onManageMembers: (calendar: Calendar) => void;
@@ -120,6 +121,7 @@ function calendarDetail(calendar: Calendar, external: boolean) {
 export function CalendarTransferDialog({
 	calendars,
 	onCreate,
+	onCreateMeeting,
 	onDisconnect,
 	onExport,
 	onImport,
@@ -468,6 +470,7 @@ export function CalendarTransferDialog({
 									setDisconnectCalendar(calendar);
 								}}
 								onManageMembers={onManageMembers}
+								onCreateMeeting={onCreateMeeting}
 							/>
 						))}
 					</div>
@@ -628,6 +631,7 @@ export function CalendarTransferDialog({
 
 function CalendarGroup({
 	busy,
+	onCreateMeeting,
 	disconnectingCalendarId,
 	disconnectReturnFocus,
 	group,
@@ -637,6 +641,7 @@ function CalendarGroup({
 	onManageMembers,
 }: {
 	busy: boolean;
+	onCreateMeeting?: (calendar: Calendar, target: HTMLElement) => void;
 	disconnectingCalendarId?: string;
 	disconnectReturnFocus: RefObject<HTMLButtonElement | null>;
 	group: CalendarSourceGroup;
@@ -677,6 +682,7 @@ function CalendarGroup({
 						<li key={calendar.id}>
 							<Row
 								className={styles.calendarRow}
+								layout="responsive-actions"
 								detail={calendarDetail(calendar, external)}
 								icon={
 									<span
@@ -693,13 +699,22 @@ function CalendarGroup({
 										) : null}
 									</span>
 								}
-								/* Three fixed slots — share, rename, remove — kept even when a
+								/* Fixed slots — create meeting, share, settings, remove — kept even when a
                    row has nothing to put in one. Right-aligning whatever a row
                    happened to have moved the same action to a different place on
                    every line, so "where do I share this?" had to be answered per
                    row instead of once per column. */
 								trailing={
 									<span className={styles.rowActions}>
+										<span className={styles.rowActionSlot}>
+											{["google", "caldav", "microsoft"].includes(calendar.provider ?? "") && calendar.role === "owner" && !federatedId ? (
+												<ProviderOrganizerCreateAction
+													calendarID={calendar.id}
+													color={calendar.color}
+													onCreate={onCreateMeeting ? (target) => onCreateMeeting(calendar, target) : undefined}
+												/>
+											) : null}
+										</span>
 										<span className={styles.rowActionSlot}>
 											{federatedId ? null : (
 												<IconButton
@@ -768,11 +783,6 @@ function CalendarGroup({
 									</span>
 								}
 							/>
-                            {["google", "caldav", "microsoft"].includes(calendar.provider ?? "") && calendar.role === "owner" && !federatedId ? (
-                              <div className={styles.calendarMeeting}>
-                                <ProviderOrganizerCreateAction calendarID={calendar.id} color={calendar.color} />
-                              </div>
-                            ) : null}
 						</li>
 					);
 				})}

@@ -350,3 +350,14 @@ it("opens verified Outlook creation in explicit UTC", async () => {
   await screen.findByRole("status");
   expect(api.save.mock.calls[0][0]).toMatchObject({ provider: "microsoft", notificationPolicy: "server-invite", time: { kind: "zoned", timeZone: "UTC" } });
 });
+
+it("delegates the verified calendar action to shared creation with its focus target", async () => {
+  api.observe.mockResolvedValue({ provider: "google", calendarID, sendUpdates: "all" });
+  const onCreate = vi.fn();
+  render(<ProviderOrganizerCreateAction calendarID={calendarID} color="red" onCreate={onCreate} />);
+  const trigger = await screen.findByRole("button", { name: "Create Google meeting" });
+  fireEvent.click(trigger);
+  expect(onCreate).toHaveBeenCalledExactlyOnceWith(trigger);
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(api.save).not.toHaveBeenCalled();
+});

@@ -161,6 +161,26 @@ export const States: Story = {
   ),
 };
 
+export const InsideElevatedDialog: Story = {
+  render: () => (
+    <Dialog elevated open title="Meeting calendar" closeLabel="Close meeting calendar" onOpenChange={() => undefined}>
+      <CalendarSelect />
+    </Dialog>
+  ),
+  play: async () => {
+    const trigger = screen.getByRole("combobox", { name: "Calendar" });
+    await userEvent.click(trigger);
+    const option = await screen.findByRole("option", { name: /Personal/ });
+    await waitFor(() => {
+      const box = option.getBoundingClientRect();
+      expect(option.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2))).toBe(true);
+    });
+    await userEvent.click(option);
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(trigger).toHaveTextContent("Personal");
+  },
+};
+
 /* Narrow turns the popover into a bottom sheet, and the label that is
    screen-reader-only on a laptop becomes the sheet's visible heading. */
 export const NarrowSheet: Story = {

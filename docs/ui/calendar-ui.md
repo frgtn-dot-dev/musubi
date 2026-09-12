@@ -161,6 +161,18 @@ axes are defined in [`design-system.md` section 4](./design-system.md#4-geometry
 Those rules apply to every calendar layer; feature CSS must not establish a
 competing inset or rhythm.
 
+Web portal ordering uses `--layer-*-z` tokens. An elevated shared Dialog passes
+its layer context to descendant Popover and Menu surfaces, including their
+Radix positioning wrappers. Child pickers must remain clickable above the
+dialog in both anchored and narrow sheet layouts; features do not set z-index.
+
+Meeting creation has one workspace dialog with a calendar picker. The toolbar
+Create menu opens it without a preset; a calendar row's meeting icon presets
+that calendar. Only verified provider capabilities appear in the picker. A
+missing preset requires an explicit alternative, switching preserves draft
+content and intended instants, and submitted retries retain their original
+calendar and request. Closing returns focus to the entry point.
+
 `--hour-height` nastavuje renderer z téhož `TimeGeometry`, který používá
 hit-testing, event layout i drag. Není dovoleno zavést druhou pixelovou
 konstantu pro tutéž časovou osu.

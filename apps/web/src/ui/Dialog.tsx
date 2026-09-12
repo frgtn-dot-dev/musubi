@@ -2,6 +2,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { type ReactElement, type ReactNode, type RefObject } from "react";
 import { IconButton } from "./Button";
 import { classNames } from "./class-names";
+import { ElevatedDialogContext } from "./layer-context";
 import styles from "./primitives.module.css";
 
 export type DialogSize =
@@ -128,42 +129,44 @@ export function Dialog({
             returnTarget.focus();
           }}
         >
-          <header className={styles.dialogHeader}>
-            <div className={styles.dialogHeading}>
-              <DialogPrimitive.Title className={styles.dialogTitle}>
-                {title}
-              </DialogPrimitive.Title>
-              {description === null || description === undefined ? null : (
-                <DialogPrimitive.Description
-                  className={styles.dialogDescription}
+          <ElevatedDialogContext.Provider value={elevated}>
+            <header className={styles.dialogHeader}>
+              <div className={styles.dialogHeading}>
+                <DialogPrimitive.Title className={styles.dialogTitle}>
+                  {title}
+                </DialogPrimitive.Title>
+                {description === null || description === undefined ? null : (
+                  <DialogPrimitive.Description
+                    className={styles.dialogDescription}
+                  >
+                    {description}
+                  </DialogPrimitive.Description>
+                )}
+              </div>
+              <DialogPrimitive.Close asChild>
+                <IconButton
+                  className={styles.dialogClose}
+                  label={closeLabel}
+                  size="compact"
                 >
-                  {description}
-                </DialogPrimitive.Description>
+                  <span className={styles.dialogCloseGlyph}>×</span>
+                </IconButton>
+              </DialogPrimitive.Close>
+            </header>
+            <div
+              className={classNames(
+                styles.dialogBody,
+                styles[`dialogBody_${bodyLayout}`],
+                bodyScroll === "panels" && styles.dialogBody_panels,
+                bodyClassName,
               )}
+            >
+              {children}
             </div>
-            <DialogPrimitive.Close asChild>
-              <IconButton
-                className={styles.dialogClose}
-                label={closeLabel}
-                size="compact"
-              >
-                <span className={styles.dialogCloseGlyph}>×</span>
-              </IconButton>
-            </DialogPrimitive.Close>
-          </header>
-          <div
-            className={classNames(
-              styles.dialogBody,
-              styles[`dialogBody_${bodyLayout}`],
-              bodyScroll === "panels" && styles.dialogBody_panels,
-              bodyClassName,
-            )}
-          >
-            {children}
-          </div>
-          {footer ? (
-            <footer className={styles.dialogFooter}>{footer}</footer>
-          ) : null}
+            {footer ? (
+              <footer className={styles.dialogFooter}>{footer}</footer>
+            ) : null}
+          </ElevatedDialogContext.Provider>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

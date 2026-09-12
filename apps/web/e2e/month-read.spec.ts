@@ -97,7 +97,7 @@ async function chooseSelectOption(page: Page, label: string, option: string) {
 
 async function openCreateEvent(page: Page) {
 	await page
-		.getByRole("button", { name: "Create event or task", exact: true })
+		.getByRole("button", { name: "Create event, meeting or task", exact: true })
 		.click();
 	await page.getByRole("menuitem", { name: "Event", exact: true }).click();
 }
@@ -786,7 +786,7 @@ test("reads, filters and signs out of the authenticated Month", async ({
 	await expect(page.getByRole("menu", { name: "Create", exact: true })).toHaveCount(0);
 	await expect(page.getByRole("textbox", { name: "Event title" })).toBeFocused();
 	await page.keyboard.press("Escape");
-	await expect(page.getByRole("button", { name: "Create event or task", exact: true })).toBeFocused();
+	await expect(page.getByRole("button", { name: "Create event, meeting or task", exact: true })).toBeFocused();
 	await page.keyboard.press("Enter");
 	await page.getByRole("menuitem", { name: "Event", exact: true }).press("Enter");
 	await expect(page.getByRole("textbox", { name: "Event title" })).toBeFocused();
@@ -4152,7 +4152,7 @@ test("navigates by keyboard and documents the map behind ?", async ({
 		.getByRole("radiogroup", { name: "Calendar view" })
 		.boundingBox();
 	const eventBox = await page
-		.getByRole("button", { name: "Create event or task", exact: true })
+		.getByRole("button", { name: "Create event, meeting or task", exact: true })
 		.boundingBox();
 	expect(
 		eventBox!.x - (switcherBox!.x + switcherBox!.width),
@@ -4308,7 +4308,7 @@ test("blocks the phone web app with a full-screen app download", async ({
 	const box = (await blocker.locator("..").boundingBox())!;
 	expect(box).toMatchObject({ height: 720, width: 390, x: 0, y: 0 });
 	await expect(
-		page.getByRole("button", { name: "Create event or task", exact: true }),
+		page.getByRole("button", { name: "Create event, meeting or task", exact: true }),
 	).toHaveCount(0);
 
 	await page.keyboard.press("Escape");
@@ -4370,7 +4370,7 @@ test("turns anchored surfaces into sheets on a narrow viewport", async ({
 	// Create sits within thumb reach rather than in the toolbar.
 	const create = page.getByRole("button", {
 		exact: true,
-		name: "Create event or task",
+		name: "Create event, meeting or task",
 	});
 	const fab = (await create.boundingBox())!;
 	expect(fab.y).toBeGreaterThan(500);
@@ -7450,7 +7450,7 @@ test("draws the plus on the narrow create button", async ({ page }) => {
 	// took the icon with it, leaving a plain dark circle with nothing in it.
 	const create = page.getByRole("button", {
 		exact: true,
-		name: "Create event or task",
+		name: "Create event, meeting or task",
 	});
 	const plus = create.locator("svg");
 	await expect(plus).toBeVisible();
@@ -9652,7 +9652,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (con
       await page.getByRole("button", { name: /Organizer meeting/ }).first().click();
       trigger = page.getByRole("button", { name: "Manage Google meeting", exact: true }); await trigger.click();
     }
-    const editor = page.getByRole("dialog", { name: action === "create" ? "Create Google meeting" : "Manage Google meeting", exact: true });
+    const editor = page.getByRole("dialog", { name: action === "create" ? "Create meeting" : "Manage Google meeting", exact: true });
     if (action === "create") { await editor.getByRole("textbox", { name: "Title", exact: true }).fill("Guest planning"); await editor.getByRole("textbox", { name: "Guest email addresses" }).fill("owner@example.test"); await editor.getByRole("button", { name: "Create and send invitations" }).click(); await expect(editor.getByRole("alert")).toContainText("Choose external guests"); await expect(editor.getByRole("textbox", { name: "Guest email addresses" })).toBeEnabled(); await editor.getByRole("textbox", { name: "Guest email addresses" }).fill("guest@example.test"); }
     if (action === "update") await editor.getByRole("textbox", { name: "Notes", exact: true }).fill("New explicit note");
     await expectNoAccessibilityViolations(page); expect(await editor.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
@@ -9734,7 +9734,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (con
       await page.getByRole("button", { name: /Organizer meeting/ }).first().click();
       trigger = page.getByRole("button", { name: "Manage CalDAV meeting", exact: true }); await trigger.click();
     }
-    const editor = page.getByRole("dialog", { name: action === "create" ? "Create CalDAV meeting" : "Manage CalDAV meeting", exact: true });
+    const editor = page.getByRole("dialog", { name: action === "create" ? "Create meeting" : "Manage CalDAV meeting", exact: true });
     if (action === "create") { await editor.getByRole("textbox", { name: "Title", exact: true }).fill("Guest planning"); await editor.getByRole("textbox", { name: "Guest email addresses" }).fill("owner@example.test"); await editor.getByRole("button", { name: "Create and send invitations" }).click(); await expect(editor.getByRole("alert")).toContainText("Choose external guests"); await expect(editor.getByRole("textbox", { name: "Guest email addresses" })).toBeEnabled(); await editor.getByRole("textbox", { name: "Guest email addresses" }).fill("guest@example.test"); }
     if (action === "delete") await expect(editor.getByRole("button", { name: "Save and notify guests" })).toHaveCount(0);
     if (action === "update") await expect(editor.getByRole("button", { name: "Cancel meeting and notify guests" })).toHaveCount(0);
@@ -9904,7 +9904,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     if (width < 600) await page.getByRole("button", { name: "Open navigation" }).click();
     await page.getByRole("button", { name: "Calendars", exact: true }).click();
     const trigger = page.getByRole("button", { name: "Create Outlook meeting", exact: true }); await trigger.click();
-    const editor = page.getByRole("dialog", { name: "Create Outlook meeting", exact: true });
+    const editor = page.getByRole("dialog", { name: "Create meeting", exact: true });
     await expect(editor.getByRole("textbox", { name: "Event time zone" })).toHaveValue("UTC");
     await expect(editor.getByRole("textbox", { name: "Event time zone" })).toBeDisabled();
     await editor.getByRole("textbox", { name: "Title", exact: true }).fill("Guest planning");
@@ -9998,4 +9998,73 @@ for (const confirmation of ["unavailable", "missing"] as const) {
     expect(errors).toEqual([]);
     await page.screenshot({ path: `/tmp/musubi-session-check-${confirmation}.png` });
   });
+}
+
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  for (const entry of ["toolbar", "calendar"] as const) {
+    test(`shared meeting creation from ${entry}: ${theme} ${width}`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+      // Every request stays inside this fixture, including invitation writes.
+      await page.route(url => url.pathname.startsWith("/api/"), route => respond(route, {}));
+      const googleID = "00000000-0000-4000-8000-000000000391";
+      const outlookID = "00000000-0000-4000-8000-000000000392";
+      const connected = [
+        { ...calendars[0]!, id: googleID, name: "Studio", provider: "google", accountId: "google-fixture", accountLabel: "studio@example.test" },
+        { ...calendars[0]!, id: outlookID, name: "Team", provider: "microsoft", accountId: "outlook-fixture", accountLabel: "team@example.test" },
+      ];
+      await mockAuthenticatedReads(page, { ...events, events: [] }, [calendars[0]!, ...connected]);
+      await page.route(`**/api/v1/calendars/${googleID}/provider-organizer`, route => respond(route, { provider: "google", calendarID: googleID, sendUpdates: "all" }));
+      await page.route(`**/api/v1/calendars/${outlookID}/provider-organizer`, route => respond(route, { provider: "microsoft", calendarID: outlookID, notificationPolicy: "server-invite", createTime: "utc-or-all-day", actions: ["create"] }));
+      const writes: Record<string, unknown>[] = [], errors: string[] = [];
+      page.on("pageerror", error => errors.push(error.message));
+      await page.route("**/api/v1/provider-organizer", route => {
+        const body = route.request().postDataJSON(); writes.push(body);
+        return respond(route, { operationID: body.operationID, eventID: body.eventID, replayed: false, status: "pending", localCommitted: true, notificationDelivery: "unknown" }, 202);
+      });
+      await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+      let trigger: Locator;
+      if (entry === "toolbar") {
+        trigger = page.getByRole("button", { name: "Create event, meeting or task", exact: true });
+        await trigger.click();
+        await page.getByRole("menuitem", { name: "Meeting", exact: true }).click();
+      } else {
+        if (width < 600) await page.getByRole("button", { name: "Open navigation" }).click();
+        await page.getByRole("button", { name: "Calendars", exact: true }).click();
+        trigger = page.getByRole("button", { name: "Create Outlook meeting", exact: true });
+        await trigger.click();
+      }
+      const editor = page.getByRole("dialog", { name: "Create meeting", exact: true });
+      const calendar = editor.getByRole("combobox", { name: "Calendar", exact: true });
+      await expect(calendar).toContainText(entry === "calendar" ? "Team" : "Studio");
+      await calendar.click();
+      await expect(page.getByRole("option")).toHaveCount(2);
+      await page.getByRole("option", { name: /Studio/ }).click();
+      await expect(calendar).toBeFocused();
+      await editor.getByRole("textbox", { name: "Title", exact: true }).fill("Shared meeting draft");
+      await editor.getByRole("textbox", { name: "Guest email addresses" }).fill("guest@example.test");
+      await editor.getByLabel("Start", { exact: true }).fill("2026-07-26T11:00");
+      await editor.getByLabel("End", { exact: true }).fill("2026-07-26T12:00");
+      await editor.getByRole("textbox", { name: "Event time zone" }).fill("Europe/Prague");
+      await calendar.click();
+      await page.getByRole("option", { name: /Team/ }).click();
+      await expect(calendar).toBeFocused();
+      await expect(editor.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Shared meeting draft");
+      await expect(editor.getByRole("textbox", { name: "Guest email addresses" })).toHaveValue("guest@example.test");
+      await expect(editor.getByLabel("Start", { exact: true })).toHaveValue(/2026-07-26T09:00/);
+      await expect(editor.getByRole("textbox", { name: "Event time zone" })).toHaveValue("UTC");
+      await expect(editor.getByRole("textbox", { name: "Event time zone" })).toBeDisabled();
+      await expectNoAccessibilityViolations(page);
+      expect(await editor.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+      await editor.screenshot({ path: testInfo.outputPath("shared-meeting.png") });
+      await editor.getByRole("button", { name: "Create and send invitations" }).click();
+      await expect(editor.getByRole("status")).toContainText("Guest notification delivery remains unknown");
+      expect(writes).toHaveLength(1);
+      expect(writes[0]).toMatchObject({ calendarID: outlookID, provider: "microsoft", action: "create", time: { timeZone: "UTC", startLocal: "2026-07-26T09:00:00.000", endLocal: "2026-07-26T10:00:00.000" }, content: { title: "Shared meeting draft" } });
+      await editor.getByRole("button", { name: "Close", exact: true }).click();
+      await expect(trigger).toBeFocused();
+      expect(errors).toEqual([]);
+    });
+  }
 }

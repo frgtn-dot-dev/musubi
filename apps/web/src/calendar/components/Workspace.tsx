@@ -70,6 +70,7 @@ import type { CalendarViewId } from "../view-registry";
 import { AccountDialog } from "./AccountDialog";
 import { AgendaView } from "./AgendaView";
 import { CalendarTransferDialog } from "./CalendarTransferDialog";
+import { ProviderMeetingCreateDialog, isMeetingCalendarCandidate } from "./ProviderMeetingCreateDialog";
 import { ConnectionsDialog } from "./ConnectionsDialog";
 import { MonthCalendar } from "./MonthCalendar";
 import { MultiWeekCalendar } from "./MultiWeekCalendar";
@@ -341,6 +342,10 @@ export function Workspace({
   const [settingsPage, setSettingsPage] = useState<PageDocument>();
   const [newPageOpen, setNewPageOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [meetingCreate, setMeetingCreate] = useState<{
+    initialCalendarID?: string;
+    returnFocus: HTMLElement;
+  }>();
   const [searchQuery, setSearchQuery] = useState("");
   const searchEventIdRef = useRef<string | undefined>(undefined);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -1017,9 +1022,11 @@ export function Workspace({
           activeView={activeView}
           availability={gridAvailability.available ? { shown: gridAvailability.shown, onToggle: gridAvailability.toggle, onOpenList: target => { setConnectionsReturnFocus(target); setConnectionsOpen(true); } } : undefined}
           canCreateEvents={editableCalendars.length > 0}
+          canCreateMeetings={!offline && calendars.some(isMeetingCalendarCandidate)}
           canCreateTasks={!offline && editableTaskCalendars.length > 0}
           navigationTriggerRef={sidebarTriggerRef}
           onCreateEvent={(target) => openCreateAtDate(date, target)}
+          onCreateMeeting={(returnFocus) => setMeetingCreate({ returnFocus })}
           onCreateTask={() => {
             setTaskCreateRequest((request) => request + 1);
             if (activeView !== "tasks") handleViewChange("tasks");
@@ -1375,6 +1382,7 @@ export function Workspace({
       <CalendarTransferDialog
         calendars={calendars}
         onCreate={onCreateCalendar}
+        onCreateMeeting={(calendar, returnFocus) => setMeetingCreate({ initialCalendarID: calendar.id, returnFocus })}
         onDisconnect={onDisconnectExternalCalendar}
         onExport={onExportCalendar}
         onImport={onImportCalendar}
@@ -1389,6 +1397,15 @@ export function Workspace({
         open={calendarTransfersOpen}
         reminders={reminders}
       />
+      {meetingCreate ? (
+        <ProviderMeetingCreateDialog
+          calendars={calendars}
+          initialCalendarID={meetingCreate.initialCalendarID}
+          initialDate={date}
+          returnFocus={meetingCreate.returnFocus}
+          onClose={() => setMeetingCreate(undefined)}
+        />
+      ) : null}
       {showConnections ? (
         <ConnectionsDialog
           returnFocus={connectionsReturnFocus}

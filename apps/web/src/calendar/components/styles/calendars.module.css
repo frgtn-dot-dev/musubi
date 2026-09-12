@@ -393,17 +393,3 @@
 		margin-inline: var(--layer-inline);
 	}
 }
-
-/* A provider meeting is a separate action, never part of the sync status sentence.
-   Capability loading may leave the wrapper empty, so it adds no blank row. */
-.calendarMeeting:has(> button) {
-	display: flex;
-	padding: 0 var(--layer-inline) var(--space-3);
-	/* Match the existing Row inset, 22px icon lane and icon-to-copy gap. */
-	padding-left: calc(var(--space-6) + 22px + var(--space-3));
-	border-bottom: 1px solid var(--border-subtle);
-}
-
-li:has(> .calendarMeeting > button) > .calendarRow {
-	border-bottom: 0;
-}

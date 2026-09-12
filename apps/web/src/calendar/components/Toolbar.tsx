@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ListTodo,
+  Users,
   Menu as MenuIcon,
   Plus,
   Search,
@@ -25,9 +26,11 @@ type ToolbarProps = {
   availability?: { shown: boolean; onToggle: () => void; onOpenList: (target: HTMLElement | null) => void };
   activeView: CalendarViewId;
   canCreateEvents: boolean;
+  canCreateMeetings: boolean;
   canCreateTasks: boolean;
   navigationTriggerRef?: RefObject<HTMLButtonElement | null>;
   onCreateEvent: (target: HTMLElement) => void;
+  onCreateMeeting: (target: HTMLElement) => void;
   onCreateTask: () => void;
   onOpenSearch: () => void;
   onOpenSidebar: () => void;
@@ -45,9 +48,11 @@ export function Toolbar({
   availability,
   activeView,
   canCreateEvents,
+  canCreateMeetings,
   canCreateTasks,
   navigationTriggerRef,
   onCreateEvent,
+  onCreateMeeting,
   onCreateTask,
   onOpenSearch,
   onOpenSidebar,
@@ -63,7 +68,7 @@ export function Toolbar({
   // A flick moves the period on touch, so the arrows are desktop furniture.
   const narrow = useNarrowViewport();
   const createTriggerRef = useRef<HTMLButtonElement>(null);
-  const createEventAfterClose = useRef(false);
+  const createAfterClose = useRef<"event" | "meeting" | null>(null);
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
   const availabilityTriggerRef = useRef<HTMLButtonElement>(null);
   const availabilityListAfterClose = useRef(false);
@@ -163,12 +168,12 @@ export function Toolbar({
               onChange={onViewChange}
             />
           )}
-          {canCreateEvents || canCreateTasks ? (
+          {canCreateEvents || canCreateMeetings || canCreateTasks ? (
             <Menu>
               <MenuTrigger asChild>
                 <IconButton
                   className={styles.eventButton}
-                  label="Create event or task"
+                  label="Create event, meeting or task"
                   ref={createTriggerRef}
                   size="compact"
                   variant="primary"
@@ -181,24 +186,35 @@ export function Toolbar({
                 label="Create"
                 mobileSurface="anchored"
                 onCloseAutoFocus={(event) => {
-                  if (!createEventAfterClose.current) return;
-                  createEventAfterClose.current = false;
+                  const action = createAfterClose.current;
+                  if (!action) return;
+                  createAfterClose.current = null;
                   const target = createTriggerRef.current;
                   if (!target) return;
                   // Finish the outgoing menu's focus lifecycle before mounting
                   // the form, so it cannot dismiss the newly opened popover.
                   event.preventDefault();
-                  onCreateEvent(target);
+                  if (action === "meeting") onCreateMeeting(target);
+                  else onCreateEvent(target);
                 }}
               >
                 <MenuItem
                   disabled={!canCreateEvents}
                   icon={<CalendarPlus size={16} strokeWidth={1.7} />}
                   onSelect={() => {
-                    createEventAfterClose.current = true;
+                    createAfterClose.current = "event";
                   }}
                 >
                   Event
+                </MenuItem>
+                <MenuItem
+                  disabled={!canCreateMeetings}
+                  icon={<Users size={16} strokeWidth={1.7} />}
+                  onSelect={() => {
+                    createAfterClose.current = "meeting";
+                  }}
+                >
+                  Meeting
                 </MenuItem>
                 <MenuItem
                   disabled={!canCreateTasks}
