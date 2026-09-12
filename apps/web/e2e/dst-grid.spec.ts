@@ -198,21 +198,25 @@ test("DST cross-midnight draft move keeps next-day 00:45 endpoint when saved", a
   const point = await slotPoint(page, "2026-10-25", 1440);
   await page.mouse.click(point.x, point.y);
   await page.getByRole("textbox", { name: "Event title" }).fill("Cross-midnight draft");
+  const start = page.getByRole("combobox", { name: "Start time" });
+  await expect(start).toHaveValue("23:00");
   await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText("Monday, October 26, 2026");
   const end = page.getByRole("combobox", { name: "End time" });
   await end.fill("01:00");
   await end.press("Tab");
   await expect(end).toHaveValue("01:00");
+  await expect(start).toHaveValue("23:00");
   const column = page.locator('[data-time-grid-column="2026-10-25"]');
   const scale = (await column.boundingBox())!.height / 1500;
   const draft = column.locator("[data-draft]").first();
   const box = (await draft.boundingBox())!;
-  // Stay outside the bottom auto-scroll zone: this checks a precise pointer
-  // delta, not a combination of that delta and elapsed edge scrolling.
-  const grab = { x: box.x + 20, y: box.y + 10 };
+  const grab = { x: box.x + 20, y: box.y + 20 };
   expect(await page.evaluate(({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest("[data-draft]")), grab)).toBe(true);
+  const calendar = page.locator("[data-calendar-area]");
+  const scrollTop = await calendar.evaluate(element => element.scrollTop);
   await page.mouse.move(grab.x, grab.y);
   await page.mouse.down();
+  expect(await calendar.evaluate(element => element.scrollTop)).toBe(scrollTop);
   await page.mouse.move(grab.x, grab.y - 15 * scale, { steps: 8 });
   await expect(draft).toHaveAttribute("data-dragging", "");
   await page.mouse.up();

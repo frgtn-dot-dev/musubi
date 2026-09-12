@@ -669,6 +669,10 @@ export function TimeGridView({
 	) {
 		if (!draftSlot || !onMoveDraft || pointerEvent.button !== 0) return;
 		pointerEvent.stopPropagation();
+		// The draft is aria-hidden; the editor owns focus. A default mouse focus
+		// on the surrounding grid can scroll it after begin() captures scrollTop,
+		// turning that focus scroll into a time delta on the first pointer move.
+		pointerEvent.preventDefault();
 		beginDraftDrag({
 			dayIndex: draftSlot.dayIndex,
 			exactRange: draftSlot.exactRange,
