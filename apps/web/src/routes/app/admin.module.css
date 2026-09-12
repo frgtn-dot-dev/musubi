@@ -2,15 +2,11 @@
 .content {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
 }
 
-/* SettingsSection already owns the break between adjacent groups. */
-.content {
-  gap: 0;
-}
-
+/* SettingsSection owns content spacing; only the page needs a header gap. */
 .page {
+  gap: var(--space-8);
   margin: 0 auto;
   max-width: 46rem;
   padding: var(--space-6) var(--space-4);
