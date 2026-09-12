@@ -10417,3 +10417,37 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await expect(account.getByRole("button", { name: /Display name/ })).toBeFocused();
   });
 }
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`task shared recurrence editor: ${theme} ${width}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 916 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    await mockAuthenticatedReads(page);
+    let saved: Record<string, unknown> | undefined;
+    await page.route("**/api/v1/tasks", route => {
+      if (route.request().method() === "POST") {
+        saved = { ...route.request().postDataJSON(), creatorID: session.user.id };
+        return respond(route, saved);
+      }
+      return respond(route, { tasks: saved ? [saved] : [] });
+    });
+    await page.goto("/app/p/my-calendar/tasks?date=2026-07-26");
+    await page.getByRole("button", { name: "Create task", exact: true }).click();
+    await page.getByRole("textbox", { name: "Title", exact: true }).fill("Weekly UI review");
+    await page.getByRole("button", { name: "Start date: Choose date", exact: true }).click();
+    await page.getByRole("dialog", { name: "Choose start date" }).getByRole("button", { name: "Today", exact: true }).click();
+    await page.getByText("Recurrence", { exact: true }).click();
+    await page.getByRole("combobox", { name: "Repeat", exact: true }).click();
+    await page.getByRole("option", { name: "Every week", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "Recurrence rule" })).not.toBeVisible();
+    await expectNoAccessibilityViolations(page);
+    await page.screenshot({ path: testInfo.outputPath("task-recurrence.png"), fullPage: true });
+    await page.getByRole("button", { name: "Save task", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "New task" })).not.toBeVisible();
+    expect(saved?.recurrence).toMatch(/^FREQ=WEEKLY;BYDAY=/);
+    expect(saved?.start).toBeTruthy();
+    await page.getByRole("button", { name: /Weekly UI review/ }).click();
+    await page.getByText("Recurrence", { exact: true }).click();
+    await expect(page.getByRole("combobox", { name: "Repeat", exact: true })).toContainText("Every week");
+  });
+}

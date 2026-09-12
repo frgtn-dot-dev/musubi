@@ -50,6 +50,7 @@ const OPTIONS = [
 ] as const;
 
 type RecurrenceEditorProps = {
+	followStartDate?: boolean;
 	rdateMaster?: Event;
 	weekStartsOn?: Settings["weekStartsOn"];
 	allDay?: boolean;
@@ -64,6 +65,7 @@ function dateAtNoon(date: string) {
 }
 
 export function RecurrenceEditor({
+	followStartDate = true,
 	rdateMaster,
 	weekStartsOn = "monday",
 	allDay = false,
@@ -119,11 +121,11 @@ export function RecurrenceEditor({
 	useEffect(() => {
 		if (previousDate.current === date) return;
 		previousDate.current = date;
-		if (option !== "weekly") return;
+		if (!followStartDate || option !== "weekly") return;
 		let rule = buildRRule("weekly", startDate, advanced);
 		if (rule && advanced.until) rule += `;UNTIL=${advanced.until}`;
 		onChange(joinRecurrence(rule, extras) ?? "");
-	}, [advanced, date, extras, onChange, option, startDate]);
+	}, [advanced, date, extras, followStartDate, onChange, option, startDate]);
 
 	function emit(nextValue: string) {
 		setSyncedValue(nextValue);
