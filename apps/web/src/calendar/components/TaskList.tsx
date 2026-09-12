@@ -617,7 +617,7 @@ function TaskEditor({
           label="Recurrence"
           detail={taskRecurrenceSummary(draft.recurrence, draft.start)}
         >
-          <Field label="Recurrence rule" description="Uses iCalendar recurrence syntax.">
+          <Field label="Recurrence rule" help="Uses iCalendar recurrence syntax.">
             <textarea
               placeholder="RRULE:FREQ=WEEKLY"
               rows={2}

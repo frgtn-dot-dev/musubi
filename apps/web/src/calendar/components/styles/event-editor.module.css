@@ -564,6 +564,7 @@
 .form[data-compact] .calendarPlacement {
 	max-height: min(280px, 40dvh);
 	overflow-y: auto;
+	scroll-padding-block: var(--layer-body-block);
 	overscroll-behavior: contain;
 }
 
@@ -710,6 +711,7 @@
 		align-content: start;
 		overflow-x: hidden;
 		overflow-y: auto;
+		scroll-padding-block: var(--layer-body-block);
 		overscroll-behavior: contain;
 	}
 
@@ -836,6 +838,7 @@
 	gap: var(--space-6);
 	padding: var(--space-5) var(--layer-inline, var(--space-6));
 	overflow-y: auto;
+	scroll-padding-block: var(--layer-body-block);
 	overscroll-behavior: contain;
 }
 
@@ -998,12 +1001,12 @@
 
 @media (max-width: 899px) {
 	.form[data-layout="page"] { min-height: 0; grid-template-rows: minmax(0, 1fr) auto; overflow: hidden; padding: 0; }
-	.form[data-layout="page"] .formBody { display: block; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+	.form[data-layout="page"] .formBody { display: block; min-height: 0; overflow-y: auto; scroll-padding-block: var(--layer-body-block); overscroll-behavior: contain; }
 	.form[data-layout="page"] .actions { justify-content: flex-end; padding: var(--space-4) var(--layer-inline); border-top: 1px solid var(--border-subtle); }
 }
 
 @media (min-width: 900px) {
-	.form[data-layout="page"] .whenSection { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+	.form[data-layout="page"] .whenSection { min-height: 0; overflow-y: auto; scroll-padding-block: var(--layer-body-block); overscroll-behavior: contain; }
 }
 
 @media (max-width: 899px) {

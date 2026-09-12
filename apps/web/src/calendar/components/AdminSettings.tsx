@@ -176,7 +176,7 @@ export function AdminSettings({ headingLevel = 3 }: { headingLevel?: 2 | 3 }) {
             </Field>
 
             <Field
-              description="Use blank lines for paragraphs. Web links are clickable."
+              help="Use blank lines for paragraphs. Web links are clickable."
               label="Message"
             >
               <textarea

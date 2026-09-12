@@ -446,7 +446,7 @@ export function SettingsDialog({
               {activePage === "reminders" ? (
                 <SettingsSection
                   title="Reminders"
-                  description="Default timing. Calendars and events can use their own reminders."
+                  help="Default timing. Calendars and events can use their own reminders."
                 >
                   <Row
                     label="Timed events"

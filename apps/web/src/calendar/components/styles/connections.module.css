@@ -51,6 +51,7 @@
 		grid-area: 1 / 1;
 		min-height: 0;
 		overflow-y: auto;
+		scroll-padding-block: var(--layer-body-block);
 		overscroll-behavior: contain;
 	}
 
@@ -68,6 +69,7 @@
 		grid-area: 1 / 2 / -1 / 3;
 		min-height: 0;
 		overflow-y: auto;
+		scroll-padding-block: var(--layer-body-block);
 		overscroll-behavior: contain;
 		border-left: 1px solid var(--border-subtle);
 	}

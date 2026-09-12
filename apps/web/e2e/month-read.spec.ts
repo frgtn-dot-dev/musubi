@@ -10302,3 +10302,75 @@ for (const [width, theme] of [[1280, "dark"], [390, "light"], [320, "dark"]] as 
     expect(intervalReads).toBe(0);
   });
 }
+
+
+for (const [width, theme, count] of [[1280, "dark", 5], [1280, "light", 24], [390, "dark", 24]] as const) {
+  test(`Delivery inbox keeps closing space: ${theme} ${width} ${count}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 916 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    await mockAuthenticatedReads(page);
+    await page.route("**/api/v1/event-deliveries", route => respond(route, {
+      items: Array.from({ length: count }, (_, i) => ({ eventId: `00000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, savedTitle: `Saved meeting ${i + 1}` })), nextCursor: null,
+    }));
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    if (width < 600) await page.getByRole("button", { name: "Open navigation" }).click();
+    await page.getByRole("button", { name: "Connections", exact: true }).click();
+    await page.getByRole("button", { name: "Unfinished deliveries", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Unfinished deliveries", exact: true });
+    const last = dialog.getByRole("button", { name: `Saved meeting ${count} Open delivery records · saved title`, exact: true });
+    await expect(last).toBeAttached();
+    await last.focus();
+    await last.press("Tab");
+    await expect(dialog.getByRole("button", { name: "Refresh list" })).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(last).toBeFocused();
+    const measurements = await last.evaluate(element => {
+      const body = element.closest('[role="dialog"]')!.querySelector('header + div')!;
+      body.scrollTop = body.scrollHeight;
+      return { bodyBottom: body.getBoundingClientRect().bottom, lastBottom: element.getBoundingClientRect().bottom };
+    });
+    expect(measurements.bodyBottom - measurements.lastBottom).toBeGreaterThanOrEqual(19);
+    expect(measurements.bodyBottom - measurements.lastBottom).toBeLessThanOrEqual(22);
+    await expectNoAccessibilityViolations(page);
+    await dialog.screenshot({ path: testInfo.outputPath("inbox-bottom-spacing.png") });
+  });
+}
+
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`Account avatar and contextual help: ${theme} ${width}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 916 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    await mockAuthenticatedReads(page);
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    if (width < 600) await page.getByRole("button", { name: "Open navigation" }).click();
+    await page.getByRole("button", { name: "Manage account", exact: true }).click();
+    const account = page.getByRole("dialog", { name: "Account", exact: true });
+    const avatar = account.getByRole("button", { name: "Change photo", exact: true });
+    await expect(avatar).toBeVisible();
+    await expect(avatar).not.toContainText("Change photo");
+    await account.evaluate(element => Promise.all(element.getAnimations({ subtree: true }).map(animation => animation.finished)));
+    const box = await avatar.boundingBox();
+    expect(box!.width).toBeGreaterThanOrEqual(64);
+    expect(Math.abs(box!.width - box!.height)).toBeLessThanOrEqual(2);
+    await expectNoAccessibilityViolations(page);
+    await account.screenshot({ path: testInfo.outputPath("clickable-avatar.png") });
+    await account.getByRole("button", { name: /Display name/ }).click();
+    const editor = page.getByRole("dialog", { name: "Display name", exact: true });
+    const input = editor.getByRole("textbox", { name: "Display name", exact: true });
+    await expect(input).toBeFocused();
+    await expect(editor).not.toContainText("How people recognize you in shared calendars.");
+    const help = editor.getByRole("button", { name: "Help for Display name", exact: true });
+    if (width < 600) await help.click(); else await help.hover();
+    const tooltip = page.getByRole("tooltip");
+    await expect(tooltip).toContainText("How people recognize you in shared calendars.");
+    if (width >= 600) await expect(input).toBeFocused();
+    await expectNoAccessibilityViolations(page);
+    await page.screenshot({ path: testInfo.outputPath("contextual-help.png") });
+    await page.keyboard.press("Escape");
+    await expect(tooltip).toHaveCount(0);
+    await expect(editor).toBeVisible();
+    await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(account.getByRole("button", { name: /Display name/ })).toBeFocused();
+  });
+}

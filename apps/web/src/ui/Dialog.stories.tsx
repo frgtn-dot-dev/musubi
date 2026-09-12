@@ -5,6 +5,8 @@ import { DESKTOP_MODES, MOBILE_MODES } from "../../.storybook/modes";
 import { Button } from "./Button";
 import { Dialog, DialogClose, DialogInfo } from "./Dialog";
 import { Field } from "./Field";
+import { RowAction } from "./Row";
+import { SettingsSection } from "./SettingsSection";
 
 function DialogExample({ information = false }: { information?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -278,4 +280,61 @@ export const FooterSafeArea: Story = {
       <DialogExample />
     </SafeArea>
   ),
+};
+
+
+function GroupedDialogExample({ count = 5, footer = true }: { count?: number; footer?: boolean }) {
+  const [open, setOpen] = useState(false);
+  return <Dialog open={open} onOpenChange={setOpen} bodyLayout="flush" title="Saved changes"
+    closeLabel="Close saved changes" trigger={<Button>Open saved changes</Button>}
+    footer={footer ? <Button variant="secondary">Refresh list</Button> : undefined}>
+    <SettingsSection title="Events">
+      {Array.from({ length: count }, (_, i) => <RowAction key={i} label={`Saved event ${i + 1}`} detail="Open delivery records" />)}
+    </SettingsSection>
+  </Dialog>;
+}
+
+export const GroupedBodyEndSpacing: Story = {
+  render: () => <GroupedDialogExample />,
+  play: async ({ canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole("button", { name: "Open saved changes" }));
+    const dialog = await screen.findByRole("dialog", { name: "Saved changes" });
+    await waitFor(() => expect(dialog).toBeVisible());
+    const body = dialogBody(dialog);
+    const last = within(dialog).getAllByRole("button", { name: /Saved event/ }).at(-1)!;
+    last.focus();
+    body.scrollTop = body.scrollHeight;
+    await waitFor(() => {
+      const gap = body.getBoundingClientRect().bottom - last.getBoundingClientRect().bottom;
+      const expected = Number.parseFloat(getComputedStyle(body).getPropertyValue("--layer-body-block"));
+      expect(gap).toBeGreaterThanOrEqual(expected - 1);
+      expect(gap).toBeLessThanOrEqual(expected + 2);
+    });
+    await expect(last).toHaveFocus();
+    await expect(Number.parseFloat(getComputedStyle(body).scrollPaddingBottom)).toBeGreaterThan(0);
+  },
+};
+
+export const LongGroupedBodyEndSpacing: Story = {
+  ...GroupedBodyEndSpacing,
+  render: () => <GroupedDialogExample count={24} />,
+};
+
+export const NarrowGroupedBodyEndSpacing: Story = {
+  ...LongGroupedBodyEndSpacing,
+  globals: { viewport: { isRotated: false, value: "mobile1" } },
+  parameters: { chromatic: { modes: MOBILE_MODES } },
+};
+
+export const FooterlessGroupedSafeArea: Story = {
+  ...GroupedBodyEndSpacing,
+  render: () => <SafeArea><GroupedDialogExample footer={false} /></SafeArea>,
+  play: async ({ canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole("button", { name: "Open saved changes" }));
+    const dialog = await screen.findByRole("dialog", { name: "Saved changes" });
+    const body = dialogBody(dialog);
+    await waitFor(() => expect(getComputedStyle(body).paddingBottom).toBe("34px"));
+    const section = within(dialog).getByRole("region", { name: "Events" });
+    await expect(getComputedStyle(section).paddingBottom).toBe(getComputedStyle(body).getPropertyValue("--layer-body-block").trim());
+  },
 };

@@ -30,6 +30,7 @@
 	.groups {
 		min-height: 0;
 		overflow-y: auto;
+		scroll-padding-block: var(--layer-body-block);
 		overscroll-behavior: contain;
 		padding-bottom: var(--space-5);
 	}
@@ -38,6 +39,7 @@
 		grid-template-rows: auto auto;
 		min-height: 0;
 		overflow-y: auto;
+		scroll-padding-block: var(--layer-body-block);
 		border-top: 0;
 		border-left: 1px solid var(--border-subtle);
 	}

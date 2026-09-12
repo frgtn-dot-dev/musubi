@@ -1152,3 +1152,11 @@ link to the [Google sharing guide](https://support.google.com/calendar/answer/37
 Refresh failures stay in the setup dialog; successful discovery returns to the
 source list. Checking intervals remains explicit, with range fields in the body
 and the read action in the footer.
+
+
+Inset section groups at the end of a flush dialog keep a shared body-sized closing
+gap before the footer or shell edge, including delivery records and saved-change
+lists. Safe-area padding remains a separate shell/footer responsibility. Dialog
+and nested settings, calendar and inspector scrollers reserve scroll padding so
+keyboard focus does not land against the clipping edge. Scroll padding supplements
+physical content padding; it does not replace the final visible gap.

@@ -316,7 +316,8 @@ export function ProviderOrganizerFields({
             {!event && (
               <Field
                 label="Guest email addresses"
-                description="Separate required guests with commas. Guest-list changes after creation are not supported here."
+                description="Separate required guests with commas."
+                help="Guest-list changes after creation are not supported here."
               >
                 <textarea
                   value={draft.guests}

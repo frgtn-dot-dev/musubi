@@ -69,7 +69,7 @@ export function AvailabilitySection({ userId, onReconnect, onRefresh, connection
     refreshAction.setError(""); setSetupTrigger(event.currentTarget);
   }}>How to set up</Button>;
   return <>
-    <SettingsSection title="Google availability" description="Busy times from calendars shared without event details.">
+    <SettingsSection title="Google availability" help="Busy times from calendars shared without event details.">
       {sources.isPending ? <Row label="Loading shared calendars…" role="status" /> : sources.isError ? (
         <Row role="alert" label="Shared calendars could not be loaded" layout="responsive-actions" trailing={
           <Button variant="secondary" size="compact" disabled={busy} loading={sources.isFetching} onClick={() => void sources.refetch()}>Refresh availability sources</Button>
@@ -107,7 +107,7 @@ export function AvailabilitySection({ userId, onReconnect, onRefresh, connection
         }, "Could not refresh connected calendars.")}>Refresh connected calendars</Button>
       </>}
     >
-      <SettingsSection inset={false} title="Add a calendar" description="Calendars with event details already appear in your regular calendar list.">
+      <SettingsSection inset={false} title="Add a calendar" help="Calendars with event details already appear in your regular calendar list.">
         <Row label="1. Ask the owner to share" detail={<>In Google Calendar, share with the Google account you connected to Musubi. Choose <strong>See only free/busy (hide details)</strong>.</>} />
         <Row label="2. Add it in Google Calendar" detail="Open the sharing email and follow its link using that same Google account." />
         <Row label="3. Refresh here, then switch it on" detail="Refresh connected calendars below. Turn on the new calendar in this list, then choose Check availability. If asked, reconnect Google to allow access." />

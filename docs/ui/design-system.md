@@ -290,6 +290,20 @@ the accessible name and supplies the native tooltip fallback unless a custom
 `title` is provided. Toggle icon buttons expose `aria-pressed`, while buttons
 that open a layer expose the expanded state supplied by that layer primitive.
 
+`HelpTooltip` is the shared question-mark control for short, non-interactive
+background explanations. Use `Field help` or `SettingsSection help` to place it
+beside a label or heading; the button remains outside the field label. Existing
+`description` and `error` content stays visible and keeps its accessibility
+association. Required formats, validation, current status, and action consequences
+must remain visible rather than moving into optional help.
+
+Help opens after 400 ms of pointer hover, immediately on keyboard focus, or on a
+tap/click. Its content remains hoverable, uses `role="tooltip"` and
+`aria-describedby`, and does not move focus. Escape dismisses it until a fresh
+hover, focus, or explicit activation. It stays anchored with collision handling
+on narrow screens. Inline help uses a 24 px desktop target to preserve label
+rhythm and the standard compact touch target on narrow or coarse-pointer screens.
+
 `Toast` is a single transient notice, never a stack or activity log. A new
 notice replaces the current one. Neutral feedback uses a polite `status`; an
 error uses an assertive `alert`, a visible error icon, and the error border tone

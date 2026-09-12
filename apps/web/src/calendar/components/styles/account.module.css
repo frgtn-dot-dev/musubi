@@ -38,9 +38,23 @@
   font-size: var(--text-12);
 }
 
-.changePhotoControl {
-  justify-self: start;
-  margin-top: var(--space-2);
+.identity .avatarControl {
+  /* The profile Avatar determines the target size, including on touch. */
+  width: auto;
+  flex: none;
+  border-radius: var(--radius-pill);
+}
+
+.avatarCamera {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  padding: var(--space-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  color: var(--text-primary);
 }
 
 .dialogForm {

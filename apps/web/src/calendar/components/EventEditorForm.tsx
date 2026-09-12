@@ -365,7 +365,7 @@ export function EventEditorForm({
 						options={[{ value: "zoned", label: "Event time zone" }, { value: "floating", label: "Floating local time" }, { value: "all-day", label: "All-day dates" }]}
 						onChange={kind => changeTimeModel(chooseEventTimeKind(values, kind as "zoned" | "floating" | "all-day"))} />
 				</Field>
-				{values.timeKind === "zoned" && <Field label="Event time zone" description={panel ? "For example Europe/Prague." : "For example Europe/Prague. Uses the dates and times shown below."} variant={fieldVariant}>
+				{values.timeKind === "zoned" && <Field label="Event time zone" help={panel ? "For example Europe/Prague." : "For example Europe/Prague. Uses the dates and times shown below."} variant={fieldVariant}>
 					<input value={values.timeZone ?? ""} placeholder="Europe/Prague" disabled={saving} onChange={event => patch({ timeZone: event.target.value, timeLabel: event.target.value || "Choose an event time zone" })} />
 				</Field>}
 				<p className={styles.timeContext}>The selected model interprets the event dates and times. Changing it may change when the event occurs.</p>

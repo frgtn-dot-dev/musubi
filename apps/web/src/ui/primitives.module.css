@@ -1488,6 +1488,7 @@
 	overflow-x: hidden;
 	overflow-y: auto;
 	overscroll-behavior: contain;
+	scroll-padding-block: var(--layer-body-block);
 }
 
 /* The body of a dialog whose own children scroll: a list on one side, controls on
@@ -1507,6 +1508,13 @@
 
 .dialogBody_flush {
 	padding: 0;
+}
+
+/* Inset groups need a closing gutter before a footer or the shell edge.
+   Edge-to-edge fields/rows and independently scrolling panels keep their own
+   anatomy. Safe-area padding remains on the shell, outside this content gap. */
+.dialogBody_flush > .settingsSection:last-child:not([data-inset="false"]) {
+	padding-bottom: var(--layer-body-block);
 }
 
 /* A first-level section supplies the flush body's row boundary, not a second
@@ -2487,5 +2495,31 @@
 		border-block: 0;
 		border-inline-end: 0;
 		box-shadow: none;
+	}
+}
+
+/* Optional help sits beside its label without changing the label association. */
+.labelWithHelp {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	gap: var(--space-1);
+}
+
+/* Inline help uses a 24px desktop target to keep short labels compact. */
+.iconButton.helpTooltipTrigger {
+	width: var(--space-6);
+	min-width: var(--space-6);
+	min-height: var(--space-6);
+	height: var(--space-6);
+	flex: none;
+}
+
+@media (max-width: 599px), (pointer: coarse) {
+	.iconButton.helpTooltipTrigger {
+		width: var(--compact-control-height);
+		min-width: var(--compact-control-height);
+		min-height: var(--compact-control-height);
+		height: var(--compact-control-height);
 	}
 }
