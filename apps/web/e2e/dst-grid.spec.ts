@@ -214,12 +214,26 @@ test("DST cross-midnight draft move keeps next-day 00:45 endpoint when saved", a
   expect(await page.evaluate(({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest("[data-draft]")), grab)).toBe(true);
   const calendar = page.locator("[data-calendar-area]");
   const scrollTop = await calendar.evaluate(element => element.scrollTop);
+  await page.evaluate(() => {
+    const trace: unknown[] = [];
+    (window as unknown as { draftGestureTrace: unknown[] }).draftGestureTrace = trace;
+    for (const type of ["pointerdown", "pointermove", "pointerup", "scroll"]) {
+      document.addEventListener(type, event => {
+        const calendar = document.querySelector("[data-calendar-area]")!;
+        const draft = document.querySelector<HTMLElement>("[data-draft]");
+        trace.push({ type, y: (event as PointerEvent).clientY, scrollTop: calendar.scrollTop,
+          calendar: calendar.getBoundingClientRect().toJSON(), draftTop: draft?.style.top,
+          label: draft?.textContent, start: document.querySelector<HTMLInputElement>('[aria-label="Start time"]')?.value });
+      }, true);
+    }
+  });
   await page.mouse.move(grab.x, grab.y);
   await page.mouse.down();
   expect(await calendar.evaluate(element => element.scrollTop)).toBe(scrollTop);
   await page.mouse.move(grab.x, grab.y - 15 * scale, { steps: 8 });
   await expect(draft).toHaveAttribute("data-dragging", "");
   await page.mouse.up();
+  console.info("DST draft gesture", JSON.stringify(await page.evaluate(() => (window as unknown as { draftGestureTrace: unknown[] }).draftGestureTrace)));
   await expect(page.getByRole("combobox", { name: "Start time" })).toHaveValue("22:45");
   await expect(end).toHaveValue("00:45");
   await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText("Monday, October 26, 2026");
