@@ -5,7 +5,9 @@ import {
   type Calendar,
 } from "@musubi/types";
 import {
+  CheckSquare,
   Globe,
+  Square,
   Link2,
   Plus,
   RefreshCw,
@@ -29,7 +31,6 @@ import {
 } from "~/calendar/connections";
 import { useFederatedWorkspace } from "~/calendar/federated-workspace";
 import { Button, IconButton } from "~/ui/Button";
-import { Checkbox } from "~/ui/Checkbox";
 import { Dialog } from "~/ui/Dialog";
 import { Empty } from "~/ui/Empty";
 import { Field } from "~/ui/Field";
@@ -384,7 +385,16 @@ export function ConnectionsDialog({
               }
             />
           )}
-          {connections.capabilities.data?.googleAvailability ? <AvailabilitySection key={userId} userId={userId} onReconnect={() => void connectSocial("google")} /> : null}
+          {connections.capabilities.data?.googleAvailability ? <AvailabilitySection
+            key={userId}
+            userId={userId}
+            connectionBusy={busy || importing}
+            onReconnect={() => void connectSocial("google")}
+            onRefresh={async () => {
+              await connections.refreshConnectedCalendars();
+              onNotice("Connected calendars refreshed.");
+            }}
+          /> : null}
           <SettingsSection title="Sync activity">
             <Row
               label="Event deliveries"
@@ -420,14 +430,16 @@ export function ConnectionsDialog({
             ) : providers.length > 0 ? (
               <div className={styles.providerButtons}>
                 {providers.includes("google") || providers.includes("microsoft") ? (
-                  <Checkbox
-                    checked={includeTasks}
+                  <Button
+                    aria-pressed={includeTasks}
                     className={styles.taskConsent}
-                    description="Request Tasks access too. Existing permissions stay active."
                     disabled={busy}
-                    label="Include Tasks (optional)"
-                    onChange={(event) => setIncludeTasks(event.target.checked)}
-                  />
+                    icon={includeTasks ? <CheckSquare size={16} /> : <Square size={16} />}
+                    variant="secondary"
+                    onClick={() => setIncludeTasks(value => !value)}
+                  >
+                    Include Tasks (optional)
+                  </Button>
                 ) : null}
                 {providers.includes("google") ? (
                   <Button

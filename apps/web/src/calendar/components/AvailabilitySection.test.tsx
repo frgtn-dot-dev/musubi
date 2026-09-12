@@ -8,9 +8,9 @@ import { GOOGLE_AVAILABILITY_SCOPE } from "@musubi/types";
 const id = "00000000-0000-4000-8000-000000000001";
 const clients: QueryClient[] = [];
 afterEach(() => { cleanup(); clients.forEach(client => client.clear()); clients.length = 0; vi.unstubAllGlobals(); });
-function mount(onReconnect = vi.fn()) {
+function mount(onReconnect = vi.fn(), onRefresh = vi.fn().mockResolvedValue(undefined)) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); clients.push(client);
-  return render(<QueryClientProvider client={client}><AvailabilitySection userId="owner" onReconnect={onReconnect} /></QueryClientProvider>);
+  return render(<QueryClientProvider client={client}><AvailabilitySection userId="owner" onReconnect={onReconnect} onRefresh={onRefresh} /></QueryClientProvider>);
 }
 it("requires explicit selection, displays intervals without event actions, and distinguishes unavailable from free", async () => {
   let enabled = false, generation = 0, mode = "unavailable";
@@ -93,4 +93,28 @@ it("retains the named source and reconnect action after an invalid grant", async
   expect(reconnect).toHaveBeenCalledOnce();
   expect(screen.queryByText("No free/busy-only sources found")).toBeNull();
   expect(screen.getByRole("switch", { name: "Use Work availability for availability" }).getAttribute("aria-checked")).toBe("true");
+});
+
+it("explains setup without reading availability, refreshes discovery, and restores focus", async () => {
+  const fetch = vi.fn(async (url: string) => {
+    expect(url.endsWith("/availability/sources")).toBe(true);
+    return Response.json({ sources: [] });
+  });
+  vi.stubGlobal("fetch", fetch);
+  const onRefresh = vi.fn().mockRejectedValueOnce(new Error("Google is unavailable")).mockResolvedValueOnce(undefined);
+  mount(vi.fn(), onRefresh);
+  await screen.findByText("No shared busy-time calendars yet");
+  expect(screen.queryByRole("button", { name: "Check availability" })).toBeNull();
+  const setup = screen.getByRole("button", { name: "How to set up" });
+  fireEvent.click(setup);
+  const dialog = screen.getByRole("dialog", { name: "Set up Google availability" });
+  expect(within(dialog).getByText("See only free/busy (hide details)")).toBeTruthy();
+  expect(within(dialog).getByText(/Open the sharing email/)).toBeTruthy();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Refresh connected calendars" }));
+  expect((await within(dialog).findByRole("alert")).textContent).toBe("Google is unavailable");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Refresh connected calendars" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await waitFor(() => expect(document.activeElement).toBe(setup));
+  expect(onRefresh).toHaveBeenCalledTimes(2);
+  expect(fetch.mock.calls.every(([url]) => String(url).endsWith("/availability/sources"))).toBe(true);
 });

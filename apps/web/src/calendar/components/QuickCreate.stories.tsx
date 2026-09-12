@@ -22,7 +22,7 @@ function CreateEventPreview({ allDay = false, connectedAccounts = false }: { all
     {target ? <QuickCreate
       anchor={{ returnFocus: target, x: 0, y: 0 }} calendars={connectedAccounts ? connectedCalendars : fixtureCalendars}
       date="2026-09-11" endDate={allDay ? "2026-09-11" : undefined} isAllDay={allDay}
-      email="alex@example.com" userId="alex" timeFormat="24h" weekStartsOn="monday"
+      email="alex@example.com" userId="alex" userName="Alex Morgan" timeFormat="24h" weekStartsOn="monday"
       onCreate={async event => event} onCreated={() => {}} open
       onOpenChange={open => { if (!open) setTarget(undefined); }}
     /> : null}

@@ -3,16 +3,17 @@ import { type ReactNode, useEffect, useState } from "react";
 import { expect, screen, userEvent, waitFor, within } from "storybook/test";
 import { DESKTOP_MODES, MOBILE_MODES } from "../../.storybook/modes";
 import { Button } from "./Button";
-import { Dialog, DialogClose } from "./Dialog";
+import { Dialog, DialogClose, DialogInfo } from "./Dialog";
 import { Field } from "./Field";
 
-function DialogExample() {
+function DialogExample({ information = false }: { information?: boolean }) {
   const [open, setOpen] = useState(false);
 
   return (
     <Dialog
       closeLabel="Close page settings"
-      description="Choose the name used in the sidebar."
+      description={information ? undefined : "Choose the name used in the sidebar."}
+      headerActions={information ? <DialogInfo label="Page sharing information" title="Sharing">Changing this page name does not change who can see its calendars.</DialogInfo> : undefined}
       footer={
         <>
           <DialogClose>
@@ -152,6 +153,33 @@ export const NarrowSheet: Story = {
   },
   play: openDialog,
   render: () => <DialogExample />,
+};
+
+export const HeaderInformation: Story = {
+  parameters: {
+    chromatic: { modes: { ...DESKTOP_MODES, ...MOBILE_MODES } },
+  },
+  play: async (context) => {
+    await openDialog(context);
+    const dialog = await screen.findByRole("dialog", { name: "Page settings" });
+    const info = within(dialog).getByRole("button", { name: "Page sharing information" });
+    await userEvent.click(info);
+    const explanation = await screen.findByRole("dialog", { name: "Sharing" });
+    await expect(explanation).toHaveAccessibleDescription("Changing this page name does not change who can see its calendars.");
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Sharing" })).not.toBeInTheDocument());
+    await expect(dialog).toBeVisible();
+    await expect(info).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() => expect(screen.getByRole("dialog", { name: "Sharing" })).toBeVisible());
+  },
+  render: () => <DialogExample information />,
+};
+
+export const NarrowHeaderInformation: Story = {
+  ...HeaderInformation,
+  globals: { viewport: { isRotated: false, value: "mobile1" } },
+  parameters: { chromatic: { modes: MOBILE_MODES } },
 };
 
 export const FlushBody: Story = {

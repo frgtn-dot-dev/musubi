@@ -47,6 +47,7 @@ type QuickCreateProps = {
   startTime?: string;
   timeFormat: Settings["timeFormat"];
   userId: string;
+  userName?: string;
   weekStartsOn: Settings["weekStartsOn"];
 };
 
@@ -69,6 +70,7 @@ export function QuickCreate({
   startTime,
   timeFormat,
   userId,
+  userName,
   weekStartsOn,
 }: QuickCreateProps) {
   const titleRef = useRef<HTMLInputElement>(null);
@@ -166,6 +168,7 @@ export function QuickCreate({
           </header>
           <EventEditorForm
             calendars={calendars}
+            localAccountName={userName?.trim() || email}
             layout="panel"
             titleRef={titleRef}
             onExpand={onMoreOptions ? values => { handoff.current = true; onMoreOptions(values); } : undefined}

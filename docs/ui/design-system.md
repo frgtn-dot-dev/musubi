@@ -187,6 +187,12 @@ group uses the panel surface, a subtle border, and the 14 px shared radius with
 no gradient or shadow. Rows retain their own 16 px component inset inside that
 edge; this is nested component rhythm, not a competing layer axis.
 
+Inside an already padded parent such as the default `Dialog` body, use
+`SettingsSection inset={false}`. This removes only the section's outer padding;
+the parent supplies spacing between sections, while headings, group surfaces,
+and the rows' own insets retain their normal styling. The default remains inset
+for sections inside flush layers.
+
 Only repeated rows receive dividers. The group clips its surface and dividers,
 while row focus rings draw inward so keyboard focus is never hidden by the
 rounded edge. This inset structure was chosen over a fully flush list because
@@ -239,6 +245,11 @@ px and below. `MenuItem` owns icon, label, optional shortcut, disabled state,
 and a named destructive tone; `MenuSeparator` divides a genuinely different
 command group. Do not use a menu for one action, persistent choices, form
 controls, or navigation that should remain visible.
+
+`Dialog.headerActions` places secondary controls beside Close on the shared
+header axis. Use `DialogInfo` for optional background explanations, opened by
+a named Info button; keep consequential action wording visible. Its popover
+supports keyboard dismissal and returns focus to the Info button.
 
 `Dialog` defaults to `bodyLayout="padded"`; use `bodyLayout="flush"` only for
 edge-to-edge rows or sections whose own readable content follows the layer

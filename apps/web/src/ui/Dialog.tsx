@@ -1,6 +1,8 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { type ReactElement, type ReactNode, type RefObject } from "react";
+import { Info, X } from "lucide-react";
+import { type ReactElement, type ReactNode, type RefObject, useId } from "react";
 import { IconButton } from "./Button";
+import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "./Popover";
 import { classNames } from "./class-names";
 import { ElevatedDialogContext } from "./layer-context";
 import styles from "./primitives.module.css";
@@ -37,6 +39,8 @@ export type DialogProps = {
    */
   elevated?: boolean;
   footer?: ReactNode;
+  /** Secondary controls beside Close; the shell owns their alignment. */
+  headerActions?: ReactNode;
   initialFocus?: RefObject<HTMLElement | null>;
   onOpenChange: (open: boolean) => void;
   open: boolean;
@@ -73,6 +77,7 @@ export function Dialog({
   description,
   elevated = false,
   footer,
+  headerActions,
   initialFocus,
   onOpenChange,
   open,
@@ -143,15 +148,18 @@ export function Dialog({
                   </DialogPrimitive.Description>
                 )}
               </div>
-              <DialogPrimitive.Close asChild>
-                <IconButton
-                  className={styles.dialogClose}
-                  label={closeLabel}
-                  size="compact"
-                >
-                  <span className={styles.dialogCloseGlyph}>×</span>
-                </IconButton>
-              </DialogPrimitive.Close>
+              <div className={styles.dialogHeaderActions}>
+                {headerActions}
+                <DialogPrimitive.Close asChild>
+                  <IconButton
+                    className={styles.dialogClose}
+                    label={closeLabel}
+                    size="compact"
+                  >
+                    <span className={styles.dialogCloseGlyph}>×</span>
+                  </IconButton>
+                </DialogPrimitive.Close>
+              </div>
             </header>
             <div
               className={classNames(
@@ -175,4 +183,39 @@ export function Dialog({
 
 export function DialogClose({ children }: { children: ReactElement }) {
   return <DialogPrimitive.Close asChild>{children}</DialogPrimitive.Close>;
+}
+
+/** Background help stays available without competing with the dialog's task. */
+export function DialogInfo({ children, label, title }: {
+  children: ReactNode;
+  label: string;
+  title: string;
+}) {
+  const id = useId();
+  return <Popover>
+    <PopoverTrigger asChild>
+      <IconButton label={label} size="compact">
+        <Info aria-hidden="true" size={17} strokeWidth={1.6} />
+      </IconButton>
+    </PopoverTrigger>
+    <PopoverContent
+      align="end"
+      aria-describedby={`${id}-description`}
+      aria-labelledby={`${id}-title`}
+      className={styles.dialogInfo}
+      role="dialog"
+    >
+      <div className={styles.dialogHeader}>
+        <h2 className={styles.dialogTitle} id={`${id}-title`}>{title}</h2>
+        <PopoverClose asChild>
+          <IconButton className={styles.dialogClose} label={`Close ${label.toLowerCase()}`} size="compact">
+            <X aria-hidden="true" size={17} strokeWidth={1.6} />
+          </IconButton>
+        </PopoverClose>
+      </div>
+      <div className={styles.dialogBody_padded}>
+        <p className={styles.dialogDescription} id={`${id}-description`}>{children}</p>
+      </div>
+    </PopoverContent>
+  </Popover>;
 }

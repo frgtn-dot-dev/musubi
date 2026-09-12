@@ -192,7 +192,10 @@ Create menu opens it without a preset; a calendar row's meeting icon presets
 that calendar. Only verified provider capabilities appear in the picker. A
 missing preset requires an explicit alternative, switching preserves draft
 content and intended instants, and submitted retries retain their original
-calendar and request. Closing returns focus to the entry point.
+calendar and request. Closing returns focus to the entry point. Background
+invitation information lives behind the header’s Info button; the primary action
+still explicitly says it sends invitations. Cancellation confirmations retain
+their consequences in the visible description.
 
 `--hour-height` nastavuje renderer z téhož `TimeGeometry`, který používá
 hit-testing, event layout i drag. Není dovoleno zavést druhou pixelovou
@@ -1123,10 +1126,29 @@ layer; overflow, wheel, touch, and keyboard scrolling stay intact in calendars,
 forms, lists, and portaled surfaces.
 
 Event calendar pickers identify each account once, with a provider mark and
-account label in a single-line group heading. Local Musubi uses its mark alone
-with an accessible name. Each heading and its calendar rows share one rounded
+account label in a single-line group heading. Local Musubi uses its mark and the
+signed-in account name. The default calendar does not repeat a “Personal calendar”
+subtitle. Each heading and its calendar rows share one rounded
 surface, using the notes surface tokens, with consistent space between accounts.
 Individual rows show calendar colour and name without repeating the provider
 logo or subtitle. Event-detail calendar pills use a calendar-coloured provider
 mark instead of a second colour dot, and a stronger outline identifies the home
 calendar on web and native.
+
+
+### Connection choices and availability setup
+
+Connections presents optional Tasks consent as one full-width toggle button above
+provider buttons, with a checked icon and `aria-pressed`; the choice still controls
+only the requested Google/Microsoft Tasks scope. The permanent helper sentence is
+removed.
+
+Google availability uses the standard grouped rows. An empty list offers **How to
+set up** instead of an unusable check action. The setup dialog explains sharing
+busy times without details, accepting the Google sharing link in the connected
+account, refreshing connected calendars, and selecting the discovered calendar.
+Calendars with readable event details remain in normal event sync. Instructions
+link to the [Google sharing guide](https://support.google.com/calendar/answer/37082?hl=en).
+Refresh failures stay in the setup dialog; successful discovery returns to the
+source list. Checking intervals remains explicit, with range fields in the body
+and the read action in the footer.

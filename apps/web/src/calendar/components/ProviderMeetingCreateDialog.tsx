@@ -3,7 +3,7 @@ import { providerDisplayName, providerFlavor, type Calendar, type ProviderOrgani
 import { useEffect, useMemo, useRef, useState } from "react";
 import { editProviderOrganizer, getOrganizerCalendar } from "~/api/resources";
 import { Button } from "~/ui/Button";
-import { Dialog } from "~/ui/Dialog";
+import { Dialog, DialogInfo } from "~/ui/Dialog";
 import { Empty } from "~/ui/Empty";
 import { Field } from "~/ui/Field";
 import { InlineError } from "~/ui/InlineError";
@@ -137,7 +137,7 @@ export function ProviderMeetingCreateDialog({ calendars, initialCalendarID, retu
       open
       closeLabel="Close meeting editor"
       title="Create meeting"
-      description={selected ? organizerNotificationNotice(selected.provider) : "Choose a connected calendar to invite guests."}
+      headerActions={<DialogInfo label="Meeting invitation information" title="Invitations">{selected ? organizerNotificationNotice(selected.provider) : "Choose a connected calendar to invite guests."}</DialogInfo>}
       returnFocus={returnFocus}
       onOpenChange={open => { if (!open && !pending.current) onClose(); }}
       footer={<>

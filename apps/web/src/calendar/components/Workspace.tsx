@@ -1337,6 +1337,7 @@ export function Workspace({
           calendars={editableCalendars}
           date={createIntent.date}
           email={user.email}
+          userName={user.name}
           endDate={createIntent.endDate}
           endTime={createIntent.endTime}
           exactRange={createIntent.exactRange}

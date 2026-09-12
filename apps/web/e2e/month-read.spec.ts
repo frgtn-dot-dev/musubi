@@ -7883,11 +7883,9 @@ for (const { provider, width, theme } of [
 			await page.getByRole("button", { name: "Open navigation" }).click();
 		await page.getByRole("button", { name: "Connections" }).click();
 		const dialog = page.getByRole("dialog", { name: "Connections" });
-		const checkbox = dialog.getByRole("checkbox", { name: /Include Tasks/ });
-		await expect(checkbox).toBeChecked();
-		await expect(dialog).toContainText(
-			"Existing permissions stay active.",
-		);
+		const checkbox = dialog.getByRole("button", { name: /Include Tasks/ });
+		await expect(checkbox).toHaveAttribute("aria-pressed", "true");
+		await expect(dialog).not.toContainText("Existing permissions stay active.");
 		const connect = dialog.getByRole("button", {
 			name: provider === "google" ? "Google Calendar" : "Outlook",
 		});
@@ -7901,7 +7899,7 @@ for (const { provider, width, theme } of [
 		await expect(checkbox).toBeEnabled();
 		await checkbox.focus();
 		await page.keyboard.press("Space");
-		await expect(checkbox).not.toBeChecked();
+		await expect(checkbox).toHaveAttribute("aria-pressed", "false");
 		await connect.click();
 		await expect.poll(() => requests.length).toBe(2);
 		expect(requests[1]).toMatchObject({ provider, callbackURL: page.url() });
@@ -10212,6 +10210,18 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
         await trigger.click();
       }
       const editor = page.getByRole("dialog", { name: "Create meeting", exact: true });
+      const info = editor.getByRole("button", { name: "Meeting invitation information" });
+      await expect(editor).not.toContainText("Guest notification delivery cannot be verified");
+      await info.click();
+      const help = page.getByRole("dialog", { name: "Invitations", exact: true });
+      await expect(help).toContainText("Guest notification delivery cannot be verified");
+      await expectNoAccessibilityViolations(page);
+      expect(await help.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+      await help.screenshot({ path: testInfo.outputPath("meeting-information.png") });
+      await page.keyboard.press("Escape");
+      await expect(help).toHaveCount(0);
+      await expect(info).toBeFocused();
+      await expect(editor).toBeVisible();
       const calendar = editor.getByRole("combobox", { name: "Calendar", exact: true });
       await expect(calendar).toContainText(entry === "calendar" ? "Team" : "Studio");
       await calendar.click();
@@ -10243,4 +10253,52 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
       expect(errors).toEqual([]);
     });
   }
+}
+
+
+for (const [width, theme] of [[1280, "dark"], [390, "light"], [320, "dark"]] as const) {
+  test(`Google availability setup discovers a shared calendar: ${theme} ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 916 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    await mockAuthenticatedReads(page);
+    await page.route("**/api/v1/server", route => respond(route, { email: true, pushPublicKey: null, socials: [], socialsWeb: [], syncProviders: ["google", "microsoft", "caldav"], googleAvailability: true }));
+    let discovered = false;
+    let refreshes = 0;
+    let intervalReads = 0;
+    const source = { id: "00000000-0000-4000-8000-000000000101", generation: 1, label: "Team availability", accountLabel: "Google work", enabled: false, reconnectRequired: false };
+    await page.route("**/api/v1/availability/sources", route => respond(route, { sources: discovered ? [source] : [] }));
+    await page.route("**/api/v1/availability", route => { intervalReads++; return respond(route, {}); });
+    await page.route("**/api/v1/users/connections/sync", route => {
+      refreshes++; discovered = true; return respond(route, {});
+    });
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    if (width < 600) await page.getByRole("button", { name: "Open navigation" }).click();
+    await page.getByRole("button", { name: "Connections", exact: true }).click();
+    const connections = page.getByRole("dialog", { name: "Connections", exact: true });
+    await expect(connections.getByText("No shared busy-time calendars yet")).toBeVisible();
+    await expect(connections.getByRole("button", { name: "Check availability", exact: true })).toHaveCount(0);
+    const tasks = connections.getByRole("button", { name: "Include Tasks (optional)" });
+    await expect(tasks).toHaveAttribute("aria-pressed", "true");
+    await expectNoAccessibilityViolations(page);
+    expect(await connections.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await connections.screenshot({ path: `/tmp/musubi-connections-${theme}-${width}.png` });
+    const setup = connections.getByRole("button", { name: "How to set up" });
+    await setup.click();
+    const dialog = page.getByRole("dialog", { name: "Set up Google availability", exact: true });
+    await expect(dialog.getByText("See only free/busy (hide details)")).toBeVisible();
+    await expect(dialog.getByRole("link", { name: "Google sharing guide" })).toHaveAttribute("href", "https://support.google.com/calendar/answer/37082?hl=en");
+    await expectNoAccessibilityViolations(page);
+    expect(await dialog.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await dialog.screenshot({ path: `/tmp/musubi-availability-setup-${theme}-${width}.png` });
+    await dialog.getByRole("button", { name: "Close availability setup" }).click();
+    await expect(setup).toBeFocused();
+    await setup.click();
+    await dialog.getByRole("button", { name: "Refresh connected calendars", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(connections.getByRole("switch", { name: "Use Team availability for availability" })).not.toBeChecked();
+    await expect(connections.getByRole("button", { name: "Check availability", exact: true })).toBeDisabled();
+    await expect(setup).toBeFocused();
+    expect(refreshes).toBe(1);
+    expect(intervalReads).toBe(0);
+  });
 }

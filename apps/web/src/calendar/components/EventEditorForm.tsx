@@ -92,6 +92,7 @@ type EventEditorFormProps = {
 	rdateMaster?: Event;
 	calendarLocked?: boolean;
 	calendars: Calendar[];
+	localAccountName?: string;
 	/**
 	 * Quick create: only what a new event cannot do without — name, when, which
 	 * calendar — with the rest behind one disclosure. Same form, same validation,
@@ -143,6 +144,7 @@ export function EventEditorForm({
 	rdateMaster,
 	calendarLocked = false,
 	calendars,
+	localAccountName,
 	compact = false,
 	initialValues,
 	onValuesChange,
@@ -679,7 +681,10 @@ export function EventEditorForm({
 									<div className={styles.calendarGroupHeading}>
 										<strong>
 											<AccountMark size="compact" flavor={group.flavor} />
-											<span className={group.key === "musubi" ? styles.visuallyHidden : styles.calendarGroupTitle}>{group.title}</span>
+											<span className={styles.calendarGroupTitle}>{group.key === "musubi" ? localAccountName?.trim() || group.title : group.title}</span>
+											{group.key === "musubi" && localAccountName?.trim() ? (
+												<span className={styles.visuallyHidden}> · Musubi</span>
+											) : null}
 											{group.flavor && group.title !== group.detail ? (
 												<span className={styles.visuallyHidden}> · {group.detail}</span>
 											) : null}
@@ -837,6 +842,6 @@ function calendarServer(calendar: Calendar | undefined) {
 
 function calendarSourceDetail(calendar: Calendar) {
 	if (calendar.provider) return providerDisplayName(calendar);
-	if (calendar.isDefault) return "Personal calendar";
+	if (calendar.isDefault) return null;
 	return calendar.role === "owner" ? "Your calendar" : "Shared calendar";
 }

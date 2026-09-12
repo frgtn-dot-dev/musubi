@@ -628,6 +628,10 @@
 	padding-top: var(--space-8);
 }
 
+.settingsSection[data-inset="false"] {
+	padding: 0;
+}
+
 /* Sits between the section heading and its rows, so it reads as a caveat for the
    whole group rather than a detail of the first setting in it. */
 .settingsSectionDescription {
@@ -1445,6 +1449,23 @@
 .dialogClose {
 	flex: none;
 	margin: -7px -7px 0 0;
+}
+
+.dialogHeaderActions {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: var(--space-1);
+	/* Keep the existing Close glyph's optical alignment for the whole group. */
+	margin: -7px -7px 0 0;
+}
+
+.dialogHeaderActions .dialogClose {
+	margin: 0;
+}
+
+.dialogInfo {
+	width: min(var(--popover-width), calc(100vw - var(--space-6)));
 }
 
 .dialogCloseGlyph {

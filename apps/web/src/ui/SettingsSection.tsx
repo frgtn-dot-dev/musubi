@@ -12,6 +12,8 @@ export type SettingsSectionProps = Omit<
   description?: ReactNode;
   /** Use 2 directly under a page title; dialogs normally use 3. */
   headingLevel?: 2 | 3;
+  /** Let an already padded parent own the outer spacing; rows keep their inset. */
+  inset?: boolean;
   title: ReactNode;
 };
 
@@ -26,6 +28,7 @@ export function SettingsSection({
   className,
   description,
   headingLevel = 3,
+  inset = true,
   title,
   ...sectionProps
 }: SettingsSectionProps) {
@@ -36,6 +39,7 @@ export function SettingsSection({
       {...sectionProps}
       aria-labelledby={headingId}
       className={classNames(styles.settingsSection, className)}
+      data-inset={inset ? undefined : "false"}
     >
       <SectionLabel id={headingId} level={headingLevel}>
         {title}

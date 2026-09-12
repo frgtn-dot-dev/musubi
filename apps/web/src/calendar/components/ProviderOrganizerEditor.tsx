@@ -14,7 +14,7 @@ import {
 } from "@musubi/calendar";
 import { editProviderOrganizer, getOrganizerCalendar } from "~/api/resources";
 import { Button, IconButton } from "~/ui/Button";
-import { Dialog } from "~/ui/Dialog";
+import { Dialog, DialogInfo } from "~/ui/Dialog";
 import { ConfirmationDialog } from "~/ui/ConfirmationDialog";
 import { Field } from "~/ui/Field";
 import { Checkbox } from "~/ui/Checkbox";
@@ -204,7 +204,7 @@ export function ProviderOrganizerEditor({
         open
         closeLabel="Close meeting editor"
         title={occurrence ? "Manage this occurrence" : `${event ? "Manage" : "Create"} ${provider === "caldav" ? "CalDAV" : provider === "microsoft" ? "Outlook" : "Google"} meeting`}
-        description={organizerNotificationNotice(provider)}
+        headerActions={<DialogInfo label="Meeting invitation information" title="Invitations">{organizerNotificationNotice(provider)}</DialogInfo>}
         returnFocus={returnFocus}
         onOpenChange={(open) => {
           if (!open && !pending.current) onClose();

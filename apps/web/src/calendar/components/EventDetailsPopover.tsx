@@ -671,6 +671,7 @@ export function EventDetailsPopover({
                 onValuesChange={(values) => setDraft(current => current ? { ...current, values, ownedFields: rememberPrivateEditorChanges(current.values ?? eventFormValues(master.recurrence && onRestoreEvent ? occurrence : master), values, current.ownedFields) } : current)}
 								calendarLocked
 								calendars={calendars}
+                localAccountName={user.name}
                 layout="panel"
 								initialValues={draft?.values ?? eventFormValues(
 									master.recurrence && onRestoreEvent ? occurrence : master,

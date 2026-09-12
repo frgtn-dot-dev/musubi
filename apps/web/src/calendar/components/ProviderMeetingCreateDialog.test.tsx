@@ -28,6 +28,18 @@ async function ready(props: Partial<Parameters<typeof ProviderMeetingCreateDialo
   await screen.findByLabelText("Title", { exact: true });
   return result;
 }
+it("keeps provider invitation information behind Info while retaining the explicit create action", async () => {
+  await ready();
+  expect(screen.queryByText(/Google will be asked to notify all guests/)).toBeNull();
+  expect(screen.getByRole("button", { name: "Create and send invitations" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Meeting invitation information" }));
+  expect(await screen.findByText(/Google will be asked to notify all guests/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Close meeting invitation information" }));
+  await choose("Outlook team");
+  fireEvent.click(screen.getByRole("button", { name: "Meeting invitation information" }));
+  expect(await screen.findByText(/Outlook will be asked to notify all guests/)).toBeTruthy();
+  expect(api.save).not.toHaveBeenCalled();
+});
 function fillDraft() {
   change("Title", "Planning");
   change("Notes", "Keep these notes");
