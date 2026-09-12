@@ -10441,6 +10441,12 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await page.getByRole("option", { name: "Every week", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Recurrence rule" })).not.toBeVisible();
     await expectNoAccessibilityViolations(page);
+    const footerGap = await page.getByRole("button", { name: "Save task", exact: true }).evaluate(button => {
+      const footer = button.closest("footer")!;
+      const body = footer.previousElementSibling!;
+      return button.getBoundingClientRect().top - body.getBoundingClientRect().bottom;
+    });
+    expect(footerGap).toBeGreaterThanOrEqual(12);
     await page.screenshot({ path: testInfo.outputPath("task-recurrence.png"), fullPage: true });
     await page.getByRole("button", { name: "Save task", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "New task" })).not.toBeVisible();

@@ -1536,7 +1536,9 @@
 	align-items: center;
 	justify-content: flex-end;
 	gap: var(--space-2);
-	padding: 0 var(--layer-inline)
+	/* This gutter belongs outside the scrolling body, so controls never meet
+	   the clipping edge while a long form is being scrolled. */
+	padding: var(--space-3) var(--layer-inline)
 		calc(var(--layer-footer-block) + var(--layer-safe-bottom));
 }
 
