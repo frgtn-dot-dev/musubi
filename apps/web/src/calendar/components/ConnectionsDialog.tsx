@@ -11,7 +11,7 @@ import {
   RefreshCw,
   Unlink,
 } from "lucide-react";
-import { type FormEvent, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useRef, useState } from "react";
 import type { InvitePreview } from "~/api/contracts";
 import {
   getFederatedInvitePreview,
@@ -36,6 +36,7 @@ import { Field } from "~/ui/Field";
 import { InlineError } from "~/ui/InlineError";
 import { Row } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
+import { SettingsSection } from "~/ui/SettingsSection";
 import { useAsyncAction } from "~/ui/useAsyncAction";
 import { ProviderGlyph } from "~/ui/ProviderGlyph";
 import { EventDeliveryInboxDialog } from "./EventDeliveryInboxDialog";
@@ -280,7 +281,7 @@ export function ConnectionsDialog({
       bodyLayout="flush"
       bodyScroll="panels"
       closeLabel="Close connections"
-      description="Keep outside calendars in sync or join one shared through Musubi."
+      description="Connect accounts or join a shared calendar."
       onOpenChange={handleOpenChange}
       open={open}
       size="spacious"
@@ -294,6 +295,20 @@ export function ConnectionsDialog({
           <SectionHeading
             id="connections-accounts-title"
             title="Connected accounts"
+            action={
+              <IconButton
+                disabled={busy || importing}
+                label="Refresh connected calendars"
+                loading={connections.refreshing}
+                size="compact"
+                onClick={() => void run(async () => {
+                  await connections.refreshConnectedCalendars();
+                  onNotice("Connected calendars refreshed.");
+                }, "Could not refresh connected calendars.")}
+              >
+                <RefreshCw size={16} strokeWidth={1.7} />
+              </IconButton>
+            }
           />
           {accounts.length > 0 ? (
             <ul aria-label="Connected accounts" className={styles.list}>
@@ -301,17 +316,18 @@ export function ConnectionsDialog({
                 <li key={`${account.provider}:${account.accountId}`}>
                   <Row
                     className={styles.connectionRow}
-                    detail={account.providerName}
-                    icon={<AccountMark flavor={account.flavor} />}
-                    label={
-                      <span className={styles.rowLabel}>
-                        <span>{account.label}</span>
+                    detail={
+                      <span className={styles.accountDetail}>
+                        {account.providerName}
                         <StatusBadge
                           label={accountStatus(account.reconnect)}
                           tone={account.reconnect ? "warning" : "positive"}
                         />
                       </span>
                     }
+                    icon={<AccountMark flavor={account.flavor} />}
+                    label={<span title={account.label}>{account.label}</span>}
+                    layout={account.reconnect ? "responsive-actions" : "default"}
                     trailing={
                       <span className={styles.rowActions}>
                         {account.reconnect ? (
@@ -368,25 +384,15 @@ export function ConnectionsDialog({
               }
             />
           )}
-          <Button
-            className={styles.refreshButton}
-            variant="secondary"
-            icon={<RefreshCw size={16} strokeWidth={1.7} />}
-            disabled={busy || importing}
-            loading={connections.refreshing}
-            onClick={() => void run(async () => {
-              await connections.refreshConnectedCalendars();
-              onNotice("Connected calendars refreshed.");
-            }, "Could not refresh connected calendars.")}
-          >
-            Refresh connected calendars
-          </Button>
           {connections.capabilities.data?.googleAvailability ? <AvailabilitySection key={userId} userId={userId} onReconnect={() => void connectSocial("google")} /> : null}
-          <Row
-            label="Saved event deliveries"
-            detail="Check pending changes, conflicts and undelivered deletions."
-            trailing={<Button variant="secondary" size="compact" onClick={(event) => setDeliveryTrigger(event.currentTarget)}>Unfinished deliveries</Button>}
-          />
+          <SettingsSection title="Sync activity">
+            <Row
+              label="Event deliveries"
+              detail="Review pending changes and conflicts."
+              layout="responsive-actions"
+              trailing={<Button variant="secondary" size="compact" onClick={(event) => setDeliveryTrigger(event.currentTarget)}>Unfinished deliveries</Button>}
+            />
+          </SettingsSection>
         </section>
         {deliveryTrigger ? <EventDeliveryInboxDialog key={userId} userId={userId} returnFocus={deliveryTrigger} onClose={() => setDeliveryTrigger(null)} /> : null}
 
@@ -417,7 +423,7 @@ export function ConnectionsDialog({
                   <Checkbox
                     checked={includeTasks}
                     className={styles.taskConsent}
-                    description="When off, no new Tasks permission is requested. Previously granted access is not revoked."
+                    description="Request Tasks access too. Existing permissions stay active."
                     disabled={busy}
                     label="Include Tasks (optional)"
                     onChange={(event) => setIncludeTasks(event.target.checked)}
@@ -425,12 +431,13 @@ export function ConnectionsDialog({
                 ) : null}
                 {providers.includes("google") ? (
                   <Button
+                    aria-label="Google Calendar"
                     disabled={busy}
                     icon={<ProviderGlyph provider="google" />}
                     variant="secondary"
                     onClick={() => void connectSocial("google")}
                   >
-                    Google Calendar
+                    Google
                   </Button>
                 ) : null}
                 {providers.includes("microsoft") ? (
@@ -446,6 +453,7 @@ export function ConnectionsDialog({
                 {providers.includes("caldav") ? (
                   <>
                     <Button
+                      aria-label="Apple / iCloud"
                       disabled={busy}
                       icon={<ProviderGlyph provider="apple" />}
                       variant="secondary"
@@ -461,7 +469,7 @@ export function ConnectionsDialog({
                         )
                       }
                     >
-                      Apple / iCloud
+                      iCloud
                     </Button>
                     <Button
                       disabled={busy}
@@ -648,10 +656,11 @@ export function ConnectionsDialog({
   );
 }
 
-function SectionHeading({ id, title }: { id: string; title: string }) {
+function SectionHeading({ action, id, title }: { action?: ReactNode; id: string; title: string }) {
   return (
     <div className={styles.sectionHeading}>
       <SectionLabel id={id}>{title}</SectionLabel>
+      {action}
     </div>
   );
 }

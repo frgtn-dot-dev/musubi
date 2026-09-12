@@ -4,6 +4,7 @@ import { expect, userEvent, within } from "storybook/test";
 import { MOBILE_MODES } from "../../.storybook/modes";
 import { Button } from "./Button";
 import { Field } from "./Field";
+import { ProviderGlyph } from "./ProviderGlyph";
 import {
   AuthAsideLead,
   AuthForm,
@@ -33,9 +34,9 @@ function SignInExample({ initialError = "" }: { initialError?: string }) {
             You can also continue with an account you already have.
           </AuthAsideLead>
           <AuthProviders>
-            <Button variant="secondary">Continue with Google</Button>
-            <Button variant="secondary">Continue with Microsoft</Button>
-            <Button variant="secondary">Continue with Apple</Button>
+            <Button icon={<ProviderGlyph provider="google" />} variant="secondary">Continue with Google</Button>
+            <Button icon={<ProviderGlyph provider="microsoft" />} variant="secondary">Continue with Microsoft</Button>
+            <Button icon={<ProviderGlyph provider="apple" />} variant="secondary">Continue with Apple</Button>
           </AuthProviders>
         </>
       }
@@ -54,17 +55,14 @@ function SignInExample({ initialError = "" }: { initialError?: string }) {
       }
     >
       <AuthForm onSubmit={submit}>
-        <Field label="Server URL" variant="plain">
-          <input defaultValue="https://calendar.example.com" type="url" />
-        </Field>
         <Field label="Email" variant="plain">
           <input defaultValue="mika@example.com" type="email" />
         </Field>
-        <Field label="Password" variant="plain">
+        <Field label="Passphrase" variant="plain">
           <input defaultValue="correct horse battery staple" type="password" />
         </Field>
         <AuthHint>
-          <Button size="compact" variant="secondary">
+          <Button size="compact" variant="ghost">
             Forgotten your passphrase?
           </Button>
         </AuthHint>

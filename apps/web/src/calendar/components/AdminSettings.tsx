@@ -18,7 +18,8 @@ import {
 } from "~/ui/ConfirmationDialog";
 import { Disclosure } from "~/ui/Disclosure";
 import { Field } from "~/ui/Field";
-import { RouteState } from "~/ui/RouteState";
+import { Empty } from "~/ui/Empty";
+import { InlineError } from "~/ui/InlineError";
 import { Row } from "~/ui/Row";
 import { SettingsSection } from "~/ui/SettingsSection";
 import { Toast } from "~/ui/Toast";
@@ -30,7 +31,7 @@ const EMPTY = { body: "", minVersion: "", title: "" };
 // not sit on screen forever.
 const TOAST_ACKNOWLEDGEMENT_MS = 3_500;
 
-export function AdminSettings() {
+export function AdminSettings({ headingLevel = 3 }: { headingLevel?: 2 | 3 }) {
   const { user } = useSessionUser();
   const origin = getServerOrigin();
   const queryClient = useQueryClient();
@@ -38,9 +39,9 @@ export function AdminSettings() {
   // Tentýž dotaz (a tytéž staleTime/refetchOnWindowFocus), jaký si stáhne
   // modal — sdílená cache, takže odpověď navíc tahle stránka nestojí, a
   // refokusování stránky nemůže modal probudit uprostřed rozepsaného textu.
-  const { data: mine, isPending: minePending } = useAnnouncementsQuery();
+  const { data: mine, isPending: minePending, isError: mineError, refetch: retryAccess } = useAnnouncementsQuery();
 
-  const { data, isPending } = useQuery({
+  const { data, isPending, isError: listError, refetch: retryList } = useQuery({
     enabled: mine?.isAdmin === true,
     queryFn: () => listAdminAnnouncements(),
     queryKey: queryKeys.adminAnnouncements(origin),
@@ -123,17 +124,20 @@ export function AdminSettings() {
   // okamžik probliknul, než přijde odpověď. Kosmetické: ochranu dělá server,
   // ne tahle podmínka.
   if (minePending) {
-    return <RouteState busy eyebrow="Server admin" title="Loading…" />;
+    return <Row aria-busy="true" icon={<Megaphone size={16} />} label="Loading announcements…" />;
+  }
+
+  if (mineError) {
+    return <Empty title="Could not load announcements" action={<Button variant="secondary" onClick={() => void retryAccess()}>Try again</Button>} />;
   }
 
   // Slušnost UI, ne ochrana. Ta je na serveru: každá admin cesta běží za
   // `requireAdmin` a odmítne i toho, kdo si sem zadá URL ručně.
   if (mine && !mine.isAdmin) {
     return (
-      <RouteState
-        eyebrow="Server admin"
+      <Empty
         description="Only this server's admins can write announcements."
-        title="Not your page"
+        title="Admin access required"
       />
     );
   }
@@ -142,10 +146,11 @@ export function AdminSettings() {
     <div className={styles.content}>
       {/* Writing comes first: it is why an admin opens this page, and the list
           below is what they check afterwards. */}
-      <SettingsSection title={editing ? "Edit announcement" : "New announcement"}>
+      <SettingsSection headingLevel={headingLevel} title={editing ? "Edit announcement" : "New announcement"}>
         <Disclosure
           detail="Everyone signed in to this server sees it once"
-          label="Title, message, and minimum version"
+          icon={<Megaphone size={16} />}
+          label={editing ? "Edit announcement" : "Write an announcement"}
           onOpenChange={setComposerOpen}
           open={composerOpen}
         >
@@ -171,7 +176,7 @@ export function AdminSettings() {
             </Field>
 
             <Field
-              description="An empty line starts a new paragraph. Links starting with http:// or https:// become clickable."
+              description="Use blank lines for paragraphs. Web links are clickable."
               label="Message"
             >
               <textarea
@@ -189,7 +194,7 @@ export function AdminSettings() {
             </Field>
 
             <Field
-              description="Only clients on this version or newer will see it. Leave empty to show it to everyone. Write it when you release the version — an older message with a higher minimum than a newer one gets skipped."
+              description="Leave empty for everyone. Otherwise, publish with that release: newer announcements can supersede this one for older clients."
               label="Minimum version"
             >
               <input
@@ -204,12 +209,10 @@ export function AdminSettings() {
               />
             </Field>
 
-            <div className={styles.actions}>
-              <Button disabled={save.isPending} type="submit">
-                {editing ? "Save changes" : "Publish"}
-              </Button>
+            <div className={styles.formActions}>
               {editing ? (
                 <Button
+                  disabled={save.isPending}
                   onClick={() => {
                     setEditing(null);
                     setDraft(EMPTY);
@@ -221,28 +224,37 @@ export function AdminSettings() {
                   Cancel
                 </Button>
               ) : null}
+              <Button loading={save.isPending} type="submit">
+                {editing ? "Save changes" : "Publish"}
+              </Button>
             </div>
           </form>
         </Disclosure>
       </SettingsSection>
 
-      <SettingsSection title="Published">
+      <SettingsSection headingLevel={headingLevel} title="Published">
         {isPending ? (
           <Row
             icon={<Megaphone size={16} strokeWidth={1.6} />}
             label="Loading…"
           />
+        ) : listError ? (
+          <div className={styles.listError}>
+            <InlineError>Published announcements could not be loaded.</InlineError>
+            <Button variant="secondary" onClick={() => void retryList()}>Try again</Button>
+          </div>
         ) : data?.announcements.length ? (
           data.announcements.map((announcement) => (
             <Row
               detail={
                 announcement.minVersion
-                  ? `${announcement.id} · ${announcement.minVersion} and newer`
-                  : `${announcement.id} · everyone`
+                  ? `Version ${announcement.minVersion} and newer`
+                  : "Everyone on this server"
               }
               icon={<Megaphone size={16} strokeWidth={1.6} />}
               key={announcement.id}
               label={announcement.title}
+              layout="responsive-actions"
               trailing={
                 <div className={styles.actions}>
                   <Button

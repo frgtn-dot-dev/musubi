@@ -366,7 +366,7 @@
 	position: relative;
 	display: grid;
 	min-width: 0;
-	grid-template-columns: 18px 9px minmax(0, 1fr);
+	grid-template-columns: 18px 20px minmax(0, 1fr);
 	align-items: center;
 	gap: var(--space-3);
 	padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
@@ -924,8 +924,8 @@
 	gap: var(--space-2);
 }
 
-.form[data-layout="panel"] .calendarSummaryCopy strong,
-.form[data-layout="panel"] .calendarPlacementCopy strong {
+.calendarSummaryCopy strong,
+.calendarPlacementCopy strong {
 	display: flex;
 	align-items: center;
 	gap: var(--space-2);
@@ -946,7 +946,7 @@
 	padding-inline: 0;
 }
 
-.form[data-layout="panel"] .calendarGroupHeading strong,
+.calendarGroupHeading strong,
 .settingsHeading {
 	display: flex;
 	align-items: center;
@@ -994,8 +994,6 @@
    so the create/cancel controls do not disappear below a long form. */
 .form[data-layout="page"] .formBody { display: contents; }
 .form[data-layout="page"] .calendarMembership { grid-template-columns: 18px 20px minmax(0, 1fr); gap: var(--space-2); }
-.form[data-layout="page"] .calendarPlacementCopy strong,
-.form[data-layout="page"] .calendarGroupHeading strong { display: flex; align-items: center; gap: var(--space-2); }
 .pageTimeSettings { display: grid; gap: var(--space-3); padding-top: var(--space-4); }
 .pageTimeSettings > :first-child { padding-inline: var(--space-4); }
 
@@ -1026,4 +1024,12 @@
 	.form[data-layout="page"] .calendarMembership { padding-left: var(--layer-inline); }
 	.form[data-layout="page"] .calendarPlacementRow { padding-right: var(--layer-inline); }
 	.form[data-layout="page"] .inlineField { grid-template-columns: 70px minmax(0, 1fr); column-gap: var(--space-2); }
+}
+
+/* A flex title needs a text slot of its own for a real ellipsis. */
+.calendarName {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }

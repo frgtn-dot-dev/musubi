@@ -116,9 +116,8 @@ export function Toolbar({
           </p>
         </div>
 
-        {/* Four chips need a row of their own on a phone, and that row was the
-            difference between a calendar and a control panel. Same choice, one
-            control, on the line it already shares with the date. */}
+        {/* Keep the narrow view choice compact. The date gets a complete line;
+            this picker shares the next one with search and availability. */}
         {narrow ? (
           <Select
             className={styles.viewSelect}

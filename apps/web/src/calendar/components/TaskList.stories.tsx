@@ -44,7 +44,7 @@ const TASKS: Task[] = [
     isAllDay: false,
     percentComplete: 40,
     priority: 3,
-    recurrence: null,
+    recurrence: "FREQ=WEEKLY;BYDAY=SA",
     relatedTo: null,
     sequence: 2,
     start: new Date(2026, 8, 5, 14, 30),
@@ -67,7 +67,7 @@ const TASKS: Task[] = [
     sequence: 0,
     start: null,
     status: "needs-action",
-    title: "Review shared roadmap",
+    title: "Review the shared roadmap and collect feedback from the design team",
     url: null,
   },
   {

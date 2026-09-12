@@ -1,4 +1,10 @@
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Repeat2, Trash2 } from "lucide-react";
+import {
+  describeAdvanced,
+  isEditableRRule,
+  parseAdvanced,
+  splitRecurrence,
+} from "@musubi/calendar/rrule-editor";
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { providerFlavor } from "@musubi/types";
 import type {
@@ -14,10 +20,13 @@ import { Button } from "~/ui/Button";
 import { Checkbox } from "~/ui/Checkbox";
 import { DatePicker } from "~/ui/DatePicker";
 import { Dialog } from "~/ui/Dialog";
+import { Disclosure } from "~/ui/Disclosure";
 import { Empty } from "~/ui/Empty";
 import { Field } from "~/ui/Field";
 import { InlineError } from "~/ui/InlineError";
 import { Select } from "~/ui/Select";
+import { Row, RowAction } from "~/ui/Row";
+import { SectionLabel } from "~/ui/SectionLabel";
 import { TimePicker } from "~/ui/TimePicker";
 import { AccountMark } from "./ProviderIcon";
 import styles from "./TaskList.module.css";
@@ -101,6 +110,19 @@ export function taskTime(value: Date | null | undefined) {
   return `${String(value.getHours()).padStart(2, "0")}:${String(
     value.getMinutes(),
   ).padStart(2, "0")}`;
+}
+
+/** Describe only rules the shared parser understands; keep imported syntax intact. */
+export function taskRecurrenceSummary(
+  recurrence: string | null | undefined,
+  start?: Date | null,
+) {
+  if (!recurrence) return "Does not repeat";
+  const { rrule, extras } = splitRecurrence(recurrence);
+  if (extras.length || !isEditableRRule(rrule)) return "Custom recurrence";
+  const config = parseAdvanced(rrule, start?.getDay());
+  if (!start && !rrule.includes("BYDAY=")) config.days = new Set();
+  return describeAdvanced(config);
 }
 
 /** Replace only the local clock part; dates are calendar values, never UTC slices. */
@@ -292,6 +314,7 @@ export function TaskList({
             label="Open"
             onEdit={openEdit}
             onToggle={toggleComplete}
+            timeFormat={settings.timeFormat}
             tasks={active}
           />
           {completed.length ? (
@@ -301,6 +324,7 @@ export function TaskList({
               label="Completed"
               onEdit={openEdit}
               onToggle={toggleComplete}
+              timeFormat={settings.timeFormat}
               tasks={completed}
             />
           ) : null}
@@ -338,6 +362,7 @@ function TaskGroup({
   label,
   onEdit,
   onToggle,
+  timeFormat,
   tasks,
 }: {
   calendarById: Map<string, Calendar>;
@@ -345,47 +370,63 @@ function TaskGroup({
   label: string;
   onEdit: (task: Task) => void;
   onToggle: (task: Task, checked: boolean) => Promise<void>;
+  timeFormat: Settings["timeFormat"];
   tasks: Task[];
 }) {
   if (!tasks.length) return null;
   return (
     <section className={styles.group}>
-      <h2>{label}</h2>
+      <SectionLabel className={styles.groupHeading}>
+        {label}<span>{tasks.length}</span>
+      </SectionLabel>
       <ul>
         {tasks.map((task) => {
           const calendar = calendarById.get(task.calendarID);
           const complete = task.status === "completed";
           const editable = editableCalendarIds.has(task.calendarID);
-          const detail = `${calendar?.name ?? "Unknown calendar"}${
-            task.due ? ` · Due ${task.due.toLocaleDateString()}` : ""
-          }`;
+          const due = task.due?.toLocaleString(undefined, {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            ...(!task.isAllDay ? {
+              hour: "numeric" as const,
+              minute: "2-digit" as const,
+              hour12: timeFormat === "12h",
+            } : {}),
+          });
+          const status = task.status === "in-process"
+            ? "In progress"
+            : task.status === "cancelled" ? "Cancelled" : undefined;
+          const detail = [
+            calendar?.name ?? "Unknown calendar",
+            status,
+            due ? `Due ${due}` : undefined,
+            !editable ? "Read only" : undefined,
+          ].filter(Boolean).join(" · ");
+          const title = (
+            <span className={complete ? styles.done : undefined}>{task.title}</span>
+          );
           return (
             <li className={styles.task} key={task.id}>
-              <Checkbox
-                checked={complete}
-                disabled={!editable}
-                label={`Mark ${task.title} ${complete ? "open" : "completed"}`}
-                labelHidden
-                onChange={(event) => void onToggle(task, event.target.checked)}
-              />
+              <div className={styles.taskCheck}>
+                <Checkbox
+                  checked={complete}
+                  disabled={!editable}
+                  label={`Mark ${task.title} ${complete ? "open" : "completed"}`}
+                  labelHidden
+                  onChange={(event) => void onToggle(task, event.target.checked)}
+                />
+              </div>
               {editable ? (
-                <button
+                <RowAction
                   className={styles.taskMain}
-                  type="button"
+                  detail={detail}
+                  label={title}
+                  showChevron={false}
                   onClick={() => onEdit(task)}
-                >
-                  <span className={complete ? styles.done : undefined}>
-                    {task.title}
-                  </span>
-                  <small>{detail}</small>
-                </button>
+                />
               ) : (
-                <div className={styles.taskMain}>
-                  <span className={complete ? styles.done : undefined}>
-                    {task.title}
-                  </span>
-                  <small>{detail}</small>
-                </div>
+                <Row className={styles.taskMain} detail={detail} label={title} />
               )}
             </li>
           );
@@ -448,7 +489,7 @@ function TaskEditor({
               className={styles.deleteTask}
               disabled={busy}
               icon={<Trash2 aria-hidden="true" size={16} />}
-              variant="destructive"
+              variant="ghost"
               onClick={() => void onDelete()}
             >
               Delete
@@ -519,7 +560,7 @@ function TaskEditor({
             <Select
               label="Priority"
               options={Array.from({ length: 10 }, (_, priority) => ({
-                label: priority === 0 ? "None" : String(priority),
+                label: priority === 0 ? "None" : `${priority <= 4 ? "High" : priority === 5 ? "Medium" : "Low"} (${priority})`,
                 value: String(priority),
               }))}
               value={String(draft.priority)}
@@ -570,15 +611,24 @@ function TaskEditor({
             }
           />
         </Field>
-        <Field label="Recurrence">
-          <input
-            placeholder="RRULE:FREQ=WEEKLY"
-            value={draft.recurrence ?? ""}
-            onChange={(event) =>
-              onChange({ ...draft, recurrence: event.target.value || null })
-            }
-          />
-        </Field>
+        <Disclosure
+          density="compact"
+          icon={<Repeat2 aria-hidden="true" size={16} />}
+          label="Recurrence"
+          detail={taskRecurrenceSummary(draft.recurrence, draft.start)}
+        >
+          <Field label="Recurrence rule" description="Uses iCalendar recurrence syntax.">
+            <textarea
+              placeholder="RRULE:FREQ=WEEKLY"
+              rows={2}
+              spellCheck={false}
+              value={draft.recurrence ?? ""}
+              onChange={(event) =>
+                onChange({ ...draft, recurrence: event.target.value || null })
+              }
+            />
+          </Field>
+        </Disclosure>
         {error ? <InlineError>{error}</InlineError> : null}
       </form>
     </Dialog>

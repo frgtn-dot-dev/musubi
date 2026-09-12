@@ -14,7 +14,6 @@ export function ShortcutsDialog({
     <Dialog
       bodyClassName={styles.body}
       closeLabel="Close shortcuts"
-      description="Every shortcut runs the same action as its control."
       open={open}
       title="Keyboard shortcuts"
       onOpenChange={onOpenChange}

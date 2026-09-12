@@ -1,7 +1,7 @@
 import type { Calendar } from "@musubi/types";
 import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import { expect, screen, userEvent, waitFor, within } from "storybook/test";
-import { DESKTOP_MODES } from "../../../.storybook/modes";
+import { DESKTOP_MODES, MOBILE_MODES } from "../../../.storybook/modes";
 import {
 	CalendarTransferDialog,
 	type CalendarTransferDialogProps,
@@ -89,6 +89,7 @@ export const Overview: Story = {
 export const ImportIntoConnectedAccount: Story = {
 	play: async () => {
 		const dialog = await screen.findByRole("dialog", { name: "Calendars" });
+		await userEvent.click(within(dialog).getByText("Import calendar", { exact: true }));
 		const destination = within(dialog).getByRole("combobox", {
 			name: "Import into account",
 		});
@@ -116,4 +117,33 @@ export const ExternalDisconnectConfirmation: Story = {
 			),
 		).toBeVisible();
 	},
+};
+
+export const Narrow: Story = {
+  args: {
+    calendars: [...CALENDARS, {
+      ...CALENDARS[1]!,
+      id: "studio-planning",
+      name: "Studio planning and team commitments",
+    }],
+  },
+  globals: { viewport: { isRotated: false, value: "mobile1" } },
+  parameters: { chromatic: { modes: MOBILE_MODES } },
+  play: async () => {
+    const dialog = await screen.findByRole("dialog", { name: "Calendars" });
+    await waitFor(() => expect(dialog).toBeVisible());
+    expect(within(dialog).getByRole("button", { name: "Settings for Studio planning and team commitments" })).toBeVisible();
+    const summary = within(dialog).getByText("Import calendar", { exact: true }).closest("summary")!;
+    await userEvent.click(summary);
+    await waitFor(() => expect(within(dialog).getByRole("combobox", { name: "Import into account" })).toBeVisible());
+  },
+};
+
+export const Export: Story = {
+  play: async () => {
+    const dialog = await screen.findByRole("dialog", { name: "Calendars" });
+    await userEvent.click(within(dialog).getByText("Export calendar", { exact: true }));
+    await waitFor(() => expect(within(dialog).getByRole("combobox", { name: "Calendar to export" })).toBeVisible());
+    expect(within(dialog).getByRole("button", { name: "Export .ics" })).toBeVisible();
+  },
 };

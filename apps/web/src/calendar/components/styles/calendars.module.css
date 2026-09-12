@@ -41,13 +41,6 @@
 		border-top: 0;
 		border-left: 1px solid var(--border-subtle);
 	}
-
-	/* One under the other in the side column: two cards there squeeze the file
-     name and the export select into ellipses. Written with the section in front
-     of it so it wins against the base rule further down the file. */
-	.transferSection .transferGrid {
-		grid-template-columns: minmax(0, 1fr);
-	}
 }
 
 .calendarSection {
@@ -220,9 +213,9 @@
 .rowActions {
 	display: grid;
 	grid-auto-flow: column;
-	grid-auto-columns: 32px;
+	grid-auto-columns: var(--compact-control-height);
 	align-items: center;
-	gap: 2px;
+	gap: var(--space-1);
 }
 
 /* A slot is a column whether or not this row can do that thing. */
@@ -235,54 +228,15 @@
 	color: color-mix(in srgb, var(--accent-primary) 76%, var(--text-primary));
 }
 
-.transferGrid {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	align-content: start;
-	gap: var(--space-3);
-	padding: 0 var(--layer-inline);
-}
-
 .transferCard {
-	display: flex;
+	display: grid;
+	width: 100%;
 	min-width: 0;
-	flex-direction: column;
-	gap: var(--space-3);
-	padding: var(--space-4);
-	border: 1px solid var(--border-subtle);
-	border-radius: var(--radius-lg);
-	background: var(--surface-panel);
+	gap: var(--space-5);
 }
 
-.cardHeading {
-	display: flex;
-	align-items: flex-start;
-	gap: var(--space-3);
-	min-height: 42px;
-}
-
-.cardHeading > svg {
-	flex: none;
-	margin-top: 1px;
-	color: var(--text-muted);
-}
-
-.cardHeading h3,
-.cardHeading p {
-	margin: 0;
-}
-
-.cardHeading h3 {
-	color: var(--text-primary);
-	font-size: var(--text-13);
-	font-weight: 600;
-}
-
-.cardHeading p {
-	margin-top: 2px;
-	color: var(--text-primary);
-	font-size: var(--text-10);
-	line-height: 1.4;
+.transferSection > div > details + details {
+	border-top: 1px solid var(--border-subtle);
 }
 
 .cardField {
@@ -302,8 +256,7 @@
 }
 
 .cardAction {
-	align-self: flex-end;
-	margin-top: auto;
+	justify-self: end;
 }
 
 .fileControl {
@@ -353,9 +306,14 @@
 
 .importControls {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto auto;
+	grid-template-columns: minmax(0, 1fr) auto;
 	gap: var(--space-2);
 	align-items: center;
+}
+
+.importControls > button:last-child {
+	grid-column: 1 / -1;
+	justify-self: end;
 }
 
 .formColorPicker {
@@ -396,25 +354,56 @@
 		padding-inline: var(--layer-inline);
 	}
 
-	.createBar {
+	.create .createBar {
 		grid-template-columns: minmax(0, 1fr) auto;
-		margin-inline: var(--layer-inline);
 	}
 
-	.createBar > button:last-child {
-		grid-column: 1 / -1;
+	.create .formColorPicker {
+		grid-column: 2;
+		grid-row: 1;
+		justify-self: end;
+	}
+
+	.create .destination {
+		grid-column: 1;
+		grid-row: 2;
+		max-width: none;
+	}
+
+	.create .createBar > button:last-child {
+		grid-column: 2;
+		grid-row: 2;
+	}
+
+	.calendarName {
+		flex-wrap: wrap;
+		gap: var(--space-1);
+	}
+
+	.calendarName > span:first-child {
+		white-space: normal;
+		overflow-wrap: anywhere;
 	}
 
 	.rowActions {
 		gap: 0;
 	}
 
-	.transferGrid {
-		grid-template-columns: minmax(0, 1fr);
-		padding-inline: var(--layer-inline);
-	}
-
 	.error {
 		margin-inline: var(--layer-inline);
 	}
+}
+
+/* A provider meeting is a separate action, never part of the sync status sentence.
+   Capability loading may leave the wrapper empty, so it adds no blank row. */
+.calendarMeeting:has(> button) {
+	display: flex;
+	padding: 0 var(--layer-inline) var(--space-3);
+	/* Match the existing Row inset, 22px icon lane and icon-to-copy gap. */
+	padding-left: calc(var(--space-6) + 22px + var(--space-3));
+	border-bottom: 1px solid var(--border-subtle);
+}
+
+li:has(> .calendarMeeting > button) > .calendarRow {
+	border-bottom: 0;
 }

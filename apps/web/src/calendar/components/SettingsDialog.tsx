@@ -16,8 +16,9 @@ import { applyTheme } from "~/design/theme";
 import { Button } from "~/ui/Button";
 import { Dialog } from "~/ui/Dialog";
 import { InlineError } from "~/ui/InlineError";
-import { RowAction, RowOptions, RowToggle } from "~/ui/Row";
+import { Row, RowAction, RowOptions, RowToggle } from "~/ui/Row";
 import { SettingsSection } from "~/ui/SettingsSection";
+import { Select } from "~/ui/Select";
 import { AdminSettings } from "./AdminSettings";
 import { DiagnosticsSection } from "./DiagnosticsSection";
 import {
@@ -342,7 +343,7 @@ export function SettingsDialog({
       description="Preferences sync across your Musubi devices."
       onOpenChange={handleOpenChange}
       open={open}
-      size="spacious"
+      size="wide"
       title="Settings"
     >
       {!settings && !error ? (
@@ -395,82 +396,103 @@ export function SettingsDialog({
 
             <section className={styles.settingsPanel}>
               {activePage === "appearance" ? (
-                <SettingsSection title="Appearance">
-                  <RowOptions
-                    disabled={saving}
-                    label="Theme"
-                    onChange={(theme) => void save({ theme })}
-                    options={THEME_OPTIONS}
-                    value={settings.value.theme}
-                  />
-                  <RowOptions
-                    disabled={saving}
-                    label="Default view"
-                    onChange={(defaultCalendarView) =>
-                      void save({ defaultCalendarView })
-                    }
-                    options={VIEW_OPTIONS}
-                    value={settings.value.defaultCalendarView}
-                  />
-                  <RowOptions
-                    disabled={saving}
-                    label="Week starts on"
-                    onChange={(weekStartsOn) => void save({ weekStartsOn })}
-                    options={WEEK_START_OPTIONS}
-                    value={settings.value.weekStartsOn}
-                  />
-                  <RowOptions
-                    disabled={saving}
-                    label="Time format"
-                    onChange={(timeFormat) => void save({ timeFormat })}
-                    options={TIME_FORMAT_OPTIONS}
-                    value={settings.value.timeFormat}
-                  />
-                  <RowOptions
-                    disabled={saving}
-                    label="Date format"
-                    onChange={(dateFormat) => void save({ dateFormat })}
-                    options={DATE_FORMAT_OPTIONS}
-                    value={settings.value.dateFormat}
-                  />
-                </SettingsSection>
+                <>
+                  <SettingsSection title="Appearance">
+                    <RowOptions
+                      disabled={saving}
+                      label="Theme"
+                      stacked
+                      onChange={(theme) => void save({ theme })}
+                      options={THEME_OPTIONS}
+                      value={settings.value.theme}
+                    />
+                    <RowOptions
+                      disabled={saving}
+                      label="Default view"
+                      stacked
+                      onChange={(defaultCalendarView) =>
+                        void save({ defaultCalendarView })
+                      }
+                      options={VIEW_OPTIONS}
+                      value={settings.value.defaultCalendarView}
+                    />
+                  </SettingsSection>
+                  <SettingsSection title="Date & time">
+                    <RowOptions
+                      disabled={saving}
+                      label="Week starts on"
+                      onChange={(weekStartsOn) => void save({ weekStartsOn })}
+                      options={WEEK_START_OPTIONS}
+                      value={settings.value.weekStartsOn}
+                    />
+                    <RowOptions
+                      disabled={saving}
+                      label="Time format"
+                      onChange={(timeFormat) => void save({ timeFormat })}
+                      options={TIME_FORMAT_OPTIONS}
+                      value={settings.value.timeFormat}
+                    />
+                    <RowOptions
+                      disabled={saving}
+                      label="Date format"
+                      onChange={(dateFormat) => void save({ dateFormat })}
+                      options={DATE_FORMAT_OPTIONS}
+                      value={settings.value.dateFormat}
+                    />
+                  </SettingsSection>
+                </>
               ) : null}
 
               {activePage === "reminders" ? (
-                <SettingsSection title="Reminders">
-                  <RowOptions
-                    detail="Meetings and anything with a time"
-                    disabled={saving}
+                <SettingsSection
+                  title="Reminders"
+                  description="Default timing. Calendars and events can use their own reminders."
+                >
+                  <Row
                     label="Timed events"
-                    onChange={(value) =>
-                      void saveDefaultReminder(
-                        withTimed(defaultReminder, value),
-                      )
+                    layout="responsive-actions"
+                    trailing={
+                      <Select
+                        disabled={saving}
+                        label="Timed events"
+                        onChange={(value) =>
+                          void saveDefaultReminder(
+                            withTimed(defaultReminder, value),
+                          )
+                        }
+                        options={optionsFor(defaultReminder, "timed")}
+                        size="compact"
+                        value={timedValue(defaultReminder)}
+                      />
                     }
-                    options={optionsFor(defaultReminder, "timed")}
-                    value={timedValue(defaultReminder)}
                   />
-                  <RowOptions
-                    detail="Birthdays, holidays, anything without a time"
-                    disabled={saving}
+                  <Row
                     label="All-day events"
-                    onChange={(value) =>
-                      void saveDefaultReminder(
-                        withAllDay(defaultReminder, value),
-                      )
+                    layout="responsive-actions"
+                    trailing={
+                      <Select
+                        disabled={saving}
+                        label="All-day events"
+                        onChange={(value) =>
+                          void saveDefaultReminder(
+                            withAllDay(defaultReminder, value),
+                          )
+                        }
+                        options={optionsFor(defaultReminder, "allDay")}
+                        size="compact"
+                        value={allDayValue(defaultReminder)}
+                      />
                     }
-                    options={optionsFor(defaultReminder, "allDay")}
-                    value={allDayValue(defaultReminder)}
                   />
                   {reminders?.push.available ? (
                     <RowToggle
                       checked={reminders.push.enabled}
                       detail={
                         pushMessage ||
-                        "Without this, reminders only appear while a Musubi tab is open"
+                        "Receive reminders even with the Musubi tab closed"
                       }
                       disabled={saving || pushBusy}
-                      label="Notify me when this browser is closed"
+                      label="Browser notifications"
                       onCheckedChange={(wanted) => void togglePush(wanted)}
                     />
                   ) : null}
@@ -481,9 +503,9 @@ export function SettingsDialog({
                 <SettingsSection title="Email notifications">
                   <RowToggle
                     checked={notificationEmails.eventChanged}
-                    detail="Only the time changing or the event being called off — not every edit"
+                    detail="Email me when an event I’m attending moves or is cancelled"
                     disabled={saving}
-                    label="An event I'm attending moves or is cancelled"
+                    label="Event changes"
                     onCheckedChange={(eventChanged) =>
                       void save({
                         notificationEmails: {

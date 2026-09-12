@@ -126,8 +126,10 @@ const expectPageSettings: NonNullable<Story["play"]> = async () => {
   const lastIcon = within(dialog)
     .getByRole("radio", { name: "Briefcase" })
     .closest("label");
-  const defaultPage = within(dialog).getByText("Default page", { exact: true });
-  const deletePage = within(dialog).getByRole("button", { name: "Delete page" });
+  const general = within(dialog).getByRole("heading", { name: "General" });
+  const deletePage = within(dialog).getByRole("button", {
+    name: "Delete page",
+  });
   expect(deletePage.closest("footer")).not.toBeNull();
   expect(firstIcon).not.toBeNull();
   expect(lastIcon).not.toBeNull();
@@ -145,7 +147,7 @@ const expectPageSettings: NonNullable<Story["play"]> = async () => {
   ).toBeLessThan(2);
   expect(
     Math.abs(
-      defaultPage.getBoundingClientRect().left -
+      general.getBoundingClientRect().left -
         pageName.getBoundingClientRect().left,
     ),
   ).toBeLessThan(2);
@@ -222,5 +224,25 @@ export const DeleteConfirmation: Story = {
     });
     await waitFor(() => expect(confirmation).toBeVisible());
   },
+  render: (args) => <PageSettingsExample {...args} />,
+};
+
+export const ManyCalendars: Story = {
+  args: {
+    calendars: [
+      ...CALENDARS,
+      ...Array.from({ length: 17 }, (_, index) => ({
+        ...CALENDARS[index % CALENDARS.length]!,
+        id: `additional-${index}`,
+        name:
+          index === 0
+            ? "Planning and collaboration across the extended studio team"
+            : `Studio calendar ${index + 1}`,
+      })),
+    ],
+    page: { ...WORK_PAGE, name: "Studio planning and collaboration" },
+  },
+  parameters: { chromatic: { modes: DESKTOP_MODES } },
+  play: expectPageSettings,
   render: (args) => <PageSettingsExample {...args} />,
 };
