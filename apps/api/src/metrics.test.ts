@@ -10,9 +10,10 @@
 // So the committed dashboards and alert rules are read as a contract against the
 // registry, alongside the two properties of the HTTP metrics that keep them
 // usable at all: bounded label cardinality, and no secrets in the labels.
+import { EventEmitter } from "node:events";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
-import type { Request } from "express";
+import type { Request, Response } from "express";
 
 // `@musubi/config` reads the root .env at import time and refuses to load
 // without these. Same three the CI workflow provides; defaulted here so the
@@ -40,7 +41,7 @@ const DERIVED_SUFFIX = /_(bucket|count|sum|total_created|created)$/;
 const PROMETHEUS_OWN = new Set(["up"]);
 
 async function main() {
-  const { metricRoute, metricsRegistry } = await import("./metrics");
+  const { metricRoute, metricsRegistry, middlewareMetrics } = await import("./metrics");
 
   const registered = new Set(
     metricsRegistry.getMetricsAsArray().map((metric) => metric.name),
@@ -182,6 +183,17 @@ async function main() {
     "<unmatched>",
   );
   assert.equal(metricRoute({} as Request), "<unmatched>");
+
+  const response = Object.assign(new EventEmitter(), { writableEnded: true, statusCode: 200 });
+  middlewareMetrics({ method: "PUT", headers: {"user-agent": "Mozilla/5.0 (iPhone) Mobile Safari/604"},
+    user: {id: "private-user-id"}, route: {path: "/api/v1/tasks/:taskId"} } as Request,
+    response as unknown as Response, () => {});
+  response.emit("finish"); response.emit("close");
+  const product = await metricsRegistry.getSingleMetric("musubi_product_requests_total")!.get();
+  assert.equal(product.values.length, 1);
+  assert.equal(product.values[0].value, 1, "finish plus close must not double count");
+  assert.deepEqual(product.values[0].labels, {feature: "tasks", method: "PUT", outcome: "success", device: "mobile"});
+  assert.ok(!JSON.stringify(product).includes("private-user-id"));
 
   console.log(
     `Observability contract verified: ${referenced.size} series read by ops/, ` +

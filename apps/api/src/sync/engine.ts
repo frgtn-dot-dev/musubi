@@ -56,7 +56,7 @@ import {
   providerAuthErrorFields,
   ProviderAuthError,
 } from "./errors";
-import { recordExternalSyncFailure, recordEventOutboxBacklog } from "../metrics";
+import { recordExternalSyncFailure, recordEventOutboxBacklog, recordSyncRun, recordSyncObjects } from "../metrics";
 import { ProviderEventWriteError, requireEventPatch } from "./event_write";
 import { type ProviderSyncOptions, runProviderSyncs } from "./orchestrator";
 
@@ -230,7 +230,7 @@ async function notifyExternalEventUnlinks(
 
 // Pull: reconcile calendars, then pull each calendar's changes into Musubi. Scoped
 // to ONE connected account of the provider.
-export async function syncProvider(
+async function syncProviderImpl(
   adapter: CalendarAdapter,
   userID: string,
   account: { id: string; label: string },
@@ -474,6 +474,7 @@ export async function syncProvider(
 
     if (changed > 0) changedCalendarIDs.push(link.calendarID);
     await setCursor(link.calendarID, nextCursor, accessContext);
+    recordSyncObjects(provider, changes.filter(({ kind }) => kind === "event").length, changes.filter(({ kind }) => kind === "task").length);
     logger.debug("sync.calendar.completed", {
       provider,
       userId: userID,
@@ -495,6 +496,18 @@ export async function syncProvider(
     durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
   });
   return [...new Set(changedCalendarIDs)];
+}
+
+export async function syncProvider(...args: Parameters<typeof syncProviderImpl>) {
+  const started = performance.now();
+  try {
+    const result = await syncProviderImpl(...args);
+    recordSyncRun(args[0].provider, "success", (performance.now() - started) / 1000);
+    return result;
+  } catch (error) {
+    recordSyncRun(args[0].provider, "failed", (performance.now() - started) / 1000);
+    throw error;
+  }
 }
 
 // Sync every connected account of every registered provider. listAccounts returns

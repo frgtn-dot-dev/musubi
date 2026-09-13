@@ -73,7 +73,7 @@ The API computes current-state gauges from PostgreSQL and caches the snapshot fo
 | `musubi_sync_accounts{provider,status}` | Connected credential/provider accounts |
 
 CalDAV credentials live outside Better Auth and have no OAuth account status, so
-they appear with `status="active"`. Use the failure counter and logs for their
+they appear with `status="unmonitored"`. Use the failure counter and logs for their
 health.
 
 ### Process and live connections
@@ -226,3 +226,97 @@ True horizontal scaling still requires:
 Do not remove or bypass the singleton lock until those pieces exist. A database
 alone does not coordinate these in-memory behaviors; its advisory lock currently
 prevents the unsupported topology rather than making it safe.
+
+## Product observability
+
+Import `ops/grafana/musubi-product-dashboard.json` and select the Prometheus
+source. It provides sessions by device, OS and browser; task inventory by phase,
+RFC priority and home provider; authenticated feature API traffic; provider
+accounts, discovered calendar capabilities, sync volume, failures, latency and
+unresolved event deliveries. The existing API and logs dashboards remain useful
+for investigating a change in those product signals.
+
+### What the numbers mean
+
+- `musubi_sessions_by_client{device,os,browser}` counts **unexpired login
+  sessions**, not online users or physical devices. Classification uses coarse
+  User-Agent patterns. Desktop-mode iPads can look like Macs; Android tablets
+  without a tablet marker can look like phones; native apps may be `unknown`.
+- `musubi_active_users` remains the compatibility name for users with valid
+  sessions. It is **not DAU/WAU/MAU**. `musubi_sse_users` measures currently
+  connected live-update users, including background tabs.
+- `musubi_tasks{status,priority,provider}` counts non-deleted tasks, including
+  imports, completed and cancelled tasks. Priority follows RFC bands: high 1–4,
+  medium 5, low 6–9, none 0. Provider is the home calendar source, not every
+  calendar the user can access.
+- `musubi_product_requests_total{feature,method,outcome,device}` counts
+  authenticated requests to events, tasks, calendars, pages, availability and
+  reminders. It includes background refresh and federated callers. Successful
+  write responses are useful feature traffic, but retries/no-ops may count again.
+  It does not measure screen views, Kanban versus list adoption, engagement,
+  unique human actions, cohorts or retention. Inventory growth is **net change**,
+  not the number of creations: deletion and imports affect it too.
+- `musubi_provider_calendars{provider,state,events,tasks}` counts discovered
+  sources and their support flags. It does not claim recent successful sync.
+  CalDAV linked accounts now use `status="unmonitored"`, because their account
+  table does not record OAuth-style reconnect state. Credential accounts are
+  login accounts, not connected calendar providers.
+- `musubi_sync_runs_total{provider,outcome}` and
+  `musubi_sync_run_duration_seconds` observe completed account sync attempts.
+  Discovery failures before an account is invoked remain in
+  `musubi_external_sync_failures_total`. Received-object counters count persisted
+  calendar batches, including unchanged objects and repeated full reads.
+  They are throughput, not unique objects or creation counts.
+
+Counters begin when this version starts and reset on API restart. Use `rate` or
+`increase`, not subtraction, for counters. Low traffic or no sync attempts can
+produce no series rather than zero; this must not be interpreted as proof of
+healthy integrations. Database inventory gauges are cached for 60 seconds and
+are **not counters**, even legacy names ending in `_total`.
+
+### Collection health and data boundaries
+
+All inventory collectors share one in-flight, read-only, repeatable-read
+snapshot. A dedicated single-connection pool bounds connection acquisition to 1.5 seconds,
+each statement to one second, and the collector wait to five seconds. A failed refresh preserves
+last-good inventory; a cold failure exports no labeled inventory and `NaN` for
+scalar inventory. `musubi_usage_snapshot_success` and
+`musubi_usage_snapshot_timestamp_seconds` distinguish stale data from healthy
+zero counts. Failed refreshes back off for 60 seconds. Alert on collection health
+before drawing product conclusions from stale inventory.
+
+No email, user/session ID, IP address, event/task title, calendar name, token,
+provider URL or raw User-Agent is exported as a metric label. Labels are coarse,
+bounded categories. Session classification is performed in PostgreSQL; only
+aggregated family counts are returned. This adds no third-party analytics SDK,
+fingerprinting, event payload collection or browser tracking endpoint. The
+Prometheus endpoint must remain on the trusted monitoring network.
+
+This version deliberately does not turn background API requests into a claimed
+human-retention metric. Reliable adoption funnels and DAU cohorts require a
+separately defined, explicit user-interaction event model and retention policy.
+
+### Prometheus setup
+
+`ops/prometheus/prometheus.yml` is a usable configuration example for the Compose
+service `api` on the same private Docker network. Mount it as
+`/etc/prometheus/prometheus.yml` and mount `musubi-alerts.yml` alongside it. Other
+deployments must adjust the target. The metrics port is 9464 by default; reflect
+any `METRICS_PORT` override in the scrape target. A value of 0 disables export.
+The example scrapes every 30 seconds and evaluates alerts every 30 seconds.
+
+Choose retention explicitly on the Prometheus process, for example
+`--storage.tsdb.retention.time=90d`, and size disk based on actual ingestion.
+Changing retention does not recover historical data. Keep one API target per
+Musubi database: the application currently supports one API process per database.
+Do not sum duplicate scrape targets for the same database inventory. Isolate
+separate deployments using separate Prometheus data sources or job names and
+adapt the dashboard job selector accordingly.
+
+The supplied rules also cover stale product inventory, provider reconnection and
+old pending/retry event deliveries. Rules alone do not send notifications:
+configure your Alertmanager and receivers. Validate before rollout with
+`promtool check config /etc/prometheus/prometheus.yml` and
+`promtool check rules /etc/prometheus/musubi-alerts.yml`. Import dashboards into a
+Grafana instance with access controls; importing a dashboard does not deploy or
+activate the collector on an existing API image.

@@ -108,6 +108,13 @@ jobs:
           prom/prometheus:v3.7.3
           check rules /rules/musubi-alerts.yml
 
+      - name: Prometheus configuration loads
+        run: >-
+          docker run --rm -v "$PWD/ops/prometheus:/etc/prometheus:ro"
+          --entrypoint /bin/promtool
+          prom/prometheus:v3.7.3
+          check config /etc/prometheus/prometheus.yml
+
   verify:
     name: Typecheck, test, lint, docs, and migrations
     runs-on: ubuntu-latest

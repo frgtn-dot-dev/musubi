@@ -76,7 +76,7 @@
     {
       "id": 3,
       "type": "stat",
-      "title": "Active users",
+      "title": "Users with valid sessions",
       "description": "Distinct users with a currently valid session.",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
@@ -165,8 +165,8 @@
     {
       "id": 6,
       "type": "timeseries",
-      "title": "Growth per day (delta 24h)",
-      "description": "New users / events added over a rolling 24h window.",
+      "title": "Net inventory change (24h)",
+      "description": "Net inventory change in 24h, including deletion and imports. Not creations or acquisition.",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
       "targets": [
@@ -174,7 +174,7 @@
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "expr": "delta(musubi_users_total{job=\"musubi-api\"}[24h])",
-          "legendFormat": "new users / 24h"
+          "legendFormat": "net users / 24h"
         },
         {
           "refId": "B",
@@ -198,7 +198,7 @@
     {
       "id": 7,
       "type": "timeseries",
-      "title": "Active users & sessions",
+      "title": "Valid sessions and their users (not DAU)",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
       "targets": [
@@ -206,13 +206,13 @@
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "expr": "musubi_active_users{job=\"musubi-api\"}",
-          "legendFormat": "active users"
+          "legendFormat": "users with valid sessions"
         },
         {
           "refId": "B",
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "expr": "musubi_active_sessions{job=\"musubi-api\"}",
-          "legendFormat": "active sessions"
+          "legendFormat": "valid sessions"
         }
       ],
       "options": {
@@ -290,8 +290,8 @@
     {
       "id": 10,
       "type": "timeseries",
-      "title": "Sync health by provider",
-      "description": "Linked provider accounts split by sync status — a rising non-active line flags providers whose sync broke (revoked token, auth error).",
+      "title": "Linked account state (not sync freshness)",
+      "description": "Linked account state; CalDAV is unmonitored at account level. Use sync attempts and failures for observed health.",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 28 },
       "targets": [
