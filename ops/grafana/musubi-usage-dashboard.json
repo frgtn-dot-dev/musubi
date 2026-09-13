@@ -165,7 +165,7 @@
     {
       "id": 6,
       "type": "timeseries",
-      "title": "Growth per day (delta 24h)",
+      "title": "Net inventory change (24h)",
       "description": "Net inventory change in 24h, including deletion and imports. Not creations or acquisition.",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
@@ -174,7 +174,7 @@
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "expr": "delta(musubi_users_total{job=\"musubi-api\"}[24h])",
-          "legendFormat": "new users / 24h"
+          "legendFormat": "net users / 24h"
         },
         {
           "refId": "B",
@@ -206,13 +206,13 @@
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "expr": "musubi_active_users{job=\"musubi-api\"}",
-          "legendFormat": "active users"
+          "legendFormat": "users with valid sessions"
         },
         {
           "refId": "B",
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
           "expr": "musubi_active_sessions{job=\"musubi-api\"}",
-          "legendFormat": "active sessions"
+          "legendFormat": "valid sessions"
         }
       ],
       "options": {
