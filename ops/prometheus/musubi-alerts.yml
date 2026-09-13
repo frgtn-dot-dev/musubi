@@ -35,3 +35,30 @@ groups:
         annotations:
           summary: A Musubi scheduled task outlasted its interval
           description: "Task {{ $labels.task }} skipped a tick because its previous run was still active."
+
+      - alert: MusubiUsageSnapshotUnavailable
+        expr: musubi_usage_snapshot_success{job="musubi-api"} == 0 or time() - musubi_usage_snapshot_timestamp_seconds{job="musubi-api"} > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Musubi product inventory is stale or unavailable
+          description: Database-backed product panels cannot be trusted as current. Operational API metrics may still be healthy.
+
+      - alert: MusubiProviderReconnectRequired
+        expr: musubi_sync_accounts{job="musubi-api",status="reconnect_required"} > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Musubi provider accounts require reconnection
+          description: "Provider {{ $labels.provider }} has accounts requiring user reconnection."
+
+      - alert: MusubiEventDeliveryBacklog
+        expr: musubi_event_outbox_oldest_seconds{job="musubi-api",status=~"pending|attempting|retry"} > 1800
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Musubi event delivery has been waiting over 30 minutes
+          description: "Provider {{ $labels.provider }} has old {{ $labels.status }} event deliveries."

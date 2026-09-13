@@ -1,9 +1,13 @@
 import { createServer } from "node:http";
 import type { NextFunction, Request, Response } from "express";
 import { Counter, Gauge, Histogram, Registry, collectDefaultMetrics } from "prom-client";
+import { Pool } from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { config } from "@musubi/config";
 import { logger } from "@musubi/config";
-import { db, account, caldavAccounts, events, session, user, calendars } from "@musubi/db";
-import { count, countDistinct, eq, gt, isNull } from "drizzle-orm";
+import { account, caldavAccounts, events, session, user, calendars, tasks, externalCalendars } from "@musubi/db";
+import { count, countDistinct, eq, gt, isNull, sql } from "drizzle-orm";
+import { clientFamily, clientFamilySql, providerFamily, syncStatusFamily, taskStatusFamily, priorityFamily, snapshotCache } from "./product_metrics";
 import { sseStats } from "./handlers/stream";
 
 const registry = new Registry();
@@ -112,82 +116,67 @@ export function recordExternalSyncFailure(
 }
 
 // --- Usage snapshots (DB-backed gauges) --------------------------------------
-// Current-state counts only; Grafana derives "added in last 7d" with PromQL
-// (`delta(musubi_events_total[7d])`). Prometheus stores the time series, so we
-// never query a time window here — just COUNT(*).
-
-type UsageSnapshot = {
-  users: number;
-  events: number;
-  calendars: number;
-  activeUsers: number;
-  activeSessions: number;
-  syncAccounts: { provider: string; status: string; value: number }[];
-};
-
-// ponytail: cache 60s — scrape runs ~every 15s, no need to hit the DB 4×/min.
-let usageCache: UsageSnapshot | null = null;
-let usageCachedAt = 0n;
-const USAGE_TTL_NS = 60_000_000_000n;
-
-async function usageSnapshot(): Promise<UsageSnapshot> {
-  const now = process.hrtime.bigint();
-  if (usageCache && now - usageCachedAt < USAGE_TTL_NS) return usageCache;
-
-  const live = new Date();
-  const [users, evts, cals, activeUsers, activeSessions, oauthAccounts, caldav] =
-    await Promise.all([
-      db.select({ v: count() }).from(user).where(eq(user.isExternal, false)),
-      db.select({ v: count() }).from(events).where(isNull(events.deletedAt)),
-      db.select({ v: count() }).from(calendars),
-      db
-        .select({ v: countDistinct(session.userId) })
-        .from(session)
-        .where(gt(session.expiresAt, live)),
-      db.select({ v: count() }).from(session).where(gt(session.expiresAt, live)),
-      db
-        .select({
-          provider: account.providerId,
-          status: account.syncStatus,
-          v: count(),
-        })
-        .from(account)
-        .groupBy(account.providerId, account.syncStatus),
-      // CalDAV (Apple/iCloud + generic) lives in its own table, not Better
-      // Auth's `account`, and has no per-account sync status — count as active.
-      db.select({ v: count() }).from(caldavAccounts),
-    ]);
-
-  usageCache = {
-    users: users[0].v,
-    events: evts[0].v,
-    calendars: cals[0].v,
-    activeUsers: activeUsers[0].v,
-    activeSessions: activeSessions[0].v,
-    syncAccounts: [
-      ...oauthAccounts.map((r) => ({
-        provider: r.provider,
-        status: r.status,
-        value: r.v,
-      })),
-      ...(caldav[0].v > 0
-        ? [{ provider: "caldav", status: "active", value: caldav[0].v }]
-        : []),
-    ],
-  };
-  usageCachedAt = now;
-  return usageCache;
+// Inventory gauges are not creation counters or daily active users.
+// A separate single connection prevents monitoring from occupying request pool slots.
+const inventoryPool = new Pool({ connectionString: config.db.databaseUrl, max: 1,
+  connectionTimeoutMillis: 1500, idleTimeoutMillis: 10_000, query_timeout: 1500,
+  allowExitOnIdle: true });
+inventoryPool.on("error", () => logger.warn("metrics.inventory.connection_failed"));
+const inventoryDb = drizzle(inventoryPool);
+export async function loadUsageSnapshot() {
+  return inventoryDb.transaction(async (tx) => {
+    // All counts see one database snapshot; the timeout bounds scrape work.
+    await tx.execute(sql`set local statement_timeout = '1000ms'`);
+    const live = new Date();
+    const users = await tx.select({ v: count() }).from(user).where(eq(user.isExternal, false));
+    const evts = await tx.select({ v: count() }).from(events).where(isNull(events.deletedAt));
+    const cals = await tx.select({ v: count() }).from(calendars);
+    const activeUsers = await tx.select({ v: countDistinct(session.userId) }).from(session).where(gt(session.expiresAt, live));
+    const activeSessions = await tx.select({ v: count() }).from(session).where(gt(session.expiresAt, live));
+    const oauth = await tx.select({ provider: account.providerId, status: account.syncStatus, v: count() }).from(account).groupBy(account.providerId, account.syncStatus);
+    const caldav = await tx.select({ v: count() }).from(caldavAccounts);
+    const device = clientFamilySql(sql`${session.userAgent}`, "device");
+    const os = clientFamilySql(sql`${session.userAgent}`, "os");
+    const browser = clientFamilySql(sql`${session.userAgent}`, "browser");
+    const devices = await tx.select({ device, os, browser, v: count() }).from(session).where(gt(session.expiresAt, live)).groupBy(sql`1`, sql`2`, sql`3`);
+    const taskRows = await tx.select({ status: tasks.status, priority: tasks.priority, provider: externalCalendars.provider, v: count() })
+      .from(tasks).leftJoin(externalCalendars, eq(tasks.calendarID, externalCalendars.calendarID))
+      .where(isNull(tasks.deletedAt)).groupBy(tasks.status, tasks.priority, externalCalendars.provider);
+    const providerCalendars = await tx.select({ provider: externalCalendars.provider, disabled: externalCalendars.disabled,
+      events: externalCalendars.supportsEvents, tasks: externalCalendars.supportsTasks, v: count() })
+      .from(externalCalendars).groupBy(externalCalendars.provider, externalCalendars.disabled, externalCalendars.supportsEvents, externalCalendars.supportsTasks);
+    return { users: users[0].v, events: evts[0].v, calendars: cals[0].v,
+      activeUsers: activeUsers[0].v, activeSessions: activeSessions[0].v, devices, taskRows, providerCalendars,
+      syncAccounts: [...oauth.map(r => ({ provider: providerFamily(r.provider), status: syncStatusFamily(r.status), value: r.v })),
+        { provider: "caldav", status: "unmonitored", value: caldav[0].v }] };
+  }, { isolationLevel: "repeatable read", accessMode: "read only" });
 }
+const usage = snapshotCache(loadUsageSnapshot);
+async function usageSnapshot() { return usage.get(); }
+new Gauge({ name: "musubi_usage_snapshot_success", help: "Whether the latest inventory refresh succeeded.", registers: [registry],
+  async collect() { await usageSnapshot(); this.set(Number(usage.healthy)); } });
+new Gauge({ name: "musubi_usage_snapshot_timestamp_seconds", help: "Unix time of last successful inventory refresh; zero before first success.", registers: [registry],
+  async collect() { await usageSnapshot(); this.set(usage.lastSuccess); } });
+new Gauge({ name: "musubi_sessions_by_client", help: "Unexpired sessions by coarse User-Agent hints, not online users or unique devices.",
+  labelNames: ["device", "os", "browser"] as const, registers: [registry],
+  async collect() { const s = await usageSnapshot(); this.reset(); if (s) for (const {v, ...labels} of s.devices) this.inc(labels, v); } });
+new Gauge({ name: "musubi_tasks", help: "Non-deleted task inventory by status, RFC priority band and home calendar provider.",
+  labelNames: ["status", "priority", "provider"] as const, registers: [registry],
+  async collect() { const s = await usageSnapshot(); this.reset(); if (s) for (const r of s.taskRows)
+    this.inc({status: taskStatusFamily(r.status), priority: priorityFamily(r.priority), provider: providerFamily(r.provider)}, r.v); } });
+new Gauge({ name: "musubi_provider_calendars", help: "Discovered provider calendars by enabled state and capabilities; not sync freshness.",
+  labelNames: ["provider", "state", "events", "tasks"] as const, registers: [registry],
+  async collect() { const s = await usageSnapshot(); this.reset(); if (s) for (const r of s.providerCalendars)
+    this.inc({provider: providerFamily(r.provider), state: r.disabled ? "disabled" : "enabled", events: String(r.events), tasks: String(r.tasks)}, r.v); } });
 
-// A single collect() drives every usage gauge so the snapshot (and its cache)
-// is computed once per scrape instead of once per metric.
+// All collectors await the same in-flight snapshot.
 new Gauge({
   name: "musubi_users_total",
   help: "Local (non-federated) user accounts registered on this server.",
   registers: [registry],
   async collect() {
     const s = await usageSnapshot();
-    this.set(s.users);
+    this.set(s?.users ?? NaN);
   },
 });
 
@@ -196,7 +185,7 @@ new Gauge({
   help: "Live (non-deleted) events stored on this server.",
   registers: [registry],
   async collect() {
-    this.set((await usageSnapshot()).events);
+    this.set((await usageSnapshot())?.events ?? NaN);
   },
 });
 
@@ -205,7 +194,7 @@ new Gauge({
   help: "Calendars stored on this server.",
   registers: [registry],
   async collect() {
-    this.set((await usageSnapshot()).calendars);
+    this.set((await usageSnapshot())?.calendars ?? NaN);
   },
 });
 
@@ -214,7 +203,7 @@ new Gauge({
   help: "Distinct users with a currently valid (non-expired) session.",
   registers: [registry],
   async collect() {
-    this.set((await usageSnapshot()).activeUsers);
+    this.set((await usageSnapshot())?.activeUsers ?? NaN);
   },
 });
 
@@ -223,7 +212,7 @@ new Gauge({
   help: "Currently valid (non-expired) sessions.",
   registers: [registry],
   async collect() {
-    this.set((await usageSnapshot()).activeSessions);
+    this.set((await usageSnapshot())?.activeSessions ?? NaN);
   },
 });
 
@@ -233,9 +222,10 @@ new Gauge({
   labelNames: ["provider", "status"] as const,
   registers: [registry],
   async collect() {
+    const s = await usageSnapshot();
     this.reset();
-    for (const { provider, status, value } of (await usageSnapshot()).syncAccounts) {
-      this.set({ provider, status }, value);
+    for (const { provider, status, value } of s?.syncAccounts ?? []) {
+      this.inc({ provider, status }, value);
     }
   },
 });
@@ -272,6 +262,22 @@ new Gauge({
   },
 });
 
+const syncRuns = new Counter({ name: "musubi_sync_runs_total", help: "Completed account sync attempts, not individual HTTP calls.", labelNames: ["provider", "outcome"] as const, registers: [registry] });
+const syncDuration = new Histogram({ name: "musubi_sync_run_duration_seconds", help: "Account synchronization duration including discovery and persistence.", labelNames: ["provider", "outcome"] as const, buckets: [0.1, 0.5, 1, 2, 5, 10, 30, 60, 120, 300], registers: [registry] });
+const syncObjects = new Counter({ name: "musubi_sync_objects_received_total", help: "Objects received during successful calendar syncs, including repeated full reads; not unique objects.", labelNames: ["provider", "kind"] as const, registers: [registry] });
+export function recordSyncRun(provider: string, outcome: "success" | "failed", seconds: number) {
+  const labels = { provider: providerFamily(provider), outcome };
+  syncRuns.inc(labels); syncDuration.observe(labels, seconds);
+}
+export function recordSyncObjects(provider: string, events: number, tasks: number) {
+  syncObjects.inc({provider: providerFamily(provider), kind: "event"}, events);
+  syncObjects.inc({provider: providerFamily(provider), kind: "task"}, tasks);
+}
+
+const productRequests = new Counter({ name: "musubi_product_requests_total",
+  help: "Authenticated API requests by feature and client hint, including background traffic; not unique users or human actions.",
+  labelNames: ["feature", "method", "outcome", "device"] as const, registers: [registry] });
+
 const KNOWN_HTTP_METHODS = new Set([
   "DELETE",
   "GET",
@@ -307,6 +313,10 @@ export function middlewareMetrics(req: Request, res: Response, next: NextFunctio
     const labels = { method, route: metricRoute(req), status };
     const durationSeconds = Number(process.hrtime.bigint() - startedAt) / 1_000_000_000;
 
+    const feature = /^\/api\/v1\/(events|tasks|calendars|pages|availability|reminders)(?:\/|$)/.exec(labels.route)?.[1];
+    if (req.user && feature) productRequests.inc({ feature, method,
+      outcome: status === "aborted" ? "aborted" : res.statusCode < 400 ? "success" : res.statusCode < 500 ? "rejected" : "failed",
+      device: clientFamily(req.headers["user-agent"], "device") });
     httpRequests.inc(labels);
     httpRequestDuration.observe(labels, durationSeconds);
     httpRequestsInFlight.dec({ method });
