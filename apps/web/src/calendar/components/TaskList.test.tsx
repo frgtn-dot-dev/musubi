@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   replaceTaskDate,
@@ -38,7 +39,7 @@ describe("task recurrence summaries", () => {
   });
 });
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TaskSchema } from "@musubi/types";
 import { TaskList } from "./TaskList";
@@ -170,4 +171,107 @@ it("keeps due-only recurrence anchored without adding a start", async () => {
   await user.click(screen.getByRole("option", { name: "Every week" }));
   await user.click(screen.getByRole("button", { name: "Save task" }));
   expect(props.onUpdate).toHaveBeenCalledWith(task.id, expect.objectContaining({ recurrence: "FREQ=WEEKLY;BYDAY=MO", start: null }));
+});
+
+it("updates status inline without dropping recurrence", async () => {
+  const user = userEvent.setup();
+  const task = TaskSchema.parse({ id: "inline", creatorID: "owner", calendarID: fixtureCalendars[0]!.id, title: "Inline task", recurrence: "FREQ=WEEKLY" });
+  const props = { ...emptyTaskProps(), tasks: [task], onUpdate: vi.fn(async () => task) };
+  render(<TaskList {...props} />);
+  await user.click(screen.getByRole("combobox", { name: "Status of Inline task" }));
+  await user.click(screen.getByRole("option", { name: "Completed" }));
+  expect(props.onUpdate).toHaveBeenCalledWith(task.id, expect.objectContaining({ status: "completed", percentComplete: 100, completedAt: expect.any(Date), recurrence: "FREQ=WEEKLY" }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+it("preserves completion on priority edits and exposes failed writes", async () => {
+  const user = userEvent.setup();
+  const completedAt = new Date();
+  const task = TaskSchema.parse({ id: "inline", creatorID: "owner", calendarID: fixtureCalendars[0]!.id, title: "Inline task", status: "completed", completedAt, percentComplete: 100 });
+  const props = { ...emptyTaskProps(), tasks: [task], onUpdate: vi.fn(async () => { throw new Error("offline"); }) };
+  render(<TaskList {...props} />);
+  await user.click(screen.getByRole("combobox", { name: "Priority of Inline task" }));
+  await user.click(screen.getByRole("option", { name: "High (1)" }));
+  expect(props.onUpdate).toHaveBeenCalledWith(task.id, expect.objectContaining({ priority: 1, status: "completed", completedAt, percentComplete: 100 }));
+  expect(await screen.findByRole("dialog", { name: "Edit task" })).toBeTruthy();
+  expect(screen.getByText(/This task could not be updated/)).toBeTruthy();
+});
+
+
+it("returns keyboard focus to the status control after moving between groups", async () => {
+  const user = userEvent.setup();
+  const task = TaskSchema.parse({ id: "focus", creatorID: "owner", calendarID: fixtureCalendars[0]!.id, title: "Focus task" });
+  function Example() {
+    const [tasks, setTasks] = useState([task]);
+    return <TaskList {...emptyTaskProps()} tasks={tasks} onUpdate={async (_id, update) => {
+      const updated = { ...task, ...update };
+      setTasks([updated]);
+      return updated;
+    }} />;
+  }
+  render(<Example />);
+  for (const status of ["Completed", "Needs action"]) {
+    await user.click(screen.getByRole("combobox", { name: "Status of Focus task" }));
+    await user.click(screen.getByRole("option", { name: status }));
+    expect(document.activeElement).toBe(screen.getByRole("combobox", { name: "Status of Focus task" }));
+  }
+});
+
+
+it("groups every task under its own phase", () => {
+  const statuses = ["needs-action", "in-process", "completed", "cancelled"] as const;
+  const labels = ["Needs action", "In progress", "Completed", "Cancelled"];
+  const tasks = statuses.map(status => TaskSchema.parse({ id: status, creatorID: "owner", calendarID: fixtureCalendars[0]!.id, title: `Task ${status}`, status }));
+  render(<TaskList {...emptyTaskProps()} tasks={tasks} />);
+  statuses.forEach((status, index) => {
+    const group = screen.getByRole("heading", { name: `${labels[index]} 1` }).closest("section")!;
+    expect(within(group).getByRole("button", { name: new RegExp(`Task ${status}`) })).toBeTruthy();
+    expect(group.querySelectorAll("li")).toHaveLength(1);
+  });
+});
+
+
+it("shows all four Kanban columns and creates tasks directly in their phase", async () => {
+  const user = userEvent.setup();
+  const props = emptyTaskProps();
+  render(<TaskList {...props} layout="kanban" />);
+  for (const name of ["Needs action", "In progress", "Completed", "Cancelled"]) {
+    expect(screen.getByRole("region", { name })).toBeTruthy();
+  }
+  await user.click(within(screen.getByRole("region", { name: "Completed" })).getByRole("button", { name: "Add task" }));
+  await user.type(screen.getByRole("textbox", { name: "Title" }), "Already done");
+  await user.click(screen.getByRole("button", { name: "Save task" }));
+  expect(props.onCreate).toHaveBeenCalledWith(expect.objectContaining({ status: "completed", percentComplete: 100, completedAt: expect.any(Date) }));
+});
+
+it("offers a keyboard path from the drag handle to the status selector", async () => {
+  const task = TaskSchema.parse({ id: "drag", title: "Drag task", creatorID: "owner", calendarID: fixtureCalendars[0]!.id });
+  render(<TaskList {...emptyTaskProps()} tasks={[task]} layout="kanban" />);
+  fireEvent.click(screen.getByRole("button", { name: /Drag Drag task to another status/ }), { detail: 0 });
+  expect(document.activeElement).toBe(screen.getByRole("combobox", { name: "Status of Drag task" }));
+});
+
+it("keeps read-only Kanban cards visible without drag or create actions", () => {
+  const task = TaskSchema.parse({ id: "readonly", title: "Read only task", creatorID: "owner", calendarID: fixtureCalendars[0]!.id });
+  render(<TaskList {...emptyTaskProps()} tasks={[task]} editableCalendarIds={new Set()} offline layout="kanban" />);
+  expect(screen.getByText("Read only task")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /Drag Read only task/ })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Add task" })).toBeNull();
+  expect(screen.getByRole("combobox", { name: "Status of Read only task" })).toHaveProperty("disabled", true);
+});
+
+it("lets touch gestures scroll the card while keeping touch drag on its handle", () => {
+  const task = TaskSchema.parse({ id: "touch", title: "Touch task", creatorID: "owner", calendarID: fixtureCalendars[0]!.id });
+  render(<TaskList {...emptyTaskProps()} tasks={[task]} layout="kanban" />);
+  const card = screen.getByRole("button", { name: "Touch task" }).closest("[data-task-id]")!;
+  const press = () => Object.assign(new Event("pointerdown", { bubbles: true, cancelable: true }), { pointerType: "touch", pointerId: 8, button: 0, clientX: 20, clientY: 20 });
+  const scrollStart = press();
+  fireEvent(card, scrollStart);
+  expect(scrollStart.defaultPrevented).toBe(false);
+  expect(document.querySelector("[data-drag-preview]")).toBeNull();
+  fireEvent(screen.getByRole("button", { name: /Drag Touch task to another status/ }), press());
+  expect(document.querySelector("[data-drag-preview]")).not.toBeNull();
+  // Unmount's cleanup also cancels the animation frame and removes the preview.
+  cleanup();
+  expect(document.querySelector("[data-drag-preview]")).toBeNull();
 });

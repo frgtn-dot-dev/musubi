@@ -66,7 +66,7 @@ export function EventPopover({
             ? styles.eventChipContinuesBoth
             : ""
         } ${
-          event.isAllDay && showLabel ? styles.eventChipLabelVisible : ""
+          event.isAllDay && showLabel && continuesAfter ? styles.eventChipLabelVisible : ""
         }`}
         type="button"
         aria-label={`${event.title}, ${getEventDateLabel(

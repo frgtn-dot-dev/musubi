@@ -184,3 +184,10 @@
     animation: none;
   }
 }
+
+/* Saving is a temporary interaction lock, not a change in availability.
+   Keep the controls visually stable while the optimistic value is saved. */
+.settingsContent[aria-busy="true"] button:disabled,
+.settingsContent[aria-busy="true"] [role="radiogroup"] > [data-disabled] {
+  opacity: 1;
+}

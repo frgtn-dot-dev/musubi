@@ -90,7 +90,8 @@ const TASKS: Task[] = [
   },
 ];
 
-function TaskListExample({ offline = false }: { offline?: boolean }) {
+function TaskListExample({ offline = false, initialLayout = "list" }: { offline?: boolean; initialLayout?: "list" | "kanban" }) {
+  const [layout, setLayout] = useState(initialLayout);
   const [tasks, setTasks] = useState(TASKS);
 
   async function create(input: TaskCreate): Promise<Task> {
@@ -117,9 +118,11 @@ function TaskListExample({ offline = false }: { offline?: boolean }) {
 
   return (
     <TaskList
+      layout={layout}
+      onLayoutChange={setLayout}
       calendars={CALENDARS}
       createRequest={0}
-      editableCalendarIds={new Set(["work", "personal"])}
+      editableCalendarIds={new Set(offline ? [] : ["work", "personal"])}
       offline={offline}
       onCreateRequestHandled={() => undefined}
       onCreate={create}
@@ -172,4 +175,14 @@ export const Narrow: Story = {
 
 export const Offline: Story = {
   render: () => <TaskListExample offline />,
+};
+
+
+export const Kanban: Story = {
+  parameters: { chromatic: { modes: DESKTOP_MODES } },
+  render: () => <TaskListExample initialLayout="kanban" />,
+};
+
+export const KanbanOffline: Story = {
+  render: () => <TaskListExample initialLayout="kanban" offline />,
 };

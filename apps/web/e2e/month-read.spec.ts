@@ -9,6 +9,14 @@ import {
 	type Route,
 } from "@playwright/test";
 
+// Geometry assertions and synthetic pointer coordinates require the final layout.
+// Keep real motion enabled; wait only for finite transitions already in flight.
+async function settleLayout(page: Page) {
+  await page.evaluate(async () => {
+    await Promise.all(document.getAnimations().filter(animation => animation.effect?.getComputedTiming().iterations !== Infinity).map(animation => animation.finished.catch(() => undefined)));
+  });
+}
+
 async function expectOrganizerPaintedAbovePopover(editor: Locator) {
   // A modal can receive keyboard input even while an inert popover paints
   // over it. Include that surface in the paint-order probe, then restore it.
@@ -798,7 +806,8 @@ test("reads, filters and signs out of the authenticated Month", async ({
 	// `image` used to be dropped on the way from the session to the sidebar.
 	await expect(page.locator('img[src^="data:image/gif"]')).toBeVisible();
 
-	await page.getByRole("button", { name: "Sign out Web QA" }).click();
+	await page.getByRole("button", { name: "User menu for Web QA" }).click();
+	await page.getByRole("menuitem", { name: "Sign out" }).click();
 	await expect(page).toHaveURL(/\/login/);
 });
 
@@ -814,10 +823,7 @@ test("keeps an empty Month canvas quiet", async ({ page }) => {
 	await expect(page.getByText("Nothing is scheduled")).toHaveCount(0);
 	await expect(page.getByText("No events match")).toHaveCount(0);
 
-	await page
-		.getByRole("main")
-		.getByRole("button", { name: "Next month" })
-		.click();
+	await page.keyboard.press("n");
 	await expect(page.getByText("August 2026")).toBeVisible();
 	await expect(page.getByText("Nothing is scheduled")).toHaveCount(0);
 
@@ -974,8 +980,9 @@ test("renders and navigates the authenticated Week time grid", async ({
 	await page.getByRole("button", { name: /Weekly review/ }).click();
 	await expect(page.getByText("11:00 – 12:00")).toBeVisible();
 	await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 
-	await page.getByRole("button", { name: "Next week" }).click();
+	await page.keyboard.press("n");
 	await expect(page).toHaveURL(/[?&]date=2026-08-02/);
 	await expect(page.getByText("Jul 27 – Aug 2, 2026")).toBeVisible();
 
@@ -1063,7 +1070,7 @@ test("uses the shared time grid as a one-column Day", async ({ page }) => {
 		1,
 	);
 
-	await page.getByRole("button", { name: "Next day" }).click();
+	await page.keyboard.press("n");
 	await expect(page).toHaveURL(/[?&]date=2026-07-24/);
 	await expect(page.getByText("Friday, July 24, 2026")).toBeVisible();
 });
@@ -1310,6 +1317,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
 		const title = panel.getByRole("textbox", { name: "Event title" });
 		await expect(title).toBeFocused();
 		await title.fill("All-day planning");
+		await settleLayout(page);
 		const before = (await panel.boundingBox())!;
 		const submit = panel.getByRole("button", { name: "Create", exact: true });
 		const actionsBefore = await submit.boundingBox();
@@ -1995,6 +2003,7 @@ test("a second month drag replaces the first draft, not both", async ({
 	await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
 	await expect(page.locator("[data-draft]")).toHaveCount(1);
 
+	await settleLayout(page);
 	// The current panel stays mounted until the next range is committed.
 	const from = page.locator('[data-day-key="2026-07-28"]');
 	const to = page.locator('[data-day-key="2026-07-30"]');
@@ -2076,8 +2085,9 @@ test("flicks sideways to change period, but a held drag still creates", async ({
 
 	// Playwright's touchscreen only taps, so the gesture is dispatched directly.
 	// pointerType is what separates a finger from the mouse here.
-	const touchDrag = (dx: number, dy = 0, holdMs = 0) =>
-		page.evaluate(
+	const touchDrag = async (dx: number, dy = 0, holdMs = 0) => {
+    await settleLayout(page);
+    return page.evaluate(
 			async ([shiftX, shiftY, hold]) => {
 				const area = document.querySelector("[data-calendar-area]")!;
 				const box = area.getBoundingClientRect();
@@ -2119,10 +2129,12 @@ test("flicks sideways to change period, but a held drag still creates", async ({
 			},
 			[dx, dy, holdMs] as const,
 		);
+  };
 
 	// Flick left for the next period, right for the previous one.
 	await touchDrag(-120);
 	await expect(page).toHaveURL(/date=2026-08-01/);
+	await settleLayout(page);
 	await expect(page.locator("[data-live], [data-draft]")).toHaveCount(0);
 	await touchDrag(120);
 	await expect(page).toHaveURL(/date=2026-07-01/);
@@ -3881,7 +3893,8 @@ test("manages account identity and gates account deletion", async ({
 	});
 
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-	await page.getByRole("button", { name: "Manage account" }).click();
+	await page.getByRole("button", { name: "User menu for Web QA" }).click();
+	await page.getByRole("menuitem", { name: "Manage account" }).click();
 	const accountDialog = page.getByRole("dialog", { name: "Account" });
 	await expect(accountDialog).toBeVisible();
 	await expect(accountDialog).toContainText("web-qa@example.invalid");
@@ -3969,7 +3982,8 @@ test("keeps account management usable as nested mobile sheets", async ({
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 
 	await page.getByRole("button", { name: "Open navigation" }).click();
-	await page.getByRole("button", { name: "Manage account" }).click();
+	await page.getByRole("button", { name: "User menu for Web QA" }).click();
+	await page.getByRole("menuitem", { name: "Manage account" }).click();
 	const accountSheet = page.getByRole("dialog", { name: "Account" });
 	await accountSheet.evaluate((element) =>
 		Promise.all(element.getAnimations().map((animation) => animation.finished)),
@@ -4161,7 +4175,8 @@ test("navigates by keyboard and documents the map behind ?", async ({
 	const clientResult = search.getByRole("button", { name: /Client call/ });
 	await expect(clientResult).toBeVisible();
 	await page.keyboard.press("ArrowDown");
-	await expect(clientResult).toBeFocused();
+	await expect(clientResult).toHaveAttribute("data-active", "true");
+	await expect(search.getByRole("searchbox")).toBeFocused();
 	await page.keyboard.press("Escape");
 
 	// Radix returns focus to the toolbar trigger. Slash must remain global there;
@@ -4173,14 +4188,18 @@ test("navigates by keyboard and documents the map behind ?", async ({
 	await page.keyboard.press("/");
 	const searchbox = search.getByRole("searchbox");
 	await expect(searchbox).toBeFocused();
-	await page.keyboard.press("ArrowDown");
 	const newEventResult = search.getByRole("button", { name: "New event" });
 	const todayResult = search.getByRole("button", { name: "Go to today" });
-	await expect(newEventResult).toBeFocused();
+  const newTaskResult = search.getByRole("button", { name: "New task" });
+	await expect(newEventResult).toHaveAttribute("data-active", "true");
 	await page.keyboard.press("ArrowDown");
-	await expect(todayResult).toBeFocused();
+  await expect(newTaskResult).toHaveAttribute("data-active", "true");
+  await page.keyboard.press("ArrowDown");
+	await expect(todayResult).toHaveAttribute("data-active", "true");
 	await page.keyboard.press("ArrowUp");
-	await expect(newEventResult).toBeFocused();
+  await expect(newTaskResult).toHaveAttribute("data-active", "true");
+  await page.keyboard.press("ArrowUp");
+	await expect(newEventResult).toHaveAttribute("data-active", "true");
 	await page.keyboard.press("Escape");
 
 	const switcherBox = await page
@@ -4445,6 +4464,8 @@ for (const width of [1024, 1280, 1555]) {
     const before = (await calendar.boundingBox())!;
     await page.getByRole("button", { name: /Docked toolbar check/ }).click();
     const details = page.getByRole("dialog", { name: "Docked toolbar check", exact: true });
+    await expect(details).toBeVisible();
+    await settleLayout(page);
     const panelBox = (await details.boundingBox())!;
     expect((await calendar.boundingBox())!.width).toBe(before.width - panelBox.width);
     // Reserving space must resize the month, not crop its trailing days.
@@ -4456,7 +4477,7 @@ for (const width of [1024, 1280, 1555]) {
       expect(box.x + box.width).toBeLessThanOrEqual(panelBox.x + 1);
     }
     expect(await calendar.evaluate(element => element.scrollWidth - element.clientWidth)).toBe(0);
-    for (const name of ["Today", "Previous month", "Next month", "Search events and actions", "Calendar sync coverage", "Create event, meeting or task"]) {
+    for (const name of ["Search events and actions", "Calendar sync coverage", "Create event, meeting or task"]) {
       const button = page.getByRole("button", { name, exact: true });
       await expect(button).toBeInViewport();
       const box = (await button.boundingBox())!;
@@ -4475,6 +4496,7 @@ for (const width of [1024, 1280, 1555]) {
     expect(runtimeErrors).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath(`docked-toolbar-${width}.png`) });
     await details.getByRole("button", { name: "Close event details" }).click();
+    await settleLayout(page);
     expect((await calendar.boundingBox())!.width).toBe(before.width);
   });
 }
@@ -4890,6 +4912,7 @@ test("leaves a draggable pill on the month grid", async ({ page }) => {
 	);
 	await page.getByRole("textbox", { name: "Event title" }).fill("Retreat");
 
+	await settleLayout(page);
 	// Grab the pill and move the whole range a day later.
 	const pill = page.locator("[data-draft]").first();
 	const pillBox = (await pill.boundingBox())!;
@@ -5477,7 +5500,8 @@ test("creation Inspector stays fixed while its header is dragged and restores ke
 	await origin.press("Enter");
 	const panel = page.getByRole("dialog", { name: "Create event", exact: true });
 	await expect(panel.getByRole("textbox", { name: "Event title" })).toBeFocused();
-	const before = (await panel.boundingBox())!;
+	await settleLayout(page);
+		const before = (await panel.boundingBox())!;
 	expect(before).toEqual({ x: 960, y: 0, width: 480, height: 900 });
 	expect(await calendar.boundingBox()).toMatchObject({ x: calendarBefore!.x, width: calendarBefore!.width - 480 });
 	const header = panel.getByRole("heading", { name: "New event", exact: true });
@@ -6339,8 +6363,8 @@ test("keeps a previously loaded task list readable offline", async ({
 		tasks.getByText("Pack the offline checklist", { exact: true }),
 	).toBeVisible();
 	await expect(
-		tasks.getByRole("checkbox", {
-			name: "Mark Pack the offline checklist completed",
+		tasks.getByRole("combobox", {
+			name: "Status of Pack the offline checklist",
 		}),
 	).toBeDisabled();
 	await expect(
@@ -6356,7 +6380,8 @@ test("leaves nothing of the last account on a shared computer", async ({
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 	await expect(page.getByRole("button", { name: /Client call/ })).toBeVisible();
 
-	await page.getByRole("button", { name: "Sign out Web QA" }).click();
+	await page.getByRole("button", { name: "User menu for Web QA" }).click();
+	await page.getByRole("menuitem", { name: "Sign out" }).click();
 	await expect(page).toHaveURL(/\/login/);
 	// Not "eventually gone" — never rendered. `06-settings-pages-sync.md:175` is
 	// explicit that the login screen must not flash the previous user's data.
@@ -6479,7 +6504,7 @@ for (const { label, width } of [
 		await page.getByRole("button", { name: "Today" }).click();
 		await page.getByRole("button", { name: "Open navigation" }).click();
 		await expect(
-			page.getByRole("button", { name: "Sign out Web QA" }),
+			page.getByRole("button", { name: "User menu for Web QA" }),
 		).toBeVisible();
 		await page.keyboard.press("Escape");
 
@@ -6942,7 +6967,8 @@ test("moves an account to a new address, asking the old one to approve", async (
 	});
 
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-	await page.getByRole("button", { name: "Manage account" }).click();
+	await page.getByRole("button", { name: "User menu for Web QA" }).click();
+	await page.getByRole("menuitem", { name: "Manage account" }).click();
 	const accountDialog = page.getByRole("dialog", { name: "Account" });
 	await accountDialog.getByRole("button", { name: /^Email/ }).click();
 
@@ -6967,7 +6993,7 @@ test("moves an account to a new address, asking the old one to approve", async (
 
 	// Lowercased before it leaves, so the address the server stores matches the
 	// one the person will type at the login screen.
-	expect(changeBody).toMatchObject({ newEmail: "moved@example.invalid" });
+	await expect.poll(() => changeBody).toMatchObject({ newEmail: "moved@example.invalid" });
 	// Which inbox to look in is the whole answer here — and for a verified
 	// account it is the OLD one, so a stolen session cannot move the account
 	// somewhere the owner can't reach.
@@ -7027,7 +7053,7 @@ test("lays weeks out as a matrix and pages a screen at a time", async ({
 	expect(Math.abs(second.y - first.y)).toBeLessThan(4);
 
 	// A page is a screen, not a week: eight weeks forward lands on the next span.
-	await page.getByRole("main").getByRole("button", { name: "Next" }).click();
+	await page.keyboard.press("n");
 	await expect(page).toHaveURL(/date=2026-09-20/);
 	await expect(page.getByText("Sep 14 – Nov 8")).toBeVisible();
 
@@ -7094,6 +7120,7 @@ test("opens a day-view preview on screen, not over the sidebar", async ({
 
 	// A day column is as wide as the grid, so there is no room to the right of a
 	// block: the preview used to flip left, across the sidebar and off the screen.
+	await settleLayout(page);
 	const box = (await preview.boundingBox())!;
 	const width = page.viewportSize()!.width;
 	expect(box.x).toBeGreaterThanOrEqual(0);
@@ -10402,7 +10429,8 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await mockAuthenticatedReads(page);
     await page.goto("/app/p/my-calendar/month?date=2026-07-26");
     if (width < 600) await page.getByRole("button", { name: "Open navigation" }).click();
-    await page.getByRole("button", { name: "Manage account", exact: true }).click();
+    await page.getByRole("button", { name: "User menu for Web QA" }).click();
+    await page.getByRole("menuitem", { name: "Manage account", exact: true }).click();
     const account = page.getByRole("dialog", { name: "Account", exact: true });
     const avatar = account.getByRole("button", { name: "Change photo", exact: true });
     await expect(avatar).toBeVisible();
@@ -10470,5 +10498,137 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await page.getByRole("button", { name: /Weekly UI review/ }).click();
     await page.getByText("Recurrence", { exact: true }).click();
     await expect(page.getByRole("combobox", { name: "Repeat", exact: true })).toContainText("Every week");
+  });
+}
+
+for (const width of [1280, 390]) {
+  test(`Kanban preserves layout and moves tasks between phases at ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockAuthenticatedReads(page);
+    let task = { id: "kanban-task", creatorID: session.user.id, calendarID: "personal", title: "Kanban review", status: "needs-action", percentComplete: 0, priority: 5, sequence: 0, isAllDay: false, recurrence: "FREQ=WEEKLY", start: null, due: null, completedAt: null };
+    let failMove = false;
+    let responseGate: Promise<void> | undefined;
+    let releaseResponse: (() => void) | undefined;
+    const other = { ...task, id: "kanban-other", title: "Existing card", status: "in-process" };
+    await page.route("**/api/v1/tasks", route => respond(route, { tasks: [task, other] }));
+    await page.route("**/api/v1/tasks/kanban-task", async route => {
+      if (failMove) { await route.fulfill({ status: 500, body: "Failed" }); return; }
+      await responseGate;
+      task = { ...task, ...route.request().postDataJSON() };
+      await respond(route, task);
+    });
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/tasks?date=2026-07-26`);
+    await page.getByRole("radio", { name: "Kanban", exact: true }).click();
+    await expect(page).toHaveURL(/taskLayout=kanban/);
+    await page.reload();
+    const board = page.getByRole("region", { name: "Tasks", exact: true });
+    for (const name of ["Needs action", "In progress", "Completed", "Cancelled"]) {
+      await expect(board.getByRole("region", { name, exact: true })).toBeAttached();
+    }
+    if (width === 1280) {
+      const handle = page.getByRole("button", { name: "Drag Kanban review to another status; or use its status selector" });
+      await board.getByRole("button", { name: "Kanban review", exact: true }).click();
+      await expect(page.getByRole("dialog", { name: "Edit task" })).toBeVisible();
+      await expect(page.locator("[data-drag-preview]")).toHaveCount(0);
+      await page.getByRole("button", { name: "Close task editor" }).click();
+      const start = await handle.locator("xpath=ancestor::li").boundingBox();
+      const target = await board.getByRole("region", { name: "In progress", exact: true }).boundingBox();
+      if (!start || !target) throw new Error("Missing drag geometry");
+      const beginDrag = async () => {
+        await page.mouse.move(start.x + 12, start.y + 12);
+        await page.mouse.down();
+        await page.mouse.move(target.x + target.width / 2, target.y + 80, { steps: 12 });
+        await expect(page.locator("[data-drag-preview]")).toBeVisible();
+        await expect(board.locator("[data-drop-placeholder]")).toBeVisible();
+        await expect(board.getByRole("region", { name: "In progress", exact: true }).locator("ul > li").first()).toHaveAttribute("data-drop-placeholder", "true");
+      };
+      await beginDrag();
+      await page.keyboard.press("Escape");
+      await page.mouse.up();
+      await expect(page.locator("[data-drag-preview]")).toHaveCount(0);
+      expect(task.status).toBe("needs-action");
+      failMove = true;
+      await beginDrag();
+      await page.mouse.up();
+      await expect(page.locator("[data-drag-preview]")).toHaveCount(0);
+      expect(task.status).toBe("needs-action");
+      await expect(page.getByText("This task could not be updated. It is still unchanged — try again.")).toBeVisible();
+      await page.getByRole("button", { name: "Close task editor" }).click();
+      failMove = false;
+      responseGate = new Promise<void>(resolve => { releaseResponse = resolve; });
+      await beginDrag();
+      await page.mouse.up();
+      await expect(page.locator("[data-drag-preview]")).toHaveCount(0);
+      await expect(board.getByRole("region", { name: "In progress", exact: true }).getByRole("button", { name: "Kanban review", exact: true })).toBeVisible();
+      expect(task.status).toBe("needs-action"); // Server has not responded yet.
+      releaseResponse?.();
+      await expect.poll(() => task.status).toBe("in-process");
+    } else {
+      await page.getByRole("combobox", { name: "Status of Kanban review" }).click();
+      await page.getByRole("option", { name: "In progress", exact: true }).click();
+    }
+    await expect(board.getByRole("region", { name: "In progress", exact: true }).getByRole("button", { name: /^Kanban review/ })).toBeVisible();
+    expect(task.recurrence).toBe("FREQ=WEEKLY");
+    await page.getByRole("radio", { name: "List", exact: true }).click();
+    await expect(page).toHaveURL(/taskLayout=list/);
+    await expect(page.getByRole("heading", { name: "In progress 2", exact: true })).toBeVisible();
+  });
+}
+
+test("wheel changes only the month view by one period", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  const area = page.locator("[data-calendar-area]");
+  await expect(page.getByRole("grid", { name: /July 2026 calendar/ })).toBeVisible();
+  await area.hover({ position: { x: 100, y: 70 } });
+  await page.mouse.wheel(0, 100);
+  await expect(page).toHaveURL(/date=2026-08-/);
+  await page.getByRole("radio", { name: "Day", exact: true }).click();
+  const dayURL = page.url();
+  await area.hover({ position: { x: 100, y: 200 } });
+  await page.mouse.wheel(0, 100);
+  await expect(page).toHaveURL(dayURL);
+});
+
+for (const kind of ["event", "task"] as const) {
+  test(`account search refreshes ${kind} results and their open detail after access changes`, async ({ page }) => {
+    await page.addInitScript(() => {
+      class SearchStream {
+        onmessage: ((event: { data: string }) => void) | null = null;
+        constructor() { (window as unknown as { searchStream: SearchStream }).searchStream = this; }
+        close() {}
+      }
+      (window as unknown as { EventSource: unknown }).EventSource = SearchStream;
+    });
+    await mockAuthenticatedReads(page, { ...events, events: [] }, calendars.map(calendar => ({ ...calendar, role: "reader" })));
+    let title = "Private search item";
+    let description = "Private search notes";
+    let removed = false;
+    const item = event("search-event", title, "personal", "#b3492f", "2031-07-20T09:00:00.000Z", "2031-07-20T10:00:00.000Z");
+    await page.route("**/api/v1/events?**", route => respond(route, { ...events, events: kind === "event" && !removed ? [{ ...item, title, description }] : [] }));
+    await page.route("**/api/v1/events", route => respond(route, { ...events, events: kind === "event" && !removed ? [{ ...item, title, description }] : [] }));
+    await page.route("**/api/v1/tasks", route => respond(route, { tasks: kind === "task" && !removed ? [{ id: "search-task", creatorID: "owner", calendarID: "personal", title, description, status: "needs-action", isAllDay: false, sequence: 0, priority: 0, percentComplete: 0 }] : [] }));
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+    await page.getByRole("button", { name: "Search events and actions" }).click();
+    const palette = page.getByRole("dialog", { name: "Search Musubi" });
+    await palette.getByRole("searchbox").fill("Private search");
+    await expect(palette.getByRole("button", { name: /Private search item/ })).toBeVisible();
+    const refresh = () => page.evaluate(() => (window as unknown as { searchStream: { onmessage: (event: { data: string }) => void } }).searchStream.onmessage({ data: JSON.stringify({ type: "external_sync" }) }));
+    title = "Permitted search item"; description = "Permitted search notes";
+    await refresh();
+    await expect(palette.getByRole("button", { name: /Private search item/ })).toHaveCount(0);
+    await palette.getByRole("searchbox").fill("Permitted search");
+    await palette.getByRole("button", { name: /Permitted search item/ }).click();
+    const detail = page.getByRole("dialog", { name: title, exact: true });
+    await expect(detail).toContainText(description);
+    await expect(detail.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
+    title = "Busy"; description = "";
+    await refresh();
+    await expect(page.getByRole("dialog", { name: "Busy", exact: true })).toBeVisible();
+    await expect(page.getByText("Permitted search notes", { exact: true })).toHaveCount(0);
+    removed = true;
+    await refresh();
+    await expect(page.getByText(`This ${kind} is no longer available.`)).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Busy", exact: true })).toHaveCount(0);
   });
 }

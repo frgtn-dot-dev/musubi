@@ -125,7 +125,7 @@ export const DraftProtection: Story = {
     await expect(page.getByRole("dialog", { name: "Changed review" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Edit event" })).toHaveFocus();
     await userEvent.click(page.getByRole("button", { name: "Close event panel" }));
-    await expect(canvas.getByRole("button", { name: "Open Changed review" })).toHaveFocus();
+    await waitFor(() => expect(canvas.getByRole("button", { name: "Open Changed review" })).toHaveFocus());
   },
 };
 
@@ -141,7 +141,7 @@ export const SwitchWithDraft: Story = {
     await userEvent.click(page.getByRole("button", { name: "Discard changes" }));
     await expect(page.getByRole("dialog", { name: "Weekly planning" })).toBeVisible();
     await userEvent.click(page.getByRole("button", { name: "Close event panel" }));
-    await expect(canvas.getByRole("button", { name: "Open Weekly planning" })).toHaveFocus();
+    await waitFor(() => expect(canvas.getByRole("button", { name: "Open Weekly planning" })).toHaveFocus());
     await expect(canvas.getByRole("button", { name: "Open Design review" })).toBeVisible();
   },
 };

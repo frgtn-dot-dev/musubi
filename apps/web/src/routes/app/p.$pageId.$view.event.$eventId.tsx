@@ -145,7 +145,7 @@ function EditEventRoute() {
         clearEventEditorBaseline(eventId);
         void navigate({
             params: { pageId, view },
-            search: { date: search.returnDate ?? search.date ?? queryDate },
+            search: { date: search.returnDate ?? search.date ?? queryDate, taskLayout: search.taskLayout },
             to: "/app/p/$pageId/$view",
         });
     };

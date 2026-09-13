@@ -1160,3 +1160,32 @@ lists. Safe-area padding remains a separate shell/footer responsibility. Dialog
 and nested settings, calendar and inspector scrollers reserve scroll padding so
 keyboard focus does not land against the clipping edge. Scroll padding supplements
 physical content padding; it does not replace the final visible gap.
+
+
+### Task layouts, account search and motion (2026-09-13)
+
+Tasks offers List and Kanban beside the toolbar title. Both group tasks by Needs
+action, In progress, Completed and Cancelled, retain the RFC priority mapping,
+and identify the source with a calendar-coloured provider mark. List controls
+precede the title. Kanban cards have their own compact hierarchy; mouse dragging
+starts on the card background, touch dragging uses the handle so the rest of the
+card can scroll. Status selectors remain the keyboard alternative. Moves appear
+optimistically and roll back with an error if the write fails. The selected layout
+survives calendar navigation and the full event editor round trip.
+
+Search reads all accessible stored events and tasks, with visible events/tasks
+first and separate groups for other dates and hidden calendars. Arrow Up/Down
+stays within a column; Left/Right changes columns; Enter opens the selected item.
+The input retains focus while its active result is announced. Quick actions omit
+the current view and include eligible meeting creation. Account results follow
+realtime invalidation and stay out of offline snapshots; selected details resolve
+by ID against current data so redaction or removal also retires displayed content.
+Offline search can use the currently cached event window.
+
+Desktop retains the view pills when an inspector is open, wrapping actions where
+needed. The mini-calendar owns Today and month arrows; toolbar paging is retained
+on narrow screens. Month wheel navigation advances once per gesture burst. Shared
+pills slide their selection, calendar views and periods crossfade, and inspectors
+and the title resize together in 120 ms. Reduced-motion settings disable these
+transitions. User-menu actions include sign out, leaving the full profile width
+for name and email.

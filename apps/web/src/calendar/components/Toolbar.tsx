@@ -13,7 +13,7 @@ import {
   Plus,
   Search,
 } from "lucide-react";
-import { useState, useRef, type RefObject } from "react";
+import { useState, useRef, type RefObject, type ReactNode } from "react";
 import { Button, IconButton } from "~/ui/Button";
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "~/ui/Menu";
 import { Segmented } from "~/ui/Segmented";
@@ -24,6 +24,7 @@ import { CalendarCoverageInfo } from "./CalendarCoverageInfo";
 import styles from "./workspace.module.css";
 
 type ToolbarProps = {
+  taskLayoutControl?: ReactNode;
   availability?: { shown: boolean; onToggle: () => void; onOpenList: (target: HTMLElement | null) => void };
   activeView: CalendarViewId;
   canCreateEvents: boolean;
@@ -47,6 +48,7 @@ type ToolbarProps = {
 };
 
 export function Toolbar({
+  taskLayoutControl,
   availability,
   activeView,
   canCreateEvents,
@@ -122,6 +124,7 @@ export function Toolbar({
           <p className={styles.monthTitle} data-view={activeView}>
             {periodLabel}
           </p>
+          {taskLayoutControl ? <div className={styles.taskLayoutControl}>{taskLayoutControl}</div> : null}
         </div>
 
         {/* Container queries expose exactly one view choice. The calendar can

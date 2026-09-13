@@ -67,8 +67,10 @@ function nameOf(queryKey: readonly unknown[]): CacheableName | undefined {
  */
 export function shouldPersistQuery(query: {
  queryKey: readonly unknown[];
+ meta?: Record<string, unknown>;
  state: { data: unknown; status: string };
 }) {
+ if (query.meta?.persist === false) return false;
  return query.state.status === "success" && query.state.data !== undefined
   ? Boolean(nameOf(query.queryKey))
   : false;
@@ -116,7 +118,7 @@ export function reviveQueries(
 ): DehydratedState["queries"] {
  return queries.flatMap((query) => {
   const name = nameOf(query.queryKey);
-  if (!name) return [];
+  if (!name || query.meta?.persist === false || query.queryKey[3] === "account-search") return [];
 
   const parsed = CACHEABLE[name].safeParse(query.state.data);
   if (!parsed.success) return [];

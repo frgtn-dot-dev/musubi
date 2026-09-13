@@ -103,6 +103,13 @@ describe("shouldPersistQuery", () => {
     }
   });
 
+  it("does not persist or restore account-wide search", () => {
+    const entry = { ...query(["events", "o", "u", "account-search"], eventsPayload), meta: { persist: false } };
+    expect(shouldPersistQuery(entry)).toBe(false);
+    expect(reviveQueries([entry])).toEqual([]);
+    expect(reviveQueries([{ ...entry, meta: undefined }])).toEqual([]);
+  });
+
   it("leaves out failures and empties", () => {
     expect(
       shouldPersistQuery(

@@ -1,11 +1,11 @@
-import { Plus, Repeat2, Trash2 } from "lucide-react";
+import { CalendarDays, GripVertical, Circle, CircleCheck, CircleDashed, CircleX, Flag, FlagOff, Plus, Repeat2, Trash2 } from "lucide-react";
 import {
   describeAdvanced,
   isEditableRRule,
   parseAdvanced,
   splitRecurrence,
 } from "@musubi/calendar/rrule-editor";
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { Fragment, useLayoutEffect, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { providerFlavor } from "@musubi/types";
 import type {
   Calendar,
@@ -16,7 +16,7 @@ import type {
 } from "@musubi/types";
 import { parseDateKey } from "../calendar-math";
 import { toDateKey } from "../date-key";
-import { Button } from "~/ui/Button";
+import { Button, IconButton } from "~/ui/Button";
 import { Checkbox } from "~/ui/Checkbox";
 import { DatePicker } from "~/ui/DatePicker";
 import { Dialog } from "~/ui/Dialog";
@@ -26,6 +26,8 @@ import { Field } from "~/ui/Field";
 import { InlineError } from "~/ui/InlineError";
 import { Select } from "~/ui/Select";
 import { Row, RowAction } from "~/ui/Row";
+import { useKanbanDrag } from "../use-kanban-drag";
+import { TaskLayoutSwitch } from "./TaskLayoutSwitch";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { TimePicker } from "~/ui/TimePicker";
 import { AccountMark } from "./ProviderIcon";
@@ -33,6 +35,9 @@ import { RecurrenceEditor } from "./RecurrenceEditor";
 import styles from "./TaskList.module.css";
 
 type TaskListProps = {
+  showLayoutControl?: boolean;
+  layout?: "list" | "kanban";
+  onLayoutChange?: (layout: "list" | "kanban") => void;
   calendars: Calendar[];
   createRequest: number;
   editableCalendarIds: ReadonlySet<string>;
@@ -48,6 +53,18 @@ type TaskListProps = {
   calendarsResolved?: boolean;
   tasksResolved?: boolean;
 };
+
+export const TASK_STATUSES = [
+  { label: "Needs action", value: "needs-action", icon: <Circle size={16} /> },
+  { label: "In progress", value: "in-process", icon: <CircleDashed size={16} /> },
+  { label: "Completed", value: "completed", icon: <CircleCheck size={16} /> },
+  { label: "Cancelled", value: "cancelled", icon: <CircleX size={16} /> },
+];
+const TASK_PRIORITIES = Array.from({ length: 10 }, (_, priority) => ({
+  label: priority === 0 ? "No priority" : `${priority <= 4 ? "High" : priority === 5 ? "Medium" : "Low"} (${priority})`,
+  value: String(priority),
+  icon: priority === 0 ? <FlagOff size={16} /> : <Flag size={16} fill={priority <= 4 ? "currentColor" : "none"} />,
+}));
 
 type Draft = TaskUpdate & { id?: string };
 
@@ -136,6 +153,9 @@ export function replaceTaskTime(value: Date | null | undefined, time: string) {
 }
 
 export function TaskList({
+  showLayoutControl = true,
+  layout: controlledLayout,
+  onLayoutChange,
   calendars,
   createRequest,
   editableCalendarIds,
@@ -145,12 +165,41 @@ export function TaskList({
   onRemove,
   onUpdate,
   settings,
-  tasks,
-  sourceTasks = tasks,
+  tasks: serverTasks,
+  sourceTasks = serverTasks,
   sourceCalendars = calendars,
   calendarsResolved = false,
   tasksResolved = false,
 }: TaskListProps) {
+  const [optimisticTask, setOptimisticTask] = useState<Task>();
+  const tasks = useMemo(() => optimisticTask ? serverTasks.map(task => task.id === optimisticTask.id ? { ...task, status: optimisticTask.status, priority: optimisticTask.priority, completedAt: optimisticTask.completedAt, percentComplete: optimisticTask.percentComplete } : task) : serverTasks, [serverTasks, optimisticTask]);
+  const [localLayout, setLocalLayout] = useState<"list" | "kanban">("list");
+  const layout = controlledLayout ?? localLayout;
+  const drag = useKanbanDrag(async (task, status) => {
+    const current = tasks.find(item => item.id === task.id);
+    return current ? updateInline(current, { status }) : false;
+  });
+  const boardRef = useRef<HTMLDivElement>(null);
+  const previousPositions = useRef(new Map<string, { left: number; top: number }>());
+  const cardOrder = tasks.map(task => `${task.id}:${task.status}`).join("|");
+  useLayoutEffect(() => {
+    const next = new Map<string, { left: number; top: number }>();
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const boardRect = boardRef.current?.getBoundingClientRect();
+    boardRef.current?.querySelectorAll<HTMLElement>("[data-task-id]").forEach(card => {
+      const id = card.dataset.taskId!;
+      card.getAnimations?.().forEach(animation => animation.cancel());
+      const bounds = card.getBoundingClientRect();
+      const rect = { left: bounds.left - (boardRect?.left ?? 0), top: bounds.top - (boardRect?.top ?? 0) };
+      const previous = previousPositions.current.get(id);
+      next.set(id, rect);
+      if (previous && id !== drag.draggingId && !reduced && card.animate) {
+        const x = previous.left - rect.left, y = previous.top - rect.top;
+        if (x || y) card.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: "translate(0, 0)" }], { duration: 220, easing: "cubic-bezier(.2,.8,.2,1)" });
+      }
+    });
+    previousPositions.current = next;
+  }, [cardOrder, layout, drag.draggingId, drag.targetStatus]);
   const firstEditableCalendarID = calendars.find((calendar) =>
     editableCalendarIds.has(calendar.id),
   )?.id;
@@ -165,14 +214,23 @@ export function TaskList({
   const [removedTaskID, setRemovedTaskID] = useState<string>();
   const [ownedFields, setOwnedFields] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [inlineBusy, setInlineBusy] = useState(false);
+  const inlineLock = useRef(false);
+  const inlineControls = useRef(new Map<string, HTMLButtonElement>());
+  const restoreInlineFocus = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (inlineBusy || !restoreInlineFocus.current) return;
+    const control = inlineControls.current.get(restoreInlineFocus.current);
+    if (control && document.activeElement === document.body) control.focus();
+    restoreInlineFocus.current = undefined;
+  }, [inlineBusy, tasks]);
   const [error, setError] = useState("");
   const titleRef = useRef<HTMLInputElement>(null);
   const calendarById = useMemo(
     () => new Map(calendars.map((calendar) => [calendar.id, calendar])),
     [calendars],
   );
-  const active = tasks.filter((task) => task.status !== "completed");
-  const completed = tasks.filter((task) => task.status === "completed");
+
 
   if (createRequest !== handledCreateRequest) {
     setHandledCreateRequest(createRequest);
@@ -219,12 +277,12 @@ export function TaskList({
     if (!busy) resetEditor();
   }
 
-  function openCreate() {
+  function openCreate(status: Task["status"] = "needs-action") {
     if (!firstEditableCalendarID || offline || busy) return;
     setEditing(undefined);
     setOwnedFields([]);
     setRemovedTaskID(undefined);
-    setDraft(emptyDraft(firstEditableCalendarID));
+    setDraft({ ...emptyDraft(firstEditableCalendarID), status, completedAt: status === "completed" ? new Date() : null, percentComplete: status === "completed" ? 100 : 0 });
     setError("");
   }
 
@@ -272,31 +330,43 @@ export function TaskList({
     }
   }
 
-  async function toggleComplete(task: Task, checked: boolean) {
-    if (!editableCalendarIds.has(task.calendarID)) return;
-    try {
-      await onUpdate(task.id, {
+  async function updateInline(task: Task, patch: Partial<Pick<TaskUpdate, "status" | "priority">>) {
+    if (!editableCalendarIds.has(task.calendarID) || offline || inlineLock.current || busy) return false;
+    restoreInlineFocus.current = `${task.id}:${patch.status ? "status" : "priority"}`;
+    inlineLock.current = true;
+    setInlineBusy(true);
+    const input = {
         ...taskUpdate(task),
-        completedAt: checked ? new Date() : null,
-        percentComplete: checked ? 100 : 0,
-        status: checked ? "completed" : "needs-action",
-      });
+        ...patch,
+        ...(patch.status ? {
+          completedAt: patch.status === "completed" ? task.completedAt ?? new Date() : null,
+          percentComplete: patch.status === "completed" ? 100 : task.status === "completed" ? 0 : task.percentComplete,
+        } : {}),
+      };
+    setOptimisticTask({ ...task, ...input });
+    try {
+      await onUpdate(task.id, input);
+      return true;
     } catch {
-      // The checkbox has already returned to its server-derived value. Open the
-      // task so the failure is visible and its unchanged draft can be retried.
-      setEditing(task);
-      setDraft({ ...taskUpdate(task), id: task.id });
-      setError(
-        "This task could not be updated. It is still unchanged — try again.",
-      );
+      openEdit(task);
+      setError("This task could not be updated. It is still unchanged — try again.");
+      return false;
+    } finally {
+      setOptimisticTask(undefined);
+      inlineLock.current = false;
+      setInlineBusy(false);
     }
   }
 
   return (
-    <section aria-label="Tasks" className={styles.tasks}>
-      {tasks.length === 0 ? (
+    <section aria-label="Tasks" className={styles.tasks} data-layout={layout} data-kanban-scroll>
+      {showLayoutControl ? <div className={styles.viewControls}>
+        <TaskLayoutSwitch value={layout} onChange={next => { setLocalLayout(next); onLayoutChange?.(next); }} />
+      </div> : null}
+      <div ref={boardRef} className={layout === "kanban" ? styles.board : undefined}>
+      {tasks.length === 0 && layout === "list" ? (
         <Empty
-          action={!offline && firstEditableCalendarID ? <Button icon={<Plus size={16} />} onClick={openCreate}>Create task</Button> : undefined}
+          action={!offline && firstEditableCalendarID ? <Button icon={<Plus size={16} />} onClick={() => openCreate()}>Create task</Button> : undefined}
           description={
             offline
               ? "Reconnect to refresh the tasks saved on this device."
@@ -308,29 +378,31 @@ export function TaskList({
           title={offline ? "No saved tasks" : "No tasks yet"}
         />
       ) : (
-        <>
+        TASK_STATUSES.map(({ value, label, icon }) => (
           <TaskGroup
+            key={value}
+            kanban={layout === "kanban"}
+            placeholderBeforeId={tasks.find((task, index) => task.status === value && index > tasks.findIndex(item => item.id === drag.draggingId))?.id}
+            statusValue={value}
+            dropActive={drag.targetStatus === value && !tasks.some(task => task.id === drag.draggingId && task.status === value)}
+            draggingId={drag.draggingId}
+            onDragTask={drag.begin}
+            onCreate={!offline && firstEditableCalendarID ? () => openCreate(value as Task["status"]) : undefined}
             calendarById={calendarById}
             editableCalendarIds={editableCalendarIds}
-            label="Open"
+            label={label}
+            icon={icon}
             onEdit={openEdit}
-            onToggle={toggleComplete}
+            onUpdateInline={updateInline}
+            busy={inlineBusy || busy}
+            saving={inlineBusy}
+            controls={inlineControls}
             timeFormat={settings.timeFormat}
-            tasks={active}
+            tasks={tasks.filter(task => task.status === value)}
           />
-          {completed.length ? (
-            <TaskGroup
-              calendarById={calendarById}
-              editableCalendarIds={editableCalendarIds}
-              label="Completed"
-              onEdit={openEdit}
-              onToggle={toggleComplete}
-              timeFormat={settings.timeFormat}
-              tasks={completed}
-            />
-          ) : null}
-        </>
+        ))
       )}
+      </div>
       {draft ? (
         <TaskEditor
           busy={busy}
@@ -358,28 +430,58 @@ export function TaskList({
 }
 
 function TaskGroup({
+  kanban,
+  dropActive,
+  onDragTask,
+  draggingId,
+  statusValue,
+  placeholderBeforeId,
+  onCreate,
+  icon,
   calendarById,
   editableCalendarIds,
   label,
   onEdit,
-  onToggle,
+  onUpdateInline,
+  busy,
+  controls,
+  saving,
   timeFormat,
   tasks,
 }: {
+  kanban: boolean;
+  dropActive: boolean;
+  onDragTask: (task: Task, event: React.PointerEvent<HTMLElement>) => void;
+  draggingId?: string;
+  statusValue: string;
+  placeholderBeforeId?: string;
+  onCreate?: () => void;
+  icon: ReactNode;
   calendarById: Map<string, Calendar>;
   editableCalendarIds: ReadonlySet<string>;
   label: string;
   onEdit: (task: Task) => void;
-  onToggle: (task: Task, checked: boolean) => Promise<void>;
+  onUpdateInline: (task: Task, patch: Partial<Pick<TaskUpdate, "status" | "priority">>) => Promise<boolean>;
+  busy: boolean;
+  saving: boolean;
+  controls: React.RefObject<Map<string, HTMLButtonElement>>;
   timeFormat: Settings["timeFormat"];
   tasks: Task[];
 }) {
-  if (!tasks.length) return null;
+  if (!tasks.length && !kanban) return null;
+  const placeholder = <li key="drop-placeholder" className={styles.dropPlaceholder} data-drop-placeholder aria-hidden="true">Move to {label.toLowerCase()}</li>;
   return (
-    <section className={styles.group}>
+    <section
+      className={kanban ? styles.column : styles.group}
+      aria-label={label}
+      data-drop-active={dropActive || undefined}
+      data-saving={saving || undefined}
+      data-kanban-status={kanban ? statusValue : undefined}
+    >
       <SectionLabel className={styles.groupHeading}>
-        {label}<span>{tasks.length}</span>
+        <span aria-hidden="true">{icon}</span>{label}{" "}<span>{tasks.length}</span>
       </SectionLabel>
+      {kanban && !tasks.length && !dropActive ? <p className={styles.emptyColumn}>No tasks</p> : null}
       <ul>
         {tasks.map((task) => {
           const calendar = calendarById.get(task.calendarID);
@@ -398,32 +500,75 @@ function TaskGroup({
           const status = task.status === "in-process"
             ? "In progress"
             : task.status === "cancelled" ? "Cancelled" : undefined;
-          const detail = [
+          const providerMark = <AccountMark size="compact" flavor={calendar ? providerFlavor(calendar) : null} color={calendar?.color} />;
+          const detailText = [
             calendar?.name ?? "Unknown calendar",
             status,
             due ? `Due ${due}` : undefined,
             !editable ? "Read only" : undefined,
           ].filter(Boolean).join(" · ");
+          const detail = <span className={styles.listCalendarDetail}>{providerMark}<span>{detailText}</span></span>;
           const title = (
             <span className={complete ? styles.done : undefined}>{task.title}</span>
           );
-          return (
-            <li className={styles.task} key={task.id}>
-              <div className={styles.taskCheck}>
-                <Checkbox
-                  checked={complete}
-                  disabled={!editable}
-                  label={`Mark ${task.title} ${complete ? "open" : "completed"}`}
-                  labelHidden
-                  onChange={(event) => void onToggle(task, event.target.checked)}
+          const controlsMarkup = (
+              <div className={styles.taskControls}>
+                <Select
+                  ref={node => { if (node) controls.current.set(`${task.id}:status`, node); else controls.current.delete(`${task.id}:status`); }}
+                  label={`Status of ${task.title}`}
+                  options={TASK_STATUSES}
+                  size="compact"
+                  value={task.status}
+                  disabled={!editable || busy}
+                  onChange={status => void onUpdateInline(task, { status: status as Task["status"] })}
+                />
+                <Select
+                  ref={node => { if (node) controls.current.set(`${task.id}:priority`, node); else controls.current.delete(`${task.id}:priority`); }}
+                  label={`Priority of ${task.title}`}
+                  options={TASK_PRIORITIES}
+                  size="compact"
+                  value={String(task.priority)}
+                  disabled={!editable || busy}
+                  onChange={priority => void onUpdateInline(task, { priority: Number(priority) })}
                 />
               </div>
+          );
+          if (kanban) return (
+            <Fragment key={task.id}>
+            {dropActive && placeholderBeforeId === task.id ? placeholder : null}
+            <li className={styles.kanbanCard} key={task.id} data-task-id={task.id} data-editable={editable || undefined} data-dragging={draggingId === task.id || undefined}
+              data-draggable={editable && !busy || undefined}
+              onPointerDown={event => {
+                if (!editable || busy || event.pointerType === "touch" || !(event.target instanceof Element)) return;
+                if (event.target.closest('button, a, input, textarea, select, [role="combobox"], [contenteditable="true"]')) return;
+                onDragTask(task, event);
+              }}>
+              <div className={styles.cardHeader}>
+                <span className={styles.cardCalendar}>{providerMark}<span>{calendar?.name ?? "Unknown calendar"}</span></span>
+                {editable ? <IconButton className={styles.dragHandle} label={`Drag ${task.title} to another status; or use its status selector`} size="compact" disabled={busy}
+                  onPointerDown={event => onDragTask(task, event)}
+                  onClick={event => { if (event.detail === 0) controls.current.get(`${task.id}:status`)?.focus(); }}><GripVertical size={16} /></IconButton> : <span>Read only</span>}
+              </div>
+              {editable ? <Button variant="ghost" className={styles.cardTitle} disabled={busy} onClick={() => onEdit(task)}>{title}</Button> : <p className={styles.cardTitle}>{title}</p>}
+              {task.description ? <p className={styles.cardDescription}>{task.description}</p> : null}
+              <div className={styles.cardMeta}>
+                {due ? <span><CalendarDays size={14} aria-hidden="true" />{due}</span> : <span>No due date</span>}
+                {task.recurrence ? <span title={taskRecurrenceSummary(task.recurrence, task.start)}><Repeat2 size={14} aria-hidden="true" />Repeats</span> : null}
+              </div>
+              {controlsMarkup}
+            </li>
+            </Fragment>
+          );
+          return (
+            <li className={styles.task} key={task.id}>
+              {controlsMarkup}
               {editable ? (
                 <RowAction
                   className={styles.taskMain}
                   detail={detail}
                   label={title}
                   showChevron={false}
+                  disabled={busy}
                   onClick={() => onEdit(task)}
                 />
               ) : (
@@ -432,7 +577,9 @@ function TaskGroup({
             </li>
           );
         })}
+        {kanban && dropActive && !placeholderBeforeId ? placeholder : null}
       </ul>
+      {kanban && onCreate ? <Button variant="ghost" disabled={busy} icon={<Plus size={16} />} onClick={onCreate}>Add task</Button> : null}
     </section>
   );
 }
@@ -539,12 +686,7 @@ function TaskEditor({
           <Field label="Status">
             <Select
               label="Status"
-              options={[
-                { label: "Needs action", value: "needs-action" },
-                { label: "In progress", value: "in-process" },
-                { label: "Completed", value: "completed" },
-                { label: "Cancelled", value: "cancelled" },
-              ]}
+              options={TASK_STATUSES}
               value={draft.status}
               onChange={(status) =>
                 onChange({
@@ -560,10 +702,7 @@ function TaskEditor({
           <Field label="Priority">
             <Select
               label="Priority"
-              options={Array.from({ length: 10 }, (_, priority) => ({
-                label: priority === 0 ? "None" : `${priority <= 4 ? "High" : priority === 5 ? "Medium" : "Low"} (${priority})`,
-                value: String(priority),
-              }))}
+              options={TASK_PRIORITIES}
               value={String(draft.priority)}
               onChange={(value) =>
                 onChange({ ...draft, priority: Number(value) })

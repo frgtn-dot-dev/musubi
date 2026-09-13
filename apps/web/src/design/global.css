@@ -147,3 +147,20 @@ button {
   animation-iteration-count: 1 !important;
  }
 }
+
+/* Only the calendar content participates: navigation and its sliding pills
+   stay live while the old and new views crossfade. Unsupported browsers
+   retain normal router navigation. */
+:root { view-transition-name: none; }
+::view-transition { pointer-events: none; }
+::view-transition-group(musubi-calendar-content),
+::view-transition-old(musubi-calendar-content),
+::view-transition-new(musubi-calendar-content) {
+  animation-duration: var(--motion-standard);
+  animation-timing-function: ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(musubi-calendar-content),
+  ::view-transition-old(musubi-calendar-content),
+  ::view-transition-new(musubi-calendar-content) { animation: none; }
+}

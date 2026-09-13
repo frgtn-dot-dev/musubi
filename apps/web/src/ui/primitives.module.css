@@ -2525,3 +2525,45 @@
 		height: var(--compact-control-height);
 	}
 }
+
+/* One shared selection surface slides under labels of any width. */
+.segmented { position: relative; isolation: isolate; }
+.segmentedIndicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  border-radius: var(--radius-pill);
+  background: var(--control-fill);
+  visibility: hidden;
+}
+.segmented[data-indicator-ready] .segmentedIndicator {
+  visibility: visible;
+  transition: transform var(--motion-standard) cubic-bezier(.2,.8,.2,1), width var(--motion-standard) cubic-bezier(.2,.8,.2,1);
+}
+.segmentedIndicator[data-disabled] { opacity: .45; }
+.segmentedOption { position: relative; z-index: 1; transition: color var(--motion-fast) ease; }
+.segmented[data-indicator-ready] .segmentedOption[aria-checked="true"],
+.segmented[data-indicator-ready] .segmentedOption[aria-checked="true"]:hover:not(:disabled) { background: transparent; }
+@media (prefers-reduced-motion: reduce) {
+  .segmented[data-indicator-ready] .segmentedIndicator, .segmentedOption { transition: none; }
+}
+
+/* Radix Presence retains the inspector through its closing animation. */
+.dialog.dialog_right[data-state="open"] {
+  animation: inspector-enter var(--motion-panel) ease-out;
+}
+.dialog.dialog_right[data-state="closed"] {
+  animation: inspector-exit var(--motion-panel) ease-in;
+}
+@keyframes inspector-enter {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes inspector-exit {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dialog.dialog_right[data-state] { animation: none; }
+}

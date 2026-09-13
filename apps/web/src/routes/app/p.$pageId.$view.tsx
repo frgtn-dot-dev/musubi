@@ -11,7 +11,7 @@ import { z } from "zod";
 import { ApiError, ApiResponseError } from "~/api/http";
 import { useNewerServer } from "~/api/use-newer-server";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
-import { createTask, getTasks, removeTask, updateTask } from "~/api/resources";
+import { createTask, getEvents, getTasks, removeTask, updateTask } from "~/api/resources";
 import { useServerStream } from "~/api/realtime";
 import { useReminders } from "~/calendar/use-reminders";
 import { useProviderLinkReturn } from "~/calendar/connections";
@@ -19,6 +19,7 @@ import { useSessionUser } from "~/auth/use-session-user";
 import { useSnapshot } from "~/offline/SnapshotProvider";
 import { canKeepOfflineQueryData } from "~/offline/query-error";
 import { signOutAndReset } from "~/offline/sign-out";
+import { parseDateKey } from "~/calendar/calendar-math";
 import { toDateKey } from "~/calendar/date-key";
 import {
   Workspace,
@@ -32,9 +33,10 @@ import { useSettingsMutations } from "~/calendar/settings-mutations";
 import { useWorkspaceQueries } from "~/calendar/workspace-queries";
 import { WorkspaceDataState } from "~/components/WorkspaceDataState";
 import { Onboarding } from "~/onboarding/Onboarding";
-import { isCalendarView, type CalendarViewId } from "~/calendar/view-registry";
+import { isCalendarView, viewDefinition, type CalendarViewId } from "~/calendar/view-registry";
 
 const searchSchema = z.object({
+  taskLayout: z.enum(["list", "kanban"]).optional().catch(undefined),
   date: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -64,7 +66,7 @@ function WorkspaceRoute() {
 
 function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
   const { pageId, view } = Route.useParams();
-  const { date } = Route.useSearch();
+  const { date, taskLayout } = Route.useSearch();
   const navigate = Route.useNavigate();
   const queryClient = useQueryClient();
   // Offline the session cannot be confirmed, so the last known account stands in
@@ -88,16 +90,29 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
   const providerLink = useProviderLinkReturn(userId);
   const activeView: CalendarViewId = isCalendarView(view) ? view : "month";
   const taskView = activeView === "tasks";
+  const [searchActive, setSearchActive] = useState(false);
   const workspace = useWorkspaceQueries(date, userId, activeView);
   const pages = workspace.pages.data;
   const activePage = pages?.find((page) => page.id === pageId);
   const tasksQuery = useQuery({
     // Fetch only when the view needs tasks. Once fetched, the snapshot keeps
     // them readable offline without turning every calendar Page into a request.
-    enabled: taskView && !snapshot.offline,
+    enabled: (taskView || searchActive) && !snapshot.offline,
     queryFn: ({ signal }) => getTasks(signal),
     queryKey: queryKeys.tasks(getServerOrigin(), userId),
   });
+  const searchEvents = useQuery({
+    enabled: searchActive && !snapshot.offline,
+    queryKey: ["events", getServerOrigin(), userId, "account-search"],
+    queryFn: ({ signal }) => getEvents(undefined, signal),
+    // Realtime invalidation refreshes this scoped query while the palette or
+    // its detail is open. Never include account-wide results in offline storage.
+    gcTime: 0,
+    meta: { persist: false },
+  });
+  useEffect(() => {
+    if (!searchActive) queryClient.removeQueries({ queryKey: ["events", getServerOrigin(), userId, "account-search"], exact: true });
+  }, [searchActive, queryClient, userId]);
   // Same query (and same staleTime/refetchOnWindowFocus) the announcement
   // modal makes, so this costs no extra request and cannot revive the modal
   // on a focus refetch — see useAnnouncementsQuery's comment.
@@ -156,10 +171,10 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
     void navigate({
       params: { pageId: fallbackPageId ?? pageId, view: activeView },
       replace: true,
-      search: { date },
+      search: { date, taskLayout },
       to: "/app/p/$pageId/$view",
     });
-  }, [activeView, date, editorOpen, fallbackPageId, navigate, pageId, view]);
+  }, [activeView, date, taskLayout, editorOpen, fallbackPageId, navigate, pageId, view]);
 
   if (pending) {
     return (
@@ -249,7 +264,20 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
 
   return (
     <Workspace
+      onSearchActiveChange={setSearchActive}
+      searchAccount={{
+        data: {
+          events: (snapshot.offline ? workspace.events.data?.baseEvents ?? [] : searchEvents.isError ? [] : searchEvents.data?.events ?? []).filter(event => !event.isCanceled),
+          tasks: tasksQuery.isError ? [] : tasksQuery.data?.tasks ?? [],
+          calendars: workspace.calendars.isError ? [] : workspace.calendars.data ?? [],
+        },
+        loading: searchEvents.isFetching || tasksQuery.isFetching,
+        error: searchEvents.isError || tasksQuery.isError,
+        retry: () => { void searchEvents.refetch(); void tasksQuery.refetch(); },
+      }}
       activeView={activeView}
+      taskLayout={taskLayout ?? "list"}
+      onTaskLayoutChange={layout => void navigate({ viewTransition: !window.matchMedia("(prefers-reduced-motion: reduce)").matches, search: previous => ({ ...previous, taskLayout: layout }), resetScroll: false })}
       baseEvents={workspace.mergedEvents?.baseEvents}
       calendars={workspace.mergedCalendars}
       pages={workspace.pages.data}
@@ -315,15 +343,22 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
       reminders={reminders}
       settings={workspace.settings.data}
       user={user!}
+      onStepPeriod={(offset, weeks) => void navigate({
+        // View transitions may commit after the URL changes. Step from the
+        // latest navigation state so fast repeated keys never use an old date.
+        search: previous => ({ ...previous, date: toDateKey(viewDefinition(activeView).step(parseDateKey(previous.date), offset, { weeks })) }),
+        viewTransition: !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+      })}
       onDateChange={(nextDate) =>
         void navigate({
-          search: { date: nextDate },
+          search: { date: nextDate, taskLayout },
+          viewTransition: !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
         })
       }
       onPageChange={(nextPageId, nextView) =>
         void navigate({
           params: { pageId: nextPageId, view: nextView },
-          search: { date },
+          search: { date, taskLayout },
           to: "/app/p/$pageId/$view",
         })
       }
@@ -346,6 +381,7 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
           endTime: values.endTime || undefined,
           recurrence: values.recurrence || undefined,
           returnDate: date,
+          taskLayout,
           startTime: values.startTime || undefined,
           view: activeView,
         };
@@ -368,7 +404,8 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
       onViewChange={(nextView) =>
         void navigate({
           params: { pageId, view: nextView },
-          search: { date },
+          viewTransition: !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+          search: { date, taskLayout },
           to: "/app/p/$pageId/$view",
         })
       }

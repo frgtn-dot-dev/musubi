@@ -43,3 +43,5 @@
   border-radius: 0;
   background: transparent;
 }
+
+.icon[data-monochrome] .musubiMark path { fill: currentColor; }

@@ -615,9 +615,9 @@ export function EventEditorForm({
 						type="button"
 						onClick={() => setCalendarPickerOpen((current) => !current)}
 					>
-						<AccountMark size="compact" flavor={selectedCalendar ? providerFlavor(selectedCalendar) : null} />
+						<AccountMark size="compact" flavor={selectedCalendar ? providerFlavor(selectedCalendar) : null} color={selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR} />
 						<span className={styles.calendarSummaryCopy}>
-							<strong><CalendarDot color={selectedCalendar?.color ?? DEFAULT_CALENDAR_COLOR} /><span className={styles.calendarName}>{selectedCalendar?.name ?? "Choose a calendar"}</span></strong>
+							<strong><span className={styles.calendarName}>{selectedCalendar?.name ?? "Choose a calendar"}</span></strong>
 							{/* The "home" idea only means something once an event is in more
                   than one calendar. On its own it read as a place, next to
                   "Only calendar", which read as a restriction — beside a button

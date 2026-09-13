@@ -132,6 +132,10 @@
     }
   },
   "motion": {
+    "panel": {
+      "$type": "duration",
+      "$value": "120ms"
+    },
     "fast": {
       "$type": "duration",
       "$value": "140ms"
@@ -146,6 +150,10 @@
     }
   },
   "motionNative": {
+    "panel": {
+      "$type": "duration",
+      "$value": "160ms"
+    },
     "fast": {
       "$type": "duration",
       "$value": "160ms"

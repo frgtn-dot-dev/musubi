@@ -20,10 +20,14 @@ for clients it can no longer change**.
 
 K10 implementation is complete, but `EVENT_TIME_EDITS_ENABLED` remains false.
 Production startup rejects enabling it while the product or enforced client/peer
-minimums still admit released 0.1.8. That client can lose time metadata when
-copying an event into a new identity, which a generic create request cannot
-reconstruct. Coordinate compatible clients and peers before raising minimums
-and enabling the feature; changing the flag alone is insufficient.
+minimums still admit 0.1.8. This is a conservative activation boundary, not a
+claim that 0.1.8 has been published: the latest upstream tag remains `v0.1.7`
+(verified 2026-09-13). The prepared K06 release below and explicit-time activation
+are separate gates. Copying an event into a new identity requires every writer
+to preserve its time metadata; a generic create request cannot reconstruct lost
+metadata. Coordinate verified compatible clients and peers, choose a later
+activation version and raise minimums before enabling the feature. Do not bypass
+the guard or enable it as part of the prepared 0.1.8 release.
 
 See [K10 acceptance and activation conditions](audits/calendar-k10-acceptance.md)
 for the implemented local scope and the separate K11/K12/K14/K15 gates.

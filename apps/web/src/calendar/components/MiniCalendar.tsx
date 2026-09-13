@@ -2,7 +2,7 @@ import type { Settings } from "@musubi/types";
 import { getMonthGrid } from "@musubi/calendar/layout";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
-import { IconButton } from "~/ui/Button";
+import { Button, IconButton } from "~/ui/Button";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { getLongDateLabel, getWeekdayLabels } from "../calendar-math";
 import { toDateKey } from "../date-key";
@@ -23,6 +23,7 @@ const startOfMonth = (date: Date) =>
  */
 export function MiniCalendar({
   anchor,
+  showToday = false,
   label = "Jump to date",
   max,
   min,
@@ -30,6 +31,7 @@ export function MiniCalendar({
   weekStartsOn,
 }: {
   anchor: Date;
+  showToday?: boolean;
   label?: string;
   max?: string;
   min?: string;
@@ -108,11 +110,17 @@ export function MiniCalendar({
         >
           <ChevronLeft aria-hidden="true" size={15} strokeWidth={1.7} />
         </IconButton>
+        <div className={styles.miniMonthActions}>
         <SectionLabel className={styles.miniTitle}>
           {/* Short month: the toolbar already spells the period out in full,
               and this one has seven columns to fit. */}
           {month.toLocaleDateString("en", { month: "short", year: "numeric" })}
         </SectionLabel>
+      {showToday ? <Button className={styles.miniCalendarToday} size="compact" variant="ghost" disabled={unavailable(todayKey)} onClick={() => {
+        showMonth(startOfMonth(new Date()));
+        onDateChange(todayKey);
+      }}>Today</Button> : null}
+        </div>
         <IconButton
           disabled={
             max
@@ -219,6 +227,7 @@ export function MiniCalendar({
           </div>
         ))}
       </div>
+
     </section>
   );
 }
