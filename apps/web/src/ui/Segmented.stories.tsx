@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import { useState } from "react";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 import { DESKTOP_MODES, MOBILE_MODES } from "../../.storybook/modes";
 import {
   Segmented,
@@ -77,6 +77,16 @@ export const Overview: Story = {
     await expect(
       canvas.getByRole("radio", { name: "Month" }),
     ).toHaveAttribute("aria-checked", "true");
+    const group = canvas.getByRole("radiogroup", { name: "Calendar view" });
+    const indicator = group.querySelector<HTMLElement>('[aria-hidden="true"]');
+    await userEvent.click(canvas.getByRole("radio", { name: "Agenda" }));
+    await waitFor(() => {
+      const selected = canvas.getByRole("radio", { name: "Agenda" }).getBoundingClientRect();
+      expect(indicator).not.toBeNull();
+      const bounds = indicator!.getBoundingClientRect();
+      expect(Math.abs(bounds.left - selected.left)).toBeLessThan(1);
+      expect(Math.abs(bounds.width - selected.width)).toBeLessThan(1);
+    });
   },
   render: () => (
     <SegmentedExample

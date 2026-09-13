@@ -56,7 +56,7 @@ it("detects every restored editable override, not navigation alone", async () =>
     { location: "" }, { url: "" }, { title: "" }, { startTime: "09:00" }]) {
     expect(hasEventEditorContent(eventEditorSearchSchema.parse(input))).toBe(true);
   }
-  expect(hasEventEditorContent(eventEditorSearchSchema.parse({ date: "2026-01-01", returnDate: "2026-01-02", view: "week" }))).toBe(false);
+  expect(hasEventEditorContent(eventEditorSearchSchema.parse({ date: "2026-01-01", returnDate: "2026-01-02", view: "week", taskLayout: "kanban" }))).toBe(false);
 });
 
  it("preserves creation identity across quick/full URL handoff without treating identity alone as content", async () => {
@@ -77,4 +77,9 @@ it("restores both fold instants through serialized route search", () => {
     expect(restored.invalidatedExactEndpoints).toEqual(["end"]);
   }
   expect(eventEditorSearchSchema.parse({ exactRange: { start: "2026-10-25T02:30", end: "invalid" } }).exactRange).toBeUndefined();
+});
+
+ it("keeps task layout as navigation state", () => {
+  expect(eventEditorSearchSchema.parse({ taskLayout: "kanban" }).taskLayout).toBe("kanban");
+  expect(eventEditorSearchSchema.parse({ taskLayout: "invalid" }).taskLayout).toBeUndefined();
 });

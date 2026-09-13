@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Settings,
   X,
+  UserRound,
 } from "lucide-react";
 import type {
   PageDocument,
@@ -28,6 +29,7 @@ import {
 import { BrandMark } from "~/components/BrandMark";
 import { Avatar } from "~/ui/Avatar";
 import { IconButton } from "~/ui/Button";
+import { Menu, MenuTrigger, MenuContent, MenuItem, MenuSeparator } from "~/ui/Menu";
 import { RowAction } from "~/ui/Row";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { moveItem, previewIndex } from "../list-reorder";
@@ -88,6 +90,7 @@ export function Sidebar({
   weekStartsOn,
 }: SidebarProps) {
   const [signingOut, setSigningOut] = useState(false);
+  const manageAccountAfterClose = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pageRowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [reorderMessage, setReorderMessage] = useState("");
@@ -271,6 +274,7 @@ export function Sidebar({
 
         <div className={styles.sidebarScroll} ref={scrollRef}>
           <MiniCalendar
+            showToday
             anchor={anchor}
             onDateChange={onDateChange}
             weekStartsOn={weekStartsOn}
@@ -402,29 +406,33 @@ export function Sidebar({
             <span>{syncLabel}</span>
           </p>
           <div className={styles.profile}>
+            <Menu>
+            <MenuTrigger asChild>
             <RowAction
               className={styles.profileMain}
-              aria-label="Manage account"
+              aria-label={`User menu for ${user.name}`}
               detail={<span className={styles.profileEmail}>{user.email}</span>}
               icon={
                 <Avatar image={user.image} name={user.name} size="default" />
               }
               label={user.name}
               showChevron={false}
-              onClick={onManageAccount}
             />
-            <IconButton
-              className={styles.profileSignOut}
-              disabled={signingOut}
-              label={`Sign out ${user.name}`}
-              size="compact"
-              onClick={() => {
+            </MenuTrigger>
+            <MenuContent label="User account" side="top" align="start" onCloseAutoFocus={event => {
+                if (!manageAccountAfterClose.current) return;
+                manageAccountAfterClose.current = false;
+                event.preventDefault();
+                onManageAccount();
+              }}>
+              <MenuItem icon={<UserRound size={16} />} onSelect={() => { manageAccountAfterClose.current = true; }}>Manage account</MenuItem>
+              <MenuSeparator />
+              <MenuItem icon={<LogOut size={16} />} disabled={signingOut} onSelect={() => {
                 setSigningOut(true);
                 onSignOut();
-              }}
-            >
-              <LogOut aria-hidden="true" size={16} strokeWidth={1.6} />
-            </IconButton>
+              }}>Sign out</MenuItem>
+            </MenuContent>
+            </Menu>
           </div>
         </footer>
       </aside>

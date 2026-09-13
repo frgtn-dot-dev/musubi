@@ -145,7 +145,7 @@ function EditEventRoute() {
         clearEventEditorBaseline(eventId);
         void navigate({
             params: { pageId, view },
-            search: { date: search.returnDate ?? search.date ?? queryDate },
+            search: { date: search.returnDate ?? search.date ?? queryDate, taskLayout: search.taskLayout },
             to: "/app/p/$pageId/$view",
         });
     };
@@ -216,6 +216,7 @@ function EditEventRoute() {
                     }}
                     calendarLocked
                     calendars={calendars}
+                    localAccountName={user?.name || user?.email}
                     initialValues={draftValues ?? eventFormValues(event)}
                     layout="panel"
                     onCancel={requestBack}

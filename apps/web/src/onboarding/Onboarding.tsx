@@ -1,3 +1,4 @@
+import { HelpTooltip } from "~/ui/HelpTooltip";
 import type { Calendar, SettingsDocument } from "@musubi/types";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -254,10 +255,13 @@ export function Onboarding({
                 Connect Outlook
               </Button>
             ) : null}
-            <p className={styles.note}>
-              CalDAV, iCloud and another Musubi server are in settings under
-              Connections, whenever you want them.
-            </p>
+            <div className={styles.note}>
+              Other calendar providers
+              <HelpTooltip label="About other calendar providers">
+                CalDAV, iCloud and another Musubi server are in settings under
+                Connections, whenever you want them.
+              </HelpTooltip>
+            </div>
           </div>
         ) : null}
 

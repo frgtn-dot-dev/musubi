@@ -9,6 +9,7 @@ import {
   EventSchema,
   ReminderRule,
   can,
+  providerFlavor,
   optionsFor,
   sameRule,
   timedValue,
@@ -53,7 +54,8 @@ import {
 import { DateTimePicker } from "@expo/ui/community/datetime-picker";
 import { useServer } from "@/contexts/ServerContext";
 import { EVENT_HINTS } from "@/constants/event_hints";
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
+import { ProviderIcon } from "./ProviderIcon";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import {
   effectiveReminderRule,
@@ -854,29 +856,24 @@ export function AddEventModal({
                     setSelectedCals((prev) => new Set(prev).add(cal.id));
                     setOriginCal(cal.id);
                   }}
-                  accessibilityLabel={`${cal.name} calendar`}
-                  accessibilityHint="Double tap to include. Long press to make it the primary calendar."
+                  accessibilityLabel={`${cal.name} calendar${isOrigin ? ", Home calendar" : ""}`}
+                  accessibilityHint="Double tap to include. Long press to make it the home calendar."
                   accessibilityState={{ selected: active }}
-                  style={active ? styles.pillActive : styles.pill}
+                  style={[active ? styles.pillActive : styles.pill, isOrigin && styles.pillEmphasized]}
                 >
-                  {isOrigin ? (
-                    <Ionicons
-                      name="star"
-                      size={12}
-                      color={cal.color}
-                      style={{ opacity: active ? 1 : 0.4 }}
-                    />
-                  ) : (
-                    <View
-                      style={[
-                        styles.colorDot,
-                        {
-                          backgroundColor: cal.color,
-                          opacity: active ? 1 : 0.4,
-                        },
-                      ]}
-                    />
-                  )}
+                  {cal.provider ? (
+                    <View style={{ opacity: active ? 1 : 0.4 }}>
+                      <ProviderIcon provider={providerFlavor(cal)} color={cal.color} />
+                    </View>
+                  ) : <View
+                    style={[
+                      styles.colorDot,
+                      {
+                        backgroundColor: cal.color,
+                        opacity: active ? 1 : 0.4,
+                      },
+                    ]}
+                  />}
                   <Text
                     style={{
                       fontFamily: fonts.sans,

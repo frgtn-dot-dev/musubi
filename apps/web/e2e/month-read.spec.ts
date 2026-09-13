@@ -9,6 +9,14 @@ import {
 	type Route,
 } from "@playwright/test";
 
+// Geometry assertions and synthetic pointer coordinates require the final layout.
+// Keep real motion enabled; wait only for finite transitions already in flight.
+async function settleLayout(page: Page) {
+  await page.evaluate(async () => {
+    await Promise.all(document.getAnimations().filter(animation => animation.effect?.getComputedTiming().iterations !== Infinity).map(animation => animation.finished.catch(() => undefined)));
+  });
+}
+
 async function expectOrganizerPaintedAbovePopover(editor: Locator) {
   // A modal can receive keyboard input even while an inert popover paints
   // over it. Include that surface in the paint-order probe, then restore it.
@@ -97,7 +105,7 @@ async function chooseSelectOption(page: Page, label: string, option: string) {
 
 async function openCreateEvent(page: Page) {
 	await page
-		.getByRole("button", { name: "Create event or task", exact: true })
+		.getByRole("button", { name: "Create event, meeting or task", exact: true })
 		.click();
 	await page.getByRole("menuitem", { name: "Event", exact: true }).click();
 }
@@ -786,7 +794,7 @@ test("reads, filters and signs out of the authenticated Month", async ({
 	await expect(page.getByRole("menu", { name: "Create", exact: true })).toHaveCount(0);
 	await expect(page.getByRole("textbox", { name: "Event title" })).toBeFocused();
 	await page.keyboard.press("Escape");
-	await expect(page.getByRole("button", { name: "Create event or task", exact: true })).toBeFocused();
+	await expect(page.getByRole("button", { name: "Create event, meeting or task", exact: true })).toBeFocused();
 	await page.keyboard.press("Enter");
 	await page.getByRole("menuitem", { name: "Event", exact: true }).press("Enter");
 	await expect(page.getByRole("textbox", { name: "Event title" })).toBeFocused();
@@ -798,7 +806,8 @@ test("reads, filters and signs out of the authenticated Month", async ({
 	// `image` used to be dropped on the way from the session to the sidebar.
 	await expect(page.locator('img[src^="data:image/gif"]')).toBeVisible();
 
-	await page.getByRole("button", { name: "Sign out Web QA" }).click();
+	await page.getByRole("button", { name: "User menu for Web QA" }).click();
+	await page.getByRole("menuitem", { name: "Sign out" }).click();
 	await expect(page).toHaveURL(/\/login/);
 });
 
@@ -814,10 +823,7 @@ test("keeps an empty Month canvas quiet", async ({ page }) => {
 	await expect(page.getByText("Nothing is scheduled")).toHaveCount(0);
 	await expect(page.getByText("No events match")).toHaveCount(0);
 
-	await page
-		.getByRole("main")
-		.getByRole("button", { name: "Next month" })
-		.click();
+	await page.keyboard.press("n");
 	await expect(page.getByText("August 2026")).toBeVisible();
 	await expect(page.getByText("Nothing is scheduled")).toHaveCount(0);
 
@@ -974,8 +980,9 @@ test("renders and navigates the authenticated Week time grid", async ({
 	await page.getByRole("button", { name: /Weekly review/ }).click();
 	await expect(page.getByText("11:00 – 12:00")).toBeVisible();
 	await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 
-	await page.getByRole("button", { name: "Next week" }).click();
+	await page.keyboard.press("n");
 	await expect(page).toHaveURL(/[?&]date=2026-08-02/);
 	await expect(page.getByText("Jul 27 – Aug 2, 2026")).toBeVisible();
 
@@ -1063,12 +1070,12 @@ test("uses the shared time grid as a one-column Day", async ({ page }) => {
 		1,
 	);
 
-	await page.getByRole("button", { name: "Next day" }).click();
+	await page.keyboard.press("n");
 	await expect(page).toHaveURL(/[?&]date=2026-07-24/);
 	await expect(page.getByText("Friday, July 24, 2026")).toBeVisible();
 });
 
-test("overlays Day event details without resizing the calendar", async ({
+test("docks Day event details and restores the calendar on close", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 1280, height: 800 });
@@ -1095,6 +1102,15 @@ test("overlays Day event details without resizing the calendar", async ({
 	expect(detailsBox.y).toBe(0);
 	expect(detailsBox.width).toBe(480);
 	expect(detailsBox.height).toBe(800);
+	const dockedArea = (await calendarArea.boundingBox())!;
+	expect(dockedArea.x).toBe(areaBox.x);
+	expect(dockedArea.width).toBe(areaBox.width - detailsBox.width);
+	expect(dockedArea.x + dockedArea.width).toBe(detailsBox.x);
+	await expect(trigger).toBeVisible();
+	await expect(page).toHaveURL(/day\?date=2026-07-23/);
+	await details.getByRole("button", { name: "Close event details" }).click();
+	await expect(details).toHaveCount(0);
+	await expect(trigger).toBeFocused();
 	expect(await calendarArea.boundingBox()).toEqual(areaBox);
 	expect(await trigger.boundingBox()).toEqual(triggerBox);
 
@@ -1289,56 +1305,48 @@ test("chooses an event time and duration from the time pickers", async ({
 	).toBe(30 * 60 * 1_000);
 });
 
-for (const width of [1280, 390]) {
-	test(`keeps the all-day toggle in one place when it is flipped at ${width}px`, async ({
-		page,
-	}) => {
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+	test(`creation Inspector keeps actions reachable while switching all-day at ${width}px`, async ({ page }, testInfo) => {
 		await page.setViewportSize({ width, height: 800 });
+		await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
 		await mockAuthenticatedReads(page);
 		await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 		await openCreateEvent(page);
 
-		const toggle = page.locator('[class*="toggleRow"]');
-		const label = page.getByText("All day", { exact: true });
-		await expect(toggle).toBeVisible();
-		// Let the popover finish arriving before measuring where anything sits.
-		await page
-			.locator('[class*="createPopover"]')
-			.evaluate((el) =>
-				Promise.all(el.getAnimations().map((animation) => animation.finished)),
-			);
+		const panel = page.getByRole("dialog", { name: "Create event", exact: true });
+		const title = panel.getByRole("textbox", { name: "Event title" });
+		await expect(title).toBeFocused();
+		await title.fill("All-day planning");
+		await settleLayout(page);
+		const before = (await panel.boundingBox())!;
+		const submit = panel.getByRole("button", { name: "Create", exact: true });
+		const actionsBefore = await submit.boundingBox();
+		const allDay = panel.getByRole("switch", { name: "All day", exact: true });
+		await allDay.check();
+		await expect(allDay).toBeChecked();
+		await expect(panel.getByRole("button", { name: /^Ends:/ })).toContainText("Monday, July 27, 2026");
+		await expect(panel.getByRole("combobox", { name: "Start time" })).toHaveCount(0);
+		await expect(title).toHaveValue("All-day planning");
+		expect(await panel.boundingBox()).toEqual(before);
+		expect(await submit.boundingBox()).toEqual(actionsBefore);
+		await expect(submit).toBeInViewport();
+		expect(before).toEqual({ x: Math.max(0, width - 480), y: 0, width: Math.min(480, width), height: 800 });
+		expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+		await expectNoAccessibilityViolations(page);
+		await page.screenshot({ path: testInfo.outputPath("create-inspector-all-day.png") });
 
-		const timed = (await toggle.boundingBox())!.y;
-		await label.click();
-		const datePickers = [
-			page.getByRole("button", { name: /^Date:/ }),
-			page.getByRole("button", { name: /^Ends:/ }),
-		];
-		await expect(datePickers[1]).toBeVisible();
-		for (const picker of datePickers) {
-			const [pickerBox, chevronBox] = await Promise.all([
-				picker.boundingBox(),
-				picker.locator("svg").boundingBox(),
-			]);
-			expect(
-				Math.abs(
-					pickerBox!.x + pickerBox!.width - (chevronBox!.x + chevronBox!.width),
-				),
-			).toBeLessThanOrEqual(1);
-		}
-		// The toggle stays on the anchored side of the conditional time row:
-		// above it in desktop popovers, below it in bottom-anchored sheets.
-		expect((await toggle.boundingBox())!.y).toBe(timed);
-
-		await label.click();
-		await expect(
-			page.getByRole("combobox", { name: "Start time" }),
-		).toBeVisible();
-		expect((await toggle.boundingBox())!.y).toBe(timed);
+		await allDay.uncheck();
+		await expect(panel.getByRole("combobox", { name: "Start time" })).toBeVisible();
+		await allDay.check();
+		const write = page.waitForRequest(request => request.method() === "POST" && new URL(request.url()).pathname === "/api/v1/events");
+		await submit.click();
+		expect((await write).postDataJSON()).toMatchObject({ title: "All-day planning", isAllDay: true, start: "2026-07-26T00:00:00.000Z", end: "2026-07-26T00:00:00.000Z" });
+		await expect(panel).toHaveCount(0);
+		await expect(page.getByRole("button", { name: "Create event, meeting or task", exact: true })).toBeFocused();
 	});
 }
 
-test("scrolls a long calendar list inside quick create", async ({ page }) => {
+test("scrolls a long calendar list inside the creation Inspector", async ({ page }) => {
 	await page.setViewportSize({ width: 1890, height: 962 });
 	const manyCalendars = [
 		...calendars,
@@ -1359,19 +1367,17 @@ test("scrolls a long calendar list inside quick create", async ({ page }) => {
 		name: "Calendars for this event",
 	});
 	await expect(calendarList).toBeVisible();
-	expect(
-		await calendarList.evaluate(
-			(element) => element.scrollHeight > element.clientHeight,
-		),
-	).toBe(true);
-	await calendarList.hover();
-	await page.mouse.wheel(0, 420);
-	await expect
-		.poll(() => calendarList.evaluate((element) => element.scrollTop))
-		.toBeGreaterThan(0);
+	// The form owns the scroller; calendar choices must not introduce another.
+	const body = page.getByRole("dialog", { name: "Create event", exact: true }).locator('[class*="formBody"]');
+	const lastChoice = calendarList.getByRole("radio", { name: "Project calendar 12 as home calendar" });
+	await lastChoice.scrollIntoViewIfNeeded();
+	await expect(lastChoice).toBeInViewport();
+	expect(await body.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+	await lastChoice.click();
+	await expect(lastChoice).toBeChecked();
 
 	const popoverBox = (await page
-		.locator('[class*="createPopover"]')
+		.getByRole("dialog", { name: "Create event", exact: true })
 		.boundingBox())!;
 	const actionsBox = (await page
 		.getByRole("button", { name: "More options" })
@@ -1997,7 +2003,8 @@ test("a second month drag replaces the first draft, not both", async ({
 	await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
 	await expect(page.locator("[data-draft]")).toHaveCount(1);
 
-	// Dragging out another one drops the first from the first press.
+	await settleLayout(page);
+	// The current panel stays mounted until the next range is committed.
 	const from = page.locator('[data-day-key="2026-07-28"]');
 	const to = page.locator('[data-day-key="2026-07-30"]');
 	const fromBox = (await from.boundingBox())!;
@@ -2013,7 +2020,7 @@ test("a second month drag replaces the first draft, not both", async ({
 	await expect(page.locator("[data-live]")).toHaveCount(3);
 	await expect(page.locator("[data-draft]")).toHaveCount(0);
 	await expect(page.getByRole("dialog", { name: "Create event" })).toHaveCount(
-		0,
+		1,
 	);
 
 	// Releasing keeps the new one. The replaced popover restores focus to its own
@@ -2078,8 +2085,9 @@ test("flicks sideways to change period, but a held drag still creates", async ({
 
 	// Playwright's touchscreen only taps, so the gesture is dispatched directly.
 	// pointerType is what separates a finger from the mouse here.
-	const touchDrag = (dx: number, dy = 0, holdMs = 0) =>
-		page.evaluate(
+	const touchDrag = async (dx: number, dy = 0, holdMs = 0) => {
+    await settleLayout(page);
+    return page.evaluate(
 			async ([shiftX, shiftY, hold]) => {
 				const area = document.querySelector("[data-calendar-area]")!;
 				const box = area.getBoundingClientRect();
@@ -2121,10 +2129,12 @@ test("flicks sideways to change period, but a held drag still creates", async ({
 			},
 			[dx, dy, holdMs] as const,
 		);
+  };
 
 	// Flick left for the next period, right for the previous one.
 	await touchDrag(-120);
 	await expect(page).toHaveURL(/date=2026-08-01/);
+	await settleLayout(page);
 	await expect(page.locator("[data-live], [data-draft]")).toHaveCount(0);
 	await touchDrag(120);
 	await expect(page).toHaveURL(/date=2026-07-01/);
@@ -2309,6 +2319,7 @@ test("cancels a drag with Escape and leaves the event alone", async ({
 	// Escape cancels the drag, not the screen: nothing is written and the block
 	// returns to where it was.
 	expect(writes).toBe(0);
+	await expect(page.getByRole("dialog", { name: "Project check-in" })).toHaveCount(0);
 	const after = (await block.boundingBox())!;
 	expect(Math.abs(after.y - before.y)).toBeLessThan(2);
 });
@@ -2554,11 +2565,13 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
 		page.getByRole("heading", { name: "Your calendars" }),
 	).toBeVisible();
 	const calendarDialog = page.getByRole("dialog", { name: "Calendars" });
+	await expect(calendarDialog.getByPlaceholder("New calendar")).toBeHidden();
+	await calendarDialog.getByText("New calendar", { exact: true }).click();
 	const newName = calendarDialog.getByPlaceholder("New calendar");
 	const newColor = calendarDialog.getByRole("button", {
 		name: /New calendar color:/,
 	});
-	const add = calendarDialog.getByRole("button", { name: "Add" });
+	const add = calendarDialog.getByRole("button", { name: "Create" });
 	const [nameBox, colorBox, addBox] = await Promise.all([
 		newName.boundingBox(),
 		newColor.boundingBox(),
@@ -2568,7 +2581,10 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
 	expect(colorBox).not.toBeNull();
 	expect(addBox).not.toBeNull();
 	expect(Math.abs(nameBox!.y - colorBox!.y)).toBeLessThanOrEqual(1);
-	expect(Math.abs(colorBox!.y - addBox!.y)).toBeLessThanOrEqual(1);
+	expect(colorBox!.x).toBeGreaterThan(nameBox!.x + nameBox!.width);
+	expect(addBox!.y).toBeGreaterThan(colorBox!.y);
+	const listBox = await calendarDialog.locator('[class*="calendarSection"]').boundingBox();
+	expect(nameBox!.x).toBeGreaterThanOrEqual(listBox!.x + listBox!.width);
 	expect(Math.abs(nameBox!.height - colorBox!.height)).toBeLessThanOrEqual(1);
 	expect(Math.abs(colorBox!.height - addBox!.height)).toBeLessThanOrEqual(1);
 
@@ -2649,7 +2665,7 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
 			request.method() === "POST" &&
 			new URL(request.url()).pathname === "/api/v1/calendars",
 	);
-	await page.getByRole("button", { name: "Add" }).click();
+	await page.getByRole("button", { name: "Create" }).click();
 	expect((await createRequest).postDataJSON()).toMatchObject({
 		color: "#A8B5A0",
 		name: "Travel",
@@ -2701,6 +2717,37 @@ test("creates, renames and deletes a calendar", async ({ page }) => {
 	).toHaveCount(0);
 });
 
+test("calendar actions scroll independently with every form expanded", async ({ page }) => {
+	await page.setViewportSize({ width: 1280, height: 600 });
+	await mockAuthenticatedReads(page);
+	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+	await page.getByRole("button", { name: "Calendars" }).click();
+	const dialog = page.getByRole("dialog", { name: "Calendars" });
+	const actions = dialog.getByRole("region", { name: "Calendar actions" });
+	for (const label of ["New calendar", "Export calendar", "Import calendar"]) {
+		await actions.getByText(label, { exact: true }).click();
+	}
+	const list = dialog.locator('[class*="groups"]').first();
+	const listTop = await list.evaluate((element) => element.getBoundingClientRect().top);
+	const scroll = await actions.evaluate((element) => {
+		element.scrollTop = element.scrollHeight;
+		return {
+			top: element.scrollTop,
+			height: element.clientHeight,
+			content: element.scrollHeight,
+			padding: Number.parseFloat(getComputedStyle(element).paddingBottom),
+		};
+	});
+	expect(scroll.content).toBeGreaterThan(scroll.height);
+	expect(scroll.top).toBeGreaterThan(0);
+	const panelBox = (await actions.boundingBox())!;
+	const importButton = actions.getByRole("button", { name: "Import", exact: true });
+	const buttonBox = (await importButton.boundingBox())!;
+	expect(buttonBox.y).toBeGreaterThanOrEqual(panelBox.y);
+	expect(buttonBox.y + buttonBox.height).toBeLessThanOrEqual(panelBox.y + panelBox.height - scroll.padding);
+	expect(await list.evaluate((element) => element.getBoundingClientRect().top)).toBe(listTop);
+});
+
 test("creates a calendar inside a connected account", async ({ page }) => {
 	const withAccount = [
 		calendars[0]!,
@@ -2738,12 +2785,12 @@ test("creates a calendar inside a connected account", async ({ page }) => {
 	await page.getByRole("button", { name: "Calendars" }).click();
 	const dialog = page.getByRole("dialog", { name: "Calendars" });
 
+	await dialog.getByText("New calendar", { exact: true }).click();
 	await dialog.getByPlaceholder("New calendar").fill("Studio hours");
-	// The destination is offered because an account is connected; with none, the
-	// control is not there at all.
+	// The destination includes the connected account alongside Musubi.
 	await dialog.getByRole("combobox", { name: "Account", exact: true }).click();
 	await page.getByRole("option", { name: "work@example.com" }).click();
-	await dialog.getByRole("button", { name: "Add", exact: true }).click();
+	await dialog.getByRole("button", { name: "Create", exact: true }).click();
 
 	// Provider and account go with it, which is what makes the server create it on
 	// Google first and import the mirror. The cleared field is the flow finishing:
@@ -3846,7 +3893,8 @@ test("manages account identity and gates account deletion", async ({
 	});
 
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-	await page.getByRole("button", { name: "Manage account" }).click();
+	await page.getByRole("button", { name: "User menu for Web QA" }).click();
+	await page.getByRole("menuitem", { name: "Manage account" }).click();
 	const accountDialog = page.getByRole("dialog", { name: "Account" });
 	await expect(accountDialog).toBeVisible();
 	await expect(accountDialog).toContainText("web-qa@example.invalid");
@@ -3934,7 +3982,8 @@ test("keeps account management usable as nested mobile sheets", async ({
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 
 	await page.getByRole("button", { name: "Open navigation" }).click();
-	await page.getByRole("button", { name: "Manage account" }).click();
+	await page.getByRole("button", { name: "User menu for Web QA" }).click();
+	await page.getByRole("menuitem", { name: "Manage account" }).click();
 	const accountSheet = page.getByRole("dialog", { name: "Account" });
 	await accountSheet.evaluate((element) =>
 		Promise.all(element.getAnimations().map((animation) => animation.finished)),
@@ -3996,7 +4045,7 @@ test("drags across month days to create an all-day range", async ({ page }) => {
 		"Tuesday, July 28, 2026",
 	);
 	await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText(
-		"Thursday, July 30, 2026",
+		"Friday, July 31, 2026",
 	);
 	// The same pill stays put, now grabbable and owned by the open draft.
 	await expect(page.locator("[data-live]")).toHaveCount(0);
@@ -4032,7 +4081,7 @@ test("dragging backwards across month days still creates a forward range", async
 		"Tuesday, July 28, 2026",
 	);
 	await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText(
-		"Thursday, July 30, 2026",
+		"Friday, July 31, 2026",
 	);
 });
 
@@ -4126,7 +4175,8 @@ test("navigates by keyboard and documents the map behind ?", async ({
 	const clientResult = search.getByRole("button", { name: /Client call/ });
 	await expect(clientResult).toBeVisible();
 	await page.keyboard.press("ArrowDown");
-	await expect(clientResult).toBeFocused();
+	await expect(clientResult).toHaveAttribute("data-active", "true");
+	await expect(search.getByRole("searchbox")).toBeFocused();
 	await page.keyboard.press("Escape");
 
 	// Radix returns focus to the toolbar trigger. Slash must remain global there;
@@ -4138,21 +4188,25 @@ test("navigates by keyboard and documents the map behind ?", async ({
 	await page.keyboard.press("/");
 	const searchbox = search.getByRole("searchbox");
 	await expect(searchbox).toBeFocused();
-	await page.keyboard.press("ArrowDown");
 	const newEventResult = search.getByRole("button", { name: "New event" });
 	const todayResult = search.getByRole("button", { name: "Go to today" });
-	await expect(newEventResult).toBeFocused();
+  const newTaskResult = search.getByRole("button", { name: "New task" });
+	await expect(newEventResult).toHaveAttribute("data-active", "true");
 	await page.keyboard.press("ArrowDown");
-	await expect(todayResult).toBeFocused();
+  await expect(newTaskResult).toHaveAttribute("data-active", "true");
+  await page.keyboard.press("ArrowDown");
+	await expect(todayResult).toHaveAttribute("data-active", "true");
 	await page.keyboard.press("ArrowUp");
-	await expect(newEventResult).toBeFocused();
+  await expect(newTaskResult).toHaveAttribute("data-active", "true");
+  await page.keyboard.press("ArrowUp");
+	await expect(newEventResult).toHaveAttribute("data-active", "true");
 	await page.keyboard.press("Escape");
 
 	const switcherBox = await page
 		.getByRole("radiogroup", { name: "Calendar view" })
 		.boundingBox();
 	const eventBox = await page
-		.getByRole("button", { name: "Create event or task", exact: true })
+		.getByRole("button", { name: "Create event, meeting or task", exact: true })
 		.boundingBox();
 	expect(
 		eventBox!.x - (switcherBox!.x + switcherBox!.width),
@@ -4308,7 +4362,7 @@ test("blocks the phone web app with a full-screen app download", async ({
 	const box = (await blocker.locator("..").boundingBox())!;
 	expect(box).toMatchObject({ height: 720, width: 390, x: 0, y: 0 });
 	await expect(
-		page.getByRole("button", { name: "Create event or task", exact: true }),
+		page.getByRole("button", { name: "Create event, meeting or task", exact: true }),
 	).toHaveCount(0);
 
 	await page.keyboard.press("Escape");
@@ -4360,7 +4414,7 @@ for (const width of [320, 390]) {
   }
 }
 
-test("turns anchored surfaces into sheets on a narrow viewport", async ({
+test("opens creation in a full-height Inspector on a narrow viewport", async ({
 	page,
 }) => {
 	await page.setViewportSize({ height: 720, width: 390 });
@@ -4370,14 +4424,14 @@ test("turns anchored surfaces into sheets on a narrow viewport", async ({
 	// Create sits within thumb reach rather than in the toolbar.
 	const create = page.getByRole("button", {
 		exact: true,
-		name: "Create event or task",
+		name: "Create event, meeting or task",
 	});
 	const fab = (await create.boundingBox())!;
 	expect(fab.y).toBeGreaterThan(500);
 	expect(Math.round(fab.width)).toBe(Math.round(fab.height));
 
 	await openCreateEvent(page);
-	// The popover is a bottom sheet: full width, sitting on the bottom edge.
+	// The shared Inspector fills the narrow viewport with a fixed action footer.
 	const sheet = page.getByRole("dialog", { name: "Create event" });
 	await sheet.evaluate((element) =>
 		Promise.all(element.getAnimations().map((animation) => animation.finished)),
@@ -4386,6 +4440,8 @@ test("turns anchored surfaces into sheets on a narrow viewport", async ({
 	expect(Math.round(box.width)).toBe(390);
 	expect(Math.round(box.y + box.height)).toBeLessThanOrEqual(721);
 	expect(box.x).toBe(0);
+	expect(box.y).toBe(0);
+	expect(box.height).toBe(720);
 	expect(
 		await sheet.evaluate((element) => element.scrollWidth - element.clientWidth),
 	).toBe(0);
@@ -4396,7 +4452,56 @@ test("turns anchored surfaces into sheets on a narrow viewport", async ({
 	await expectNoAccessibilityViolations(page);
 });
 
-test("keeps desktop event details in the right overlay without moving the calendar", async ({
+for (const width of [1024, 1280, 1555]) {
+  test(`docked event panel keeps toolbar actions reachable at ${width}px`, async ({ page }, testInfo) => {
+    const runtimeErrors: string[] = [];
+    page.on("pageerror", error => runtimeErrors.push(error.message));
+    await page.setViewportSize({ width, height: 916 });
+    const appointment = event("docked-toolbar", "Docked toolbar check", "personal", "#b3492f", "2026-07-20T09:00:00.000Z", "2026-07-20T10:00:00.000Z");
+    await mockAuthenticatedReads(page, { ...events, events: [appointment] }, calendars.map(calendar => calendar.id === "studio" ? { ...calendar, provider: "microsoft" } : calendar));
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-20`);
+    const calendar = page.locator("[data-calendar-area]");
+    const before = (await calendar.boundingBox())!;
+    await page.getByRole("button", { name: /Docked toolbar check/ }).click();
+    const details = page.getByRole("dialog", { name: "Docked toolbar check", exact: true });
+    await expect(details).toBeVisible();
+    await settleLayout(page);
+    const panelBox = (await details.boundingBox())!;
+    expect((await calendar.boundingBox())!.width).toBe(before.width - panelBox.width);
+    // Reserving space must resize the month, not crop its trailing days.
+    const weekdays = calendar.getByRole("columnheader");
+    await expect(weekdays).toHaveCount(7);
+    for (const weekday of await weekdays.all()) {
+      const box = (await weekday.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(before.x);
+      expect(box.x + box.width).toBeLessThanOrEqual(panelBox.x + 1);
+    }
+    expect(await calendar.evaluate(element => element.scrollWidth - element.clientWidth)).toBe(0);
+    for (const name of ["Search events and actions", "Calendar sync coverage", "Create event, meeting or task"]) {
+      const button = page.getByRole("button", { name, exact: true });
+      await expect(button).toBeInViewport();
+      const box = (await button.boundingBox())!;
+      expect(box.x + box.width).toBeLessThanOrEqual(panelBox.x);
+      expect(await button.evaluate(element => {
+        const r = element.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+        return hit === element || element.contains(hit);
+      })).toBe(true);
+    }
+    await page.getByRole("button", { name: "Calendar sync coverage", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Calendar sync coverage", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(details).toBeVisible();
+    await expectNoAccessibilityViolations(page);
+    expect(runtimeErrors).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath(`docked-toolbar-${width}.png`) });
+    await details.getByRole("button", { name: "Close event details" }).click();
+    await settleLayout(page);
+    expect((await calendar.boundingBox())!.width).toBe(before.width);
+  });
+}
+
+test("keeps desktop event details beside the calendar with toolbar controls accessible", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 1280, height: 800 });
@@ -4406,7 +4511,7 @@ test("keeps desktop event details in the right overlay without moving the calend
 	const leftTrigger = page
 		.getByRole("button", { name: /Studio retreat/ })
 		.first();
-	const calendarGrid = page.getByRole("grid").first();
+	const calendarGrid = page.locator("[data-calendar-area]");
 	const calendarBox = (await calendarGrid.boundingBox())!;
 	await leftTrigger.click();
 	const leftDetails = page.getByRole("dialog", { name: "Studio retreat" });
@@ -4419,7 +4524,7 @@ test("keeps desktop event details in the right overlay without moving the calend
 	);
 	const leftDetailsBox = (await leftDetails.boundingBox())!;
 	expect(leftDetailsBox).toMatchObject({ x: 800, y: 0, width: 480, height: 800 });
-	expect(await calendarGrid.boundingBox()).toEqual(calendarBox);
+	expect(await calendarGrid.boundingBox()).toMatchObject({ x: calendarBox.x, width: calendarBox.width - leftDetailsBox.width });
 	expect(
 		await leftDetails.evaluate((element) => ({
 			horizontal: element.scrollWidth - element.clientWidth,
@@ -4497,6 +4602,7 @@ test("opens the calendar color picker as the top mobile sheet", async ({
 
 	await page.getByRole("button", { name: "Open navigation" }).click();
 	await page.getByRole("button", { name: "Calendars" }).click();
+	await page.getByText("New calendar", { exact: true }).click();
 	const trigger = page.getByRole("button", {
 		name: "New calendar color: #B3A48A",
 	});
@@ -4806,6 +4912,7 @@ test("leaves a draggable pill on the month grid", async ({ page }) => {
 	);
 	await page.getByRole("textbox", { name: "Event title" }).fill("Retreat");
 
+	await settleLayout(page);
 	// Grab the pill and move the whole range a day later.
 	const pill = page.locator("[data-draft]").first();
 	const pillBox = (await pill.boundingBox())!;
@@ -4827,14 +4934,14 @@ test("leaves a draggable pill on the month grid", async ({ page }) => {
 		"Wednesday, July 29, 2026",
 	);
 	await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText(
-		"Friday, July 31, 2026",
+		"Saturday, August 1, 2026",
 	);
 	await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue(
 		"Retreat",
 	);
 });
 
-test("asks for a name and a time first, the rest on request", async ({
+test("creation Inspector exposes the complete form and submits from the keyboard", async ({
 	page,
 }) => {
 	await mockAuthenticatedReads(page);
@@ -4860,10 +4967,10 @@ test("asks for a name and a time first, the rest on request", async ({
 		})),
 	).toEqual({ horizontal: 0, vertical: 0 });
 	await expectNoAccessibilityViolations(page);
-	// Everything else is out of the way until asked for.
-	await expect(page.getByPlaceholder("Add location")).toHaveCount(0);
-	await expect(page.getByPlaceholder("Add notes")).toHaveCount(0);
-	await expect(page.getByLabel("Repeat")).toHaveCount(0);
+	// The complete event form is available in the same Inspector used for editing.
+	await expect(page.getByPlaceholder("Add location")).toBeVisible();
+	await expect(page.getByPlaceholder("Add notes")).toBeVisible();
+	await expect(page.getByLabel("Repeat")).toBeVisible();
 	await expect(bubble.locator('[data-ui="calendar-placement"]')).toHaveCount(0);
 
 	// The documented keyboard path submits without leaving the title field.
@@ -5211,49 +5318,206 @@ test("leaving the full event editor keeps the calendar where it was", async ({
 	await expect(page).toHaveURL(/\/month\?date=2026-07-26/);
 });
 
-test("moves the create window by its header, never out of the calendar", async ({
-	page,
-}) => {
+for (const view of ["month", "week"] as const) {
+	test(`creation Inspector guards edit-to-create and create-to-event handoffs in ${view}`, async ({ page }) => {
+		await page.setViewportSize({ width: 1440, height: 900 });
+		const appointment = event("inspector-appointment", "Inspector appointment", "personal", "#b3492f", "2026-07-20T04:00:00.000Z", "2026-07-20T05:00:00.000Z");
+		await mockAuthenticatedReads(page, { ...events, events: [appointment] });
+		await page.goto(`/app/p/${DEFAULT_PAGE_ID}/${view}?date=2026-07-20`);
+		const calendar = page.locator("[data-calendar-area]");
+		if (view === "week") await calendar.evaluate(element => { element.scrollTop = 0; });
+		const calendarBefore = await calendar.boundingBox();
+		const trigger = page.getByRole("button", { name: /Inspector appointment/ }).first();
+		await trigger.click();
+		await page.getByRole("button", { name: "Edit", exact: true }).click();
+		const title = page.getByRole("textbox", { name: "Event title" });
+		await title.fill("Keep the edited appointment");
+		const slot = page.locator(view === "month" ? '[data-day-key="2026-07-21"]' : '[data-time-grid-column="2026-07-20"]');
+		const bounds = (await slot.boundingBox())!;
+		const point = { x: bounds.x + Math.min(40, bounds.width / 2), y: view === "month" ? bounds.y + bounds.height - 8 : bounds.y + 128 };
+		await page.mouse.click(point.x, point.y);
+		let confirmation = page.getByRole("dialog", { name: "Discard unsaved changes?", exact: true });
+		await expect(confirmation).toBeVisible();
+		await confirmation.getByRole("button", { name: "Keep editing", exact: true }).last().click();
+		await expect(title).toHaveValue("Keep the edited appointment");
+		await expect(page.getByRole("dialog", { name: "Create event", exact: true })).toHaveCount(0);
+		await page.mouse.click(point.x, point.y);
+		await confirmation.getByRole("button", { name: "Discard changes", exact: true }).click();
+
+		const create = page.getByRole("dialog", { name: "Create event", exact: true });
+		await expect(create).toBeVisible();
+		await expect(page.getByRole("dialog")).toHaveCount(1);
+		await expect(title).toHaveValue("");
+		await expect(title).toBeFocused();
+		expect(await calendar.boundingBox()).toMatchObject({ x: calendarBefore!.x, width: calendarBefore!.width - 480 });
+		await title.fill("Keep the new appointment");
+		await trigger.click();
+		confirmation = page.getByRole("dialog", { name: "Discard new event?", exact: true });
+		await expect(confirmation).toBeVisible();
+		await confirmation.getByRole("button", { name: "Keep editing", exact: true }).last().click();
+		await expect(title).toHaveValue("Keep the new appointment");
+		await expect(title).toBeFocused();
+		await trigger.click();
+		await confirmation.getByRole("button", { name: "Discard event", exact: true }).click();
+		const details = page.getByRole("dialog", { name: "Inspector appointment", exact: true });
+		await expect(details).toBeVisible();
+		await expect(page.getByRole("dialog")).toHaveCount(1);
+		await expect(create).toHaveCount(0);
+		await expect.poll(() => details.evaluate(element => element.contains(document.activeElement))).toBe(true);
+		expect(await calendar.boundingBox()).toMatchObject({ x: calendarBefore!.x, width: calendarBefore!.width - 480 });
+	});
+
+	test(`creation Inspector preserves a dirty draft until a new ${view} slot is accepted`, async ({ page }) => {
+		await page.setViewportSize({ width: 1440, height: 900 });
+		await mockAuthenticatedReads(page, { ...events, events: [] });
+		await page.goto(`/app/p/${DEFAULT_PAGE_ID}/${view}?date=2026-07-20`);
+		const calendar = page.locator("[data-calendar-area]");
+		if (view === "week") await calendar.evaluate(element => { element.scrollTop = 0; });
+		const first = page.locator(view === "month" ? '[data-day-key="2026-07-20"]' : '[data-time-grid-column="2026-07-20"]');
+		const firstBox = (await first.boundingBox())!;
+		await page.mouse.click(firstBox.x + 30, view === "month" ? firstBox.y + firstBox.height - 8 : firstBox.y + 128);
+		const create = page.getByRole("dialog", { name: "Create event", exact: true });
+		const title = create.getByRole("textbox", { name: "Event title" });
+		await title.fill("Preserve this draft");
+		const oldDate = await create.getByRole("button", { name: /^Date:/ }).textContent();
+		const oldStart = await create.getByRole("combobox", { name: "Start time" }).inputValue();
+		const next = page.locator(view === "month" ? '[data-day-key="2026-07-21"]' : '[data-time-grid-column="2026-07-20"]');
+		const nextBox = (await next.boundingBox())!;
+		const point = { x: nextBox.x + 30, y: view === "month" ? nextBox.y + nextBox.height - 8 : nextBox.y + 256 };
+		await page.mouse.click(point.x, point.y);
+		const confirmation = page.getByRole("dialog", { name: "Discard new event?", exact: true });
+		await expect(confirmation).toBeVisible();
+		await confirmation.getByRole("button", { name: "Keep editing", exact: true }).last().click();
+		await expect(title).toHaveValue("Preserve this draft");
+		await expect(title).toBeFocused();
+		await expect(create.getByRole("button", { name: /^Date:/ })).toHaveText(oldDate!);
+		await expect(create.getByRole("combobox", { name: "Start time" })).toHaveValue(oldStart);
+		await page.mouse.click(point.x, point.y);
+		await confirmation.getByRole("button", { name: "Discard event", exact: true }).click();
+		await expect(page.getByRole("dialog")).toHaveCount(1);
+		await expect(title).toHaveValue("");
+		await expect(title).toBeFocused();
+		if (view === "month") await expect(create.getByRole("button", { name: /^Date:/ })).toContainText("Tuesday, July 21, 2026");
+		else await expect(create.getByRole("combobox", { name: "Start time" })).toHaveValue("04:00");
+		await expect(page.locator("[data-draft]")).toHaveCount(1);
+	});
+}
+
+test("scrolls the calendar and event form with hidden scrollbar chrome", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await mockAuthenticatedReads(page, { ...events, events: [] });
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/day?date=2026-07-20`);
+  const calendar = page.locator("[data-calendar-area]");
+  await calendar.evaluate(element => { element.scrollTop = 0; });
+  await expect.poll(() => calendar.evaluate(element => getComputedStyle(element).scrollbarWidth)).toBe("none");
+  await calendar.hover();
+  await page.mouse.wheel(0, 400);
+  await expect.poll(() => calendar.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  await openCreateEvent(page);
+  const panel = page.getByRole("dialog", { name: "Create event", exact: true });
+  const body = panel.locator('[class*="formBody"]');
+  await expect.poll(() => body.evaluate(element => getComputedStyle(element).scrollbarWidth)).toBe("none");
+  await body.hover();
+  await page.mouse.wheel(0, 600);
+  await expect.poll(() => body.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  await expect(panel.getByRole("button", { name: "Create", exact: true })).toBeInViewport();
+  await panel.getByPlaceholder("Add notes").fill("Scrollable notes");
+  await page.screenshot({ path: testInfo.outputPath("docked-create-hidden-scrollbars.png") });
+});
+
+test("creation Inspector preserves a draft across the modal viewport boundary", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 916 });
+  await mockAuthenticatedReads(page, { ...events, events: [] });
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-20`);
+  await openCreateEvent(page);
+  const panel = page.getByRole("dialog", { name: "Create event", exact: true });
+  const title = panel.getByRole("textbox", { name: "Event title" });
+  await title.fill("Draft across layouts");
+  await panel.getByPlaceholder("Add location").fill("Studio C");
+  await panel.getByPlaceholder("Add notes").fill("Keep these notes");
+  await panel.getByRole("combobox", { name: "Start time" }).fill("14:30");
+  await panel.getByRole("combobox", { name: "Start time" }).press("Tab");
+  for (const width of [1023, 390, 1024, 1280]) {
+    await page.setViewportSize({ width, height: 916 });
+    await expect(title).toHaveValue("Draft across layouts");
+    await expect(panel.getByPlaceholder("Add location")).toHaveValue("Studio C");
+    await expect(panel.getByPlaceholder("Add notes")).toHaveValue("Keep these notes");
+    await expect(panel.getByRole("combobox", { name: "Start time" })).toHaveValue("14:30");
+    if (width <= 1023) await expect(panel).toHaveAttribute("aria-modal", "true");
+    else await expect(panel).not.toHaveAttribute("aria-modal", "true");
+  }
+  const write = page.waitForRequest(request => request.method() === "POST" && new URL(request.url()).pathname === "/api/v1/events");
+  await panel.getByRole("button", { name: "Create", exact: true }).click();
+  expect((await write).postDataJSON()).toMatchObject({ title: "Draft across layouts", location: "Studio C", description: "Keep these notes", start: "2026-07-20T12:30:00.000Z" });
+  await expect(panel).toHaveCount(0);
+});
+
+test("creation Inspector retains pending writes and failures across a narrow resize", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 916 });
+  await mockAuthenticatedReads(page, { ...events, events: [] });
+  let attempts = 0;
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await page.route("**/api/v1/events", async route => {
+    if (route.request().method() !== "POST") return route.fallback();
+    attempts++;
+    if (attempts > 1) return route.fallback();
+    await pending;
+    return route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "Test write failure" }) });
+  });
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-20`);
+  await openCreateEvent(page);
+  const panel = page.getByRole("dialog", { name: "Create event", exact: true });
+  const title = panel.getByRole("textbox", { name: "Event title" });
+  await title.fill("Retain failed write");
+  await panel.getByRole("button", { name: "Create", exact: true }).click();
+  await expect.poll(() => attempts).toBe(1);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(title).toBeDisabled();
+  await expect(panel.getByRole("button", { name: "Saving…", exact: true })).toBeDisabled();
+  await panel.press("Escape");
+  await expect(panel).toBeVisible();
+  expect(attempts).toBe(1);
+  release();
+  await expect(panel.getByRole("alert")).toBeVisible();
+  await expect(title).toBeEnabled();
+  await expect(title).toHaveValue("Retain failed write");
+  await page.setViewportSize({ width: 1280, height: 916 });
+  await expect(panel.getByRole("alert")).toBeVisible();
+  await panel.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(panel).toHaveCount(0);
+  expect(attempts).toBe(2);
+});
+
+test("creation Inspector stays fixed while its header is dragged and restores keyboard focus", async ({ page }, testInfo) => {
+	await page.setViewportSize({ width: 1440, height: 900 });
 	await mockAuthenticatedReads(page);
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-	await page.locator('[data-day-key="2026-07-15"]').click();
-
-	const bubble = page.getByRole("dialog", { name: "Create event" });
-	await bubble.evaluate((element) =>
-		Promise.all(element.getAnimations().map((animation) => animation.finished)),
-	);
-	const before = (await bubble.boundingBox())!;
-	const header = bubble.locator("[data-drag-handle]");
-
-	// Dragging the header moves the window.
+	const calendar = page.locator("[data-calendar-area]");
+	const calendarBefore = await calendar.boundingBox();
+	const origin = page.locator('[data-day-key="2026-07-15"]');
+	await origin.focus();
+	await origin.press("Enter");
+	const panel = page.getByRole("dialog", { name: "Create event", exact: true });
+	await expect(panel.getByRole("textbox", { name: "Event title" })).toBeFocused();
+	await settleLayout(page);
+		const before = (await panel.boundingBox())!;
+	expect(before).toEqual({ x: 960, y: 0, width: 480, height: 900 });
+	expect(await calendar.boundingBox()).toMatchObject({ x: calendarBefore!.x, width: calendarBefore!.width - 480 });
+	const header = panel.getByRole("heading", { name: "New event", exact: true });
 	const grip = (await header.boundingBox())!;
-	await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+	await page.mouse.move(grip.x + 8, grip.y + grip.height / 2);
 	await page.mouse.down();
-	await page.mouse.move(
-		grip.x + grip.width / 2 - 220,
-		grip.y + grip.height / 2 - 60,
-		{ steps: 10 },
-	);
+	await page.mouse.move(grip.x - 220, grip.y + grip.height / 2 + 80, { steps: 10 });
 	await page.mouse.up();
-
-	const after = (await bubble.boundingBox())!;
-	expect(Math.round(after.x)).toBe(Math.round(before.x - 220));
-	expect(Math.round(after.y)).toBe(Math.round(before.y - 60));
-	// Still the same draft: moving the window is not editing it.
-	await expect(page.getByRole("button", { name: /^Date:/ })).toContainText(
-		"Wednesday, July 15, 2026",
-	);
-
-	// Dragged hard at the calendar's left edge it stops there, whole.
-	const area = (await page.getByRole("main").boundingBox())!;
-	await page.mouse.move(after.x + 60, after.y + 20);
-	await page.mouse.down();
-	await page.mouse.move(area.x - 900, after.y + 20, { steps: 10 });
-	await page.mouse.up();
-
-	const clamped = (await bubble.boundingBox())!;
-	expect(clamped.x).toBeGreaterThanOrEqual(area.x - 1);
-	expect(clamped.x + clamped.width).toBeLessThanOrEqual(area.x + area.width + 1);
+	expect(await panel.boundingBox()).toEqual(before);
+	expect(await calendar.boundingBox()).toMatchObject({ x: calendarBefore!.x, width: calendarBefore!.width - 480 });
+	await expect(panel.getByRole("button", { name: /^Date:/ })).toContainText("Wednesday, July 15, 2026");
+	await expect(page.locator("[data-live]")).toHaveCount(0);
+	await page.screenshot({ path: testInfo.outputPath("create-inspector-desktop.png") });
+	await panel.getByRole("button", { name: "Close new event" }).click();
+	await expect(panel).toHaveCount(0);
+	await expect(origin).toBeFocused();
 });
 
 test("shows a dragged event where it is going and a ghost where it was", async ({
@@ -6099,8 +6363,8 @@ test("keeps a previously loaded task list readable offline", async ({
 		tasks.getByText("Pack the offline checklist", { exact: true }),
 	).toBeVisible();
 	await expect(
-		tasks.getByRole("checkbox", {
-			name: "Mark Pack the offline checklist completed",
+		tasks.getByRole("combobox", {
+			name: "Status of Pack the offline checklist",
 		}),
 	).toBeDisabled();
 	await expect(
@@ -6116,7 +6380,8 @@ test("leaves nothing of the last account on a shared computer", async ({
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 	await expect(page.getByRole("button", { name: /Client call/ })).toBeVisible();
 
-	await page.getByRole("button", { name: "Sign out Web QA" }).click();
+	await page.getByRole("button", { name: "User menu for Web QA" }).click();
+	await page.getByRole("menuitem", { name: "Sign out" }).click();
 	await expect(page).toHaveURL(/\/login/);
 	// Not "eventually gone" — never rendered. `06-settings-pages-sync.md:175` is
 	// explicit that the login screen must not flash the previous user's data.
@@ -6239,7 +6504,7 @@ for (const { label, width } of [
 		await page.getByRole("button", { name: "Today" }).click();
 		await page.getByRole("button", { name: "Open navigation" }).click();
 		await expect(
-			page.getByRole("button", { name: "Sign out Web QA" }),
+			page.getByRole("button", { name: "User menu for Web QA" }),
 		).toBeVisible();
 		await page.keyboard.press("Escape");
 
@@ -6702,7 +6967,8 @@ test("moves an account to a new address, asking the old one to approve", async (
 	});
 
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
-	await page.getByRole("button", { name: "Manage account" }).click();
+	await page.getByRole("button", { name: "User menu for Web QA" }).click();
+	await page.getByRole("menuitem", { name: "Manage account" }).click();
 	const accountDialog = page.getByRole("dialog", { name: "Account" });
 	await accountDialog.getByRole("button", { name: /^Email/ }).click();
 
@@ -6727,7 +6993,7 @@ test("moves an account to a new address, asking the old one to approve", async (
 
 	// Lowercased before it leaves, so the address the server stores matches the
 	// one the person will type at the login screen.
-	expect(changeBody).toMatchObject({ newEmail: "moved@example.invalid" });
+	await expect.poll(() => changeBody).toMatchObject({ newEmail: "moved@example.invalid" });
 	// Which inbox to look in is the whole answer here — and for a verified
 	// account it is the OLD one, so a stolen session cannot move the account
 	// somewhere the owner can't reach.
@@ -6787,7 +7053,7 @@ test("lays weeks out as a matrix and pages a screen at a time", async ({
 	expect(Math.abs(second.y - first.y)).toBeLessThan(4);
 
 	// A page is a screen, not a week: eight weeks forward lands on the next span.
-	await page.getByRole("main").getByRole("button", { name: "Next" }).click();
+	await page.keyboard.press("n");
 	await expect(page).toHaveURL(/date=2026-09-20/);
 	await expect(page.getByText("Sep 14 – Nov 8")).toBeVisible();
 
@@ -6854,68 +7120,40 @@ test("opens a day-view preview on screen, not over the sidebar", async ({
 
 	// A day column is as wide as the grid, so there is no room to the right of a
 	// block: the preview used to flip left, across the sidebar and off the screen.
+	await settleLayout(page);
 	const box = (await preview.boundingBox())!;
 	const width = page.viewportSize()!.width;
 	expect(box.x).toBeGreaterThanOrEqual(0);
 	expect(box.x + box.width).toBeLessThanOrEqual(width);
 });
 
-test("a press that dismisses a preview does not also start a draft", async ({
-	page,
-}) => {
-	await mockAuthenticatedReads(page);
-	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/day?date=2026-07-23`);
-
-	await page
-		.getByRole("button", { name: /Project check-in/ })
-		.first()
-		.click();
-	await expect(page.getByRole("dialog").first()).toBeVisible();
-
-	// Press on empty grid, far below the events: that press is dismissing the
-	// preview, and it used to leave a draft flashing up behind it.
-	// Empty grid, well clear of the morning events. The column is taller than the
-	// viewport, so the point comes from the viewport rather than from its box.
-	const column = page.locator("[data-time-grid-column]").first();
-	const bounds = (await column.boundingBox())!;
-	const x = bounds.x + 40;
-	const y = page.viewportSize()!.height - 120;
-	await page.mouse.click(x, y);
-
-	// Nothing is open at all: no preview, and no composer for a draft nobody asked
-	// for — that draft flashing up behind the preview was the bug.
-	await expect(page.getByRole("dialog")).toHaveCount(0);
-
-	// The same press with nothing open does open the composer, so the guard is
-	// about dismissal and not about the gesture.
-	await page.mouse.click(x, y);
-	await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
-
-	// The month grid creates from a click on a cell, so it had the same hole.
-	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-23`);
-	await page
-		.getByRole("button", { name: /Project check-in/ })
-		.first()
-		.click();
-	await expect(page.getByRole("dialog").first()).toBeVisible();
-	const cell = page
-		.getByRole("grid")
-		.first()
-		.getByRole("gridcell", { name: /July 13, 2026/ });
-	const cellBox = (await cell.boundingBox())!;
-	// Dragging out a range, which is the month grid's create gesture: the press
-	// that dismisses a preview must not begin one.
-	await page.mouse.move(cellBox.x + 20, cellBox.y + cellBox.height - 12);
-	await page.mouse.down();
-	await page.mouse.move(
-		cellBox.x + cellBox.width * 2,
-		cellBox.y + cellBox.height - 12,
-		{
-			steps: 6,
-		},
-	);
-	await page.mouse.up();
-	await expect(page.getByRole("dialog")).toHaveCount(0);
+test("event details stay open on outside clicks and grid gestures until explicitly closed", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  for (const view of ["day", "month"]) {
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/${view}?date=2026-07-23`);
+    await page.getByRole("button", { name: /Project check-in/ }).first().click();
+    const details = page.getByRole("dialog", { name: "Project check-in", exact: true });
+    await expect(details).toBeVisible();
+    const target = view === "day"
+      ? page.locator("[data-time-grid-column]").first()
+      : page.locator('[data-day-key="2026-07-13"]');
+    const bounds = (await target.boundingBox())!;
+    const point = { x: bounds.x + 20, y: view === "day" ? page.viewportSize()!.height - 120 : bounds.y + bounds.height - 12 };
+    await page.mouse.click(point.x, point.y);
+    await expect(details).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Create event", exact: true })).toHaveCount(0);
+    await page.mouse.move(point.x, point.y);
+    await page.mouse.down();
+    await page.mouse.move(view === "day" ? point.x : point.x + bounds.width * 2, view === "day" ? point.y - 80 : point.y, { steps: 6 });
+    await page.mouse.up();
+    await expect(details).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Create event", exact: true })).toHaveCount(0);
+    await details.getByRole("button", { name: "Close event details" }).click();
+    await expect(details).toHaveCount(0);
+    const closedBounds = (await target.boundingBox())!;
+    await page.mouse.click(closedBounds.x + 20, view === "day" ? page.viewportSize()!.height - 120 : closedBounds.y + closedBounds.height - 12);
+    await expect(page.getByRole("dialog", { name: "Create event", exact: true })).toBeVisible();
+  }
 });
 
 test("stays inside its box with twenty calendars", async ({ page }) => {
@@ -7450,7 +7688,7 @@ test("draws the plus on the narrow create button", async ({ page }) => {
 	// took the icon with it, leaving a plain dark circle with nothing in it.
 	const create = page.getByRole("button", {
 		exact: true,
-		name: "Create event or task",
+		name: "Create event, meeting or task",
 	});
 	const plus = create.locator("svg");
 	await expect(plus).toBeVisible();
@@ -7719,11 +7957,9 @@ for (const { provider, width, theme } of [
 			await page.getByRole("button", { name: "Open navigation" }).click();
 		await page.getByRole("button", { name: "Connections" }).click();
 		const dialog = page.getByRole("dialog", { name: "Connections" });
-		const checkbox = dialog.getByRole("checkbox", { name: /Include Tasks/ });
-		await expect(checkbox).toBeChecked();
-		await expect(dialog).toContainText(
-			"Existing permissions stay active.",
-		);
+		const checkbox = dialog.getByRole("button", { name: /Include Tasks/ });
+		await expect(checkbox).toHaveAttribute("aria-pressed", "true");
+		await expect(dialog).not.toContainText("Existing permissions stay active.");
 		const connect = dialog.getByRole("button", {
 			name: provider === "google" ? "Google Calendar" : "Outlook",
 		});
@@ -7737,7 +7973,7 @@ for (const { provider, width, theme } of [
 		await expect(checkbox).toBeEnabled();
 		await checkbox.focus();
 		await page.keyboard.press("Space");
-		await expect(checkbox).not.toBeChecked();
+		await expect(checkbox).toHaveAttribute("aria-pressed", "false");
 		await connect.click();
 		await expect.poll(() => requests.length).toBe(2);
 		expect(requests[1]).toMatchObject({ provider, callbackURL: page.url() });
@@ -8177,7 +8413,7 @@ for (const [width, theme, target] of [[1280, "light", "zoned"], [390, "dark", "a
       writes.push({ method: route.request().method(), body });
       return respond(route, { ...source, title: body.patch.title, revision: 2,
         start: target === "zoned" ? "2026-07-25T13:30:17.123Z" : "2026-07-25T00:00:00Z",
-        end: target === "zoned" ? "2026-07-25T14:30:19.456Z" : "2026-07-26T00:00:00Z",
+        end: target === "zoned" ? "2026-07-25T14:30:19.456Z" : "2026-07-25T00:00:00Z",
         isAllDay: target === "all-day", timeModel: target === "zoned" ? body.time : { kind: "all-day" },
       });
     });
@@ -8186,6 +8422,12 @@ for (const [width, theme, target] of [[1280, "light", "zoned"], [390, "dark", "a
     await page.getByRole("button", { name: "Edit", exact: true }).click();
     await page.getByRole("textbox", { name: "Event title" }).fill("Explicit complete draft");
     await page.getByRole("button", { name: "More options", exact: true }).click();
+    const timeHelp = page.getByRole("button", { name: "Help for Time model", exact: true });
+    await expect(page.getByText("The selected model interprets", { exact: false })).toHaveCount(0);
+    await timeHelp.focus();
+    await expect(page.getByRole("tooltip")).toContainText("Changing it may change when the event occurs.");
+    await timeHelp.press("Escape");
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
     await page.getByRole("combobox", { name: "Time model", exact: true }).click();
     await page.getByRole("option", { name: target === "zoned" ? "Event time zone" : "All-day dates", exact: true }).click();
     if (target === "all-day") {
@@ -8207,7 +8449,7 @@ for (const [width, theme, target] of [[1280, "light", "zoned"], [390, "dark", "a
     expect(writes).toHaveLength(1);
     expect(writes[0]).toEqual({ method: "PUT", body: { expectedRevision: 1, patch: { title: "Explicit complete draft" }, time: target === "zoned" ? {
       kind: "zoned", timeZone: "America/New_York", startLocal: "2026-07-25T09:30:17.123", endLocal: "2026-07-25T10:30:19.456",
-    } : { kind: "all-day", startDate: "2026-07-25", endDate: "2026-07-26" } } });
+    } : { kind: "all-day", startDate: "2026-07-25", endDate: "2026-07-25" } } });
   });
 }
 
@@ -8305,18 +8547,30 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
   });
 }
 
-test("explains bounded Outlook coverage on an empty distant calendar", async ({ page }) => {
+test("explains bounded Outlook coverage without a permanent banner", async ({ page }, testInfo) => {
   await mockAuthenticatedReads(page, { ...events, events: [] }, calendars.map(calendar => calendar.id === "studio" ? { ...calendar, provider: "microsoft" } : calendar));
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2035-07-26`);
-  const notice = page.getByRole("status").filter({ hasText: "Outlook sync covers a limited date range" });
-  await expect(notice).toBeVisible();
-  await expectNoAccessibilityViolations(page);
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(notice).toBeVisible();
-  await expectNoAccessibilityViolations(page);
+  const trigger = page.getByRole("button", { name: "Calendar sync coverage", exact: true });
+  const calendar = page.locator("[data-calendar-area]");
+  for (const width of [1280, 390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    const geometry = await calendar.boundingBox();
+    await expect(trigger).toBeInViewport();
+    await expect(page.getByRole("status").filter({ hasText: "Outlook sync covers" })).toHaveCount(0);
+    await trigger.click();
+    const details = page.getByRole("dialog", { name: "Calendar sync coverage", exact: true });
+    await expect(details).toContainText("Outlook sync covers a limited date range");
+    await expectNoAccessibilityViolations(page);
+    await page.screenshot({ path: testInfo.outputPath(`coverage-${width}.png`) });
+    await page.keyboard.press("Escape");
+    await expect(details).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+    expect(await calendar.boundingBox()).toEqual(geometry);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  }
   await page.setViewportSize({ width: 1280, height: 720 });
   await setCalendarVisibility(page, "Studio", false);
-  await expect(notice).toHaveCount(0);
+  await expect(trigger).toHaveCount(0);
 });
 
 for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
@@ -8329,9 +8583,14 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
     await page.goto("/app/p/my-calendar/month?date=2026-07-26");
     await page.getByRole("button", { name: /Provider meeting/ }).first().click();
     await page.locator("summary").filter({ hasText: "Outlook details" }).click();
-    await expect(page.getByText(/These settings describe the series/)).toBeVisible();
+    await expect(page.getByText(/These settings describe the series/)).toHaveCount(0);
+    await page.getByRole("button", { name: "About Outlook settings" }).click();
+    const help = page.getByRole("tooltip");
+    await expect(help).toContainText("These settings describe the series");
+    await expect(help).toContainText("Both apps may notify");
+    await page.keyboard.press("Escape");
+    await expect(help).toHaveCount(0);
     await expect(page.getByText("Availability: Working elsewhere", { exact: true })).toBeVisible();
-    await expect(page.getByText(/Both apps may notify/)).toBeVisible();
     await page.locator("summary").filter({ hasText: "Outlook participants" }).click();
     await expect(page.getByRole("list", { name: "Outlook participants" })).toBeVisible();
     await expect(page.getByText("Alex Chen", { exact: true })).toBeVisible();
@@ -9652,7 +9911,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (con
       await page.getByRole("button", { name: /Organizer meeting/ }).first().click();
       trigger = page.getByRole("button", { name: "Manage Google meeting", exact: true }); await trigger.click();
     }
-    const editor = page.getByRole("dialog", { name: action === "create" ? "Create Google meeting" : "Manage Google meeting", exact: true });
+    const editor = page.getByRole("dialog", { name: action === "create" ? "Create meeting" : "Manage Google meeting", exact: true });
     if (action === "create") { await editor.getByRole("textbox", { name: "Title", exact: true }).fill("Guest planning"); await editor.getByRole("textbox", { name: "Guest email addresses" }).fill("owner@example.test"); await editor.getByRole("button", { name: "Create and send invitations" }).click(); await expect(editor.getByRole("alert")).toContainText("Choose external guests"); await expect(editor.getByRole("textbox", { name: "Guest email addresses" })).toBeEnabled(); await editor.getByRole("textbox", { name: "Guest email addresses" }).fill("guest@example.test"); }
     if (action === "update") await editor.getByRole("textbox", { name: "Notes", exact: true }).fill("New explicit note");
     await expectNoAccessibilityViolations(page); expect(await editor.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
@@ -9734,7 +9993,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (con
       await page.getByRole("button", { name: /Organizer meeting/ }).first().click();
       trigger = page.getByRole("button", { name: "Manage CalDAV meeting", exact: true }); await trigger.click();
     }
-    const editor = page.getByRole("dialog", { name: action === "create" ? "Create CalDAV meeting" : "Manage CalDAV meeting", exact: true });
+    const editor = page.getByRole("dialog", { name: action === "create" ? "Create meeting" : "Manage CalDAV meeting", exact: true });
     if (action === "create") { await editor.getByRole("textbox", { name: "Title", exact: true }).fill("Guest planning"); await editor.getByRole("textbox", { name: "Guest email addresses" }).fill("owner@example.test"); await editor.getByRole("button", { name: "Create and send invitations" }).click(); await expect(editor.getByRole("alert")).toContainText("Choose external guests"); await expect(editor.getByRole("textbox", { name: "Guest email addresses" })).toBeEnabled(); await editor.getByRole("textbox", { name: "Guest email addresses" }).fill("guest@example.test"); }
     if (action === "delete") await expect(editor.getByRole("button", { name: "Save and notify guests" })).toHaveCount(0);
     if (action === "update") await expect(editor.getByRole("button", { name: "Cancel meeting and notify guests" })).toHaveCount(0);
@@ -9904,7 +10163,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     if (width < 600) await page.getByRole("button", { name: "Open navigation" }).click();
     await page.getByRole("button", { name: "Calendars", exact: true }).click();
     const trigger = page.getByRole("button", { name: "Create Outlook meeting", exact: true }); await trigger.click();
-    const editor = page.getByRole("dialog", { name: "Create Outlook meeting", exact: true });
+    const editor = page.getByRole("dialog", { name: "Create meeting", exact: true });
     await expect(editor.getByRole("textbox", { name: "Event time zone" })).toHaveValue("UTC");
     await expect(editor.getByRole("textbox", { name: "Event time zone" })).toBeDisabled();
     await editor.getByRole("textbox", { name: "Title", exact: true }).fill("Guest planning");
@@ -9997,5 +10256,379 @@ for (const confirmation of ["unavailable", "missing"] as const) {
     await expect(page.locator("vite-error-overlay")).toHaveCount(0);
     expect(errors).toEqual([]);
     await page.screenshot({ path: `/tmp/musubi-session-check-${confirmation}.png` });
+  });
+}
+
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  for (const entry of ["toolbar", "calendar"] as const) {
+    test(`shared meeting creation from ${entry}: ${theme} ${width}`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+      // Every request stays inside this fixture, including invitation writes.
+      await page.route(url => url.pathname.startsWith("/api/"), route => respond(route, {}));
+      const googleID = "00000000-0000-4000-8000-000000000391";
+      const outlookID = "00000000-0000-4000-8000-000000000392";
+      const connected = [
+        { ...calendars[0]!, id: googleID, name: "Studio", provider: "google", accountId: "google-fixture", accountLabel: "studio@example.test" },
+        { ...calendars[0]!, id: outlookID, name: "Team", provider: "microsoft", accountId: "outlook-fixture", accountLabel: "team@example.test" },
+      ];
+      await mockAuthenticatedReads(page, { ...events, events: [] }, [calendars[0]!, ...connected]);
+      await page.route(`**/api/v1/calendars/${googleID}/provider-organizer`, route => respond(route, { provider: "google", calendarID: googleID, sendUpdates: "all" }));
+      await page.route(`**/api/v1/calendars/${outlookID}/provider-organizer`, route => respond(route, { provider: "microsoft", calendarID: outlookID, notificationPolicy: "server-invite", createTime: "utc-or-all-day", actions: ["create"] }));
+      const writes: Record<string, unknown>[] = [], errors: string[] = [];
+      page.on("pageerror", error => errors.push(error.message));
+      await page.route("**/api/v1/provider-organizer", route => {
+        const body = route.request().postDataJSON(); writes.push(body);
+        return respond(route, { operationID: body.operationID, eventID: body.eventID, replayed: false, status: "pending", localCommitted: true, notificationDelivery: "unknown" }, 202);
+      });
+      await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+      let trigger: Locator;
+      if (entry === "toolbar") {
+        trigger = page.getByRole("button", { name: "Create event, meeting or task", exact: true });
+        await trigger.click();
+        await page.getByRole("menuitem", { name: "Meeting", exact: true }).click();
+      } else {
+        if (width < 600) await page.getByRole("button", { name: "Open navigation" }).click();
+        await page.getByRole("button", { name: "Calendars", exact: true }).click();
+        trigger = page.getByRole("button", { name: "Create Outlook meeting", exact: true });
+        await trigger.click();
+      }
+      const editor = page.getByRole("dialog", { name: "Create meeting", exact: true });
+      const info = editor.getByRole("button", { name: "Meeting invitation information" });
+      await expect(editor).not.toContainText("Guest notification delivery cannot be verified");
+      await info.click();
+      const help = page.getByRole("dialog", { name: "Invitations", exact: true });
+      await expect(help).toContainText("Guest notification delivery cannot be verified");
+      await expectNoAccessibilityViolations(page);
+      expect(await help.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+      await help.screenshot({ path: testInfo.outputPath("meeting-information.png") });
+      await page.keyboard.press("Escape");
+      await expect(help).toHaveCount(0);
+      await expect(info).toBeFocused();
+      await expect(editor).toBeVisible();
+      const calendar = editor.getByRole("combobox", { name: "Calendar", exact: true });
+      await expect(calendar).toContainText(entry === "calendar" ? "Team" : "Studio");
+      await calendar.click();
+      await expect(page.getByRole("option")).toHaveCount(2);
+      await page.getByRole("option", { name: /Studio/ }).click();
+      await expect(calendar).toBeFocused();
+      await editor.getByRole("textbox", { name: "Title", exact: true }).fill("Shared meeting draft");
+      await editor.getByRole("textbox", { name: "Guest email addresses" }).fill("guest@example.test");
+      await editor.getByLabel("Start", { exact: true }).fill("2026-07-26T11:00");
+      await editor.getByLabel("End", { exact: true }).fill("2026-07-26T12:00");
+      await editor.getByRole("textbox", { name: "Event time zone" }).fill("Europe/Prague");
+      await calendar.click();
+      await page.getByRole("option", { name: /Team/ }).click();
+      await expect(calendar).toBeFocused();
+      await expect(editor.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Shared meeting draft");
+      await expect(editor.getByRole("textbox", { name: "Guest email addresses" })).toHaveValue("guest@example.test");
+      await expect(editor.getByLabel("Start", { exact: true })).toHaveValue(/2026-07-26T09:00/);
+      await expect(editor.getByRole("textbox", { name: "Event time zone" })).toHaveValue("UTC");
+      await expect(editor.getByRole("textbox", { name: "Event time zone" })).toBeDisabled();
+      await expectNoAccessibilityViolations(page);
+      expect(await editor.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+      await editor.screenshot({ path: testInfo.outputPath("shared-meeting.png") });
+      await editor.getByRole("button", { name: "Create and send invitations" }).click();
+      await expect(editor.getByRole("status")).toContainText("Guest notification delivery remains unknown");
+      expect(writes).toHaveLength(1);
+      expect(writes[0]).toMatchObject({ calendarID: outlookID, provider: "microsoft", action: "create", time: { timeZone: "UTC", startLocal: "2026-07-26T09:00:00.000", endLocal: "2026-07-26T10:00:00.000" }, content: { title: "Shared meeting draft" } });
+      await editor.getByRole("button", { name: "Close", exact: true }).click();
+      await expect(trigger).toBeFocused();
+      expect(errors).toEqual([]);
+    });
+  }
+}
+
+
+for (const [width, theme] of [[1280, "dark"], [390, "light"], [320, "dark"]] as const) {
+  test(`Google availability setup discovers a shared calendar: ${theme} ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 916 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    await mockAuthenticatedReads(page);
+    await page.route("**/api/v1/server", route => respond(route, { email: true, pushPublicKey: null, socials: [], socialsWeb: [], syncProviders: ["google", "microsoft", "caldav"], googleAvailability: true }));
+    let discovered = false;
+    let refreshes = 0;
+    let intervalReads = 0;
+    const source = { id: "00000000-0000-4000-8000-000000000101", generation: 1, label: "Team availability", accountLabel: "Google work", enabled: false, reconnectRequired: false };
+    await page.route("**/api/v1/availability/sources", route => respond(route, { sources: discovered ? [source] : [] }));
+    await page.route("**/api/v1/availability", route => { intervalReads++; return respond(route, {}); });
+    await page.route("**/api/v1/users/connections/sync", route => {
+      refreshes++; discovered = true; return respond(route, {});
+    });
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    if (width < 600) await page.getByRole("button", { name: "Open navigation" }).click();
+    await page.getByRole("button", { name: "Connections", exact: true }).click();
+    const connections = page.getByRole("dialog", { name: "Connections", exact: true });
+    await expect(connections.getByText("No shared busy-time calendars yet")).toBeVisible();
+    await expect(connections.getByRole("button", { name: "Check availability", exact: true })).toHaveCount(0);
+    const tasks = connections.getByRole("button", { name: "Include Tasks (optional)" });
+    await expect(tasks).toHaveAttribute("aria-pressed", "true");
+    await expectNoAccessibilityViolations(page);
+    expect(await connections.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await connections.screenshot({ path: `/tmp/musubi-connections-${theme}-${width}.png` });
+    const setup = connections.getByRole("button", { name: "How to set up" });
+    await setup.click();
+    const dialog = page.getByRole("dialog", { name: "Set up Google availability", exact: true });
+    await expect(dialog.getByText("See only free/busy (hide details)")).toBeVisible();
+    await expect(dialog.getByRole("link", { name: "Google sharing guide" })).toHaveAttribute("href", "https://support.google.com/calendar/answer/37082?hl=en");
+    await expectNoAccessibilityViolations(page);
+    expect(await dialog.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await dialog.screenshot({ path: `/tmp/musubi-availability-setup-${theme}-${width}.png` });
+    await dialog.getByRole("button", { name: "Close availability setup" }).click();
+    await expect(setup).toBeFocused();
+    await setup.click();
+    await dialog.getByRole("button", { name: "Refresh connected calendars", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(connections.getByRole("switch", { name: "Use Team availability for availability" })).not.toBeChecked();
+    await expect(connections.getByRole("button", { name: "Check availability", exact: true })).toBeDisabled();
+    await expect(setup).toBeFocused();
+    expect(refreshes).toBe(1);
+    expect(intervalReads).toBe(0);
+  });
+}
+
+
+for (const [width, theme, count] of [[1280, "dark", 5], [1280, "light", 24], [390, "dark", 24]] as const) {
+  test(`Delivery inbox keeps closing space: ${theme} ${width} ${count}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 916 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    await mockAuthenticatedReads(page);
+    await page.route("**/api/v1/event-deliveries", route => respond(route, {
+      items: Array.from({ length: count }, (_, i) => ({ eventId: `00000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`, savedTitle: `Saved meeting ${i + 1}` })), nextCursor: null,
+    }));
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    if (width < 600) await page.getByRole("button", { name: "Open navigation" }).click();
+    await page.getByRole("button", { name: "Connections", exact: true }).click();
+    await page.getByRole("button", { name: "Unfinished deliveries", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Unfinished deliveries", exact: true });
+    const last = dialog.getByRole("button", { name: `Saved meeting ${count} Open delivery records · saved title`, exact: true });
+    await expect(last).toBeAttached();
+    await last.focus();
+    await last.press("Tab");
+    await expect(dialog.getByRole("button", { name: "Refresh list" })).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(last).toBeFocused();
+    const measurements = await last.evaluate(element => {
+      const body = element.closest('[role="dialog"]')!.querySelector('header + div')!;
+      body.scrollTop = body.scrollHeight;
+      return { bodyBottom: body.getBoundingClientRect().bottom, lastBottom: element.getBoundingClientRect().bottom };
+    });
+    expect(measurements.bodyBottom - measurements.lastBottom).toBeGreaterThanOrEqual(19);
+    expect(measurements.bodyBottom - measurements.lastBottom).toBeLessThanOrEqual(22);
+    await expectNoAccessibilityViolations(page);
+    await dialog.screenshot({ path: testInfo.outputPath("inbox-bottom-spacing.png") });
+  });
+}
+
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`Account avatar and contextual help: ${theme} ${width}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 916 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    await mockAuthenticatedReads(page);
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    if (width < 600) await page.getByRole("button", { name: "Open navigation" }).click();
+    await page.getByRole("button", { name: "User menu for Web QA" }).click();
+    await page.getByRole("menuitem", { name: "Manage account", exact: true }).click();
+    const account = page.getByRole("dialog", { name: "Account", exact: true });
+    const avatar = account.getByRole("button", { name: "Change photo", exact: true });
+    await expect(avatar).toBeVisible();
+    await expect(avatar).not.toContainText("Change photo");
+    await account.evaluate(element => Promise.all(element.getAnimations({ subtree: true }).map(animation => animation.finished)));
+    const box = await avatar.boundingBox();
+    expect(box!.width).toBeGreaterThanOrEqual(64);
+    expect(Math.abs(box!.width - box!.height)).toBeLessThanOrEqual(2);
+    await expectNoAccessibilityViolations(page);
+    await account.screenshot({ path: testInfo.outputPath("clickable-avatar.png") });
+    await account.getByRole("button", { name: /Display name/ }).click();
+    const editor = page.getByRole("dialog", { name: "Display name", exact: true });
+    const input = editor.getByRole("textbox", { name: "Display name", exact: true });
+    await expect(input).toBeFocused();
+    await expect(editor).not.toContainText("How people recognize you in shared calendars.");
+    const help = editor.getByRole("button", { name: "Help for Display name", exact: true });
+    if (width < 600) await help.click(); else await help.hover();
+    const tooltip = page.getByRole("tooltip");
+    await expect(tooltip).toContainText("How people recognize you in shared calendars.");
+    if (width >= 600) await expect(input).toBeFocused();
+    await expectNoAccessibilityViolations(page);
+    await page.screenshot({ path: testInfo.outputPath("contextual-help.png") });
+    await page.keyboard.press("Escape");
+    await expect(tooltip).toHaveCount(0);
+    await expect(editor).toBeVisible();
+    await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(account.getByRole("button", { name: /Display name/ })).toBeFocused();
+  });
+}
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`task shared recurrence editor: ${theme} ${width}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 916 });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    await mockAuthenticatedReads(page);
+    let saved: Record<string, unknown> | undefined;
+    await page.route("**/api/v1/tasks", route => {
+      if (route.request().method() === "POST") {
+        saved = { ...route.request().postDataJSON(), creatorID: session.user.id };
+        return respond(route, saved);
+      }
+      return respond(route, { tasks: saved ? [saved] : [] });
+    });
+    await page.goto("/app/p/my-calendar/tasks?date=2026-07-26");
+    await page.getByRole("button", { name: "Create task", exact: true }).click();
+    await page.getByRole("textbox", { name: "Title", exact: true }).fill("Weekly UI review");
+    await page.getByRole("button", { name: "Start date: Choose date", exact: true }).click();
+    await page.getByRole("dialog", { name: "Choose start date" }).getByRole("button", { name: "Today", exact: true }).click();
+    await page.getByText("Recurrence", { exact: true }).click();
+    await page.getByRole("combobox", { name: "Repeat", exact: true }).click();
+    await page.getByRole("option", { name: "Every week", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "Recurrence rule" })).not.toBeVisible();
+    await expectNoAccessibilityViolations(page);
+    const footerGap = await page.getByRole("button", { name: "Save task", exact: true }).evaluate(button => {
+      const footer = button.closest("footer")!;
+      const body = footer.previousElementSibling!;
+      return button.getBoundingClientRect().top - body.getBoundingClientRect().bottom;
+    });
+    expect(footerGap).toBeGreaterThanOrEqual(12);
+    await page.screenshot({ path: testInfo.outputPath("task-recurrence.png"), fullPage: true });
+    await page.getByRole("button", { name: "Save task", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "New task" })).not.toBeVisible();
+    expect(saved?.recurrence).toMatch(/^FREQ=WEEKLY;BYDAY=/);
+    expect(saved?.start).toBeTruthy();
+    await page.getByRole("button", { name: /Weekly UI review/ }).click();
+    await page.getByText("Recurrence", { exact: true }).click();
+    await expect(page.getByRole("combobox", { name: "Repeat", exact: true })).toContainText("Every week");
+  });
+}
+
+for (const width of [1280, 390]) {
+  test(`Kanban preserves layout and moves tasks between phases at ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockAuthenticatedReads(page);
+    let task = { id: "kanban-task", creatorID: session.user.id, calendarID: "personal", title: "Kanban review", status: "needs-action", percentComplete: 0, priority: 5, sequence: 0, isAllDay: false, recurrence: "FREQ=WEEKLY", start: null, due: null, completedAt: null };
+    let failMove = false;
+    let responseGate: Promise<void> | undefined;
+    let releaseResponse: (() => void) | undefined;
+    const other = { ...task, id: "kanban-other", title: "Existing card", status: "in-process" };
+    await page.route("**/api/v1/tasks", route => respond(route, { tasks: [task, other] }));
+    await page.route("**/api/v1/tasks/kanban-task", async route => {
+      if (failMove) { await route.fulfill({ status: 500, body: "Failed" }); return; }
+      await responseGate;
+      task = { ...task, ...route.request().postDataJSON() };
+      await respond(route, task);
+    });
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/tasks?date=2026-07-26`);
+    await page.getByRole("radio", { name: "Kanban", exact: true }).click();
+    await expect(page).toHaveURL(/taskLayout=kanban/);
+    await page.reload();
+    const board = page.getByRole("region", { name: "Tasks", exact: true });
+    for (const name of ["Needs action", "In progress", "Completed", "Cancelled"]) {
+      await expect(board.getByRole("region", { name, exact: true })).toBeAttached();
+    }
+    if (width === 1280) {
+      const handle = page.getByRole("button", { name: "Drag Kanban review to another status; or use its status selector" });
+      await board.getByRole("button", { name: "Kanban review", exact: true }).click();
+      await expect(page.getByRole("dialog", { name: "Edit task" })).toBeVisible();
+      await expect(page.locator("[data-drag-preview]")).toHaveCount(0);
+      await page.getByRole("button", { name: "Close task editor" }).click();
+      const start = await handle.locator("xpath=ancestor::li").boundingBox();
+      const target = await board.getByRole("region", { name: "In progress", exact: true }).boundingBox();
+      if (!start || !target) throw new Error("Missing drag geometry");
+      const beginDrag = async () => {
+        await page.mouse.move(start.x + 12, start.y + 12);
+        await page.mouse.down();
+        await page.mouse.move(target.x + target.width / 2, target.y + 80, { steps: 12 });
+        await expect(page.locator("[data-drag-preview]")).toBeVisible();
+        await expect(board.locator("[data-drop-placeholder]")).toBeVisible();
+        await expect(board.getByRole("region", { name: "In progress", exact: true }).locator("ul > li").first()).toHaveAttribute("data-drop-placeholder", "true");
+      };
+      await beginDrag();
+      await page.keyboard.press("Escape");
+      await page.mouse.up();
+      await expect(page.locator("[data-drag-preview]")).toHaveCount(0);
+      expect(task.status).toBe("needs-action");
+      failMove = true;
+      await beginDrag();
+      await page.mouse.up();
+      await expect(page.locator("[data-drag-preview]")).toHaveCount(0);
+      expect(task.status).toBe("needs-action");
+      await expect(page.getByText("This task could not be updated. It is still unchanged — try again.")).toBeVisible();
+      await page.getByRole("button", { name: "Close task editor" }).click();
+      failMove = false;
+      responseGate = new Promise<void>(resolve => { releaseResponse = resolve; });
+      await beginDrag();
+      await page.mouse.up();
+      await expect(page.locator("[data-drag-preview]")).toHaveCount(0);
+      await expect(board.getByRole("region", { name: "In progress", exact: true }).getByRole("button", { name: "Kanban review", exact: true })).toBeVisible();
+      expect(task.status).toBe("needs-action"); // Server has not responded yet.
+      releaseResponse?.();
+      await expect.poll(() => task.status).toBe("in-process");
+    } else {
+      await page.getByRole("combobox", { name: "Status of Kanban review" }).click();
+      await page.getByRole("option", { name: "In progress", exact: true }).click();
+    }
+    await expect(board.getByRole("region", { name: "In progress", exact: true }).getByRole("button", { name: /^Kanban review/ })).toBeVisible();
+    expect(task.recurrence).toBe("FREQ=WEEKLY");
+    await page.getByRole("radio", { name: "List", exact: true }).click();
+    await expect(page).toHaveURL(/taskLayout=list/);
+    await expect(page.getByRole("heading", { name: "In progress 2", exact: true })).toBeVisible();
+  });
+}
+
+test("wheel changes only the month view by one period", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  const area = page.locator("[data-calendar-area]");
+  await expect(page.getByRole("grid", { name: /July 2026 calendar/ })).toBeVisible();
+  await area.hover({ position: { x: 100, y: 70 } });
+  await page.mouse.wheel(0, 100);
+  await expect(page).toHaveURL(/date=2026-08-/);
+  await page.getByRole("radio", { name: "Day", exact: true }).click();
+  const dayURL = page.url();
+  await area.hover({ position: { x: 100, y: 200 } });
+  await page.mouse.wheel(0, 100);
+  await expect(page).toHaveURL(dayURL);
+});
+
+for (const kind of ["event", "task"] as const) {
+  test(`account search refreshes ${kind} results and their open detail after access changes`, async ({ page }) => {
+    await page.addInitScript(() => {
+      class SearchStream {
+        onmessage: ((event: { data: string }) => void) | null = null;
+        constructor() { (window as unknown as { searchStream: SearchStream }).searchStream = this; }
+        close() {}
+      }
+      (window as unknown as { EventSource: unknown }).EventSource = SearchStream;
+    });
+    await mockAuthenticatedReads(page, { ...events, events: [] }, calendars.map(calendar => ({ ...calendar, role: "reader" })));
+    let title = "Private search item";
+    let description = "Private search notes";
+    let removed = false;
+    const item = event("search-event", title, "personal", "#b3492f", "2031-07-20T09:00:00.000Z", "2031-07-20T10:00:00.000Z");
+    await page.route("**/api/v1/events?**", route => respond(route, { ...events, events: kind === "event" && !removed ? [{ ...item, title, description }] : [] }));
+    await page.route("**/api/v1/events", route => respond(route, { ...events, events: kind === "event" && !removed ? [{ ...item, title, description }] : [] }));
+    await page.route("**/api/v1/tasks", route => respond(route, { tasks: kind === "task" && !removed ? [{ id: "search-task", creatorID: "owner", calendarID: "personal", title, description, status: "needs-action", isAllDay: false, sequence: 0, priority: 0, percentComplete: 0 }] : [] }));
+    await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+    await page.getByRole("button", { name: "Search events and actions" }).click();
+    const palette = page.getByRole("dialog", { name: "Search Musubi" });
+    await palette.getByRole("searchbox").fill("Private search");
+    await expect(palette.getByRole("button", { name: /Private search item/ })).toBeVisible();
+    const refresh = () => page.evaluate(() => (window as unknown as { searchStream: { onmessage: (event: { data: string }) => void } }).searchStream.onmessage({ data: JSON.stringify({ type: "external_sync" }) }));
+    title = "Permitted search item"; description = "Permitted search notes";
+    await refresh();
+    await expect(palette.getByRole("button", { name: /Private search item/ })).toHaveCount(0);
+    await palette.getByRole("searchbox").fill("Permitted search");
+    await palette.getByRole("button", { name: /Permitted search item/ }).click();
+    const detail = page.getByRole("dialog", { name: title, exact: true });
+    await expect(detail).toContainText(description);
+    await expect(detail.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
+    title = "Busy"; description = "";
+    await refresh();
+    await expect(page.getByRole("dialog", { name: "Busy", exact: true })).toBeVisible();
+    await expect(page.getByText("Permitted search notes", { exact: true })).toHaveCount(0);
+    removed = true;
+    await refresh();
+    await expect(page.getByText(`This ${kind} is no longer available.`)).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Busy", exact: true })).toHaveCount(0);
   });
 }

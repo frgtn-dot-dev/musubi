@@ -70,6 +70,7 @@ export type CalendarTransferDialogProps = {
 		provider?: string;
 	}) => Promise<Calendar>;
 	onDisconnect: (calendar: Calendar) => Promise<unknown>;
+	onCreateMeeting?: (calendar: Calendar, target: HTMLElement) => void;
 	onExport: (calendarId: string, connectionId?: string) => Promise<string>;
 	onImport: (input: ImportInput) => Promise<ImportedCalendar>;
 	onManageMembers: (calendar: Calendar) => void;
@@ -120,6 +121,7 @@ function calendarDetail(calendar: Calendar, external: boolean) {
 export function CalendarTransferDialog({
 	calendars,
 	onCreate,
+	onCreateMeeting,
 	onDisconnect,
 	onExport,
 	onImport,
@@ -400,51 +402,6 @@ export function CalendarTransferDialog({
 						<SectionLabel level={2}>Your calendars</SectionLabel>
 					</div>
 
-					<div className={styles.create}>
-					<form className={styles.createBar} onSubmit={handleCreate}>
-						<label
-							className={styles.visuallyHidden}
-							htmlFor="new-calendar-name"
-						>
-							New calendar name
-						</label>
-						<input
-							disabled={busy === "create"}
-							id="new-calendar-name"
-							placeholder="New calendar"
-							value={newName}
-							onChange={(event) => setNewName(event.target.value)}
-						/>
-						<Select
-							className={styles.destination}
-							disabled={busy === "create"}
-							label="Account"
-							options={destinationOptions}
-							value={destinationKey}
-							onChange={setDestinationKey}
-						/>
-						<ColorPicker
-							className={styles.formColorPicker}
-							disabled={busy === "create"}
-							label="New calendar color"
-							/* Outlook accepts nine preset colours and nothing else, so the
-                 picker follows the destination rather than offering a colour the
-                 provider will refuse. */
-							provider={destination?.provider ?? null}
-							value={newColor}
-							onChange={setNewColor}
-						/>
-						<Button
-							icon={<Plus size={16} strokeWidth={1.8} />}
-							loading={busy === "create"}
-							type="submit"
-						>
-							Add
-						</Button>
-					</form>
-					{createError ? <ErrorMessage error={createError} /> : null}
-					</div>
-
 					<div className={styles.groups}>
 						{groups.map((group) => (
 							<CalendarGroup
@@ -468,14 +425,63 @@ export function CalendarTransferDialog({
 									setDisconnectCalendar(calendar);
 								}}
 								onManageMembers={onManageMembers}
+								onCreateMeeting={onCreateMeeting}
 							/>
 						))}
 					</div>
 				</section>
 
-				<SettingsSection className={styles.transferSection} title="Import & export">
+				<SettingsSection className={styles.transferSection} title="Calendar actions">
 					<Disclosure
-						detail="Download a calendar as an .ics file."
+						icon={<Plus size={18} strokeWidth={1.7} />}
+						label="New calendar"
+					>
+						<form className={styles.transferCard} onSubmit={handleCreate}>
+							<div className={styles.createNameRow}>
+								<Field label="New calendar name">
+									<input
+										disabled={Boolean(busy)}
+										id="new-calendar-name"
+										placeholder="New calendar"
+										value={newName}
+										onChange={(event) => setNewName(event.target.value)}
+									/>
+								</Field>
+								<ColorPicker
+									className={styles.formColorPicker}
+									disabled={Boolean(busy)}
+									label="New calendar color"
+									/* Match the destination provider's supported palette. */
+									provider={destination?.provider ?? null}
+									value={newColor}
+									onChange={setNewColor}
+								/>
+							</div>
+							<Field label="Account">
+								<Select
+									disabled={Boolean(busy)}
+									label="Account"
+									options={destinationOptions}
+									value={destinationKey}
+									onChange={setDestinationKey}
+								/>
+							</Field>
+							{createError ? (
+								<InlineError requestId={createError.requestId}>
+									{createError.message}
+								</InlineError>
+							) : null}
+							<Button
+								className={styles.cardAction}
+								disabled={Boolean(busy) && busy !== "create"}
+								loading={busy === "create"}
+								type="submit"
+							>
+								Create
+							</Button>
+						</form>
+					</Disclosure>
+					<Disclosure
 						icon={<Download size={18} strokeWidth={1.7} />}
 						label="Export calendar"
 					>
@@ -486,7 +492,7 @@ export function CalendarTransferDialog({
 								void handleExport();
 							}}
 						>
-							<Field className={styles.cardField} label="Calendar to export">
+							<Field className={styles.cardField} help="Download a calendar as an .ics file." label="Calendar to export">
 								<Select
 									disabled={Boolean(busy)}
 									label="Calendar to export"
@@ -511,7 +517,6 @@ export function CalendarTransferDialog({
 						</form>
 					</Disclosure>
 					<Disclosure
-						detail="Create a calendar from an .ics file."
 						icon={<FileUp size={18} strokeWidth={1.7} />}
 						label="Import calendar"
 					>
@@ -536,7 +541,7 @@ export function CalendarTransferDialog({
 									/>
 								</label>
 							</div>
-							<Field className={styles.cardField} label="Import into">
+							<Field className={styles.cardField} help="Create a calendar from an .ics file in the selected account." label="Import into">
 								<Select
 									disabled={Boolean(busy)}
 									label="Import into account"
@@ -628,6 +633,7 @@ export function CalendarTransferDialog({
 
 function CalendarGroup({
 	busy,
+	onCreateMeeting,
 	disconnectingCalendarId,
 	disconnectReturnFocus,
 	group,
@@ -637,6 +643,7 @@ function CalendarGroup({
 	onManageMembers,
 }: {
 	busy: boolean;
+	onCreateMeeting?: (calendar: Calendar, target: HTMLElement) => void;
 	disconnectingCalendarId?: string;
 	disconnectReturnFocus: RefObject<HTMLButtonElement | null>;
 	group: CalendarSourceGroup;
@@ -677,6 +684,7 @@ function CalendarGroup({
 						<li key={calendar.id}>
 							<Row
 								className={styles.calendarRow}
+								layout="responsive-actions"
 								detail={calendarDetail(calendar, external)}
 								icon={
 									<span
@@ -693,13 +701,22 @@ function CalendarGroup({
 										) : null}
 									</span>
 								}
-								/* Three fixed slots — share, rename, remove — kept even when a
+								/* Fixed slots — create meeting, share, settings, remove — kept even when a
                    row has nothing to put in one. Right-aligning whatever a row
                    happened to have moved the same action to a different place on
                    every line, so "where do I share this?" had to be answered per
                    row instead of once per column. */
 								trailing={
 									<span className={styles.rowActions}>
+										<span className={styles.rowActionSlot}>
+											{["google", "caldav", "microsoft"].includes(calendar.provider ?? "") && calendar.role === "owner" && !federatedId ? (
+												<ProviderOrganizerCreateAction
+													calendarID={calendar.id}
+													color={calendar.color}
+													onCreate={onCreateMeeting ? (target) => onCreateMeeting(calendar, target) : undefined}
+												/>
+											) : null}
+										</span>
 										<span className={styles.rowActionSlot}>
 											{federatedId ? null : (
 												<IconButton
@@ -768,11 +785,6 @@ function CalendarGroup({
 									</span>
 								}
 							/>
-                            {["google", "caldav", "microsoft"].includes(calendar.provider ?? "") && calendar.role === "owner" && !federatedId ? (
-                              <div className={styles.calendarMeeting}>
-                                <ProviderOrganizerCreateAction calendarID={calendar.id} color={calendar.color} />
-                              </div>
-                            ) : null}
 						</li>
 					);
 				})}
@@ -870,7 +882,7 @@ function EditCalendarDialog({
 				onSubmit={(event) => void handleSubmit(event)}
 			>
 				{/* Name and colour are the same decision — what this calendar looks like
-            in a list — so they share one bar, the way a new calendar is made. */}
+            in a list — so they share one bar. */}
 				{editable ? (
 					<div className={styles.editBar}>
 						<input

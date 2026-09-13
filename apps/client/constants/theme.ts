@@ -102,6 +102,13 @@ const makeStyles = () => StyleSheet.create({
     paddingHorizontal: spacing[3],
     paddingVertical: 6,
   },
+  // A doubled rule adds emphasis without changing the pill's outer geometry.
+  pillEmphasized: {
+    borderWidth: 2,
+    borderColor: colors.line3,
+    paddingHorizontal: spacing[3] - 1,
+    paddingVertical: 5,
+  },
   horizontalPillView: {
     flexDirection: "row",
     gap: 6,

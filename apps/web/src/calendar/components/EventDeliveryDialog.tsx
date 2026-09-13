@@ -28,7 +28,7 @@ import {
   retryEventDelivery,
 } from "~/api/resources";
 import { Button } from "~/ui/Button";
-import { Dialog } from "~/ui/Dialog";
+import { Dialog, DialogInfo } from "~/ui/Dialog";
 import {
   ConfirmationDialog,
   ConfirmationNotice,
@@ -162,7 +162,7 @@ export function EventDeliveryDialog({
           if (!open && !busyRef.current) onClose();
         }}
         title="Delivery"
-        description="Status of saved changes. Unsaved edits in a form are not included."
+        headerActions={<DialogInfo label="About delivery status" title="Delivery status">Status of saved changes. Unsaved edits in a form are not included.</DialogInfo>}
         closeLabel="Close delivery"
         bodyLayout="flush"
         returnFocus={returnFocus}

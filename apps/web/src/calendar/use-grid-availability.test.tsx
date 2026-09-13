@@ -75,7 +75,7 @@ it.each([false, true])("keeps selection suspended across close/reopen and retire
     const body = JSON.parse(String(options?.body));
     return Response.json({ start: body.start, end: body.end, observedAt: body.start, sources: [{ sourceId: id, generation, status: "available", intervals: [{ start: body.start, end: body.end }] }] });
   }));
-  function Combined() { const [open, setOpen] = useState(false); return <><Harness listOpen={open} /><button onClick={() => setOpen(!open)}>Connections</button>{open ? <AvailabilitySection userId="owner" onReconnect={() => {}} /> : null}</>; }
+  function Combined() { const [open, setOpen] = useState(false); return <><Harness listOpen={open} /><button onClick={() => setOpen(!open)}>Connections</button>{open ? <AvailabilitySection userId="owner" onReconnect={() => {}} onRefresh={async () => {}} /> : null}</>; }
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); clients.push(client);
   render(<QueryClientProvider client={client}><Combined /></QueryClientProvider>);
   await waitFor(() => expect((screen.getByText("Toggle") as HTMLButtonElement).disabled).toBe(false));

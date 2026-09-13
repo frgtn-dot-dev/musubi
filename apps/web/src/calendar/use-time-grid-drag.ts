@@ -266,10 +266,11 @@ export function useTimeGridDrag<T = Event>({
         startY: input.y,
       };
       pointerRef.current = { x: input.x, y: input.y };
+      let cancelled = false;
 
       function handleMove(nativeEvent: PointerEvent) {
         const press = pressRef.current;
-        if (!press || nativeEvent.pointerId !== press.pointerId) return;
+        if (!press || cancelled || nativeEvent.pointerId !== press.pointerId) return;
 
         pointerRef.current = { x: nativeEvent.clientX, y: nativeEvent.clientY };
 
@@ -324,6 +325,12 @@ export function useTimeGridDrag<T = Event>({
         const active = dragRef.current;
         if (!press || nativeEvent.pointerId !== press.pointerId) return;
 
+        if (cancelled) {
+          swallowNextClick(nativeEvent);
+          finish();
+          return;
+        }
+
         if (invalidRef.current) {
           swallowNextClick(nativeEvent);
           optionsRef.current.onError("There is no local time at that position. The original time was kept.");
@@ -374,7 +381,13 @@ export function useTimeGridDrag<T = Event>({
         if (nativeEvent.key !== "Escape") return;
         // Escape cancels the drag, not the whole screen.
         nativeEvent.stopPropagation();
-        finish();
+        nativeEvent.preventDefault();
+        // Clear the preview now, but keep the release listener: the browser's
+        // subsequent click must not open an inspector for the cancelled drag.
+        cancelled = true;
+        dragRef.current = undefined;
+        stopAutoScroll();
+        setDrag(undefined);
       }
 
       // Retire any set still attached: a press that never saw its release

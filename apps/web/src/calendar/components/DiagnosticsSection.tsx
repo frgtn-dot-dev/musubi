@@ -185,9 +185,8 @@ export function DiagnosticsSection({
       {/* Its own group: the evidence is a different kind of thing from the
           verdicts above it, and the checks read as one list only while nothing
           else shares their card. */}
-      <SettingsSection title="Full report">
+      <SettingsSection title="Full report" help="Nothing here leaves the page until you copy it.">
         <Disclosure
-          detail="Nothing here leaves the page until you copy it"
           label={
             snapshot ? "Server, browser, and notification state" : "Gathering…"
           }

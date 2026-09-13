@@ -75,6 +75,7 @@ export const Overview: Story = {
 		expect(
 			within(dialog).getByRole("button", { name: "Stop syncing Studio" }),
 		).toBeVisible();
+		await userEvent.click(within(dialog).getByText("New calendar", { exact: true }));
 		const account = within(dialog).getByRole("combobox", { name: "Account" });
 		expect(account).toBeVisible();
 		await userEvent.click(account);
@@ -133,6 +134,9 @@ export const Narrow: Story = {
     const dialog = await screen.findByRole("dialog", { name: "Calendars" });
     await waitFor(() => expect(dialog).toBeVisible());
     expect(within(dialog).getByRole("button", { name: "Settings for Studio planning and team commitments" })).toBeVisible();
+    await userEvent.click(within(dialog).getByText("New calendar", { exact: true }));
+    expect(within(dialog).getByRole("textbox", { name: "New calendar name" })).toBeVisible();
+    expect(within(dialog).getByRole("button", { name: "Create" })).toBeVisible();
     const summary = within(dialog).getByText("Import calendar", { exact: true }).closest("summary")!;
     await userEvent.click(summary);
     await waitFor(() => expect(within(dialog).getByRole("combobox", { name: "Import into account" })).toBeVisible());

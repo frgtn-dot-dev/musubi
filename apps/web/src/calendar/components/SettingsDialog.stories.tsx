@@ -108,3 +108,22 @@ export const ReminderChoices: Story = {
   },
   render: (args) => <SettingsExample {...args} />,
 };
+
+export const SavingWithoutFlicker: Story = {
+  args: { onPatch: () => new Promise<SettingsDocument>(() => {}) },
+  play: async () => {
+    const dialog = await screen.findByRole("dialog", { name: "Settings" });
+    const group = await within(dialog).findByRole("radiogroup", { name: "Time format" });
+    const options = within(group).getAllByRole("radio");
+    const next = options.find(option => option.getAttribute("aria-checked") !== "true")!;
+    await userEvent.click(next);
+    await expect(next).toBeDisabled();
+    await expect(next).toHaveAttribute("aria-checked", "true");
+    expect(getComputedStyle(next).opacity).toBe("1");
+    const theme = within(dialog).getByRole("radiogroup", { name: "Theme" });
+    for (const radio of within(theme).getAllByRole("radio")) {
+      expect(getComputedStyle(radio).opacity).toBe("1");
+    }
+    expect(getComputedStyle(theme.querySelector<HTMLElement>("[data-disabled]")!).opacity).toBe("1");
+  },
+};

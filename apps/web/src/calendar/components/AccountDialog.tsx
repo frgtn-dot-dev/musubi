@@ -6,16 +6,16 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react";
-import { type FormEvent, type RefObject, useRef, useState } from "react";
+import { type FormEvent, type RefObject, useCallback, useRef, useState } from "react";
 import { deleteAccount, uploadAvatar } from "~/api/resources";
 import { authClient } from "~/auth/auth-client";
 import { Avatar } from "~/ui/Avatar";
-import { Button } from "~/ui/Button";
+import { Button, IconButton } from "~/ui/Button";
 import {
   ConfirmationDialog,
   ConfirmationNotice,
 } from "~/ui/ConfirmationDialog";
-import { Dialog } from "~/ui/Dialog";
+import { Dialog, DialogInfo } from "~/ui/Dialog";
 import { Field } from "~/ui/Field";
 import { InlineError } from "~/ui/InlineError";
 import { RowAction } from "~/ui/Row";
@@ -60,6 +60,17 @@ export function AccountDialog({
   const session = authClient.useSession();
   const user = session.data?.user;
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const avatarActionRef = useRef<HTMLButtonElement>(null);
+  const setAvatarInput = useCallback((input: HTMLInputElement | null) => {
+    avatarInputRef.current = input;
+    if (!input) return;
+    const restoreFocus = () => avatarActionRef.current?.focus();
+    input.addEventListener("cancel", restoreFocus);
+    return () => {
+      input.removeEventListener("cancel", restoreFocus);
+      avatarInputRef.current = null;
+    };
+  }, []);
   const nameActionRef = useRef<HTMLButtonElement>(null);
   const emailActionRef = useRef<HTMLButtonElement>(null);
   const deleteActionRef = useRef<HTMLButtonElement>(null);
@@ -114,7 +125,7 @@ export function AccountDialog({
       <Dialog
         bodyLayout="flush"
         closeLabel="Close account"
-        description="Your profile is visible to people you share calendars with."
+        headerActions={<DialogInfo label="About your profile" title="Your profile">Your profile is visible to people you share calendars with.</DialogInfo>}
         onOpenChange={handleOpenChange}
         open={open}
         title="Account"
@@ -126,7 +137,7 @@ export function AccountDialog({
               aria-label="Change profile photo"
               className={styles.visuallyHidden}
               disabled={busy}
-              ref={avatarInputRef}
+              ref={setAvatarInput}
               tabIndex={-1}
               type="file"
               onChange={(event) => {
@@ -135,24 +146,25 @@ export function AccountDialog({
                 if (file) void changeAvatar(file);
               }}
             />
-            <Avatar
-              image={user?.image}
-              name={user?.name ?? "Musubi"}
-              size="profile"
-            />
+            <IconButton
+              className={styles.avatarControl}
+              disabled={!user || busy}
+              label="Change photo"
+              onClick={() => avatarInputRef.current?.click()}
+              ref={avatarActionRef}
+            >
+              <Avatar
+                image={user?.image}
+                name={user?.name ?? "Musubi"}
+                size="profile"
+              />
+              <span className={styles.avatarCamera}>
+                <Camera aria-hidden="true" size={16} strokeWidth={1.7} />
+              </span>
+            </IconButton>
             <div className={styles.identityCopy}>
               <strong>{user?.name ?? "Your profile"}</strong>
               <span>{user?.email ?? "Loading account…"}</span>
-              <Button
-                className={styles.changePhotoControl}
-                disabled={!user || busy}
-                icon={<Camera aria-hidden="true" size={15} strokeWidth={1.7} />}
-                onClick={() => avatarInputRef.current?.click()}
-                size="compact"
-                variant="ghost"
-              >
-                Change photo
-              </Button>
             </div>
           </div>
 
@@ -297,7 +309,6 @@ function EditNameDialog({
   return (
     <Dialog
       closeLabel="Close display name"
-      description="How people recognize you in shared calendars."
       footer={
         <>
           <Button
@@ -329,7 +340,7 @@ function EditNameDialog({
         id="display-name-form"
         onSubmit={(event) => void saveName(event)}
       >
-        <Field label="Display name">
+        <Field label="Display name" help="How people recognize you in shared calendars.">
           <input
             autoComplete="name"
             disabled={busy}

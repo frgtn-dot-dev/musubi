@@ -1,3 +1,4 @@
+import { HelpTooltip } from "~/ui/HelpTooltip";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
@@ -236,10 +237,13 @@ function InviteRoute() {
             Create an account to join
           </AuthSubmit>
           {/* A note, not a failure — AuthMessage is the error colour. */}
-          <p className={styles.hint}>
-            Already using Musubi on another server? Paste this link into
-            Connections there, and the calendar joins your own account instead.
-          </p>
+          <div className={styles.hint}>
+            Using another Musubi server
+            <HelpTooltip label="About joining from another server">
+              Paste this link into Connections on your Musubi server, and the
+              calendar joins your own account instead.
+            </HelpTooltip>
+          </div>
         </>
       )}
     </AuthShell>

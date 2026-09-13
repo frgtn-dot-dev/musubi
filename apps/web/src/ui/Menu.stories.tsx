@@ -4,6 +4,7 @@ import { useState } from "react";
 import { expect, screen, userEvent, waitFor, within } from "storybook/test";
 import { DESKTOP_MODES, MOBILE_MODES } from "../../.storybook/modes";
 import { IconButton } from "./Button";
+import { Dialog } from "./Dialog";
 import {
   Menu,
   MenuContent,
@@ -103,6 +104,26 @@ export const Overview: Story = {
   },
   play: openMenu,
   render: () => <PageActionsMenu />,
+};
+
+export const InsideElevatedDialog: Story = {
+  render: () => (
+    <Dialog elevated open title="Page settings" closeLabel="Close page settings" onOpenChange={() => undefined}>
+      <PageActionsMenu />
+    </Dialog>
+  ),
+  play: async () => {
+    const trigger = screen.getByRole("button", { name: "Open Work page actions" });
+    await userEvent.click(trigger);
+    const item = await screen.findByRole("menuitem", { name: /Duplicate page/ });
+    await waitFor(() => {
+      const box = item.getBoundingClientRect();
+      expect(item.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2))).toBe(true);
+    });
+    await userEvent.click(item);
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(screen.getByText("Work page duplicated.")).toBeVisible();
+  },
 };
 
 export const NarrowSheet: Story = {

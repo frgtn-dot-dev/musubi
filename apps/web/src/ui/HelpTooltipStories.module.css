@@ -1,0 +1,11 @@
+.controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.corner {
+  position: fixed;
+  top: var(--space-2);
+  right: var(--space-2);
+}

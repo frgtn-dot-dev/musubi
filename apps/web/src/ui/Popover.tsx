@@ -1,11 +1,13 @@
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import {
   forwardRef,
+  useContext,
   type ComponentPropsWithoutRef,
   type ElementRef,
 } from "react";
 import anchoredStyles from "./AnchoredSurface.module.css";
 import { classNames } from "./class-names";
+import { ElevatedDialogContext } from "./layer-context";
 
 const DEFAULT_COLLISION_PADDING = 12;
 const DEFAULT_SIDE_OFFSET = 8;
@@ -46,6 +48,7 @@ export const PopoverContent = forwardRef<
   },
   forwardedRef,
 ) {
+  const elevated = useContext(ElevatedDialogContext);
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
@@ -56,6 +59,7 @@ export const PopoverContent = forwardRef<
         className={classNames(anchoredStyles.surface, className)}
         collisionPadding={collisionPadding}
         data-mobile-surface={mobileSurface}
+        data-layer-elevated={elevated ? "" : undefined}
         ref={forwardedRef}
         sideOffset={sideOffset}
       >

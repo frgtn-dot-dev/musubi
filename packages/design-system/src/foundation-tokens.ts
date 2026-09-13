@@ -65,11 +65,13 @@ export const componentDimensions = {
  */
 export const motionDurations = {
   web: {
+    panel: 120,
     fast: 140,
     standard: 220,
     slow: 300,
   },
   native: {
+    panel: 160,
     fast: 160,
     standard: 260,
     slow: 320,

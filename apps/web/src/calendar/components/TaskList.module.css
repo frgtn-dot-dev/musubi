@@ -1,12 +1,13 @@
 .tasks { overflow: auto; padding: var(--space-6); }
-.group { margin-bottom: var(--space-7); }
-.groupHeading { display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-2); }
-.groupHeading span { font-variant-numeric: tabular-nums; }
+.group { display: grid; gap: var(--space-3); margin-bottom: var(--space-7); }
+.groupHeading { display: flex; align-items: center; gap: var(--space-2); margin: 0; }
+.groupHeading span { display: inline-flex; font-variant-numeric: tabular-nums; }
 .group ul { background: var(--surface-panel); border: 1px solid var(--border-subtle); border-radius: var(--radius-card); list-style: none; margin: 0; padding: 0; overflow: hidden; }
 .task { align-items: center; display: flex; min-height: var(--row-min-height); }
 .task + .task { border-top: 1px solid var(--border-subtle); }
-.taskCheck { display: flex; flex: none; padding-inline-start: var(--space-4); }
-.taskMain { flex: 1; min-width: 0; border-bottom: 0; padding: var(--space-3); overflow-wrap: anywhere; }
+.taskControls { display: grid; grid-template-columns: repeat(2, calc(var(--space-4) * 8.5)); flex: none; gap: var(--space-2); padding: var(--space-4); padding-inline-end: 0; }
+.taskControls > button { min-width: 0; width: 100%; }
+.task .taskMain { align-self: stretch; flex: 1; min-width: 0; border-bottom: 0; padding: var(--space-4); overflow-wrap: anywhere; }
 .done { color: var(--text-secondary); text-decoration: line-through; }
 .editor { display: grid; gap: var(--space-5); }
 .fields { display: grid; gap: var(--space-4); grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -17,3 +18,56 @@
 .dateTimeRow[data-all-day] { grid-template-columns: minmax(0, 1fr); }
 
 .deleteTask { margin-right: auto; }
+
+@media (max-width: 599px) {
+  .task { align-items: stretch; flex-direction: column; }
+  .taskControls { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: var(--space-4); padding-bottom: 0; }
+}
+
+.viewControls { display: flex; justify-content: flex-end; margin-bottom: var(--space-5); }
+.board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); align-items: stretch; padding-bottom: var(--space-4); }
+.column { position: relative; display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; min-height: calc(var(--space-8) * 6); container-type: inline-size; }
+.column + .column::before { content: ""; position: absolute; inset-block: 0; inset-inline-start: calc(var(--space-2) * -1); border-inline-start: 1px solid var(--border-subtle); }
+.column[data-drop-active] > .groupHeading { color: var(--text-primary); }
+@media (max-width: 1023px) { .board { grid-template-columns: repeat(4, minmax(280px, 1fr)); } }
+.column ul { display: grid; gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
+/* Cards deliberately have their own content hierarchy, independent of list rows. */
+.kanbanCard { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border-subtle); border-radius: var(--radius-card); background: var(--surface-panel); transition: box-shadow var(--motion-standard) ease; }
+.kanbanCard[data-dragging] { opacity: .25; }
+.kanbanCard[data-drag-preview] { opacity: 1; box-shadow: var(--shadow-overlay); border-color: var(--text-secondary); }
+.cardHeader { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); color: var(--text-secondary); font-size: var(--text-12); min-height: var(--space-7); }
+.cardHeader > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kanbanCard .cardTitle { display: block; height: auto; min-height: 0; padding: 0; margin: 0; text-align: left; white-space: normal; overflow-wrap: anywhere; font-size: var(--text-15); font-weight: 600; line-height: 1.5; }
+.cardDescription { margin: 0; color: var(--text-secondary); font-size: var(--text-13); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.cardMeta { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); color: var(--text-secondary); font-size: var(--text-12); }
+.cardMeta span { display: inline-flex; align-items: center; gap: var(--space-1); }
+.cardMeta svg { flex: none; }
+.kanbanCard .taskControls { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); padding: 0; margin-top: var(--space-2); }
+.dragHandle { cursor: grab; touch-action: none; flex: none; }
+.dragHandle:active { cursor: grabbing; }
+.dropPlaceholder { display: grid; place-items: center; height: var(--kanban-drag-height, 150px); box-sizing: border-box; padding: var(--space-4); border: 1px dashed var(--text-secondary); border-radius: var(--radius-card); color: var(--text-secondary); font-size: var(--text-13); animation: dropEnter var(--motion-standard) ease-out; }
+@keyframes dropEnter { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .kanbanCard { transition: none; } .dropPlaceholder { animation: none; } }
+.emptyColumn { margin: 0; padding: var(--space-5); color: var(--text-secondary); font-size: var(--text-13); text-align: center; }
+
+.layoutLabel { display: inline-flex; align-items: center; gap: var(--space-2); }
+
+@container (max-width: 260px) { .kanbanCard .taskControls { grid-template-columns: minmax(0, 1fr); } }
+
+.kanbanCard[data-draggable] { cursor: grab; touch-action: auto; user-select: none; }
+.kanbanCard[data-draggable]:active { cursor: grabbing; }
+.kanbanCard[data-draggable] button { touch-action: manipulation; }
+
+/* A short save lock must not dim the whole board or change its geometry. */
+.column[data-saving] .kanbanCard[data-editable] button:disabled,
+.column[data-saving] > button:disabled { opacity: 1; }
+
+.tasks[data-layout="kanban"] { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; padding-bottom: 0; }
+.tasks[data-layout="kanban"] .board { flex: 1 0 auto; padding-bottom: 0; }
+
+.cardCalendar { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.cardCalendar svg { flex: none; }
+.cardCalendar > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.listCalendarDetail { display: inline-flex; align-items: center; gap: var(--space-1); }
+.listCalendarDetail > :first-child, .cardCalendar > :first-child { flex: none; }

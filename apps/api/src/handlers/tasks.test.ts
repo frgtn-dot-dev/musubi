@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { can } from "@musubi/types";
+import { can, TaskSchema, TaskStatusSchema } from "@musubi/types";
 
 process.env.DATABASE_URL ??= "postgres://user:pass@localhost:5432/test";
 process.env.ENVIRONMENT ??= "dev";
@@ -17,6 +17,31 @@ async function main() {
   });
   assert.equal(created.percentComplete, 100);
   assert.ok(created.completedAt instanceof Date);
+
+  // Saving another task must not depend on a completion-only representation:
+  // all native statuses and recurrence survive the same JSON request/response
+  // boundaries used by create, update, and a subsequent list refresh.
+  for (const status of TaskStatusSchema.options) {
+    const input = {
+      id: "00000000-0000-4000-8000-000000000003",
+      calendarID: created.calendarID,
+      title: `Persist ${status}`,
+      status,
+      percentComplete: status === "in-process" ? 40 : 0,
+      isAllDay: true,
+      due: "2026-09-12T00:00:00.000Z",
+      recurrence: "RRULE:FREQ=WEEKLY;BYDAY=SA",
+    };
+    const parsed = parseTaskCreateBody(JSON.parse(JSON.stringify(input)));
+    const saved = TaskSchema.parse(JSON.parse(JSON.stringify({ ...parsed, creatorID: "owner" })));
+    const update = parseTaskUpdateBody(JSON.parse(JSON.stringify(saved)));
+    assert.equal(saved.status, status);
+    assert.equal(update.status, status);
+    assert.equal(saved.percentComplete, status === "completed" ? 100 : input.percentComplete);
+    assert.equal(update.recurrence, input.recurrence);
+    assert.equal(update.isAllDay, true);
+    assert.equal(update.due?.toISOString(), input.due);
+  }
 
   const updated = parseTaskUpdateBody({
     calendarID: "00000000-0000-4000-8000-000000000002",

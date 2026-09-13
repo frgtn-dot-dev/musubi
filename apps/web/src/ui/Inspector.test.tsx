@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, describe, expect, it } from "vitest";
-import { Inspector, InspectorClose, InspectorContent, InspectorTrigger } from "./Inspector";
+import { Inspector, InspectorClose, InspectorContent, InspectorTrigger, requestInspectorTransition } from "./Inspector";
 
 afterEach(cleanup);
 
@@ -27,6 +27,28 @@ function SelectedObject({ name, guard = false }: { name: string; guard?: boolean
 }
 
 describe("Inspector", () => {
+  it("guards an imperative create entry point before replacing an edited object", async () => {
+    const user = userEvent.setup();
+    function WorkspaceEntry() {
+      const [creating, setCreating] = useState(false);
+      return <>
+        <SelectedObject name="Event" guard />
+        <button onClick={() => requestInspectorTransition(() => setCreating(true))}>New event</button>
+        {creating ? <p>Creating event</p> : null}
+      </>;
+    }
+    render(<WorkspaceEntry />);
+    await user.click(screen.getByRole("button", { name: "Inspect Event" }));
+    await user.click(screen.getByRole("button", { name: "New event" }));
+    expect(screen.queryByText("Creating event")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Keep editing" }));
+    expect(screen.getByRole("dialog", { name: "Event" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "New event" }));
+    await user.click(screen.getByRole("button", { name: "Discard draft" }));
+    expect(screen.queryByRole("dialog", { name: "Event" })).toBeNull();
+    expect(screen.getByText("Creating event")).toBeTruthy();
+  });
+
   it("switches selection with only one object panel open", async () => {
     const user = userEvent.setup();
     render(<><SelectedObject name="Event" /><SelectedObject name="Calendar" /></>);

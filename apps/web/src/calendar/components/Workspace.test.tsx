@@ -143,7 +143,7 @@ describe("Workspace", () => {
       />,
     );
 
-    const today = screen.getByRole("button", { name: "Today" });
+    const today = within(screen.getByLabelText("Jump to date")).getByRole("button", { name: "Today" });
     await user.click(today);
     expect(document.activeElement).toBe(today);
 
@@ -644,7 +644,29 @@ describe("Workspace", () => {
     ).not.toBeNull();
 
     await user.click(quarterly);
-    expect(onDateChange).toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "Quarterly planning" })).toBeTruthy();
+    expect(onDateChange).not.toHaveBeenCalled();
+  });
+
+  it("keeps a read-only search detail readable and retires refreshed private content", async () => {
+    const user = userEvent.setup();
+    const original = { ...fixtureEvents[0]!, title: "Private search event", description: "Secret search notes" };
+    const readCalendars = fixtureCalendars.map(calendar => ({ ...calendar, role: "reader" }));
+    const source = { data: { events: [original], tasks: [], calendars: readCalendars }, loading: false, error: false, retry: vi.fn() };
+    const props = { ...commonProps, calendars: readCalendars, events: [], searchAccount: source, onOpenFullEditor: vi.fn() };
+    const view = render(<Workspace {...props} />);
+    await user.click(screen.getByRole("button", { name: "Search events and actions" }));
+    await user.type(screen.getByRole("searchbox"), "Private search event");
+    await user.click(screen.getByRole("button", { name: /Private search event/ }));
+    const detail = screen.getByRole("dialog", { name: original.title });
+    expect(within(detail).getByText(original.description)).toBeTruthy();
+    expect(within(detail).queryByRole("button", { name: "Edit" })).toBeNull();
+    view.rerender(<Workspace {...props} searchAccount={{ ...source, data: { ...source.data, events: [{ ...original, title: "Busy", description: "" }] } }} />);
+    expect(screen.queryByText(original.description)).toBeNull();
+    expect(screen.getByRole("dialog", { name: "Busy" })).toBeTruthy();
+    view.rerender(<Workspace {...props} searchAccount={{ ...source, data: { ...source.data, events: [] } }} />);
+    expect(screen.queryByText("Busy")).toBeNull();
+    expect(screen.getByText("This event is no longer available.")).toBeTruthy();
   });
 
   it("renders future event days as one continuous Agenda", () => {
@@ -741,7 +763,7 @@ describe("Workspace", () => {
     render(<Workspace {...commonProps} onCreateEvent={onCreateEvent} />);
 
     await user.click(
-      screen.getByRole("button", { name: "Create event or task" }),
+      screen.getByRole("button", { name: "Create event, meeting or task" }),
     );
     await user.click(screen.getByRole("menuitem", { name: "Event" }));
     await user.type(
@@ -772,7 +794,7 @@ describe("Workspace", () => {
 
     expect(screen.queryByRole("heading", { name: "Tasks" })).toBeNull();
     await user.click(
-      screen.getByRole("button", { name: "Create event or task" }),
+      screen.getByRole("button", { name: "Create event, meeting or task" }),
     );
     await user.click(screen.getByRole("menuitem", { name: "Task" }));
 
@@ -797,14 +819,14 @@ describe("Workspace", () => {
       );
     }
     render(<LoadingRoute />);
-    await user.click(screen.getByRole("button", { name: "Create event or task" }));
+    await user.click(screen.getByRole("button", { name: "Create event, meeting or task" }));
     await user.click(screen.getByRole("menuitem", { name: "Task" }));
     expect(screen.queryByRole("dialog", { name: "New task" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Finish loading tasks" }));
     expect(screen.getByRole("dialog", { name: "New task" })).not.toBeNull();
     await user.click(within(screen.getByRole("dialog", { name: "New task" })).getByRole("button", { name: "Close task editor" }));
     expect(screen.queryByRole("dialog", { name: "New task" })).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Create event or task" }));
+    await user.click(screen.getByRole("button", { name: "Create event, meeting or task" }));
     await user.click(screen.getByRole("menuitem", { name: "Task" }));
     expect(screen.getByRole("dialog", { name: "New task" })).not.toBeNull();
   });
@@ -826,7 +848,7 @@ describe("Workspace", () => {
     );
 
     await user.click(
-      screen.getByRole("button", { name: "Create event or task" }),
+      screen.getByRole("button", { name: "Create event, meeting or task" }),
     );
     expect(
       screen
@@ -873,8 +895,8 @@ describe("Workspace", () => {
     expect(tasks.textContent).toContain("Saved offline task");
     expect(
       within(tasks)
-        .getByRole("checkbox", {
-          name: "Mark Saved offline task completed",
+        .getByRole("combobox", {
+          name: "Status of Saved offline task",
         })
         .hasAttribute("disabled"),
     ).toBe(true);
@@ -953,26 +975,19 @@ describe("Workspace", () => {
     expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
   });
 
-  it("reveals the rest of the create form in place when there is no editor page", async () => {
+  it("shows the full create form in the panel without an editor page", async () => {
     const user = userEvent.setup();
 
     render(<Workspace {...commonProps} />);
 
     await user.click(
-      screen.getByRole("button", { name: "Create event or task" }),
+      screen.getByRole("button", { name: "Create event, meeting or task" }),
     );
     await user.click(screen.getByRole("menuitem", { name: "Event" }));
     await user.type(
       screen.getByRole("textbox", { name: "Event title" }),
       "Studio time",
     );
-    // Quick create carries only the essentials.
-    expect(screen.queryByPlaceholderText("Add location")).toBeNull();
-
-    // Without an editor page wired in, the disclosure expands here — and the
-    // draft is the same form state, so what was typed stays.
-    await user.click(screen.getByRole("button", { name: "More options" }));
-
     expect(screen.getByPlaceholderText("Add location")).not.toBeNull();
     expect(
       (screen.getByRole("textbox", { name: "Event title" }) as HTMLInputElement)
@@ -987,7 +1002,7 @@ describe("Workspace", () => {
     render(<Workspace {...commonProps} onOpenFullEditor={onOpenFullEditor} />);
 
     await user.click(
-      screen.getByRole("button", { name: "Create event or task" }),
+      screen.getByRole("button", { name: "Create event, meeting or task" }),
     );
     await user.click(screen.getByRole("menuitem", { name: "Event" }));
     await user.type(
@@ -1014,7 +1029,7 @@ describe("Workspace", () => {
     render(<Workspace {...commonProps} calendars={viewerCalendars} />);
 
     expect(
-      screen.queryByRole("button", { name: "Create event or task" }),
+      screen.queryByRole("button", { name: "Create event, meeting or task" }),
     ).toBeNull();
 
     await user.click(screen.getByRole("button", { name: /Board game pub/ }));
@@ -1084,7 +1099,7 @@ describe("Workspace", () => {
     );
 
     await user.click(
-      screen.getByRole("button", { name: "Create event or task" }),
+      screen.getByRole("button", { name: "Create event, meeting or task" }),
     );
     await user.click(screen.getByRole("menuitem", { name: "Event" }));
     await user.type(

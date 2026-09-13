@@ -56,7 +56,7 @@ function NewEventRoute() {
   const back = () =>
     void navigate({
       params: { pageId, view },
-      search: { date: search.returnDate ?? date },
+      search: { date: search.returnDate ?? date, taskLayout: search.taskLayout },
       to: "/app/p/$pageId/$view",
     });
 
@@ -149,6 +149,7 @@ function NewEventForm({
   return (
     <EventEditorForm
       calendars={calendars}
+      localAccountName={user?.name || user?.email}
       initialValues={initialValues}
       layout="page"
       onCancel={back}

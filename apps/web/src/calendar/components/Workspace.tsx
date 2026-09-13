@@ -1,3 +1,7 @@
+import { eventDayKeys, getMonthGrid } from "@musubi/calendar/layout";
+import { getTimeGridDays } from "../time-grid-math";
+import { getAgendaGroups } from "../agenda-math";
+import { TaskLayoutSwitch } from "./TaskLayoutSwitch";
 import { useGridAvailability } from "../use-grid-availability";
 import { type EventScopeRequest, editedEvent, EventMutationError } from "@musubi/types";
 import type {
@@ -35,6 +39,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
+import { Dialog } from "~/ui/Dialog";
 import { Button } from "~/ui/Button";
 import { ConfirmationDialog } from "~/ui/ConfirmationDialog";
 import { describeAge, StaleBanner, UpdateBanner, CoverageBanner } from "~/ui/StaleBanner";
@@ -44,10 +49,11 @@ import {
   multiWeekDays,
   viewDefinition,
 } from "../view-registry";
-import { getEventRangeLabel, parseDateKey } from "../calendar-math";
+import { getEventDateLabel, getEventRangeLabel, parseDateKey } from "../calendar-math";
 import { toDateKey } from "../date-key";
-import type { EventFormValues } from "../event-form";
+import { eventFormValues, type EventFormValues } from "../event-form";
 import {
+  canEditEvent,
   getEditableCalendars,
   getEditableTaskCalendars,
 } from "../event-permissions";
@@ -56,6 +62,7 @@ import type { ReminderControl } from "../reminder-control";
 
 import type { AttendanceChoice } from "../attendance";
 import { shortcutFor } from "../shortcuts";
+import { useWheelPeriod } from "../use-wheel-period";
 import { useSwipePeriod } from "../use-swipe-period";
 import { useNarrowViewport } from "~/design/use-narrow-viewport";
 import { createTimeGeometry, densityFromPageConfig } from "../time-geometry";
@@ -70,13 +77,15 @@ import type { CalendarViewId } from "../view-registry";
 import { AccountDialog } from "./AccountDialog";
 import { AgendaView } from "./AgendaView";
 import { CalendarTransferDialog } from "./CalendarTransferDialog";
+import { ProviderMeetingCreateDialog, isMeetingCalendarCandidate } from "./ProviderMeetingCreateDialog";
 import { ConnectionsDialog } from "./ConnectionsDialog";
 import { MonthCalendar } from "./MonthCalendar";
 import { MultiWeekCalendar } from "./MultiWeekCalendar";
 import { NewPageDialog, PageSettingsDialog } from "./PageSettingsDialog";
+import { requestInspectorTransition } from "~/ui/Inspector";
 import { QuickCreate, type QuickCreateAnchor } from "./QuickCreate";
 import { RecurrenceScopeDialog } from "./RecurrenceScopeDialog";
-import { SearchDialog } from "./SearchDialog";
+import { SearchDialog, type SearchAccountSource } from "./SearchDialog";
 import { ShortcutsDialog } from "./ShortcutsDialog";
 import { ShareCalendarDialog } from "./ShareCalendarDialog";
 import { Sidebar } from "./Sidebar";
@@ -91,6 +100,8 @@ const TOAST_UNDO_MS = 9_000;
 
 type WorkspaceProps = {
   activeView: CalendarViewId;
+  taskLayout?: "list" | "kanban";
+  onTaskLayoutChange?: (layout: "list" | "kanban") => void;
   baseEvents?: Event[];
   calendars: Calendar[];
   date: string;
@@ -178,6 +189,9 @@ type WorkspaceProps = {
    * which is what router-less embeddings use.
    */
   onOpenFullEditor?: (values: EventFormValues, event?: Event) => void;
+  searchAccount?: SearchAccountSource;
+  onSearchActiveChange?: (active: boolean) => void;
+  onStepPeriod?: (offset: number, weeks: number) => void;
   onSignOut: () => void;
   /** State of a provider link that finished while the browser was away. */
   providerLink?: {
@@ -269,6 +283,8 @@ const unavailableTaskWrite = async () => {
 
 export function Workspace({
   activeView,
+  taskLayout,
+  onTaskLayoutChange,
   baseEvents,
   calendars,
   date,
@@ -313,6 +329,9 @@ export function Workspace({
   onSetAttendance = unavailableAttendance,
   reminders,
   onSignOut,
+  searchAccount,
+  onSearchActiveChange,
+  onStepPeriod,
   providerLink,
   onUpdateEvent,
   onApplyEventScope,
@@ -323,11 +342,13 @@ export function Workspace({
   user,
 }: WorkspaceProps) {
   const anchor = useMemo(() => parseDateKey(date), [date]);
+  const wheelPeriodRef = useWheelPeriod(activeView === "month", offset => changePeriod(offset));
   const swipePeriod = useSwipePeriod((offset) => changePeriod(offset));
   // Phone chrome has less room for a date label than it has date to spell out.
   const narrow = useNarrowViewport();
   // Direct renders (tests/stories) can own drafts locally. The route passes the
   // production state so data gates and canonical redirects cannot erase it.
+  const [localTaskLayout, setLocalTaskLayout] = useState<"list" | "kanban">("list");
   const [localPageDrafts, setLocalPageDrafts] = useState<
     Map<string, PageWorkingDraft>
   >(() => new Map());
@@ -341,8 +362,11 @@ export function Workspace({
   const [settingsPage, setSettingsPage] = useState<PageDocument>();
   const [newPageOpen, setNewPageOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [meetingCreate, setMeetingCreate] = useState<{
+    initialCalendarID?: string;
+    returnFocus: HTMLElement;
+  }>();
   const [searchQuery, setSearchQuery] = useState("");
-  const searchEventIdRef = useRef<string | undefined>(undefined);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarModal, setSidebarModal] = useState(false);
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
@@ -478,7 +502,15 @@ export function Workspace({
     );
   }
   const [createIntent, setCreateIntent] = useState<CreateIntent>();
+  const createSaving = useRef(false);
   const [localTaskCreateRequest, setLocalTaskCreateRequest] = useState(0);
+  const [searchTaskId, setSearchTaskId] = useState<string>();
+  const [searchDetailId, setSearchDetailId] = useState<string>();
+  const searchTask = (searchAccount?.data?.tasks ?? tasks).find(task => task.id === searchTaskId);
+  const searchDetail = (searchAccount?.data?.events ?? events).find(event => event.id === searchDetailId);
+  useEffect(() => {
+    onSearchActiveChange?.(searchOpen || !!searchTaskId || !!searchDetailId);
+  }, [searchOpen, searchTaskId, searchDetailId, onSearchActiveChange]);
   const taskCreateRequest = controlledTaskCreateRequest ?? localTaskCreateRequest;
   const setTaskCreateRequest = onTaskCreateRequestChange ?? setLocalTaskCreateRequest;
   const consumeTaskCreateRequest = useCallback(
@@ -609,19 +641,17 @@ export function Workspace({
       ),
     [events, visibleCalendarIds],
   );
-  useEffect(() => {
-    const searchEventId = searchEventIdRef.current;
-    if (searchOpen || !searchEventId) return;
-    const trigger = Array.from(
-      mainRef.current?.querySelectorAll<HTMLElement>(
-        "[data-event-id],[data-time-event],[data-all-day-event],[data-agenda-event]",
-      ) ?? [],
-    ).find((element) => Object.values(element.dataset).includes(searchEventId));
-    if (!trigger) return;
-    searchEventIdRef.current = undefined;
-    requestAnimationFrame(() => trigger.click());
-  }, [activeView, date, searchOpen, visibleEvents]);
-
+  const searchVisibleEventIds = useMemo(() => {
+    if (activeView === "tasks") return [];
+    const days = activeView === "month"
+      ? getMonthGrid(anchor, settings.weekStartsOn).filter(day => showAdjacentDays || day.getMonth() === anchor.getMonth())
+      : activeView === "multi-week" ? multiWeekBlocks.flat()
+      : activeView === "day" || activeView === "week" ? getTimeGridDays(anchor, activeView, settings.weekStartsOn, { includeWeekend: showWeekend }) : [];
+    const dayKeys = new Set(days.map(toDateKey));
+    const shown = activeView === "agenda" ? getAgendaGroups(visibleEvents, anchor).flatMap(group => group.items)
+      : visibleEvents.filter(event => eventDayKeys(event).some(day => dayKeys.has(day)));
+    return shown.map(event => event.recurrence ? event.id.replace(/_\d+$/, "") : event.id);
+  }, [activeView, anchor, settings.weekStartsOn, showAdjacentDays, showWeekend, multiWeekBlocks, visibleEvents]);
   useEffect(() => {
     if (!notice) {
       return;
@@ -644,7 +674,8 @@ export function Workspace({
   });
 
   function changePeriod(offset: number) {
-    onDateChange(toDateKey(view.step(anchor, offset, { weeks })));
+    if (onStepPeriod) onStepPeriod(offset, weeks);
+    else onDateChange(toDateKey(view.step(anchor, offset, { weeks })));
   }
 
   function removePageDraft(id: string, expected?: PageWorkingDraft) {
@@ -779,11 +810,9 @@ export function Workspace({
     }
 
     const bounds = target.getBoundingClientRect();
-    setCreateIntent({
+    requestInspectorTransition(() => setCreateIntent({
       anchor: {
         returnFocus: target,
-        // Beside the slot, level with its top: the popover opens next to what it
-        // describes instead of on top of it, so the draft stays grabbable.
         x: point?.x ?? bounds.right,
         y: point?.y ?? bounds.top,
       },
@@ -793,11 +822,11 @@ export function Workspace({
       endTime,
       id: Date.now(),
       startTime,
-    });
+    }));
   }
 
   /**
-   * Move the open draft to a new slot. The intent keeps its id, so the popover
+   * Move the open draft to a new slot. The intent keeps its id, so the panel
    * is not remounted and a title already typed into it survives the drag.
    */
   function moveCreateDraft(when: {
@@ -808,7 +837,7 @@ export function Workspace({
     endTime?: string;
     startTime?: string;
   }) {
-    setCreateIntent((current) => current && { ...current, ...when });
+    if (!createSaving.current) setCreateIntent((current) => current && { ...current, ...when });
   }
 
   function handleWorkspaceKeyDown(event: globalThis.KeyboardEvent) {
@@ -997,6 +1026,7 @@ export function Workspace({
       <main
         className={styles.main}
         id="main-content"
+        tabIndex={-1}
         inert={sidebarModal ? true : undefined}
         ref={mainRef}
       >
@@ -1014,12 +1044,16 @@ export function Workspace({
           <UpdateBanner onReload={newerServer.reload} />
         ) : null}
         <Toolbar
+          taskLayoutControl={activeView === "tasks" ? <TaskLayoutSwitch value={taskLayout ?? localTaskLayout} onChange={next => { setLocalTaskLayout(next); onTaskLayoutChange?.(next); }} /> : undefined}
           activeView={activeView}
           availability={gridAvailability.available ? { shown: gridAvailability.shown, onToggle: gridAvailability.toggle, onOpenList: target => { setConnectionsReturnFocus(target); setConnectionsOpen(true); } } : undefined}
+          coverageNotice={activeView === "tasks" ? null : coverageNotice}
           canCreateEvents={editableCalendars.length > 0}
+          canCreateMeetings={!offline && calendars.some(isMeetingCalendarCandidate)}
           canCreateTasks={!offline && editableTaskCalendars.length > 0}
           navigationTriggerRef={sidebarTriggerRef}
           onCreateEvent={(target) => openCreateAtDate(date, target)}
+          onCreateMeeting={(returnFocus) => setMeetingCreate({ returnFocus })}
           onCreateTask={() => {
             setTaskCreateRequest((request) => request + 1);
             if (activeView !== "tasks") handleViewChange("tasks");
@@ -1080,11 +1114,11 @@ export function Workspace({
         ) : null}
 
         {gridAvailability.notice ? <CoverageBanner message={gridAvailability.notice} /> : null}
-        {coverageNotice && activeView !== "tasks" ? <CoverageBanner message={coverageNotice} /> : null}
         <div
           className={`${styles.calendarArea} ${
             activeView === "month" ? styles.calendarAreaMonth : ""
           }`}
+          ref={wheelPeriodRef}
           data-calendar-area=""
           // Flick sideways to move a period, like the native client's pager.
           // Agenda is one continuous list, so it has no period to page.
@@ -1092,6 +1126,9 @@ export function Workspace({
         >
           {activeView === "tasks" ? (
             <TaskList
+              showLayoutControl={false}
+              layout={taskLayout ?? localTaskLayout}
+              onLayoutChange={onTaskLayoutChange}
               sourceTasks={tasks}
               sourceCalendars={calendars}
               calendarsResolved={calendarsResolved}
@@ -1178,7 +1215,6 @@ export function Workspace({
                       )
                   : undefined
               }
-              onCancelDraft={() => setCreateIntent(undefined)}
               onNotice={notify}
               onOpenFullEditor={onOpenFullEditor}
               onRemoveEvent={onRemoveEvent}
@@ -1245,7 +1281,6 @@ export function Workspace({
                       })
                   : undefined
               }
-              onCancelDraft={() => setCreateIntent(undefined)}
               onMonthChange={changePeriod}
               onMoveDraft={moveCreateDraft}
               pendingCreate={
@@ -1276,16 +1311,26 @@ export function Workspace({
           activeView={activeView}
           canCreateEvents={editableCalendars.length > 0}
           events={visibleEvents}
+          tasks={tasks}
+          calendars={calendars}
+          visibleCalendarIds={visibleCalendarIds}
+          visibleEventIds={searchVisibleEventIds}
+          accountSource={searchAccount}
+          canCreateMeetings={!offline && calendars.some(isMeetingCalendarCandidate)}
+          onCreateMeeting={() => {
+            const returnFocus = searchTriggerRef.current;
+            if (returnFocus) setMeetingCreate({ returnFocus });
+          }}
+          canCreateTasks={editableTaskCalendars.length > 0}
+          onCreateTask={() => { setTaskCreateRequest(value => value + 1); handleViewChange("tasks"); }}
+          onTaskSelect={task => setSearchTaskId(task.id)}
           inputRef={searchRef}
           onCreateEvent={() => {
             const target = searchTriggerRef.current;
             if (!target) return;
             requestAnimationFrame(() => openCreateAtDate(date, target));
           }}
-          onEventSelect={(event) => {
-            searchEventIdRef.current = event.id;
-            onDateChange(toDateKey(event.start));
-          }}
+          onEventSelect={event => setSearchDetailId(event.id)}
           onOpenChange={(nextOpen) => {
             setSearchOpen(nextOpen);
             if (!nextOpen) setSearchQuery("");
@@ -1297,6 +1342,23 @@ export function Workspace({
           returnFocus={searchTriggerRef}
           setQuery={setSearchQuery}
         />
+
+        <Dialog closeLabel="Close task" open={Boolean(searchTaskId)} onOpenChange={open => { if (!open) setSearchTaskId(undefined); }} title={searchTask?.title ?? "Task"} returnFocus={searchTriggerRef}>
+          {!searchTask ? <p>This task is no longer available.</p> : null}
+          <p>{calendars.find(calendar => calendar.id === searchTask?.calendarID)?.name}</p>
+          <p>{searchTask?.status.replace("in-process", "In progress").replace("needs-action", "Needs action")}</p>
+          {searchTask?.due ? <p>Due {searchTask.due.toLocaleString()}</p> : null}
+          {searchTask?.description ? <p>{searchTask.description}</p> : null}
+        </Dialog>
+
+        <Dialog closeLabel="Close event" open={Boolean(searchDetailId)} onOpenChange={open => { if (!open) setSearchDetailId(undefined); }} title={searchDetail?.title ?? "Event"} returnFocus={searchTriggerRef}>
+          {searchDetail ? <>
+            <p>{getEventDateLabel(searchDetail)} · {getEventRangeLabel(searchDetail, settings.timeFormat)}</p>
+            {searchDetail.location ? <p>{searchDetail.location}</p> : null}
+            {searchDetail.description ? <p>{searchDetail.description}</p> : null}
+            {onOpenFullEditor && canEditEvent(searchDetail, calendars) ? <Button onClick={() => { setSearchDetailId(undefined); onOpenFullEditor(eventFormValues(searchDetail), searchDetail); }}>Edit</Button> : null}
+          </> : <p>This event is no longer available.</p>}
+        </Dialog>
 
         <ShortcutsDialog onOpenChange={setShortcutsOpen} open={shortcutsOpen} />
 
@@ -1328,17 +1390,17 @@ export function Workspace({
       {createIntent ? (
         <QuickCreate
           anchor={createIntent.anchor}
-          // Movable, but only within the calendar it belongs to.
-          bounds={() => mainRef.current?.getBoundingClientRect()}
           calendars={editableCalendars}
           date={createIntent.date}
           email={user.email}
+          userName={user.name}
           endDate={createIntent.endDate}
           endTime={createIntent.endTime}
           exactRange={createIntent.exactRange}
           isAllDay={Boolean(createIntent.endDate)}
           key={createIntent.id}
           onCreate={onCreateEvent}
+          onSavingChange={saving => { createSaving.current = saving; }}
           onCreated={() => notify("Event created.")}
           // The block on the grid and the fields in here describe one event, so
           // editing the time, the length or the calendar moves and recolours it.
@@ -1375,6 +1437,7 @@ export function Workspace({
       <CalendarTransferDialog
         calendars={calendars}
         onCreate={onCreateCalendar}
+        onCreateMeeting={(calendar, returnFocus) => setMeetingCreate({ initialCalendarID: calendar.id, returnFocus })}
         onDisconnect={onDisconnectExternalCalendar}
         onExport={onExportCalendar}
         onImport={onImportCalendar}
@@ -1389,6 +1452,15 @@ export function Workspace({
         open={calendarTransfersOpen}
         reminders={reminders}
       />
+      {meetingCreate ? (
+        <ProviderMeetingCreateDialog
+          calendars={calendars}
+          initialCalendarID={meetingCreate.initialCalendarID}
+          initialDate={date}
+          returnFocus={meetingCreate.returnFocus}
+          onClose={() => setMeetingCreate(undefined)}
+        />
+      ) : null}
       {showConnections ? (
         <ConnectionsDialog
           returnFocus={connectionsReturnFocus}

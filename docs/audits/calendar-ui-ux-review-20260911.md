@@ -203,8 +203,13 @@ oprava Select focusu po uložení; ikona responzivního Row už neodsouvá text 
 samostatný řádek. Tyto kontrakty jsou doplněné do design systému a regresních
 kontrol. Kontrola webu nenahrazuje nativní mobilní ani živé providerové akceptace.
 
-Poslední kontrola skutečného seznamu kalendářů přesunula vytvoření providerové
-schůzky ze souhrnu synchronizace do samostatné zarovnané akce pod kalendářem.
-Schopnosti, význam stavu a provedení operace zůstávají stejné; regresní testy
-zachycují požadavky v lokálních mockách. Nezávislé závěrečné review nenašlo
-nevyřešený nález P1/P2.
+Následná uživatelská kontrola upravila vytvoření schůzky na ikonu ve společné
+řadě členů, nastavení a odpojení. V menu „+“ přibyla Schůzka; oba vstupy otevírají
+jeden formulář s výběrem ověřeného providerového kalendáře. Ikona nastaví
+výchozí kalendář, přepnutí zachová rozepsaná data a skutečný okamžik schůzky.
+Nedostupný výchozí kalendář vyžaduje výslovný výběr náhrady.
+
+Tento průchod odhalil také picker skrytý pod elevated dialogem. Oprava patří do
+sdíleného kontextu vrstev a zahrnuje menu i popovery; Storybook ověřuje skutečný
+hit-test a návrat focusu. Providerové schopnosti se nemění; tvorbu, přepnutí i
+opakování požadavku ověřují lokální mocky bez skutečných pozvánek.

@@ -14,7 +14,7 @@ import musubiPackage from "../../../../../package.json";
 import { ApiError } from "~/api/http";
 import { applyTheme } from "~/design/theme";
 import { Button } from "~/ui/Button";
-import { Dialog } from "~/ui/Dialog";
+import { Dialog, DialogInfo } from "~/ui/Dialog";
 import { InlineError } from "~/ui/InlineError";
 import { Row, RowAction, RowOptions, RowToggle } from "~/ui/Row";
 import { SettingsSection } from "~/ui/SettingsSection";
@@ -340,7 +340,7 @@ export function SettingsDialog({
     <Dialog
       bodyLayout="flush"
       closeLabel="Close settings"
-      description="Preferences sync across your Musubi devices."
+      headerActions={<DialogInfo label="About settings" title="Settings">Preferences sync across your Musubi devices.</DialogInfo>}
       onOpenChange={handleOpenChange}
       open={open}
       size="wide"
@@ -446,7 +446,7 @@ export function SettingsDialog({
               {activePage === "reminders" ? (
                 <SettingsSection
                   title="Reminders"
-                  description="Default timing. Calendars and events can use their own reminders."
+                  help="Default timing. Calendars and events can use their own reminders. Browser notifications can deliver reminders even with the Musubi tab closed."
                 >
                   <Row
                     label="Timed events"
@@ -487,10 +487,7 @@ export function SettingsDialog({
                   {reminders?.push.available ? (
                     <RowToggle
                       checked={reminders.push.enabled}
-                      detail={
-                        pushMessage ||
-                        "Receive reminders even with the Musubi tab closed"
-                      }
+                      detail={pushMessage}
                       disabled={saving || pushBusy}
                       label="Browser notifications"
                       onCheckedChange={(wanted) => void togglePush(wanted)}
@@ -500,10 +497,9 @@ export function SettingsDialog({
               ) : null}
 
               {activePage === "notifications" ? (
-                <SettingsSection title="Email notifications">
+                <SettingsSection title="Email notifications" help="Event changes emails you when an event you’re attending moves or is cancelled.">
                   <RowToggle
                     checked={notificationEmails.eventChanged}
-                    detail="Email me when an event I’m attending moves or is cancelled"
                     disabled={saving}
                     label="Event changes"
                     onCheckedChange={(eventChanged) =>
@@ -519,23 +515,20 @@ export function SettingsDialog({
               ) : null}
 
               {activePage === "about" ? (
-                <SettingsSection title="Help & About">
+                <SettingsSection title="Help & About" help="Feedback & Roadmap lets you suggest ideas, vote, and see what is planned. Problem reports include browser and server details. Support us opens Ko-fi.">
                   <RowAction
-                    detail="Suggest ideas, vote, and see what is planned"
                     label="Feedback & Roadmap"
                     showChevron={false}
                     trailing={<ExternalLink aria-hidden="true" size={15} />}
                     onClick={() => openExternal(FEEDBACK_URL)}
                   />
                   <RowAction
-                    detail="Includes browser and server details"
                     label="Report a problem"
                     showChevron={false}
                     trailing={<LifeBuoy aria-hidden="true" size={16} />}
                     onClick={openProblemReport}
                   />
                   <RowAction
-                    detail="Buy us a coffee on Ko-fi"
                     label="Support us"
                     showChevron={false}
                     trailing={<ExternalLink aria-hidden="true" size={15} />}
@@ -564,9 +557,8 @@ export function SettingsDialog({
               ) : null}
 
               {activePage === "account" ? (
-                <SettingsSection title="Account">
+                <SettingsSection title="Account" help="Manage your profile, avatar, and account deletion.">
                   <RowAction
-                    detail="Profile, avatar, and account deletion"
                     icon={<UserRound size={18} strokeWidth={1.6} />}
                     label="Manage account"
                     onClick={onManageAccount}

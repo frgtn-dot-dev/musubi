@@ -4,7 +4,7 @@ import { useState } from "react";
 import { getEventDeliveryInbox } from "~/api/resources";
 import { getServerOrigin, queryKeys } from "~/api/query-keys";
 import { Button } from "~/ui/Button";
-import { Dialog } from "~/ui/Dialog";
+import { Dialog, DialogInfo } from "~/ui/Dialog";
 import { InlineError } from "~/ui/InlineError";
 import { Row, RowAction } from "~/ui/Row";
 import { SettingsSection } from "~/ui/SettingsSection";
@@ -59,7 +59,7 @@ export function EventDeliveryInboxDialog({
           if (!open) onClose();
         }}
         title="Unfinished deliveries"
-        description="Your saved changes that still need delivery or attention, including deleted events."
+        headerActions={<DialogInfo label="About unfinished deliveries" title="Unfinished deliveries">Your saved changes that still need delivery or attention, including deleted events.</DialogInfo>}
         closeLabel="Close unfinished deliveries"
         bodyLayout="flush"
         returnFocus={returnFocus}

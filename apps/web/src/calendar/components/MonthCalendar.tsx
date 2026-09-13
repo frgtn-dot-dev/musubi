@@ -475,6 +475,7 @@ export function MonthCalendar({
                         muted ||
                         !onCreateAtDate ||
                         pointerEvent.button !== 0 ||
+                        dismissGuard.pressDismissedLayer() ||
                         (pointerEvent.target instanceof Element &&
                           pointerEvent.target.closest("button"))
                       ) {

@@ -2,6 +2,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
   useRef,
+  useLayoutEffect,
 } from "react";
 import { classNames } from "./class-names";
 import styles from "./primitives.module.css";
@@ -49,6 +50,8 @@ export function Segmented<Value extends string>({
   size = "compact",
   value,
 }: SegmentedProps<Value>) {
+  const groupRef = useRef<HTMLDivElement>(null);
+  const indicatorRef = useRef<HTMLSpanElement>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const selectedIndex = options.findIndex((option) => option.value === value);
   const fallbackIndex = options.findIndex((option) => !option.disabled);
@@ -57,6 +60,26 @@ export function Segmented<Value extends string>({
     selectedIndex >= 0 && !selectedOption?.disabled
       ? selectedIndex
       : fallbackIndex;
+
+  useLayoutEffect(() => {
+    const group = groupRef.current;
+    const indicator = indicatorRef.current;
+    const selected = optionRefs.current[selectedIndex];
+    if (!group || !indicator) return;
+    if (!selected) { delete group.dataset.indicatorReady; return; }
+    const measure = () => {
+      indicator.style.transform = `translate(${selected.offsetLeft}px, ${selected.offsetTop}px)`;
+      indicator.style.width = `${selected.offsetWidth}px`;
+      indicator.style.height = `${selected.offsetHeight}px`;
+      group.dataset.indicatorReady = "true";
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(group);
+    optionRefs.current.forEach(option => { if (option) observer.observe(option); });
+    return () => observer.disconnect();
+  }, [selectedIndex, options]);
 
   function choose(index: number) {
     const option = options[index];
@@ -88,6 +111,7 @@ export function Segmented<Value extends string>({
 
   return (
     <div
+      ref={groupRef}
       aria-disabled={disabled || undefined}
       aria-label={label}
       aria-orientation="horizontal"
@@ -98,6 +122,7 @@ export function Segmented<Value extends string>({
       )}
       role="radiogroup"
     >
+      <span ref={indicatorRef} aria-hidden="true" className={styles.segmentedIndicator} data-disabled={disabled || selectedOption?.disabled || undefined} />
       {options.map((option, index) => {
         const selected = option.value === value;
 

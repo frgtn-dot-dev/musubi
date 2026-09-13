@@ -35,6 +35,7 @@
   --row-min-height: 62px;
   --control-height: 44px;
   --compact-control-height: 38px;
+  --motion-panel: 120ms;
   --motion-fast: 140ms;
   --motion-standard: 220ms;
   --motion-slow: 300ms;

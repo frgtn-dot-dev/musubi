@@ -4,6 +4,7 @@ import { Disclosure } from "~/ui/Disclosure";
 import { Row } from "~/ui/Row";
 import { SettingsSection } from "~/ui/SettingsSection";
 import { AccountMark } from "./ProviderIcon";
+import { fixtureCalendars } from "../fixtures";
 
 const providers = [
   { flavor: "google", label: "Google Calendar", account: "haruki@example.com" },
@@ -31,6 +32,20 @@ export const AccountAndInspectorRows: Story = {
       {providers.map(provider => <Disclosure key={provider.flavor} density="compact" icon={<AccountMark flavor={provider.flavor} size="compact" />} label={`${provider.label} details`}>
         <Row size="compact" label="Account" value={provider.account} />
       </Disclosure>)}
+    </SettingsSection>
+  </div>,
+};
+
+export const CalendarPigments: Story = {
+  parameters: { chromatic: { modes: { ...DESKTOP_MODES, ...MOBILE_MODES } } },
+  render: () => <div className="sb-settings-preview">
+    <SettingsSection title="Calendar colours">
+      {providers.map((provider, index) => <Row
+        key={provider.flavor}
+        icon={<AccountMark flavor={provider.flavor} size="compact" color={fixtureCalendars[index].color} />}
+        label={fixtureCalendars[index].name}
+        detail={provider.label}
+      />)}
     </SettingsSection>
   </div>,
 };
