@@ -31,7 +31,7 @@ export default defineConfig({
     // depend on the machine's zone. Prague observes daylight saving, UTC doesn't.
     env: { TZ: "Europe/Prague" },
     environment: "node",
-    server: { deps: { inline: ["drizzle-orm"] } },
+    server: { deps: { inline: ["drizzle-orm", "@better-auth/expo"] } },
     include: ["**/*.spec.ts"],
   },
 });
