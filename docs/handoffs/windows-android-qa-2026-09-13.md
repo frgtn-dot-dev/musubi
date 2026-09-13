@@ -34,7 +34,7 @@ Use the appropriate `adb -s <serial>` selector when multiple devices are attache
 
 The client defaults to `musubi.pro`. Explicitly choose the test server before using the test account. The previous test API was `http://localhost:7531`; the test account is `ui-test@musubi.test` and its password must be transferred privately.
 
-Windows localhost is not Linux localhost. Run the API in Windows or establish a working tunnel to the existing Linux QA service. For example, with SSH already configured, `ssh -N -L 7531:127.0.0.1:7531 <user>@<linux-host>` forwards the Linux loopback API to Windows. ADB reverse then connects the Android device to that Windows port. Verify the API is running first; it was stopped at handoff preparation time.
+Windows localhost is not Linux localhost. Run the API in Windows or establish a working tunnel to the existing Linux QA service. For example, with SSH already configured, `ssh -N -L 7531:127.0.0.1:7531 <user>@<linux-host>` forwards the Linux loopback API to Windows. ADB reverse then connects the Android device to that Windows port. Verify the API is running first; it was restarted on Linux for the handoff verification, but process availability is not guaranteed after moving machines.
 
 The existing QA backend uses `DEV_AUTH_COOKIE_PREFIX=musubi-ui-qa`. When connecting to this backend, create the ignored `apps/client/.env.local`:
 
@@ -44,7 +44,7 @@ EXPO_PUBLIC_DEV_AUTH_COOKIE_PREFIX=musubi-ui-qa
 
 Restart Metro after changing the environment and sign in again. Leave this unset for a backend using standard Better Auth cookies. The override only applies to development builds, also accepts the standard prefix, and does not change production authentication.
 
-The last Android failure was login succeeding followed by protected requests returning 401: the Expo plugin ignored the QA-prefixed session cookie. A regression test now exercises the real Expo plugin's cookie persistence and subsequent request header. A fresh live login against the QA API still needs verification after the service is restarted. Login HTTP 200 alone is not acceptance: verify authenticated settings, events and tasks, and that the app stays signed in.
+The last Android failure was login succeeding followed by protected requests returning 401: the Expo plugin ignored the QA-prefixed session cookie. A regression test now exercises the real Expo plugin's cookie persistence and subsequent request header. A temporary integration probe using the mobile auth client passed a real QA API login and protected settings request after restarting the service (native platform/storage seams mocked). Device login and persistence after an app restart still need verification. Login HTTP 200 alone is not acceptance: verify authenticated settings, events and tasks, and that the app stays signed in.
 
 ## QA state to preserve
 
