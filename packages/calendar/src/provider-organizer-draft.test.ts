@@ -106,6 +106,10 @@ console.log("Bound organizer draft and stored occurrence admission: OK");
 const outlook = organizerRequest("create", { ...draft, timeZone: "UTC" }, [], { ...identity, provider: "microsoft" });
 assert.equal(outlook.provider, "microsoft");
 assert.equal("notificationPolicy" in outlook && outlook.notificationPolicy, "server-invite");
-assert.equal(organizerDraft(undefined, "microsoft").timeZone, "UTC");
+assert.equal(organizerDraft(undefined, "microsoft").timeZone, Intl.DateTimeFormat().resolvedOptions().timeZone);
 for (const action of ["update", "delete"] as const) assert.throws(() => organizerRequest(action, draft, ["title"], { ...identity, provider: "microsoft" }));
 assert.match(eventDeliveryExplanation({ provider: "microsoft", organizerPhase: "accepted" } as EventDeliveryTarget), /Outlook accepted/);
+
+const localOutlook = organizerRequest("create", { ...draft, timeZone: "Europe/Prague", start: "2026-09-13T09:00:00", end: "2026-09-13T10:00:00" }, [], { ...identity, provider: "microsoft" });
+assert.equal(localOutlook.action, "create");
+if (localOutlook.action === "create") assert.deepEqual(localOutlook.time, { kind: "zoned", timeZone: "UTC", startLocal: "2026-09-13T07:00:00.000", endLocal: "2026-09-13T08:00:00.000" });

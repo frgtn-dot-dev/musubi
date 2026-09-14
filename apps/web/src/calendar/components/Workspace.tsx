@@ -1,3 +1,5 @@
+import { calendarTasks, isCalendarTask } from "@musubi/calendar";
+import { CalendarTaskContext } from "./CalendarTaskDetails";
 import { eventDayKeys, getMonthGrid } from "@musubi/calendar/layout";
 import { getTimeGridDays } from "../time-grid-math";
 import { getAgendaGroups } from "../agenda-math";
@@ -634,12 +636,12 @@ export function Workspace({
 
   const visibleEvents = useMemo(
     () =>
-      events.filter((event) =>
+      [...events, ...calendarTasks(tasks, calendars)].filter((event) =>
         event.calendars.some((calendarId) =>
           visibleCalendarIds.includes(calendarId),
         ),
       ),
-    [events, visibleCalendarIds],
+    [events, tasks, calendars, visibleCalendarIds],
   );
   const searchVisibleEventIds = useMemo(() => {
     if (activeView === "tasks") return [];
@@ -650,7 +652,7 @@ export function Workspace({
     const dayKeys = new Set(days.map(toDateKey));
     const shown = activeView === "agenda" ? getAgendaGroups(visibleEvents, anchor).flatMap(group => group.items)
       : visibleEvents.filter(event => eventDayKeys(event).some(day => dayKeys.has(day)));
-    return shown.map(event => event.recurrence ? event.id.replace(/_\d+$/, "") : event.id);
+    return shown.filter(event => !isCalendarTask(event)).map(event => event.recurrence ? event.id.replace(/_\d+$/, "") : event.id);
   }, [activeView, anchor, settings.weekStartsOn, showAdjacentDays, showWeekend, multiWeekBlocks, visibleEvents]);
   useEffect(() => {
     if (!notice) {
@@ -948,6 +950,7 @@ export function Workspace({
   }
 
   return (
+    <CalendarTaskContext.Provider value={{ tasks, calendars, settings, offline, update: onUpdateTask }}>
     <div className={styles.workspace}>
       <Sidebar
         activePageId={pageId}
@@ -1310,7 +1313,7 @@ export function Workspace({
         <SearchDialog
           activeView={activeView}
           canCreateEvents={editableCalendars.length > 0}
-          events={visibleEvents}
+          events={visibleEvents.filter(event => !isCalendarTask(event))}
           tasks={tasks}
           calendars={calendars}
           visibleCalendarIds={visibleCalendarIds}
@@ -1561,5 +1564,6 @@ export function Workspace({
         open={settingsOpen}
       />
     </div>
+    </CalendarTaskContext.Provider>
   );
 }

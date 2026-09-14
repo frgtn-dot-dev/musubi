@@ -8,7 +8,46 @@ process.env.ENVIRONMENT ??= "dev";
 process.env.BETTER_AUTH_URL ??= "http://localhost:7531";
 
 async function main() {
-  const { microsoftAdapter, microsoftEventPath, parseGraphDate, toExternalCalendar, toNormalized, toGraphEvent, toGraphEventPatch, parseCursor } = await import("./microsoft");
+  const { fetchMicrosoftTaskChanges, microsoftAdapter, microsoftEventPath, parseGraphDate, toExternalCalendar, toNormalized, toGraphEvent, toGraphEventPatch, parseCursor } = await import("./microsoft");
+
+  // Unsupported delta falls back to a complete paginated snapshot, never a
+  // partial delta. Other failures remain failures and cannot trigger a sweep.
+  const graphBase = "https://graph.microsoft.com/v1.0";
+  const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+  const unsupported = () => json({ error: { message: "Invalid request. Delta query is not supported by this resource." } }, 400);
+  const requests: string[] = [];
+  const snapshot = await fetchMicrosoftTaskChanges("fixture", "list/id", null, {
+    graphBase,
+    fetchImpl: (async (input) => {
+      const url = String(input); requests.push(url);
+      if (url.includes("/delta")) return unsupported();
+      if (url.includes("page=2")) return json({ value: [{ id: "two", title: "Second" }] });
+      return json({ value: [{ id: "one", title: "First" }], "@odata.nextLink": `${graphBase}/me/todo/lists/list%2Fid/tasks?page=2` });
+    }) as typeof fetch,
+  });
+  assert.equal(requests.length, 3);
+  assert.ok(requests[1].includes("/list%2Fid/tasks?"));
+  assert.equal(snapshot.reset, true);
+  assert.equal(snapshot.nextCursor, null);
+  assert.deepEqual(snapshot.changes.map(c => c.kind === "task" && c.data.externalId), ["one", "two"]);
+  for (const failure of ["second-page", "malformed", "other-400"]) {
+    await assert.rejects(fetchMicrosoftTaskChanges("fixture", "list", null, {
+      graphBase,
+      fetchImpl: (async (input) => {
+        const url = String(input);
+        if (failure === "other-400") return json({ error: { message: "Invalid request" } }, 400);
+        if (url.includes("/delta")) return unsupported();
+        if (failure === "malformed") return json({});
+        if (url.includes("page=2")) return json({ error: { message: "Unavailable" } }, 500);
+        return json({ value: [{ id: "one" }], "@odata.nextLink": `${graphBase}/me/todo/lists/list/tasks?page=2` });
+      }) as typeof fetch,
+    }));
+  }
+
+  assert.equal(toExternalCalendar({ id: "default", name: "Calendar", canEdit: true, isDefaultCalendar: true }).providerDefaultCalendar, true);
+  assert.equal(toExternalCalendar({ id: "ordinary", name: "Calendar", canEdit: true, isDefaultCalendar: false }).providerDefaultCalendar, false);
+  assert.equal(toExternalCalendar({ id: "unknown", name: "Calendar", canEdit: true }).providerDefaultCalendar, null);
+  assert.equal(toExternalCalendar({ id: "default", name: "Calendar", canEdit: true, isDefaultCalendar: true }).readOnly, false, "Metadata lock must not remove event write access");
 
   // Writes stay scoped to their source, including non-default work calendars.
   assert.equal(

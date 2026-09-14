@@ -122,28 +122,16 @@ it.each([
   expect(close).toHaveBeenCalledOnce();
 });
 
-it("opens retained delivery discovery from the actual native connection screen", async () => {
-  const { default: DeliveryModal } = await import("./EventDeliveryModal");
-  const find = (node: ReactNode): any => {
-    if (Array.isArray(node)) return node.map(find).find(Boolean);
-    if (!isValidElement<{ children?: ReactNode; label?: string; onPress?: () => void }>(node)) return;
-    if (node.type === DeliveryModal) return node.props;
-    return find(node.props.children);
-  };
-  const render = () => { state.index = 0; return SyncCalendarModal({ visible: true, onClose: vi.fn(), onConnected: vi.fn() }); };
-  control(render(), "Unfinished deliveries")!.onPress!();
-  const modal = find(render());
-  expect(modal.visible).toBe(true);
-  expect(modal.eventId).toBeUndefined();
-  modal.onClose();
-  expect(find(render()).visible).toBe(false);
+it("keeps the connection screen focused on providers", () => {
+  state.index = 0;
+  expect(control(SyncCalendarModal({ visible: true, onClose: vi.fn(), onConnected: vi.fn() }), "Unfinished deliveries")).toBeUndefined();
 });
 
 it.each([false, true])("native Google callback requests availability scope only with capability=%s", async enabled => {
   const render = () => { state.index = 0; return SyncCalendarModal({ visible: true, onClose: vi.fn(), onConnected: vi.fn() }); };
   render();
   // Capability state, otherwise exercise the actual disclosure and OAuth callbacks.
-  state.values[2] = { origin: "https://home.example.test", enabled };
+  state.values[1] = { origin: "https://home.example.test", enabled };
   control(render(), "Google Calendar")!.onPress!();
   await control(render(), "Continue to Google")!.onPress!();
   expect(linkSocial.mock.lastCall![0].scopes.includes("https://www.googleapis.com/auth/calendar.events.freebusy")).toBe(enabled);
@@ -159,9 +147,9 @@ it("opens capability-gated availability from the real native connection entry", 
   };
   const render = () => { state.index = 0; return SyncCalendarModal({ visible: true, onClose: vi.fn(), onConnected: vi.fn() }); };
   expect(control(render(), "Check availability")).toBeUndefined();
-  state.values[2] = { origin: "https://other.example.test", enabled: true };
+  state.values[1] = { origin: "https://other.example.test", enabled: true };
   expect(control(render(), "Check availability")).toBeUndefined();
-  state.values[2] = { origin: "https://home.example.test", enabled: true };
+  state.values[1] = { origin: "https://home.example.test", enabled: true };
   control(render(), "Check availability")!.onPress!();
   expect(find(render()).visible).toBe(true);
   find(render()).onClose(); expect(find(render()).visible).toBe(false);

@@ -17,6 +17,10 @@ export function useKanbanDrag(onMove: (task: Task, status: Task["status"]) => Pr
     const scroller = card?.closest<HTMLElement>("[data-kanban-scroll]");
     if (!card || !scroller) return;
     event.preventDefault();
+    const pointerId = event.pointerId;
+    // Keep the active pointer routed to the board across cards, controls and
+    // scroll regions. Capture-phase listeners also survive child propagation stops.
+    scroller.setPointerCapture?.(pointerId);
     const start = card.getBoundingClientRect();
     scroller.style.setProperty("--kanban-drag-height", `${start.height}px`);
     const ghost = card.cloneNode(true) as HTMLElement;
@@ -41,17 +45,34 @@ export function useKanbanDrag(onMove: (task: Task, status: Task["status"]) => Pr
       const bounds = scroller.getBoundingClientRect();
       if (x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom) {
         scroller.scrollLeft += x > bounds.right - 40 ? 10 : x < bounds.left + 40 ? -10 : 0;
-        scroller.scrollTop += y > bounds.bottom - 40 ? 10 : y < bounds.top + 40 ? -10 : 0;
+        const column = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-kanban-status]");
+        const body = column && scroller.contains(column) ? column.querySelector<HTMLElement>("[data-kanban-column-scroll]") : null;
+        if (body) {
+          const bodyBounds = body.getBoundingClientRect();
+          body.scrollTop += y > bodyBounds.bottom - 40 ? 10 : y < bodyBounds.top + 40 ? -10 : 0;
+        }
       }
       paint(); hit(); frame = requestAnimationFrame(tick);
     };
-    const move = (next: PointerEvent) => { if (next.pointerId === event.pointerId) { x = next.clientX; y = next.clientY; } };
+    const updatePosition = (next: MouseEvent) => {
+      x = next.clientX; y = next.clientY;
+      // Follow input immediately, even if the remote host throttles animation frames.
+      paint(); hit();
+    };
+    const move = (next: PointerEvent) => { if (next.pointerId === pointerId) updatePosition(next); };
+    // Some remote input bridges supply mouse moves between pointer down/up.
+    // Restrict this fallback to mouse drags so it cannot interfere with touch.
+    const mouseMove = (next: MouseEvent) => {
+      if (event.pointerType === "mouse" && (next.buttons & 1)) updatePosition(next);
+    };
     const detach = () => {
       cancelAnimationFrame(frame);
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      window.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("mousemove", mouseMove, true);
+      window.removeEventListener("pointerup", up, true);
+      window.removeEventListener("pointercancel", cancel, true);
       window.removeEventListener("keydown", key, true);
+      if (scroller.hasPointerCapture?.(pointerId)) scroller.releasePointerCapture(pointerId);
     };
     const dispose = () => { active = false; detach(); ghost.getAnimations?.().forEach(animation => animation.cancel()); ghost.remove(); scroller.style.removeProperty("--kanban-drag-height"); cleanup.current = undefined; };
     const travel = async (rect: DOMRect) => {
@@ -87,14 +108,15 @@ export function useKanbanDrag(onMove: (task: Task, status: Task["status"]) => Pr
       // The task list owns rollback and animates the card back if saving fails.
       await saving;
     }
-    const up = (next: PointerEvent) => { if (next.pointerId !== event.pointerId) return; x = next.clientX; y = next.clientY; hit(); void finish(false); };
-    const cancel = (next?: PointerEvent) => { if (!next || next.pointerId === event.pointerId) void finish(true); };
+    const up = (next: PointerEvent) => { if (next.pointerId !== pointerId) return; x = next.clientX; y = next.clientY; hit(); void finish(false); };
+    const cancel = (next?: PointerEvent) => { if (!next || next.pointerId === pointerId) void finish(true); };
     const key = (next: KeyboardEvent) => { if (next.key === "Escape") { next.preventDefault(); next.stopPropagation(); cancel(); } };
     cleanup.current = dispose;
     paint(); setDraggingId(task.id);
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-    window.addEventListener("pointercancel", cancel);
+    window.addEventListener("pointermove", move, true);
+    window.addEventListener("mousemove", mouseMove, true);
+    window.addEventListener("pointerup", up, true);
+    window.addEventListener("pointercancel", cancel, true);
     window.addEventListener("keydown", key, true);
     frame = requestAnimationFrame(tick);
   }

@@ -1189,3 +1189,25 @@ pills slide their selection, calendar views and periods crossfade, and inspector
 and the title resize together in 120 ms. Reduced-motion settings disable these
 transitions. User-menu actions include sign out, leaving the full profile width
 for name and email.
+
+## Datované tasky v kalendáři (web a Android)
+
+- Začátek tasku patří do příslušného dne, s časem do časové mřížky. Termín
+  dokončení má vlastní položku v celodenním řádku.
+- Datum bez času zachovává uložený kalendářní den. Termín s časem se vztahuje
+  k časovému pásmu zařízení. Shodný celodenní začátek a termín tvoří jednu položku.
+- Task bez dat zůstává jen v Tasks. Zrušené tasky se nezobrazují; dokončené
+  mají označení dokončení. Platí filtr viditelných kalendářů.
+- Kliknutí otevírá detail tasku se změnou stavu. Položky jsou pouze projekce;
+  neukládají se přes event API a nevstupují do eventových připomínek ani dostupnosti.
+- Task zatím nemá samostatnou délku. Krátká geometrie časové položky slouží
+  pouze pro čitelnost; nezobrazuje se jako uložený konec a nepřetéká přes půlnoc.
+  Termín dokončení není konec rezervovaného časového bloku.
+- Zobrazují se konkrétní tasky vrácené API. Projekce sama negeneruje budoucí
+  opakované tasky z pravidla recurrence.
+
+
+Kanban columns scroll independently below a fixed header containing the status,
+count and Add task action. Each scroll region is keyboard-focusable; drag edge
+scrolling follows the column under the pointer while horizontal board scrolling
+remains available on narrow screens.

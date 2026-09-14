@@ -1,6 +1,8 @@
+import { BottomSheetFrame } from "@/components/ui/BottomSheetFrame";
+import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEffect, useRef, useState } from "react";
-import { AppState, Pressable, ScrollView, Text, View } from "react-native";
+import { AppState, ScrollView, Text, View } from "react-native";
 import { uuidv7 } from "uuidv7";
 import { spacing, typeSizes } from "@musubi/design-system";
 import {
@@ -182,8 +184,9 @@ export function DeliveryBody({
     }
   }
 
+  const motion = useModalAnimation(true, onClose);
   function close() {
-    if (!busyRef.current) onClose();
+    if (!busyRef.current) void motion.handleClose();
   }
   const confirmLabel =
     comparison?.preview.graphCreateAdoption ? "Use provider version" : comparison?.preview.caldavAlarmResolution ? (comparison.preview.caldavAlarmResolution.scope === "series" ? "Apply saved series alarm" : "Apply saved event alarm") : comparison?.preview.scopeResolution ? (comparison.preview.scopeResolution.kind === "following-delete" ? "Delete following occurrences" : comparison.preview.scopeResolution.kind === "following-create" ? "Finish future series" : comparison.preview.scopeResolution.kind === "following-update" ? "Apply following changes" : "Delete entire series") : comparison?.preview.rsvpResolution ? "Send saved response" : comparison?.preview.reminderResolution ? "Apply saved reminders" : comparison?.preview.action === "delete"
@@ -230,12 +233,7 @@ export function DeliveryBody({
   };
   return (
     <ModalPortal visible onRequestClose={close}>
-      <View style={styles.modalOverlay}>
-        <Pressable style={{ flex: 1 }} onPress={close} accessible={false} />
-      </View>
-      <View style={styles.modalSheet}>
-        <View style={styles.modalHandle} />
-        <View style={styles.modalTitleRow}>
+      <BottomSheetFrame motion={motion} onClose={close} dismissible={!busy} header={<View style={styles.modalTitleRow}>
           <Text accessibilityRole="header" style={styles.modalTitle}>
             {comparison
               ? "Review remote changes"
@@ -243,7 +241,7 @@ export function DeliveryBody({
                 ? "Delivery"
                 : "Unfinished deliveries"}
           </Text>
-        </View>
+        </View>}>
         <ScrollView
           contentContainerStyle={{
             padding: spacing[4],
@@ -518,7 +516,8 @@ export function DeliveryBody({
             onPress={close}
           />
         </ScrollView>
-      </View>
+
+     </BottomSheetFrame>
     </ModalPortal>
   );
 }

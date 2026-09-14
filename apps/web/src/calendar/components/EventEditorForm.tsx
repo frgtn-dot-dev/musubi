@@ -1,3 +1,4 @@
+import { TimeZonePicker } from "./TimeZonePicker";
 import { chooseEventTimeKind } from "@musubi/calendar";
 import {
 	can,
@@ -327,6 +328,7 @@ export function EventEditorForm({
 	function changeTimeModel(next: Partial<EventFormValues>) {
 		patch({
 			...next,
+            ...(values.createID && next.timeKind === "zoned" && !next.timeZone && !values.timeZone ? { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, timeLabel: Intl.DateTimeFormat().resolvedOptions().timeZone } : {}),
 			...(panel && next.isAllDay && values.endDate < values.date
 				? { endDate: values.date }
 				: {}),
@@ -366,8 +368,8 @@ export function EventEditorForm({
 						options={[{ value: "zoned", label: "Event time zone" }, { value: "floating", label: "Floating local time" }, { value: "all-day", label: "All-day dates" }]}
 						onChange={kind => changeTimeModel(chooseEventTimeKind(values, kind as "zoned" | "floating" | "all-day"))} />
 				</Field>
-				{values.timeKind === "zoned" && <Field label="Event time zone" help={panel ? "For example Europe/Prague." : "For example Europe/Prague. Uses the dates and times shown below."} variant={fieldVariant}>
-					<input value={values.timeZone ?? ""} placeholder="Europe/Prague" disabled={saving} onChange={event => patch({ timeZone: event.target.value, timeLabel: event.target.value || "Choose an event time zone" })} />
+				{values.timeKind === "zoned" && <Field label="Event time zone" help="Uses the dates and times shown in the editor." variant={fieldVariant}>
+					<TimeZonePicker value={values.timeZone ?? ""} disabled={saving} onChange={value => patch({ timeZone: value, timeLabel: value })} />
 				</Field>}
 			</>
 	) : null;

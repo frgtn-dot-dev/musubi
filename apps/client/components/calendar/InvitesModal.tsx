@@ -144,12 +144,16 @@ export default function InvitesModal({ calendar, visible, onClose }: Props) {
         <Animated.View style={[styles.modalOverlay, fadeStyle]}>
           <Pressable style={{ flex: 1 }} onPress={handleClose} accessible={false} />
         </Animated.View>
-        <GestureDetector gesture={gesture}>
+
           <Animated.View style={[styles.modalSheet, fadeStyle, slideStyle]}>
+            <GestureDetector gesture={gesture}>
+              <View collapsable={false}>
             <View style={styles.modalHandle} />
             <View style={styles.modalTitleRow}>
               <Text style={styles.modalTitle}>Invite Links</Text>
             </View>
+              </View>
+            </GestureDetector>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}>
 
               {/* New link — its own bordered section, same rhythm as other modals. */}
@@ -244,7 +248,7 @@ export default function InvitesModal({ calendar, visible, onClose }: Props) {
               )}
             </ScrollView>
           </Animated.View>
-        </GestureDetector>
+
       </GestureHandlerRootView>
     </Modal>
   );

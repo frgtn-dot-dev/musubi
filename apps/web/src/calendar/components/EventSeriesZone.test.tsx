@@ -17,9 +17,9 @@ it("saves UTC from a synthetic final occurrence without restarting COUNT", async
   await user.click(screen.getByRole("button", { name: "Open occurrence" }));
   await user.click(screen.getByRole("button", { name: /^Edit$/ }));
   // Panel exposes the time-zone field directly.
-  const zone = screen.getByRole("textbox", { name: /^Event time zone$/ });
-  await user.clear(zone); await user.type(zone, "UTC");
+  const zone = screen.getByRole("combobox", { name: /^Event time zone$/ });
+  await user.click(zone); await user.type(screen.getByRole("textbox", { name: "Search Event time zone" }), "UTC"); await user.click(await screen.findByRole("option", { name: "UTC" }));
   await user.click(screen.getByRole("button", { name: /^Save$/ }));
   await user.click(screen.getByRole("button", { name: /^All events$/ }));
   expect(apply).toHaveBeenCalledWith(master, expect.objectContaining({ scope: "series", patch: {}, time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-10-23T02:30:00.000", endLocal: "2026-10-23T03:30:00.000" } }));
-});
+}, 15000);

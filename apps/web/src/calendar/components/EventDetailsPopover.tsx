@@ -1,3 +1,5 @@
+import { isCalendarTask } from "@musubi/calendar";
+import { CalendarTaskDetails } from "./CalendarTaskDetails";
 import { isGoogleEditorPrivacyRefresh, refreshPrivateEditorBaseline, refreshPrivateEditorValues, rememberPrivateEditorChanges, type PrivateEditorField } from "../event-editor-privacy";
 import { Empty } from "~/ui/Empty";
 import { ProviderRsvpEditor } from "./ProviderRsvpEditor";
@@ -171,7 +173,12 @@ type EventDetailsPopoverProps = EventActionHandlers & {
 	weekStartsOn: Settings["weekStartsOn"];
 };
 
-export function EventDetailsPopover({
+export function EventDetailsPopover(props: EventDetailsPopoverProps) {
+  if (isCalendarTask(props.event)) return <CalendarTaskDetails taskId={props.event.calendarTask.id}>{props.children}</CalendarTaskDetails>;
+  return <CalendarEventDetailsPopover {...props} />;
+}
+
+function CalendarEventDetailsPopover({
 	calendar,
 	calendars,
 	children,

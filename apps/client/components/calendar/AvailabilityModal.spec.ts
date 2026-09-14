@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { isValidElement, type ReactNode } from "react";
+vi.mock("@/hooks/useModalAnimation", () => ({ useModalAnimation: (_visible: boolean, close: () => void) => ({ handleClose: close }) }));
+vi.mock("@/components/ui/BottomSheetFrame", () => ({ BottomSheetFrame: "BottomSheetFrame" }));
 const h = vi.hoisted(() => ({ slots: [] as any[], index: 0, effects: [] as (() => void)[], request: vi.fn(), userId: "owner", apiUrl: "https://home.example.test", appState: undefined as ((state: string) => void) | undefined }));
 vi.mock("react", async original => ({ ...await original<typeof import("react")>(),
   useState: (initial: any) => { const index = h.index++; if (!(index in h.slots)) h.slots[index] = typeof initial === "function" ? initial() : initial; return [h.slots[index], (value: any) => { h.slots[index] = typeof value === "function" ? value(h.slots[index]) : value; }]; },

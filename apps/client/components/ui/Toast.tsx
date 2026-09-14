@@ -45,7 +45,7 @@ const VISIBLE_MS = 4200; // auto-dismiss after this
 const REVEAL_MS = motionDurations.native.standard;
 const TRAVEL = 14; // it only nudges up a little; the fade does the reveal
 const SIGN_IN_ACTIONS_H = 154; // Forgot + Continue + gap/padding; toast sits above both
-const TAB_PATHS = new Set(["/", "/calendars", "/agenda", "/settings"]);
+const TAB_PATHS = new Set(["/", "/calendars", "/tasks", "/agenda", "/settings"]);
 
 // Mounted once at the app root; renders whatever toast is currently in the store.
 export function ToastHost() {

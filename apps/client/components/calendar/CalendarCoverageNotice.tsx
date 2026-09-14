@@ -1,14 +1,18 @@
-import { Text, View } from "react-native";
+import { Alert } from "react-native";
 import { calendarCoverageNotice } from "@musubi/calendar";
 import type { Calendar } from "@musubi/types";
-import { colors, fonts } from "@/constants/theme";
+import { colors } from "@/constants/theme";
+import { Tap } from "@/components/ui/Tap";
+import { Feather } from "@expo/vector-icons";
 
 export function CalendarCoverageNotice({ calendars }: { calendars: readonly Calendar[] }) {
   const message = calendarCoverageNotice(calendars);
   if (!message) return null;
   return (
-    <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: colors.bg1 }}>
-      <Text accessibilityLiveRegion="polite" style={{ fontFamily: fonts.sans, fontSize: 13, color: colors.fg2 }}>{message}</Text>
-    </View>
+    <Tap accessibilityLabel="Calendar sync information" accessibilityHint="Shows provider calendar coverage details"
+      onPress={() => Alert.alert("Calendar sync", message)}
+      style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+      <Feather name="info" size={18} color={colors.fg3} />
+    </Tap>
   );
 }

@@ -99,6 +99,7 @@ export type EventWriteOperation = {
 
 export type ExternalCalendarInfo = {
   externalId: string;
+  providerDefaultCalendar?: boolean | null;
   name: string;
   color: string;
   supportsEvents?: boolean;

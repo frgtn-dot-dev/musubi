@@ -116,10 +116,11 @@ export default function TabLayout() {
           headerShown: false,
           tabBarIcon: ({ color }) => <Feather size={20} name='layers' color={color} />,
         }} />
-        <Tabs.Screen name="agenda" options={{
-          title: "Agenda",
+        <Tabs.Screen name="agenda" options={{ href: null }} />
+        <Tabs.Screen name="tasks" options={{
+          title: "Tasks",
           headerShown: false,
-          tabBarIcon: ({ color }) => <Feather size={20} name='list' color={color} />,
+          tabBarIcon: ({ color }) => <Feather size={20} name='check-square' color={color} />,
         }} />
         <Tabs.Screen name="settings" options={{
           title: "Settings",

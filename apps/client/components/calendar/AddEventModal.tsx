@@ -1,3 +1,4 @@
+import { TimeZonePicker } from "./TimeZonePicker";
 import { refreshedPrivateField } from "@/lib/eventEditorPrivacy";
 import "react-native-get-random-values";
 import {
@@ -309,6 +310,7 @@ export function AddEventModal({
     setNewUrl("");
     setUrlError("");
     setDetailsOpen(false);
+    setTimeSettingsOpen(false);
     setAttendeesToggle(false);
     setNewRecurrence("none");
     setUnsupportedRecurrence(null);
@@ -349,6 +351,7 @@ export function AddEventModal({
   const [timeDraft, setTimeDraft] = useState<EventTimeDraft | null>(null);
   const recurrenceStart = timeDraft ? new Date(`${timeDraft.date}T12:00:00`) : newStart;
   const [timeModelPicker, setTimeModelPicker] = useState(false);
+  const [timeSettingsOpen, setTimeSettingsOpen] = useState(false);
   useEffect(() => {
     if (!docked) return;
     const show = Keyboard.addListener(
@@ -1030,17 +1033,6 @@ export function AddEventModal({
           />
         )}
 
-        <SettingRowAction label="Time model" value={timeDraft?.timeKind === "zoned" ? "Event time zone" : timeDraft?.timeLabel ?? "Not specified"}
-          detail="The selected model interprets the dates and times below. Changing it may change when the event occurs."
-          onPress={() => setTimeModelPicker(true)} />
-        {timeDraft?.timeKind === "zoned" && <View style={styles.fieldContainer}>
-          <Text style={styles.fieldValueText}>Event time zone</Text>
-          <TextInput accessibilityLabel="Event time zone" style={styles.fieldValueText} value={timeDraft.timeZone ?? ""} placeholder="Europe/Prague" autoCorrect={false} autoCapitalize="none"
-            onChangeText={value => setTimeDraft(current => current && ({ ...current, timeZone: value, timeLabel: value || "Choose an event time zone" }))} />
-        </View>}
-        {timeDraft && <Text style={styles.fieldValueText}>
-          {timeDraft.timeLabel}
-        </Text>}
         {/* One "When" block, platform-calendar style: Starts / Ends rows with
                   date+time chips, all-day inline, quick presets underneath. */}
         <View style={styles.fieldContainer}>
@@ -1903,6 +1895,19 @@ export function AddEventModal({
             </View>
           </>
         )}
+        <SettingRowAction label="Advanced time settings" onPress={() => setTimeSettingsOpen(open => !open)} />
+        {timeSettingsOpen && <>
+        <SettingRowAction label="Time model" value={timeDraft?.timeKind === "zoned" ? "Event time zone" : timeDraft?.timeLabel ?? "Not specified"}
+          detail="The selected model interprets the dates and times below. Changing it may change when the event occurs."
+          onPress={() => setTimeModelPicker(true)} />
+        {timeDraft?.timeKind === "zoned" && <View style={styles.fieldContainer}>
+          <Text style={styles.fieldValueText}>Event time zone</Text>
+          <TimeZonePicker accessibilityLabel="Event time zone" value={timeDraft.timeZone ?? ""} disabled={isLoading} onChange={value => setTimeDraft(current => current && ({ ...current, timeZone: value, timeLabel: value }))} />
+        </View>}
+        {timeDraft && <Text style={styles.fieldValueText}>
+          {timeDraft.timeLabel}
+        </Text>}
+        </>}
       </ScrollView>
       {!docked && (
         <View
@@ -1924,7 +1929,7 @@ export function AddEventModal({
           // The native picker values already represent the visible local date,
           // including the all-day projection above. Adopt those civil fields.
           const current = timeDraft ?? legacyEventTimeDraft({ start: newStart, end: newEnd, isAllDay: false });
-          const next = chooseEventTimeKind(current, value as "zoned" | "floating" | "all-day");
+          const next = chooseEventTimeKind(!event && !current.timeZone ? { ...current, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone } : current, value as "zoned" | "floating" | "all-day");
           setTimeDraft(next);
           setAllDayToggle(next.isAllDay);
         }}

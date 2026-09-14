@@ -1,3 +1,4 @@
+import EventDeliveryModal from "@/components/calendar/EventDeliveryModal";
 import {
   SettingRowAction,
   SettingRowOptions,
@@ -74,6 +75,7 @@ function reminderLabel(rule: ReminderRule, kind: "allDay" | "timed") {
 }
 
 export default function SettingsTab() {
+  const [deliveryVisible, setDeliveryVisible] = useState(false);
   const api = useApi();
   const { authClient, apiUrl } = useServer();
   const calendars = useCalendarsStore((state) => state.calendars);
@@ -524,10 +526,12 @@ export default function SettingsTab() {
         <SettingRowOptions
           label="Default View"
           value={defaultCalendarView}
-          options={["month", "week", "day"]}
+          options={["day", "week", "month", "schedule"]}
+          labels={{ schedule: "Agenda" }}
           onChange={(v) => {
-            setDefaultCalendarView(v as CalendarView);
-            save({ defaultCalendarView: v as CalendarView });
+            const next = v as CalendarView;
+            setDefaultCalendarView(next);
+            save({ defaultCalendarView: next });
           }}
         />
         <SettingRowOptions
@@ -664,6 +668,9 @@ export default function SettingsTab() {
           />
         ) : null}
 
+        <Text style={[styles.sectionLabel, local.sectionHeading]}>Sync & delivery</Text>
+        <SettingRowAction label="Delivery status" detail="All pending deliveries, failures, and provider confirmations" onPress={() => setDeliveryVisible(true)} />
+
         <Text style={[styles.sectionLabel, local.sectionHeading]}>Account</Text>
         <View style={{ paddingHorizontal: 16, paddingBottom: 32, gap: 10 }}>
           <Btn
@@ -693,6 +700,7 @@ export default function SettingsTab() {
           />
         </View>
       </ScrollView>
+      <EventDeliveryModal visible={deliveryVisible} onClose={() => setDeliveryVisible(false)} />
       <InputModal
         visible={emailModalVisible}
         title="New email address"

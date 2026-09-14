@@ -2231,7 +2231,10 @@
 }
 
 .weekBlockDay[data-today] .weekBlockDate {
-	color: var(--accent-primary);
+	background: var(--accent-primary);
+	color: var(--accent-on-primary);
+	border-radius: var(--radius-sm);
+	padding-inline: var(--space-1);
 	font-weight: 600;
 }
 
@@ -2384,4 +2387,8 @@
     .toolbar .viewSwitcher { max-width: 100%; }
     .viewSwitcher > button { min-width: 0; padding-inline: var(--space-2); }
   }
+}
+
+.eventChip[data-task-completed] .eventTitle {
+  text-decoration: line-through;
 }

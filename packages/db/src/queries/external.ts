@@ -94,6 +94,7 @@ export async function getUserExternalCalendars(
       providerAccessRevision: externalCalendars.providerAccessRevision,
       supportsEvents: externalCalendars.supportsEvents,
       supportsTasks: externalCalendars.supportsTasks,
+      providerDefaultCalendar: externalCalendars.providerDefaultCalendar,
       calColor: calendars.color,
     })
     .from(externalCalendars)
@@ -118,6 +119,7 @@ export async function importExternalCalendar(
     color: string;
     supportsEvents?: boolean;
     supportsTasks?: boolean;
+    providerDefaultCalendar?: boolean | null;
   },
   role: string = "owner", // "viewer" for provider-side read-only calendars (holidays, …)
 ) {
@@ -137,6 +139,7 @@ export async function importExternalCalendar(
       cursor: null,
       supportsEvents: cal.supportsEvents ?? true,
       supportsTasks: cal.supportsTasks ?? false,
+      providerDefaultCalendar: cal.providerDefaultCalendar ?? null,
     });
     await tx
       .insert(calendarMembers)
@@ -271,7 +274,7 @@ export async function setExternalCalendarCapabilities(
   userID: string,
   accountID: string,
   externalCalendarID: string,
-  capabilities: { supportsEvents: boolean; supportsTasks: boolean },
+  capabilities: { supportsEvents: boolean; supportsTasks: boolean; providerDefaultCalendar?: boolean | null },
 ) {
   await db
     .update(externalCalendars)
@@ -310,6 +313,7 @@ export async function getExternalLinkForCalendar(calendarID: string) {
       externalCalendarID: externalCalendars.externalCalendarID,
       supportsEvents: externalCalendars.supportsEvents,
       supportsTasks: externalCalendars.supportsTasks,
+      providerDefaultCalendar: externalCalendars.providerDefaultCalendar,
       userID: externalCalendars.userID,
       accountID: externalCalendars.accountID,
       accountLabel: externalCalendars.accountLabel,

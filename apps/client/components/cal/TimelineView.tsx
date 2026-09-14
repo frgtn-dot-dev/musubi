@@ -1,3 +1,5 @@
+import { TaskStatusIcon } from "@/components/tasks/TaskStatusIcon";
+import { isCalendarTask } from "@musubi/calendar";
 import { Event } from "@musubi/types";
 import { Feather } from "@expo/vector-icons";
 import { activeScheme, colors, fonts } from "@/constants/theme";
@@ -497,7 +499,7 @@ function TimelinePage({
               <Tap
                 key={sp.event.id}
                 onPress={() => onPressEvent(sp.event)}
-                accessibilityLabel={`All-day event, ${sp.event.title || "Untitled event"}`}
+                accessibilityLabel={`${isCalendarTask(sp.event) ? "Task deadline" : "All-day event"}, ${sp.event.title || "Untitled event"}`}
                 style={{
                 position: "absolute",
                 left: sp.startCol * colW + 1,
@@ -507,7 +509,7 @@ function TimelinePage({
                 backgroundColor: eventColorOf(sp.event),
                 borderRadius: 4, paddingHorizontal: 5, justifyContent: "center",
               }}>
-                <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 9.5, color: INK }}>{sp.event.title}</Text>
+                <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 9.5, color: INK }}>{isCalendarTask(sp.event) ? <><TaskStatusIcon status={sp.event.calendarTask.status} size={10} color={INK} />{" "}<Text style={{ textDecorationLine: sp.event.calendarTask.status === "completed" ? "line-through" : "none" }}>{sp.event.title}</Text></> : sp.event.title}</Text>
               </Tap>
             ))}
             {hiddenSpans > 0 && (
@@ -812,14 +814,14 @@ const TimelineEventBlock = memo(function TimelineEventBlock({
         }}
       >
         <Text numberOfLines={dur >= 30 ? 2 : 1} style={{ fontFamily: fonts.sansMedium, fontSize: 10.5, color: INK, paddingRight: movable ? 0 : 10 }}>
-          {event.title}
+          {isCalendarTask(event) ? <><TaskStatusIcon status={event.calendarTask.status} size={10} color={INK} />{" "}<Text style={{ textDecorationLine: event.calendarTask.status === "completed" ? "line-through" : "none" }}>{event.title}</Text></> : event.title}
         </Text>
         {(showTime || preview !== null) && (
           <Text style={{ fontFamily: fonts.sans, fontSize: 9, color: INK, opacity: 0.65 }}>
-            {formatTime(new Date(event.start.getTime() + shiftMs), timeFormat)} – {formatTime(new Date(event.end.getTime() + shiftMs), timeFormat)}
+            {formatTime(new Date(event.start.getTime() + shiftMs), timeFormat)}{!isCalendarTask(event) ? ` – ${formatTime(new Date(event.end.getTime() + shiftMs), timeFormat)}` : ""}
           </Text>
         )}
-        {!movable && (
+        {!movable && !isCalendarTask(event) && (
           <Feather name="lock" size={8} color={INK} style={{ position: "absolute", top: 3, right: 3, opacity: 0.5 }} />
         )}
       </Tap>

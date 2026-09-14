@@ -1,3 +1,4 @@
+import { isCalendarTask } from "@musubi/calendar";
 import type { Event, Settings } from "@musubi/types";
 import { dayKey, eventDayDate } from "@musubi/calendar/layout";
 
@@ -57,6 +58,7 @@ export function getEventRangeLabel(
   }
 
   const formatter = timeFormatter(timeFormat);
+  if (isCalendarTask(event)) return formatter.format(event.start);
 
   return `${formatter.format(event.start)} – ${formatter.format(event.end)}`;
 }

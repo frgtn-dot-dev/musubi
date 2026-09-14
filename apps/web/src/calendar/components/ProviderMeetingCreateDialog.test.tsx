@@ -18,7 +18,10 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
 const value = (label: string) => (screen.getByLabelText(label, { exact: true }) as HTMLInputElement).value;
-const change = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label, { exact: true }), { target: { value } });
+const change = (label: string, value: string) => {
+  if (label === "Event time zone") { fireEvent.click(screen.getByRole("combobox", { name: label })); fireEvent.click(screen.getByRole("option", { name: value })); }
+  else fireEvent.change(screen.getByLabelText(label, { exact: true }), { target: { value } });
+};
 async function choose(name: string) {
   fireEvent.click(screen.getByRole("combobox", { name: "Calendar" }));
   fireEvent.click(await screen.findByRole("option", { name: new RegExp(name) }));
@@ -76,8 +79,8 @@ it("presets the requested calendar and workspace date", async () => {
   await ready({ initialCalendarID: outlook.id, initialDate: "2026-12-31" });
   expect(screen.getByRole("combobox", { name: "Calendar" }).textContent).toContain("Outlook team");
   expect(value("Start")).toBe("2026-12-31T09:00");
-  expect(value("Event time zone")).toBe("UTC");
-  expect(screen.getByLabelText("Event time zone")).toHaveProperty("disabled", true);
+  expect(value("Event time zone")).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  expect(screen.getByLabelText("Event time zone")).toHaveProperty("disabled", false);
 });
 
 it("keeps the same form and common draft while converting Google time exactly for Outlook", async () => {
@@ -92,9 +95,9 @@ it("keeps the same form and common draft while converting Google time exactly fo
   expect(value("Notes")).toBe("Keep these notes");
   expect(value("Location")).toBe("Room 2");
   expect(value("Guest email addresses")).toBe("guest@example.test");
-  expect(value("Start")).toBe("2026-09-12T09:00");
-  expect(value("End")).toBe("2026-09-12T10:00");
-  expect(value("Event time zone")).toBe("UTC");
+  expect(value("Start")).toBe("2026-09-12T11:00");
+  expect(value("End")).toBe("2026-09-12T12:00");
+  expect(value("Event time zone")).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
   fireEvent.click(screen.getByRole("button", { name: "Create and send invitations" }));
   await screen.findByText(/Meeting change saved/);
   expect(api.save.mock.calls[0][0]).toMatchObject({ calendarID: outlook.id, provider: "microsoft", content: { title: "Planning", description: "Keep these notes", location: "Room 2" }, guests: [{ email: "guest@example.test", optional: false }], time: { kind: "zoned", startLocal: "2026-09-12T09:00:00.000", endLocal: "2026-09-12T10:00:00.000", timeZone: "UTC" } });
@@ -186,7 +189,7 @@ it("requires an explicit choice when the requested calendar loses meeting access
   expect(screen.queryByRole("button", { name: "Create and send invitations" })).toBeNull();
   await choose("Outlook team");
   expect(value("Start")).toBe("2026-12-31T09:00");
-  expect(value("Event time zone")).toBe("UTC");
+  expect(value("Event time zone")).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
   expect(screen.queryByText(/This calendar is not available/)).toBeNull();
   expect(api.save).not.toHaveBeenCalled();
 });

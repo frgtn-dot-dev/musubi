@@ -63,7 +63,7 @@ describe("meeting calendar draft continuity", () => {
   });
 
   it("starts on the requested workspace date in the target provider's supported zone", () => {
-    expect(initialMeetingDraft("microsoft", "2026-12-31")).toMatchObject({ start: "2026-12-31T09:00:00", end: "2026-12-31T10:00:00", timeZone: "UTC" });
+    expect(initialMeetingDraft("microsoft", "2026-12-31")).toMatchObject({ start: "2026-12-31T09:00:00", end: "2026-12-31T10:00:00", timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone });
     expect(initialMeetingDraft("google", "2026-02-30").start.slice(0, 10)).not.toBe("2026-02-30");
   });
 });

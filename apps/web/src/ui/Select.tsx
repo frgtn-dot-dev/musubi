@@ -1,3 +1,4 @@
+import { Field } from "./Field";
 import { Check, ChevronDown } from "lucide-react";
 import {
 	forwardRef,
@@ -28,6 +29,7 @@ export type SelectProps = Omit<
 	"children" | "defaultValue" | "onChange" | "value"
 > & {
 	label: string;
+	searchable?: boolean;
 	onChange: (value: string) => void;
 	options: readonly SelectOption[];
 	placeholder?: string;
@@ -51,6 +53,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
 			className,
 			disabled = false,
 			label,
+			searchable = false,
 			onChange,
 			options,
 			placeholder = "Choose an option",
@@ -67,7 +70,10 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
 		const typeahead = useRef({ at: 0, query: "" });
 		const [open, setOpen] = useState(false);
 		const [activeValue, setActiveValue] = useState(value);
-		const enabledOptions = options.filter((option) => !option.disabled);
+		const [query, setQuery] = useState("");
+		const searchRef = useRef<HTMLInputElement>(null);
+		const filteredOptions = options.filter(option => !searchable || (optionText(option) + " " + option.value).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+		const enabledOptions = filteredOptions.filter((option) => !option.disabled);
 		const selectedOption = options.find((option) => option.value === value);
 		const initialValue =
 			(selectedOption && !selectedOption.disabled
@@ -119,6 +125,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
 		}
 
 		function beginOpen(nextValue = initialValue) {
+			setQuery("");
 			setActiveValue(nextValue);
 			setOpen(true);
 		}
@@ -213,6 +220,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
 				<PopoverTrigger asChild>
 					<button
 						{...triggerProps}
+                        value={value}
 						aria-controls={listboxId}
 						aria-expanded={open}
 						aria-haspopup="listbox"
@@ -268,18 +276,23 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
 						align="start"
 						aria-labelledby={titleId}
 						className={styles.selectPopover}
+                        data-searchable={searchable || undefined}
 						side="bottom"
 						sideOffset={6}
 						onOpenAutoFocus={(event) => {
 							event.preventDefault();
 							requestAnimationFrame(() =>
-								optionRefs.current.get(activeValue || initialValue)?.focus(),
+								searchable ? searchRef.current?.focus() : optionRefs.current.get(activeValue || initialValue)?.focus(),
 							);
 						}}
 					>
 						<h2 className={styles.selectSheetTitle} id={titleId}>
 							{label}
 						</h2>
+                        {searchable ? <Field label={`Search ${label}`} labelHidden><input ref={searchRef} aria-label={`Search ${label}`} placeholder="Search city or time zone" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
+                          if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); const option = event.key === "ArrowDown" ? enabledOptions[0] : enabledOptions.at(-1); if (option) focusOption(option.value); }
+                          if (event.key === "Enter") { event.preventDefault(); if (enabledOptions.length === 1) choose(enabledOptions[0]!.value); }
+                        }} /></Field> : null}
 						<div
 							aria-label={`${label} options`}
 							className={classNames(
@@ -293,7 +306,8 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
 								event.preventDefault();
 							}}
 						>
-							{options.map((option) => {
+							{searchable && !filteredOptions.length ? <p role="status">No time zones found</p> : null}
+							{filteredOptions.map((option) => {
 								const selected = option.value === value;
 								const active = option.value === activeValue;
 

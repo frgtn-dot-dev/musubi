@@ -30,6 +30,7 @@ import { useCalendarsStore } from "@/store/useCalendarsStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { Feather } from "@expo/vector-icons";
 import CalendarSettingsModal from "./CalendarSettingsModal";
+import { ProviderOrganizerCreateAction } from "./ProviderOrganizerEditor";
 import CreateCalendarModal from "./CreateCalendarModal";
 import { useVisibleEvents } from "@/hooks/useVisibleEvents";
 import { useApi } from "@/services/api";
@@ -289,7 +290,7 @@ export default function CalendarDetail({
             accessible={false}
           />
         </Animated.View>
-        <GestureDetector gesture={gesture}>
+
           <Animated.View
             style={[
               styles.modalSheet,
@@ -298,6 +299,8 @@ export default function CalendarDetail({
               slideStyle,
             ]}
           >
+            <GestureDetector gesture={gesture}>
+              <View collapsable={false}>
             <View style={styles.modalHandle} />
             <View style={styles.modalTitleRow}>
               <View style={styles.calendarCircle}>
@@ -308,20 +311,26 @@ export default function CalendarDetail({
                   ]}
                 />
               </View>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>{liveCalendar?.name}</Text>
                 <Text style={{ color: colors.fg3, fontSize: 12 }}>
                   {liveCalendar?.members.length} members ·{" "}
                   {visibleEvents.length} events
                 </Text>
               </View>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+              {visible && liveCalendar && ["google", "caldav", "microsoft"].includes(liveCalendar.provider ?? "") && liveCalendar.role === "owner" ? <ProviderOrganizerCreateAction key={liveCalendar.id} calendarID={liveCalendar.id} color={liveCalendar.color} /> : null}
               <Tap
-                style={{ flex: 1, alignItems: "flex-end", paddingRight: 12 }}
+                accessibilityLabel="Calendar settings"
+                style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
                 onPress={() => openCalendarSettings(liveCalendar!)}
               >
                 <Feather name="settings" size={24} color={colors.fg2} />
               </Tap>
+              </View>
             </View>
+              </View>
+            </GestureDetector>
             <View style={{ height: calendarSpace }}>
               <CalendarHeader
                 anchorDate={anchorDate}
@@ -362,7 +371,7 @@ export default function CalendarDetail({
               />
             </View>
           </Animated.View>
-        </GestureDetector>
+
         {/* Docked composer — no FAB. Peeks in day view / with a draft, same
             model as the home tab. No tab bar in this modal, so the keyboard
             inset is the safe area. Lives inside this GestureHandlerRootView

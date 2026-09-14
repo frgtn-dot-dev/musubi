@@ -1,3 +1,6 @@
+import { useCalendarTasks } from "@/hooks/useCalendarTasks";
+import { isCalendarTask } from "@musubi/calendar";
+import AgendaView from "@/components/calendar/AgendaView";
 import { CalendarCoverageNotice } from "@/components/calendar/CalendarCoverageNotice";
 import { expandCalendarView } from "@/lib/calendarExpansion";
 import { CalendarExpansionError } from "@/components/calendar/CalendarExpansionError";
@@ -57,6 +60,8 @@ function getViewRange(mode: CalMode, monthStart: Date): [Date, Date] {
 }
 
 export default function MainTab() {
+  const calendarTasks = useCalendarTasks();
+  const openCalendarTask = calendarTasks.open;
   const api = useApi();
   const consumerTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const { events, addEvent, updateEvent } = useEventsStore();
@@ -72,9 +77,9 @@ export default function MainTab() {
   } = useCalendarsStore();
   useEffect(() => {
     syncActiveCals(calendars);
-  }, [calendars]);
+  }, [calendars, syncActiveCals]);
 
-  // settings' CalendarView still carries a legacy "schedule" value — the agenda tab owns that
+  // The shared settings wire value "schedule" is presented as Agenda.
   const normalizeMode = (m: string): CalMode =>
     m === "week" || m === "day" ? m : "month";
   const [calMode, setCalMode] = useState<CalMode>(
@@ -221,10 +226,18 @@ export default function MainTab() {
 
   // Android calendar VIEW intent (com.android.calendar/time/<ms>, routed via
   // +not-found → root index): jump the calendar to the requested date.
-  const { time, calendarWidgetId } = useLocalSearchParams<{
+  const { time, calendarWidgetId, view } = useLocalSearchParams<{
+    view?: string;
     time?: string;
     calendarWidgetId?: string;
   }>();
+  useEffect(() => {
+    if (view === "day" || view === "week" || view === "month") {
+      resetDrill();
+      setDraft(null);
+      setCalMode(view);
+    }
+  }, [view, resetDrill]);
   const [calendarWidgetSettingsId, setCalendarWidgetSettingsId] = useState<
     number | null
   >(null);
@@ -267,8 +280,8 @@ export default function MainTab() {
   // Store write, not setState — opening the detail must not re-render MainTab
   // (and the whole calendar under it). The modal lives in GlobalEventModals.
   const openEventDetail = useCallback(
-    (event: Event) => presentEventDetail(events, event),
-    [events],
+    (event: Event) => { if (!openCalendarTask(event)) presentEventDetail(events, event); },
+    [events, openCalendarTask],
   );
 
   // Snap the expansion anchor to its month; stable across in-month swipes.
@@ -290,8 +303,8 @@ export default function MainTab() {
   );
   const visibleEvents = useMemo(
     () =>
-      expansion.events.filter((e) => e.calendars.some((id) => activeCals.has(id))),
-    [expansion.events, activeCals],
+      [...expansion.events, ...calendarTasks.items].filter((e) => e.calendars.some((id) => activeCals.has(id))),
+    [expansion.events, calendarTasks.items, activeCals],
   );
 
   const calendarById = useMemo(
@@ -308,7 +321,7 @@ export default function MainTab() {
   // Drag-to-move existing events: only non-recurring ones the user may edit
   // (moving one occurrence of a series = detached instances, postponed).
   const canMoveEvent = useCallback(
-    (e: Event) => !e.recurrence && canEditEvent(e, calendars),
+    (e: Event) => !isCalendarTask(e) && !e.recurrence && canEditEvent(e, calendars),
     [calendars],
   );
   const onMoveEvent = useCallback(
@@ -351,10 +364,14 @@ export default function MainTab() {
   const dockPeeking =
     !!draft || ((calMode === "day" || !!drill) && !dockHidden);
 
+  if (view === "agenda" || (!view && !time && defaultCalendarView === "schedule")) return <><AgendaView calendarTasks={calendarTasks} /><CalendarWidgetSettingsModal widgetId={calendarWidgetSettingsId} onClose={closeCalendarWidgetSettings} /></>;
+
   return (
     <GestureDetector gesture={edgeBackGesture}>
       <View style={styles.screen}>
         <CalendarHeader
+          onAgenda={() => router.setParams({ view: "agenda" })}
+          info={<CalendarCoverageNotice calendars={calendars.filter(calendar => activeCals.has(calendar.id))} />}
           anchorDate={anchorDate}
           calMode={drill ? "day" : calMode}
           onModeChange={switchMode}
@@ -372,8 +389,8 @@ export default function MainTab() {
           onToggle={toggleCal}
           onSolo={soloCalendar}
         />
-        <CalendarCoverageNotice calendars={calendars.filter(calendar => activeCals.has(calendar.id))} />
         {expansion.error && <CalendarExpansionError message={expansion.error} onRetry={onRefresh} refreshing={refreshing} />}
+        {calendarTasks.detail}
         <CalendarDrillView
           calMode={calMode}
           base={base}

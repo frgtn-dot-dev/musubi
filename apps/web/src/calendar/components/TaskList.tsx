@@ -1,4 +1,4 @@
-import { CalendarDays, GripVertical, Circle, CircleCheck, CircleDashed, CircleX, Flag, FlagOff, Plus, Repeat2, Trash2 } from "lucide-react";
+import { CalendarDays, GripVertical, Circle, CircleCheck, Clock3, CircleX, Flag, FlagOff, Plus, Repeat2, Trash2 } from "lucide-react";
 import {
   describeAdvanced,
   isEditableRRule,
@@ -56,7 +56,7 @@ type TaskListProps = {
 
 export const TASK_STATUSES = [
   { label: "Needs action", value: "needs-action", icon: <Circle size={16} /> },
-  { label: "In progress", value: "in-process", icon: <CircleDashed size={16} /> },
+  { label: "In progress", value: "in-process", icon: <Clock3 size={16} /> },
   { label: "Completed", value: "completed", icon: <CircleCheck size={16} /> },
   { label: "Cancelled", value: "cancelled", icon: <CircleX size={16} /> },
 ];
@@ -478,9 +478,13 @@ function TaskGroup({
       data-saving={saving || undefined}
       data-kanban-status={kanban ? statusValue : undefined}
     >
-      <SectionLabel className={styles.groupHeading}>
-        <span aria-hidden="true">{icon}</span>{label}{" "}<span>{tasks.length}</span>
-      </SectionLabel>
+      <div className={kanban ? styles.columnHeading : undefined}>
+        <SectionLabel className={styles.groupHeading}>
+          <span aria-hidden="true">{icon}</span>{label}{" "}<span>{tasks.length}</span>
+        </SectionLabel>
+        {kanban && onCreate ? <Button variant="ghost" size="compact" disabled={busy} icon={<Plus size={16} />} onClick={onCreate}>Add task</Button> : null}
+      </div>
+      <div className={kanban ? styles.columnBody : undefined} data-kanban-column-scroll={kanban ? "" : undefined} tabIndex={kanban ? 0 : undefined} role={kanban ? "region" : undefined} aria-label={kanban ? `${label} tasks` : undefined}>
       {kanban && !tasks.length && !dropActive ? <p className={styles.emptyColumn}>No tasks</p> : null}
       <ul>
         {tasks.map((task) => {
@@ -579,7 +583,7 @@ function TaskGroup({
         })}
         {kanban && dropActive && !placeholderBeforeId ? placeholder : null}
       </ul>
-      {kanban && onCreate ? <Button variant="ghost" disabled={busy} icon={<Plus size={16} />} onClick={onCreate}>Add task</Button> : null}
+      </div>
     </section>
   );
 }

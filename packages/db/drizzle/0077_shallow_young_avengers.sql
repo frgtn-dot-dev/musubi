@@ -1,0 +1,1 @@
+ALTER TABLE "external_calendars" ADD COLUMN "provider_default_calendar" boolean;

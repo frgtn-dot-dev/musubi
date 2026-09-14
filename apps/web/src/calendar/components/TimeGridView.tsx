@@ -1,3 +1,4 @@
+import { isCalendarTask } from "@musubi/calendar";
 import { buildDayAxis, singleDayAxis, sharedWeekAxis, coordinateToInstant, coordinateBoundaryInstant, instantToCoordinate, intervalAxisSegments, civilCandidates, utcOffsetLabel, type TimeAxis } from "../day-axis";
 import { availabilityDaySegments, type GridAvailabilityInterval } from "../availability-grid";
 import { DEFAULT_CALENDAR_COLOR, type Calendar, type Event, type Settings } from "@musubi/types";
@@ -340,7 +341,7 @@ const TimelineEvent = memo(function TimelineEvent({
 				className={styles.timelineEventAction}
         style={{ left, width, top: minutesToY(pieces[0]?.start ?? startMin, geometry), height: actionHeight }}
 				type="button"
-				aria-label={`${event.title}, ${getEventDateLabel(
+				aria-label={`${isCalendarTask(event) ? "Task, " : ""}${event.title}, ${getEventDateLabel(
 					event,
 				 )}, ${getEventRangeLabel(event, timeFormat)}, ${axisTimeLabel(axis, dayIndex, daySegment.startMin, timeFormat)}, ${calendar?.name ?? "calendar"}`}
 				aria-busy={pending || undefined}
@@ -388,8 +389,9 @@ const TimelineEvent = memo(function TimelineEvent({
 						: getEventRangeLabel(event, timeFormat).replace(" – ", "–")}
 				</span>
 				<span className={styles.timelineEventTitle}>
-					{event.title}
-					<EventMarks event={event} readOnly={!editable} />
+          {isCalendarTask(event) ? <EventMarks event={event} /> : null}
+					{isCalendarTask(event) && event.calendarTask.status === "completed" ? <s>{event.title}</s> : event.title}
+          {!isCalendarTask(event) ? <EventMarks event={event} readOnly={!editable} /> : null}
 				</span>
 				{event.location ? (
 					<span className={styles.timelineEventMeta}>{event.location}</span>
@@ -816,7 +818,7 @@ export function TimeGridView({
 									<button
 										className={styles.timeGridAllDayEvent}
 										type="button"
-										aria-label={`All-day event, ${span.event.title}, ${getEventDateLabel(
+										aria-label={`${isCalendarTask(span.event) ? "Task deadline" : "All-day event"}, ${span.event.title}, ${getEventDateLabel(
 											span.event,
 										)}, ${calendar?.name ?? "calendar"}`}
 										data-all-day-event={span.event.id}
@@ -832,7 +834,7 @@ export function TimeGridView({
 											} as CSSProperties
 										}
 									>
-										{span.event.title}
+										{isCalendarTask(span.event) && span.event.calendarTask.status === "completed" ? <s>{span.event.title}</s> : span.event.title}<EventMarks event={span.event} />
 									</button>
 								</EventDetailsPopover>,
 							];

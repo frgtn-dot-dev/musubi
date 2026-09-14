@@ -111,12 +111,16 @@ export default function MemberRolesModal({ calendar, visible, onClose }: Props) 
         <Animated.View style={[styles.modalOverlay, fadeStyle]}>
           <Pressable style={{ flex: 1 }} onPress={handleClose} accessible={false} />
         </Animated.View>
-        <GestureDetector gesture={gesture}>
+
           <Animated.View style={[styles.modalSheet, fadeStyle, slideStyle]}>
+            <GestureDetector gesture={gesture}>
+              <View collapsable={false}>
             <View style={styles.modalHandle} />
             <View style={styles.modalTitleRow}>
               <Text style={styles.modalTitle}>Members</Text>
             </View>
+              </View>
+            </GestureDetector>
             <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 16, gap: 12 }} showsVerticalScrollIndicator={false}>
               {members.map((m) => {
                 const isOwner = m.id === calendar?.creatorID;
@@ -199,7 +203,7 @@ export default function MemberRolesModal({ calendar, visible, onClose }: Props) 
               })}
             </ScrollView>
           </Animated.View>
-        </GestureDetector>
+
       </GestureHandlerRootView>
     </Modal>
   );

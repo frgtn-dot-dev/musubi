@@ -1,3 +1,4 @@
+import { isCalendarTask } from "@musubi/calendar";
 import type { Calendar, Event, Settings } from "@musubi/types";
 import { ChevronRight, MapPin } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
@@ -209,7 +210,7 @@ export function AgendaView({
 														style={{ backgroundColor: eventColor }}
 													/>
 													<span className={styles.agendaEventCopy}>
-														<span className={styles.agendaEventTitle}>{event.title}</span>
+														<span className={styles.agendaEventTitle}>{isCalendarTask(event) && event.calendarTask.status === "completed" ? <s>{event.title}</s> : event.title}</span>
 														{/* Only what this event actually has: an agenda row
                                 with empty slots reads as missing data. */}
 														{event.location ? (

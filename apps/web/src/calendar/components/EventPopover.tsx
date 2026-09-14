@@ -1,3 +1,4 @@
+import { isCalendarTask } from "@musubi/calendar";
 import type { Calendar, Event, Settings } from "@musubi/types";
 import {
   getEventDateLabel,
@@ -69,7 +70,7 @@ export function EventPopover({
           event.isAllDay && showLabel && continuesAfter ? styles.eventChipLabelVisible : ""
         }`}
         type="button"
-        aria-label={`${event.title}, ${getEventDateLabel(
+        aria-label={`${isCalendarTask(event) ? "Task, " : ""}${event.title}, ${getEventDateLabel(
           event,
         )}, ${getEventRangeLabel(event, timeFormat)}, ${calendar?.name ?? "calendar"}`}
         aria-busy={pending || undefined}
@@ -77,6 +78,7 @@ export function EventPopover({
         data-draggable={onBeginDrag ? "" : undefined}
         data-pending={pending ? "" : undefined}
         data-event-id={event.id}
+        data-task-completed={isCalendarTask(event) && event.calendarTask.status === "completed" ? "" : undefined}
         onPointerDown={onBeginDrag}
         style={
           {

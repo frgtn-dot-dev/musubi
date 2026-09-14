@@ -208,3 +208,7 @@ export const NarrowSheet: Story = {
   },
   render: () => <CalendarSelect />,
 };
+
+export const Searchable: Story = {
+  args: { label: "Time zone", searchable: true, value: "UTC", options: [{ value: "UTC", label: "UTC" }, { value: "Europe/Prague", label: "Europe/Prague" }, { value: "America/New_York", label: "America/New York" }] },
+};

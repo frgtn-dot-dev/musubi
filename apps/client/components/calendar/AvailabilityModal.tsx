@@ -1,5 +1,7 @@
+import { BottomSheetFrame } from "@/components/ui/BottomSheetFrame";
+import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { AppState, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { AppState, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AVAILABILITY_SOURCE_LIMIT } from "@musubi/types";
 import { spacing, typeSizes } from "@musubi/design-system";
@@ -33,16 +35,14 @@ export function AvailabilityBody({ onClose, onReconnect }: Props) {
     const subscription = AppState.addEventListener("change", next => { if (next === "active") void session.refresh(); else session.invalidate(); });
     return () => { clearInterval(timer); unsubscribe(); subscription.remove(); session.dispose(); };
   }, [session]);
-  const close = () => { session.dispose(); onClose(); };
+  const motion = useModalAnimation(true, () => { session.dispose(); onClose(); });
+  const close = motion.handleClose;
   const busy = state.phase === "selecting" || state.phase === "reading";
   const selected = state.sources.filter(source => source.enabled);
   const overLimit = selected.length > AVAILABILITY_SOURCE_LIMIT;
   const copy = { fontFamily: fonts.sans, fontSize: typeSizes[12], color: colors.fg2 };
   return <ModalPortal visible onRequestClose={close}>
-    <View style={styles.modalOverlay}><Pressable style={{ flex: 1 }} onPress={close} accessible={false} /></View>
-    <View style={styles.modalSheet}>
-      <View style={styles.modalHandle} />
-      <View style={styles.modalTitleRow}><Text accessibilityRole="header" style={styles.modalTitle}>Check availability</Text></View>
+      <BottomSheetFrame motion={motion} onClose={close} header={<View style={styles.modalTitleRow}><Text accessibilityRole="header" style={styles.modalTitle}>Check availability</Text></View>}>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: spacing[4], paddingBottom: spacing[4] + insets.bottom, gap: spacing[3] }}>
         <Text style={copy}>Choose free/busy-only Google sources. These are private to your connection and are not imported as events. Times below are UTC; unavailable does not mean free.</Text>
         {state.sources.map(source => <View key={source.id}>
@@ -69,6 +69,7 @@ export function AvailabilityBody({ onClose, onReconnect }: Props) {
         </View> : null}
         <Btn label="Close availability" variant="secondary" onPress={close} />
       </ScrollView>
-    </View>
-  </ModalPortal>;
+
+   </BottomSheetFrame>
+    </ModalPortal>;
 }

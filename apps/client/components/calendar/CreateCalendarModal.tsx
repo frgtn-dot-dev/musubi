@@ -107,6 +107,10 @@ export default function CreateCalendarModal({ calendar, visible, onClose, onCrea
   }, [calendar, visible]);
 
   const handleCreate = async () => {
+    if (calendar?.provider === "microsoft" && calendar.supportsEvents !== false && calendar.providerDefaultCalendar !== false) {
+      setNameError("The default Outlook calendar’s name and color cannot be changed here.");
+      return;
+    }
     const newCalendar: Calendar = {
       id: calendar?.id ?? "create",
       creatorID: userID!,
@@ -187,12 +191,16 @@ export default function CreateCalendarModal({ calendar, visible, onClose, onCrea
           <Animated.View style={[styles.modalOverlay, fadeStyle]}>
             <Pressable style={{ flex: 1 }} onPress={handleClose} accessible={false} />
           </Animated.View>
-          <GestureDetector gesture={gesture}>
+
             <Animated.View style={[styles.modalSheet, fadeStyle, slideStyle]} onLayout={e => onSheetLayout(e.nativeEvent.layout.height)}>
+              <GestureDetector gesture={gesture}>
+                <View collapsable={false}>
               <View style={styles.modalHandle} />
               <View style={styles.modalTitleRow}>
                 <Text style={styles.modalTitle}>{calendar ? "Edit Calendar" : "New Calendar"}</Text>
               </View>
+                </View>
+              </GestureDetector>
 
               <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={styles.fieldContainer}>
@@ -343,7 +351,7 @@ export default function CreateCalendarModal({ calendar, visible, onClose, onCrea
                 <Btn label={calendar ? "Save" : importFile ? "Import" : "Create"} onPress={handleCreate} loading={isLoading} />
               </View>
             </Animated.View >
-          </GestureDetector>
+
           {/* Rendered INSIDE the Modal window so its absolute overlay sits on
               top of the sheet — as a Modal sibling it was a modal-in-modal
               (broken on iOS: didn't show + ate touches). */}

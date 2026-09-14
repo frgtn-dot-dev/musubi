@@ -39,7 +39,7 @@ describe("task recurrence summaries", () => {
   });
 });
 
-import { cleanup, render, screen, within, fireEvent } from "@testing-library/react";
+import { cleanup, render, screen, within, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TaskSchema } from "@musubi/types";
 import { TaskList } from "./TaskList";
@@ -274,4 +274,35 @@ it("lets touch gestures scroll the card while keeping touch drag on its handle",
   // Unmount's cleanup also cancels the animation frame and removes the preview.
   cleanup();
   expect(document.querySelector("[data-drag-preview]")).toBeNull();
+});
+
+it("follows the active pointer even when a child stops move and release propagation", async () => {
+  const task = TaskSchema.parse({ id: "pointer", title: "Pointer task", creatorID: "owner", calendarID: fixtureCalendars[0]!.id });
+  render(<TaskList {...emptyTaskProps()} tasks={[task]} layout="kanban" />);
+  const card = screen.getByRole("button", { name: "Pointer task" }).closest("[data-task-id]")!;
+  const pointer = (type: string, x: number, id = 7) => Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
+    pointerType: "mouse", pointerId: id, button: 0, clientX: x, clientY: 20,
+  });
+  const originalHit = document.elementFromPoint;
+  document.elementFromPoint = () => card;
+  const stop = (event: Event) => event.stopPropagation();
+  card.addEventListener("pointermove", stop);
+  card.addEventListener("pointerup", stop);
+  try {
+    fireEvent(card, pointer("pointerdown", 20));
+    const preview = document.querySelector<HTMLElement>("[data-drag-preview]")!;
+    fireEvent(card, pointer("pointermove", 150, 99));
+    expect(preview.style.transform).toContain("translate3d(0px");
+    fireEvent(card, pointer("pointermove", 150));
+    expect(preview.style.transform).toContain("translate3d(130px");
+    fireEvent.mouseMove(card, { clientX: 190, clientY: 20, buttons: 1 });
+    expect(preview.style.transform).toContain("translate3d(170px");
+    fireEvent(card, pointer("pointerup", 150));
+    await waitFor(() => expect(document.querySelector("[data-drag-preview]")).toBeNull());
+  } finally {
+    document.elementFromPoint = originalHit;
+    card.removeEventListener("pointermove", stop);
+    card.removeEventListener("pointerup", stop);
+    cleanup();
+  }
 });

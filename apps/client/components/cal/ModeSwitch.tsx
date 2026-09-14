@@ -8,6 +8,7 @@ import Animated, { FadeInDown, FadeOut } from "react-native-reanimated";
 type CalMode = "day" | "week" | "month";
 
 type Props = {
+  onAgenda?: () => void;
   mode: string;                       // current mode (checkmark)
   onChange: (m: CalMode) => void;
   /** The tap target — gets the open state for the chevron. */
@@ -17,7 +18,7 @@ type Props = {
 // Musubi-style view switcher: the trigger opens a small paper card with
 // Day/Week/Month. Parent must sit above its siblings (zIndex) so the card
 // isn't buried under whatever renders below.
-export function ModeSwitch({ mode, onChange, trigger }: Props) {
+export function ModeSwitch({ mode, onChange, trigger, onAgenda }: Props) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -27,7 +28,7 @@ export function ModeSwitch({ mode, onChange, trigger }: Props) {
         scaleTo={0.98}
         style={{ minHeight: 44, justifyContent: "center" }}
         accessibilityLabel={`Calendar view, ${mode}`}
-        accessibilityHint="Opens the day, week, and month view choices"
+        accessibilityHint={onAgenda ? "Opens the day, week, month, and agenda view choices" : "Opens the day, week, and month view choices"}
         accessibilityState={{ expanded: open }}
       >
         {trigger(open)}
@@ -54,10 +55,10 @@ export function ModeSwitch({ mode, onChange, trigger }: Props) {
               elevation: 8,
             }}
           >
-            {(["day", "week", "month"] as CalMode[]).map(m => (
+            {(["day", "week", "month", ...(onAgenda ? ["agenda"] : [])]).map(m => (
               <Tap
                 key={m}
-                onPress={() => { setOpen(false); onChange(m); }}
+                onPress={() => { setOpen(false); if (m === "agenda") onAgenda?.(); else onChange(m as CalMode); }}
                 accessibilityRole="radio"
                 accessibilityLabel={`${m} view`}
                 accessibilityState={{ checked: m === mode }}
