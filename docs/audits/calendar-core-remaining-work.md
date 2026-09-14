@@ -1,5 +1,11 @@
 # Core kalendáře: zbývající práce
 
+> Rozhodnutí 2026-09-14: vlastník vybral časový model, organizer, RSVP a osobní
+> iCloud obsahové zápisy pro dosud nevydanou 0.1.8. Připomínky a dostupnost
+> zůstávají vypnuté. [Aktuální aktivační plán](../releases/core-0.1.8-activation.md)
+> nahrazuje dřívější požadavek na pozdější verzi; živé a device mezery níže tím
+> nejsou označené za splněné.
+
 Aktualizováno 2026-09-11. Tento přehled doplňuje
 [implementační plán](calendar-core-implementation-plan.md); jeho historické
 checkpointy popisují stav v okamžiku příslušného řezu, ne vždy dnešní omezení.

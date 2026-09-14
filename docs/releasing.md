@@ -18,19 +18,25 @@ for clients it can no longer change**.
 
 ## Explicit event-time activation
 
-K10 implementation is complete, but `EVENT_TIME_EDITS_ENABLED` remains false.
-Production startup rejects enabling it while the product or enforced client/peer
-minimums still admit 0.1.8. This is a conservative activation boundary, not a
-claim that 0.1.8 has been published: the latest upstream tag remains `v0.1.7`
-(verified 2026-09-13). The prepared K06 release below and explicit-time activation
-are separate gates. Copying an event into a new identity requires every writer
-to preserve its time metadata; a generic create request cannot reconstruct lost
-metadata. Coordinate verified compatible clients and peers, choose a later
-activation version and raise minimums before enabling the feature. Do not bypass
-the guard or enable it as part of the prepared 0.1.8 release.
+The owner approved including explicit event-time editing, supported organizer
+operations, RSVP and iCloud personal content writes in the **unreleased 0.1.8**
+release on 2026-09-14. The latest published release is `v0.1.7`; a preliminary
+0.1.8 development build is not the release artifact. The previous requirement
+for a version newer than 0.1.8 was based on treating that development version
+as published and is superseded.
 
-See [K10 acceptance and activation conditions](audits/calendar-k10-acceptance.md)
-for the implemented local scope and the separate K11/K12/K14/K15 gates.
+Production startup requires product/client/peer compatibility at **0.1.8 or
+newer**, with the product satisfying both enforced minimums. Do not lower these
+minimums: older writers can lose explicit time metadata when copying events.
+Rebuild every 0.1.8 development client from the final release revision and
+coordinate the server, web, native and connected peer rollout described below.
+
+Flags remain off by default. The selected activation values, supported provider
+scope and outstanding live/device checks are recorded in
+[Core 0.1.8 activation](releases/core-0.1.8-activation.md). Permission, native
+identity and operation-specific checks still apply with flags enabled.
+Changing the compatibility boundary does not certify untested provider paths
+or deploy production configuration.
 
 ## Order of deployment
 

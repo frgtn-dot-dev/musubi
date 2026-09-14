@@ -4,9 +4,10 @@
 calendar writes, and Google organizer activation do not enable it. The local
 implementation uses fake HTTP and synthetic database evidence; no live scheduling
 server or actual guest delivery has been accepted. Live activation remains a
-separate operator decision. Production startup rejects either organizer flag while
-the existing 0.1.8 client/peer minimums remain; no version or minimum is changed
-by this batch.
+separate operator decision. The coordinated unreleased 0.1.8 activation requires
+compatible product and enforced client/peer minimums of at least 0.1.8; see
+[the activation plan](../releases/core-0.1.8-activation.md). This does not
+replace live scheduling acceptance.
 
 The public organizer request discriminates `provider: caldav` and requires
 `notificationPolicy: server-invite`. Web and native callers reuse the meeting
@@ -49,7 +50,11 @@ Only validated `mailto` members participate in email identity matching; other
 well-formed references are neither fetched nor interpreted as email addresses.
 Duplicate identities, malformed email members and ambiguous self matches fail.
 The separate iCloud personal-content fallback never applies to scheduling:
-resource `write-content` remains required for RSVP and organizer updates;
+resource `write-content` remains required for organizer updates and the strict
+CalDAV RSVP path. Only the separately gated [iCloud one-off attendee
+compatibility](caldav-rsvp.md#separately-gated-icloud-attendee-compatibility)
+accepts its precisely defined missing-metadata evidence; it never authorizes
+organizer writes. For organizer operations,
 collection `bind`/`unbind` proves only the corresponding create/delete operation.
 
 ## Native writes and uncertainty
