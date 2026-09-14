@@ -91,6 +91,7 @@ async function main() {
       "update-only",
       "create",
       "all-day-create",
+      "alias-create",
       "cancel",
       "cancel-stale",
       "cancel-other-creator",
@@ -290,7 +291,7 @@ async function main() {
           actor,
           original.id,
         );
-        const create = scenario === "create" || scenario === "all-day-create";
+        const create = scenario === "create" || scenario === "all-day-create" || scenario === "alias-create";
         const request = {
           operationID: randomUUID(),
           provider: "caldav",
@@ -300,6 +301,7 @@ async function main() {
           ...(create
             ? {
                 action: "create",
+                ...(scenario === "alias-create" ? { organizerAddress: "mailto:other@example.test" } : {}),
                 color: "red",
                 content: {
                   title: "Created",
@@ -395,6 +397,7 @@ async function main() {
           });
         }
         if (create) state.data = null;
+        if (scenario === "alias-create") state.mode = "two-self";
         if (scenario === "cancel-only") state.mode = "no-write";
         if (scenario === "update-only") state.mode = "no-unbind";
         const journal = () =>
@@ -536,6 +539,9 @@ async function main() {
         assert.equal(state.puts, 0);
         assert.equal(state.deletes, 0);
         const row = (await journal())[0]!;
+        if (scenario === "alias-create") {
+          await assert.rejects(() => queueProviderOrganizer(actor, { ...request, organizerAddress: "mailto:self@example.test" }));
+        }
         assert.equal(row.payload.organizer!.request.provider, "caldav");
         assert.equal(
           (await queueProviderOrganizer(actor, request)).replayed,

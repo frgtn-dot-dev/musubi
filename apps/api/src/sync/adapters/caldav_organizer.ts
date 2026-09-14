@@ -187,9 +187,10 @@ export function caldavOrganizerDesired(
     return null;
   }
   if (request.action === "create") {
+    const organizer = request.organizerAddress ?? (proof.addresses.length === 1 ? proof.addresses[0] : undefined);
     if (
       baseline ||
-      proof.addresses.length !== 1 ||
+      !organizer || !proof.addresses.includes(organizer) ||
       request.guests.some((guest) =>
         proof.addresses.includes(`mailto:${guest.email}`),
       )
@@ -218,7 +219,7 @@ export function caldavOrganizerDesired(
     event.addPropertyWithValue("uid", uid);
     event.addPropertyWithValue("dtstamp", stamp(timestamp));
     event.addPropertyWithValue("sequence", 0);
-    event.addProperty(property("organizer", proof.addresses[0]!));
+    event.addProperty(property("organizer", organizer));
     event.addProperty(property("summary", request.content.title));
     if (request.content.description !== null)
       event.addProperty(property("description", request.content.description));

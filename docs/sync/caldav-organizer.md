@@ -34,7 +34,13 @@ unbind permission. Capability observation verifies update and cancellation
 separately; both clients expose only those proven actions. Existing resources require a complete single VEVENT, UID,
 strong ETag, Schedule-Tag and a native ORGANIZER belonging to that principal.
 Participant SCHEDULE-AGENT must be absent or SERVER; delegation and force-send
-parameters are refused. Creation requires one unambiguous own address.
+parameters are refused. Creation with multiple verified own addresses requires an explicit organizer-address
+selection in the web or native editor. The server checks it against fresh
+scheduling proof again at admission and dispatch. Omission remains accepted
+only for a principal with exactly one address; guests cannot be any own alias.
+Single-address capability responses retain their existing shape. Multiple-address
+responses require the coordinated updated clients (older strict parsers hide
+that creation capability).
 The common strict scheduling-property reader preserves namespace and href
 identity and refuses ambiguous or failed properties. Guarded requests do not
 follow redirects with credentials.

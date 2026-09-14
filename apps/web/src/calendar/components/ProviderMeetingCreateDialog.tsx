@@ -13,7 +13,7 @@ import { ProviderOrganizerFields } from "./ProviderOrganizerEditor";
 import { initialMeetingDraft, meetingDraftAllDay, meetingDraftForProvider, type MeetingProvider } from "./provider-meeting-draft";
 import styles from "./styles/event-delivery.module.css";
 
-type MeetingCalendar = Calendar & { provider: MeetingProvider };
+type MeetingCalendar = Calendar & { provider: MeetingProvider; organizerAddresses?: string[] };
 
 /** Capability success is checked separately; this predicate never grants write access. */
 export function isMeetingCalendarCandidate(calendar: Calendar): calendar is MeetingCalendar {
@@ -52,7 +52,7 @@ export function ProviderMeetingCreateDialog({ calendars, initialCalendarID, retu
     void Promise.allSettled(candidates.map(async (calendar) => {
       const capability = await getOrganizerCalendar(calendar.id, controller.signal);
       if (capability.calendarID !== calendar.id || capability.provider !== calendar.provider) return null;
-      return calendar;
+      return { ...calendar, organizerAddresses: capability.provider === "caldav" ? capability.organizerAddresses : undefined };
     })).then((results) => {
       if (controller.signal.aborted) return;
       const available = results.flatMap(result => result.status === "fulfilled" && result.value ? [result.value] : []);
@@ -73,7 +73,9 @@ export function ProviderMeetingCreateDialog({ calendars, initialCalendarID, retu
     return () => controller.abort();
   }, [candidates, retry]);
 
-  const currentAvailable = selected && approved.some(calendar => calendar.id === selected.id && calendar.provider === selected.provider);
+  const currentCalendar = selected ? approved.find(calendar => calendar.id === selected.id && calendar.provider === selected.provider) : undefined;
+  const currentAvailable = !!currentCalendar;
+  const organizerAddresses = submitted ? selected?.organizerAddresses : currentCalendar?.organizerAddresses;
   const locked = busy || submitted;
 
   function chooseCalendar(calendarID: string) {
@@ -87,7 +89,7 @@ export function ProviderMeetingCreateDialog({ calendars, initialCalendarID, retu
         : initialMeetingDraft(target.provider, initial.current.date);
       initialized.current = true;
       setSelected(target);
-      setDraft(nextDraft);
+      setDraft({ ...nextDraft, organizerAddress: undefined });
       setError("");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not switch calendars. Your draft has been kept.");
@@ -107,12 +109,14 @@ export function ProviderMeetingCreateDialog({ calendars, initialCalendarID, retu
     setBusy(true);
     setError("");
     try {
-      frozen.current ??= organizerRequest("create", draft, [], {
+      if (!frozen.current && organizerAddresses?.length && !organizerAddresses.includes(draft.organizerAddress ?? "")) throw new Error("Choose the organizer address for this meeting.");
+      frozen.current ??= organizerRequest("create", { ...draft, organizerAddress: organizerAddresses?.length ? draft.organizerAddress : undefined }, [], {
         ...identity.current,
         calendarID: selected.id,
         color: selected.color,
         provider: selected.provider,
       });
+      if (!submitted && currentCalendar) setSelected(currentCalendar);
       setSubmitted(true);
       await editProviderOrganizer(frozen.current);
       setNotice(`Meeting change saved. Check Delivery details for ${selected.provider === "caldav" ? "the CalDAV server’s" : selected.provider === "microsoft" ? "Outlook's" : "Google's"} result. Guest notification delivery remains unknown.`);
@@ -171,7 +175,7 @@ export function ProviderMeetingCreateDialog({ calendars, initialCalendarID, retu
           action={candidates.length ? <Button variant="secondary" onClick={() => setRetry(current => current + 1)}>Retry</Button> : undefined}
         /> : null}
         {!loading && selected && !currentAvailable && approved.length > 0 && !submitted ? <InlineError>Choose an available calendar. Your meeting draft has been kept.</InlineError> : null}
-        {selected ? <ProviderOrganizerFields draft={draft} provider={selected.provider} locked={locked} onChange={patch} /> : null}
+        {selected ? <ProviderOrganizerFields organizerAddresses={organizerAddresses} draft={draft} provider={selected.provider} locked={locked} onChange={patch} /> : null}
       </>}
       {error ? <InlineError>{error}</InlineError> : null}
     </Dialog>

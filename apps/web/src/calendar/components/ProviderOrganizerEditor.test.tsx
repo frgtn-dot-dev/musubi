@@ -373,3 +373,17 @@ it("delegates the verified calendar action to shared creation with its focus tar
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(api.save).not.toHaveBeenCalled();
 });
+
+it("passes discovered alias choices to the per-calendar editor", async () => {
+  api.observe.mockResolvedValue({ provider: "caldav", calendarID, organizerAddresses: ["mailto:first@example.test", "mailto:second@example.test"] });
+  api.save.mockResolvedValue({ status: "pending" });
+  render(<ProviderOrganizerCreateAction calendarID={calendarID} color="red" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Create CalDAV meeting" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Title" }), { target: { value: "Planning" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Guest email addresses" }), { target: { value: "guest@example.test" } });
+  fireEvent.click(screen.getByRole("combobox", { name: "Organizer address" }));
+  fireEvent.click(await screen.findByRole("option", { name: "second@example.test" }));
+  fireEvent.click(screen.getByRole("button", { name: "Create and send invitations" }));
+  await screen.findByRole("status");
+  expect(api.save.mock.calls[0][0]).toMatchObject({ provider: "caldav", organizerAddress: "mailto:second@example.test" });
+});
