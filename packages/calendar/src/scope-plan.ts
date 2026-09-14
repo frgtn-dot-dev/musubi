@@ -1,4 +1,4 @@
-import { EventSchema, EventScopeRequestSchema, occurrenceKey, type Event, type EventScopeRequest, type OccurrenceIdentity, type OccurrenceStart } from "@musubi/types";
+import { isOneOffContentScope, EventSchema, EventScopeRequestSchema, occurrenceKey, type Event, type EventScopeRequest, type OccurrenceIdentity, type OccurrenceStart } from "@musubi/types";
 import { expandRecurringEvents } from "./recurrence";
 import { civilToInstant, instantToCivil } from "./time-zone";
 import { resolveEventTimeEdit } from "./time-edit";
@@ -51,6 +51,11 @@ export function planEventScope(masterInput: Event, childrenInput: readonly Event
   const master = EventSchema.parse(masterInput);
   const children = childrenInput.map(child => EventSchema.parse(child));
   if (master.revision !== request.expectedRevision) throw new Error("The series revision changed.");
+  if (isOneOffContentScope(master, request)) {
+    if (children.length) throw new Error("A one-off event cannot have occurrence definitions.");
+    const next = edit(master, request as Extract<EventScopeRequest, { action: "update" }>);
+    return unchanged(master, next) ? empty() : { updates: [next], creates: [], deletes: [] };
+  }
   if (master.seriesID || !master.recurrence || master.isCanceled || !master.timeModel || master.timeModel.kind === "legacy-unknown")
     throw new Error("Scope planning requires a live explicit recurring master.");
   if (children.some(child => !Number.isSafeInteger(child.revision) || !child.revision)) throw new Error("A persisted occurrence requires a known revision.");

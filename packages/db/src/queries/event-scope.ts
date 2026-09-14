@@ -1,3 +1,5 @@
+import { isOneOffContentScope } from "@musubi/types";
+import { isCaldavOneOffContentWrite } from "./caldav-series-scope";
 import { appendCaldavSplit, caldavSplitPlan, caldavSplitCreationAddresses, type CaldavSplitPrepared } from "./caldav-split";
 import { appendCaldavSeriesDeletion, type CaldavSeriesDeletionPrepared, sameCaldavRecurrence, normalizeCaldavScopeRequest, caldavSeriesContext, caldavSeriesDesired, appendCaldavSeries, sameCaldavScopeContext, type CaldavSeriesContext, type CaldavSeriesPrepared } from "./caldav-series-scope";
 import { lockExternalEventAddress } from "./event-outbox-deletions";
@@ -89,7 +91,7 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
         }
         if (removesRecurrence && (request.scope !== "series" || request.time || childRows.length)) throw new EventWriteError("event-write", "unsupported");
         if (!restoresExdates && !editsRdate && request.action === "update" && request.patch.recurrence !== undefined && ((!removesRecurrence && (!request.patch.recurrence || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(request.patch.recurrence))) || !/^(?:RRULE:)?FREQ=[^\r\n]+$/i.test(master.recurrence ?? ""))) throw new EventWriteError("event-write", "unsupported");
-        caldavContext = await caldavSeriesContext(tx, actorID, EventSchema.parse(master), childRows.filter(child => !child.deletedAt).map(child => EventSchema.parse(snapshot(child))));
+        caldavContext = await caldavSeriesContext(tx, actorID, EventSchema.parse(master), childRows.filter(child => !child.deletedAt).map(child => EventSchema.parse(snapshot(child))), undefined, false, false, isOneOffContentScope(EventSchema.parse(master), request));
         if (request.action === "update" && request.time?.kind === "zoned" && master.timeModel?.kind === "zoned" && request.time.timeZone !== master.timeModel.timeZone && caldavContext.retiredDefinitions?.length) throw new EventWriteError("event-write", "unsupported");
         if (request.action === "update" && request.patch.recurrence !== undefined && (/(?:^|\n)EXDATE/.test(master.recurrence ?? "") || editsRdate) && caldavContext.retiredDefinitions?.length) throw new EventWriteError("event-write", "unsupported");
         if (options.caldavSplit && (options.caldav || options.caldavDeletion || options.provider || !sameCaldavScopeContext(options.caldavSplit.split.request, request))) throw new EventWriteError("event-write", "unsupported");
@@ -232,7 +234,7 @@ export async function applyLocalEventScope(eventID: string, actorID: string, inp
         // suffixes. Reserve temporary addresses inside this transaction first.
         for (const { mapping } of remapped) await tx.update(externalEvents).set({ externalEventID: mapping.externalSeriesID! + "#musubi-pending=" + randomUUID() }).where(eq(externalEvents.id, mapping.id));
         for (const { mapping, child } of remapped) await tx.update(externalEvents).set({ externalEventID: mapping.externalSeriesID! + "#musubi-original=" + encodeURIComponent(JSON.stringify(child.originalStart)), originalStart: child.originalStart }).where(eq(externalEvents.id, mapping.id));
-        const queuedContext = await caldavSeriesContext(tx, actorID, changedMaster, actualChildren, undefined, false, options.caldav.write.patch.recurrence === null);
+        const queuedContext = await caldavSeriesContext(tx, actorID, changedMaster, actualChildren, undefined, false, options.caldav.write.patch.recurrence === null, isCaldavOneOffContentWrite(options.caldav.write));
         await appendCaldavSeries(tx, actorID, request.operationID, { ...options.caldav, context: queuedContext }, changedMaster);
       }
     }

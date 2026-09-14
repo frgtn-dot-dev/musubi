@@ -24,3 +24,13 @@ assert.equal(eventScopeRequest(master, child, "occurrence").operationID, cancel.
 assert.throws(() => eventScopeRequest({ ...master, revision: 4 }, occurrence, "series", edited), /changed/);
 assert.throws(() => eventScopeRequest(master, occurrence, "series", { ...edited, calendars: ["different"] }), /Unrecognized/);
 console.log("Scope client intent: stable retry, frozen CAS, civil master shift and moved original identity: OK");
+const personal = { ...master, recurrence: null };
+const personalEdit = { ...personal, title: "Personal changed", description: "Notes", location: "Room" };
+const personalRequest = eventScopeRequest(personal, personal, "series", personalEdit);
+assert.deepEqual(personalRequest.patch, { title: "Personal changed", description: "Notes", location: "Room" });
+assert.equal(personalRequest.time, undefined);
+assert.equal(eventScopeRequest(personal, personal, "series", personalEdit).operationID, personalRequest.operationID);
+assert.throws(() => eventScopeRequest(personal, personal, "series"), /only title/);
+assert.throws(() => eventScopeRequest(personal, personal, "occurrence", personalEdit), /only title/);
+assert.throws(() => eventScopeRequest(personal, personal, "series", { ...personalEdit, recurrence: "FREQ=DAILY" }), /only title/);
+assert.throws(() => eventScopeRequest(personal, personal, "series", { ...personalEdit, start: new Date(personal.start.getTime() + 60000) }), /civil time intent/);

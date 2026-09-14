@@ -1058,3 +1058,24 @@ worker ACK, post-PUT membership revocation without ACK, provider 403/412, and
 ambiguous complete-resource recovery. Existing CalDAV scope regressions and the
 full project check also pass. These tests intercept provider DNS/HTTP and do not
 constitute live iCloud acceptance.
+
+## Personal one-off content edits (0.1.8)
+
+The scope endpoint also accepts `series/update` for a personal, non-recurring
+CalDAV root with an explicit time model. This narrow path changes only title,
+notes and location. Compact and full web editors and the native editor use the
+same durable operation instead of the legacy event PATCH.
+
+Admission requires the authoritative owner, exact calendar/resource mapping,
+no live or retired children, and fresh resource evidence. Native ORGANIZER or
+ATTENDEE properties still reject this personal-write path. The existing iCloud
+personal-content authorization fallback applies only under its documented
+conditions. Time, recurrence, calendar moves and deletion are not admitted by
+this one-off path.
+
+Conditional PUT retains UID, native time properties, alarms and unrelated bytes.
+A full read-back acknowledges delivery; a lost response is verified before any
+retry, and a conflict requires explicit fresh confirmation. Operation replay,
+local revisions and dispatch-time authority checks remain in force. Integration
+tests cover zoned, floating and all-day content, lost response, conflict
+resolution, stale revision and refusal of unsupported edits or permissions.

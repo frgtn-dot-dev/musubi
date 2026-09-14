@@ -1,11 +1,11 @@
-import { EventScopeRequestSchema, EventTimeContentPatchSchema, eventContentPatch, hasKnownEventTime, requireEventRevision, type Event, type EventScopeRequest, type EventTimeEdit, type EventWriteRequest } from "@musubi/types";
+import { isOneOffContentScope, EventScopeRequestSchema, EventTimeContentPatchSchema, eventContentPatch, hasKnownEventTime, requireEventRevision, type Event, type EventScopeRequest, type EventTimeEdit, type EventWriteRequest } from "@musubi/types";
 import { assertCaldavSeriesUTCConversion } from "./caldav-series-zone";
 import type { EditScope } from "./recurrence-edit";
 
 const pending = new WeakMap<Event, Map<string, string>>();
 /** Keep the operation identity while retrying the same frozen draft. */
 export function eventScopeRequest(master: Event, occurrence: Event, scope: EditScope, edited?: EventWriteRequest, newID: () => string = () => crypto.randomUUID(), ensureDefinition = false): EventScopeRequest {
-  if (!master.recurrence || !hasKnownEventTime(master)) throw new Error("Refresh this series with an explicit time model before using scope editing.");
+  if (!hasKnownEventTime(master)) throw new Error("Refresh this series with an explicit time model before using scope editing.");
   if ((!edited || edited.timeEdit || scope !== "series") && !occurrence.seriesID && requireEventRevision(occurrence) !== requireEventRevision(master)) throw new Error("The series changed since this occurrence was opened. Refresh and reopen it.");
   if (occurrence.seriesID && occurrence.seriesID !== master.id) throw new Error("The occurrence belongs to a different series.");
   const model = occurrence.timeModel;
@@ -30,6 +30,8 @@ export function eventScopeRequest(master: Event, occurrence: Event, scope: EditS
     patch = EventTimeContentPatchSchema.parse(content);
   }
   const intent = { expectedRevision: requireEventRevision(master), scope, ...(scope === "series" ? {} : { originalStart, expectedOccurrenceRevision: occurrence.seriesID ? requireEventRevision(occurrence) : null }), ...(edited ? { action: "update", patch, ...(ensureDefinition && scope !== "series" ? { ensureDefinition: true } : {}), ...(time ? { time } : {}) } : { action: "delete" }) };
+  if (!master.recurrence && (!isOneOffContentScope(master, EventScopeRequestSchema.parse({ ...intent, operationID: master.id })) || master.id !== occurrence.id))
+    throw new Error("This personal event supports only title, notes and location changes here.");
   const key = JSON.stringify({ master: master.id, intent });
   const owner = occurrence;
   let requests = pending.get(owner);

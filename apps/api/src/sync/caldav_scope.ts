@@ -2,12 +2,13 @@ import { randomUUID } from "node:crypto";
 import { planEventScope } from "@musubi/calendar";
 import { sameCaldavScopeContext, normalizeCaldavScopeRequest } from "@musubi/db";
 import type { CaldavSeriesContext, CaldavSeriesPrepared, CaldavSeriesDeletionPrepared, CaldavSplitPrepared } from "@musubi/db";
-import { EventScopeRequestSchema, EventWriteError } from "@musubi/types";
+import { isOneOffContentScope, EventScopeRequestSchema, EventWriteError } from "@musubi/types";
 import { caldavAdapter, prepareCaldavSeriesWrite, prepareCaldavSeriesDeletion, prepareCaldavSeriesSplit } from "./adapters/caldav";
 import { ProviderEventWriteError } from "./event_write";
 
 export async function prepareCaldavSeries(context: CaldavSeriesContext, input: unknown): Promise<CaldavSeriesPrepared> {
   const request = normalizeCaldavScopeRequest(context.master, EventScopeRequestSchema.parse(input));
+  if (context.master.recurrence === null && (!isOneOffContentScope(context.master, request) || context.children.length || context.retiredDefinitions?.length)) throw new EventWriteError("event-write", "unsupported");
   if (!["series", "occurrence", "following"].includes(request.scope) || (request.scope === "series" && request.action !== "update") || (request.action === "update" && (Object.keys(request.patch).some(key => !["title", "description", "location", "recurrence"].includes(key)))))
     throw new EventWriteError("event-write", "unsupported");
   if (request.action === "update" && request.patch.recurrence === null && (request.scope !== "series" || request.time || context.children.length || context.retiredDefinitions?.length)) throw new EventWriteError("event-write", "unsupported");

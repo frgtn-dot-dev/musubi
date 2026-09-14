@@ -1,4 +1,4 @@
-import { Event } from "@musubi/types";
+import { EventSchema, Event } from "@musubi/types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const SILENT = { minutesBefore: null, allDay: null };
@@ -93,6 +93,22 @@ describe("applySeriesEdit", () => {
     expect(chooseOption).not.toHaveBeenCalled();
     expect(updateEvent).toHaveBeenCalledTimes(1);
     expect(addEvent).not.toHaveBeenCalled();
+  });
+
+  it("routes a personal CalDAV content edit through the durable scope operation", async () => {
+    const plain = EventSchema.parse({ ...master, id: "00000000-0000-4000-8000-000000000991", creatorID: "owner", organizer: "", revision: 1, isCanceled: false, recurrence: null, color: "red", timeModel: { kind: "zoned", timeZone: "UTC", startLocal: "2026-07-06T09:00:00.000", endLocal: "2026-07-06T10:00:00.000" } });
+    const changed = { ...plain, title: "Renamed" };
+    const applyEventScope = vi.fn().mockResolvedValue(changed);
+    const options = { addEvent, updateEvent, provider: "caldav", master: plain, occurrence: plain, edited: changed, applyEventScope };
+    expect(await applySeriesEdit(options)).toEqual(changed);
+    expect(applyEventScope).toHaveBeenCalledWith(plain, expect.objectContaining({ action: "update", scope: "series", expectedRevision: 1, patch: { title: "Renamed" } }));
+    expect(chooseOption).not.toHaveBeenCalled();
+    expect(updateEvent).not.toHaveBeenCalled();
+    expect(addEvent).not.toHaveBeenCalled();
+    await expect(applySeriesEdit({ ...options, edited: { ...changed, start: new Date(plain.start.getTime() + 60000) } })).rejects.toThrow(/civil time intent/);
+    expect(applyEventScope).toHaveBeenCalledTimes(1);
+    await expect(applySeriesEdit({ ...options, applyEventScope: undefined })).rejects.toThrow(/unavailable/);
+    expect(updateEvent).not.toHaveBeenCalled();
   });
 
   it("detaches one occurrence and leaves the series named as it was", async () => {
