@@ -192,4 +192,4 @@ Both clients send a request-only create time intent; read/cache snapshots strip 
 
 Generic unlink/tombstone cannot remove a detached definition or a master with children, including tombstones. The check runs under the existing event revision lock and preserves content/links on refusal. K12 must provide an atomic scope-aware removal before family writes are admitted.
 
-Production startup refuses explicit time activation unless product and enforced client/peer minimums are newer than released 0.1.8. The current defaults and versions remain unchanged. This prevents merely toggling the flag while clients that lose metadata during copy are still supported; it is a necessary release condition, not automatic release certification.
+Production startup refuses explicit time activation unless product and enforced client/peer minimums are at least 0.2.0. The unpublished 0.1.8 candidate is superseded; runtime feature defaults remain off. This prevents merely toggling the flag while clients that lose metadata during copy are still supported; it is a necessary release condition, not automatic release certification.

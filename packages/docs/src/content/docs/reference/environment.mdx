@@ -57,15 +57,16 @@ values fail at boot instead of silently weakening the SSRF boundary.
 ## Optional Core capabilities
 
 All flags below default to `false`; only the literal `true` enables them.
-The coordinated 0.1.8 release may enable supported time/organizer operations
+The coordinated 0.2.0 release may enable supported time/organizer operations
 when product and enforced client/peer versions are compatible and both minimums
-are at least 0.1.8. Old development builds also labelled 0.1.8 must be rebuilt.
+are at least 0.2.0. Preliminary 0.1.8 development builds must be replaced with 0.2.0 builds.
 
 | Variable | Effect |
 | --- | --- |
 | `EVENT_TIME_EDITS_ENABLED` | Explicit event-time operations and supported provider time import/writes |
 | `PROVIDER_ORGANIZER_EDITS_ENABLED` | Supported Google organizer operations and Microsoft one-off meeting creation |
 | `CALDAV_ORGANIZER_EDITS_ENABLED` | CalDAV organizer operations with proven scheduling permissions |
+| `ICLOUD_ORGANIZER_CREATE_ENABLED` | Read-only confirmation of accepted iCloud meeting creation; also requires CalDAV organizer operations |
 | `PROVIDER_RSVP_EDITS_ENABLED` | Supported provider attendee replies |
 | `ICLOUD_RSVP_EDITS_ENABLED` | Narrow iCloud attendee compatibility; also requires provider RSVP |
 | `ICLOUD_PERSONAL_CONTENT_WRITES_ENABLED` | Narrow personal iCloud series-content writes; also requires explicit-time editing |
@@ -74,9 +75,9 @@ are at least 0.1.8. Old development builds also labelled 0.1.8 must be rebuilt.
 | `GOOGLE_AVAILABILITY_ENABLED` | Google FreeBusy availability |
 
 Flags do not bypass permissions or expand supported provider operations.
-The selected 0.1.8 activation excludes reminder writes, CalDAV alarm writes and
-Google availability. See the repository's `docs/releases/core-0.1.8-activation.md`
-and `ops/release/core-0.1.8.env.example` for the activation checklist and explicit
+The selected 0.2.0 activation excludes iCloud attendee RSVP, reminder writes, CalDAV alarm writes and
+Google availability. See the repository's `docs/releases/core-0.2.0-activation.md`
+and `ops/release/core-0.2.0.env.example` for the activation checklist and explicit
 settings. These files are not loaded automatically.
 
 ## Docker Compose

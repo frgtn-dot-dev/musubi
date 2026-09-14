@@ -1,16 +1,18 @@
 import assert from "node:assert/strict";
 import { assertEventTimeActivation } from "./event_time_activation";
 
-const release = { product: "0.1.8", client: "0.1.8", peer: "0.1.8" };
+const release = { product: "0.2.0", client: "0.2.0", peer: "0.2.0" };
 const incompatible = [
-  { product: "0.1.8", client: "0.1.7", peer: "0.1.8" },
-  { product: "0.1.8", client: "0.1.8", peer: "0.1.7" },
-  { product: "0.1.7", client: "0.1.8", peer: "0.1.8" },
-  { product: "0.1.8", client: "0.1.9", peer: "0.1.8" },
-  { product: "0.1.8", client: "0.1.8", peer: "0.1.9" },
+  { product: "0.1.8", client: "0.1.8", peer: "0.1.8" },
+  { product: "0.2.0", client: "0.1.99", peer: "0.2.0" },
+  { product: "0.2.0", client: "0.1.8", peer: "0.2.0" },
+  { product: "0.2.0", client: "0.2.0", peer: "0.1.8" },
+  { product: "0.1.8", client: "0.2.0", peer: "0.2.0" },
+  { product: "0.2.0", client: "0.2.1", peer: "0.2.0" },
+  { product: "0.2.0", client: "0.2.0", peer: "0.2.1" },
 ];
 for (const key of ["product", "client", "peer"] as const) {
-  for (const value of ["invalid", "", "0.1.8-beta.1", "0.1", "9007199254740992.1.8"]) {
+  for (const value of ["invalid", "", "0.2.0-beta.1", "0.1", "9007199254740992.1.8"]) {
     incompatible.push({ ...release, [key]: value });
   }
 }
@@ -30,8 +32,8 @@ for (const enabledKey of ["eventTimeEditsEnabled", "providerOrganizerEditsEnable
   }
 }
 assert.doesNotThrow(() => assertEventTimeActivation("prod", true, release));
-assert.doesNotThrow(() => assertEventTimeActivation("prod", true, { product: "0.1.9", client: "0.1.8", peer: "0.1.8" }));
-assert.doesNotThrow(() => assertEventTimeActivation("prod", true, { product: "0.1.9", client: "0.1.9", peer: "0.1.9" }));
+assert.doesNotThrow(() => assertEventTimeActivation("prod", true, { product: "0.2.1", client: "0.2.0", peer: "0.2.0" }));
+assert.doesNotThrow(() => assertEventTimeActivation("prod", true, { product: "0.2.1", client: "0.2.1", peer: "0.2.1" }));
 assert.throws(() => assertEventTimeActivation("prod", true, incompatible[0]), /coordinated release/);
 assert.doesNotThrow(() => assertEventTimeActivation("prod", false, incompatible[0]));
 console.log("Explicit time production activation compatibility gate: OK");

@@ -356,7 +356,7 @@ export const tasksRelations = relations(tasks, ({ one }) => ({
 }));
 
 // Deprecated public-event storage. No runtime code reads or writes this table.
-// Keep through 0.1.8 for rollback safety; drop it in a later contract release.
+// Keep through 0.2.0 for rollback safety; drop it in a later contract release.
 export const eventShares = pgTable("event_shares", {
   id: uuid("id").primaryKey().defaultRandom(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -380,7 +380,7 @@ export const eventShares = pgTable("event_shares", {
 });
 
 // Deprecated scheduler storage. No runtime code reads or writes these tables.
-// Keep through 0.1.8 so rolling back the API does not meet a missing schema;
+// Keep through 0.2.0 so rolling back the API does not meet a missing schema;
 // remove in a later contract release per docs/releasing.md.
 export const schedulingPolls = pgTable("scheduling_polls", {
   id: uuid("id").primaryKey().defaultRandom(),

@@ -34,19 +34,19 @@ async function main() {
     method, headers: { authorization: `Bearer ${token.raw}`, ...(version === undefined ? {} : { [CLIENT_VERSION_HEADER]: version }) },
   });
   try {
-    for (const version of [undefined, "", "0.1.7", "0.1.8garbage", "9", "1.2.3.4", "Infinity.1.2"]) {
+    for (const version of [undefined, "", "0.1.7", "0.1.8", "0.1.99", "0.1.8garbage", "9", "1.2.3.4", "Infinity.1.2"]) {
       for (const [path, method] of [["/api/v1/events", "GET"], ["/api/v1/events", "POST"], ["/api/stream", "GET"]]) {
         const response = await request(path!, version, method);
         assert.equal(response.status, 426, `${method} ${path} refuses ${version}`);
         assert.equal((await response.json()).error, "ClientUpgradeRequired");
       }
     }
-    assert.equal((await request("/api/v1/events?clientVersion=0.1.8")).status, 426, "query spelling is stream-only");
+    assert.equal((await request(`/api/v1/events?clientVersion=${PRODUCT_VERSION}`)).status, 426, "query spelling is stream-only");
     assert.equal((await request("/api/v1/events", PRODUCT_VERSION)).status, 200);
     assert.equal((await request("/api/v1/events", PRODUCT_VERSION, "POST")).status, 400, "compatible version does not authorize malformed writes");
     assert.equal((await fetch(origin + "/api/v1/events", { headers: { [CLIENT_VERSION_HEADER]: PRODUCT_VERSION } })).status, 401, "version is not authentication");
     assert.equal((await fetch(origin + "/api/v1/server")).status, 200, "discovery remains available for upgrade");
-    for (const path of ["/api/stream", "/api/stream?clientVersion=0.1.8"]) {
+    for (const path of ["/api/stream", `/api/stream?clientVersion=${PRODUCT_VERSION}`]) {
       const controller = new AbortController();
       const response = await fetch(origin + path, { signal: controller.signal, headers: {
         authorization: `Bearer ${token.raw}`, ...(path.includes("?") ? {} : { [CLIENT_VERSION_HEADER]: PRODUCT_VERSION }),
@@ -54,7 +54,7 @@ async function main() {
       assert.equal(response.status, 200);
       controller.abort();
     }
-    const oldPeer = await request("/api/v1/federation/accept", "0.1.7", "POST");
+    const oldPeer = await request("/api/v1/federation/accept", "0.1.8", "POST");
     assert.equal(oldPeer.status, 426, "old peer handshake is refused before creating a shadow user");
     assert.equal((await request("/api/v1/federation/accept", PRODUCT_VERSION, "POST")).status, 400, "compatible handshake still validates invite");
     assert.equal((await request("/api/v1/federation/token/rotate", undefined, "POST")).status, 200, "machine credential lifecycle is the narrow authenticated exemption");

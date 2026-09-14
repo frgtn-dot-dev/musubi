@@ -18,22 +18,20 @@ for clients it can no longer change**.
 
 ## Explicit event-time activation
 
-The owner approved including explicit event-time editing, supported organizer
-operations, RSVP and iCloud personal content writes in the **unreleased 0.1.8**
-release on 2026-09-14. The latest published release is `v0.1.7`; a preliminary
-0.1.8 development build is not the release artifact. The previous requirement
-for a version newer than 0.1.8 was based on treating that development version
-as published and is superseded.
+The owner approved explicit event-time editing, supported organizer operations,
+provider RSVP and iCloud personal content writes for the coordinated **0.2.0**
+release on 2026-09-14. The unpublished 0.1.8 candidate is superseded; no
+intermediate 0.1.8 tag is planned. iCloud attendee RSVP remains deferred.
 
-Production startup requires product/client/peer compatibility at **0.1.8 or
-newer**, with the product satisfying both enforced minimums. Do not lower these
-minimums: older writers can lose explicit time metadata when copying events.
-Rebuild every 0.1.8 development client from the final release revision and
-coordinate the server, web, native and connected peer rollout described below.
+Production startup requires product/client/peer compatibility at **0.2.0 or
+newer**, with the product satisfying both enforced minimums. Older writers can
+lose explicit time metadata when copying events. Replace preliminary 0.1.8
+clients with final 0.2.0 builds and coordinate the server, web, native and
+connected peer rollout described below.
 
 Flags remain off by default. The selected activation values, supported provider
 scope and outstanding live/device checks are recorded in
-[Core 0.1.8 activation](releases/core-0.1.8-activation.md). Permission, native
+[Core 0.2.0 activation](releases/core-0.2.0-activation.md). Permission, native
 identity and operation-specific checks still apply with flags enabled.
 Changing the compatibility boundary does not certify untested provider paths
 or deploy production configuration.
@@ -57,20 +55,19 @@ deploy order.
 
 ## K06 coordinated compatibility break (prepared, not deployed)
 
-The fixing release is **0.1.8**, not 0.1.9: the latest actual upstream release
-is GitHub tag `v0.1.7`; the root manifest's 0.1.8 is unreleased work. Release
-authority is the upstream tag, not the current product constant.
+The coordinated release is **0.2.0**. The former 0.1.8 development version was
+not published; historical QA records do not represent a released artifact.
 
-The owner approved raising **both client and federation peer floors to 0.1.8**.
+The owner approved raising **both client and federation peer floors to 0.2.0**.
 Prepare server, web and native together; do not enable this deployment until
 compatible clients and connected servers are available. This explicitly
 supersedes the normal additive API→web→phone order above. No publishing,
 production migration or deployment is authorized by this implementation.
 
 All authenticated product API reads and writes require
-`x-musubi-client-version: X.Y.Z >= 0.1.8`, including member-token requests,
+`x-musubi-client-version: X.Y.Z >= 0.2.0`, including member-token requests,
 uploads, ICS and streams. Browser EventSource alone uses
-`/api/stream?clientVersion=0.1.8` because it cannot set headers. Missing/malformed
+`/api/stream?clientVersion=0.2.0` because it cannot set headers. Missing/malformed
 or old versions receive 426, not an authentication failure or a forced reload
 that discards a draft. The header is compatibility evidence, **not authorization
 or a substitute for event expected-revision validation**.
