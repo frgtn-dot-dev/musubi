@@ -210,3 +210,44 @@ it("ignores a stale capability result after the calendar list changes", async ()
   expect(screen.getByRole("option").textContent).toContain("Outlook team");
   expect(api.save).not.toHaveBeenCalled();
 });
+
+it("requires an explicit iCloud alias, clears it on calendar switch, and freezes it for retry", async () => {
+  const icloud = { ...google, provider: "caldav" as const, name: "iCloud", id: "00000000-0000-4000-8000-000000000003" };
+  api.observe.mockImplementation(async (id: string) => id === icloud.id ? { provider: "caldav", calendarID: id, notificationPolicy: "server-invite", createTime: "utc-or-all-day", organizerAddresses: ["mailto:first@example.test", "mailto:second@example.test"] } : capability(google));
+  api.save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "pending" });
+  await ready({ calendars: [icloud, google] });
+  fillDraft();
+  fireEvent.click(screen.getByRole("button", { name: "Create and send invitations" }));
+  await screen.findByText("Choose the organizer address for this meeting.");
+  expect(api.save).not.toHaveBeenCalled();
+  const selectAlias = async () => {
+    fireEvent.click(screen.getByRole("combobox", { name: "Organizer address" }));
+    fireEvent.click(await screen.findByRole("option", { name: "second@example.test" }));
+  };
+  await selectAlias();
+  await choose("Work"); await choose("iCloud");
+  expect(screen.getByRole("combobox", { name: "Organizer address" }).textContent).toContain("Choose an address");
+  await selectAlias();
+  fireEvent.click(screen.getByRole("button", { name: "Create and send invitations" }));
+  await screen.findByText("offline");
+  expect(api.save.mock.calls[0][0]).toMatchObject({ provider: "caldav", organizerAddress: "mailto:second@example.test" });
+  expect(screen.getByRole("combobox", { name: "Organizer address" })).toHaveProperty("disabled", true);
+  fireEvent.click(screen.getByRole("button", { name: "Retry saved meeting action" }));
+  await screen.findByRole("status");
+  expect(api.save.mock.calls[1]).toEqual(api.save.mock.calls[0]);
+});
+
+it("refreshes the same calendar's available aliases without losing the meeting draft", async () => {
+  const icloud = { ...google, provider: "caldav" as const, name: "iCloud" };
+  api.observe.mockResolvedValueOnce({ provider: "caldav", calendarID: icloud.id });
+  const ui = await ready({ calendars: [icloud] });
+  fillDraft();
+  api.observe.mockResolvedValue({ provider: "caldav", calendarID: icloud.id, organizerAddresses: ["mailto:new@example.test", "mailto:other@example.test"] });
+  ui.rerender(<ProviderMeetingCreateDialog calendars={[{ ...icloud }]} initialDate="2026-09-12" onClose={vi.fn()} />);
+  const picker = await screen.findByRole("combobox", { name: "Organizer address" });
+  expect(value("Title")).toBe("Planning");
+  fireEvent.click(picker); fireEvent.click(await screen.findByRole("option", { name: "new@example.test" }));
+  fireEvent.click(screen.getByRole("button", { name: "Create and send invitations" }));
+  await screen.findByRole("status");
+  expect(api.save.mock.calls[0][0]).toMatchObject({ organizerAddress: "mailto:new@example.test" });
+});

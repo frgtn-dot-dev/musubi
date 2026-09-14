@@ -90,6 +90,8 @@ export const GoogleOrganizerRequestSchema = z
           "A bound occurrence requires its exact observation and supports content changes only.",
       });
   });
+const organizerAddress = z.string().transform(value => value.toLowerCase())
+  .refine(value => value.startsWith("mailto:") && z.email().safeParse(value.slice(7)).success, "Choose a valid organizer address");
 const caldavCommon = common
   .omit({ provider: true, sendUpdates: true })
   .extend({
@@ -100,6 +102,7 @@ export const CaldavOrganizerRequestSchema = z.discriminatedUnion("action", [
   caldavCommon
     .extend({
       action: z.literal("create"),
+      organizerAddress: organizerAddress.optional(),
       content: content.strict(),
       time: time.refine(
         (value) =>
@@ -220,6 +223,7 @@ export const ProviderOrganizerCalendarSchema = z.discriminatedUnion(
         calendarID: z.uuid(),
         notificationPolicy: z.literal("server-invite"),
         createTime: z.literal("utc-or-all-day"),
+        organizerAddresses: z.array(organizerAddress).min(1).max(100).optional(),
       })
       .strict(),
   ],

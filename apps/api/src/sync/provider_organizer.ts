@@ -41,10 +41,9 @@ export async function observeOrganizerCalendar(
       undefined,
       AbortSignal.timeout(10_000),
     );
-    if (transport.proof.addresses.length !== 1)
-      throw new EventWriteError("organizer", "unsupported");
     return {
       provider: "caldav" as const,
+      ...(transport.proof.addresses.length > 1 ? { organizerAddresses: transport.proof.addresses } : {}),
       calendarID,
       notificationPolicy: "server-invite" as const,
       createTime: "utc-or-all-day" as const,

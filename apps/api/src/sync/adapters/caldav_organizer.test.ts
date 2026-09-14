@@ -203,6 +203,17 @@ async function main() {
     reset();
     state.data = null;
     const creation = await transport("actor", "account", collection, "create");
+    const aliases = { ...creation.proof, addresses: [...creation.proof.addresses, "mailto:alias@example.test"] };
+    assert.throws(() => caldavOrganizerDesired(collection, create, null, aliases, "20260301T100000Z"));
+    for (const address of aliases.addresses) {
+      const selected = CaldavOrganizerRequestSchema.parse({ ...create, organizerAddress: address.toUpperCase() });
+      const result = caldavOrganizerDesired(collection, selected, null, aliases, "20260301T100000Z");
+      assert.ok(result?.data.includes(`ORGANIZER:${address}`));
+      assert.throws(() => caldavOrganizerDesired(collection, selected, null, { ...aliases, addresses: aliases.addresses.filter(value => value !== address) }, "20260301T100000Z"));
+    }
+    assert.throws(() => caldavOrganizerDesired(collection, CaldavOrganizerRequestSchema.parse({ ...create, organizerAddress: "mailto:outsider@example.test" }), null, aliases, "20260301T100000Z"));
+    assert.throws(() => CaldavOrganizerRequestSchema.parse({ ...create, organizerAddress: "not an address" }));
+    assert.throws(() => caldavOrganizerDesired(collection, CaldavOrganizerRequestSchema.parse({ ...create, organizerAddress: aliases.addresses[0], guests: [{ email: "alias@example.test", optional: false }] }), null, aliases, "20260301T100000Z"));
     const created = caldavOrganizerDesired(
       collection,
       create,
@@ -227,6 +238,15 @@ async function main() {
       "observed",
     );
     assert.equal(state.puts, 1);
+    reset("two-self"); state.data = null;
+    const aliasSession = await transport("actor", "account", collection, "create");
+    const aliasRequest = CaldavOrganizerRequestSchema.parse({ ...create, organizerAddress: "mailto:other@example.test" });
+    const aliasIntent = { ...createIntent, request: aliasRequest, desired: caldavOrganizerDesired(collection, aliasRequest, null, aliasSession.proof, "20260301T100000Z") };
+    state.mode = "ok";
+    const changedIdentity = await transport("actor", "account", collection, "create");
+    let aliasDispatches = 0;
+    await assert.rejects(() => changedIdentity.deliver(aliasIntent, async () => { aliasDispatches++; }, async () => {}));
+    assert.equal(aliasDispatches, 0); assert.equal(state.puts, 0);
     reset();
     const deletion = CaldavOrganizerRequestSchema.parse({
       ...ids,

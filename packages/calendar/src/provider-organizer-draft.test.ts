@@ -113,3 +113,8 @@ assert.match(eventDeliveryExplanation({ provider: "microsoft", organizerPhase: "
 const localOutlook = organizerRequest("create", { ...draft, timeZone: "Europe/Prague", start: "2026-09-13T09:00:00", end: "2026-09-13T10:00:00" }, [], { ...identity, provider: "microsoft" });
 assert.equal(localOutlook.action, "create");
 if (localOutlook.action === "create") assert.deepEqual(localOutlook.time, { kind: "zoned", timeZone: "UTC", startLocal: "2026-09-13T07:00:00.000", endLocal: "2026-09-13T08:00:00.000" });
+
+const caldavAlias = organizerRequest("create", { ...draft, organizerAddress: "mailto:alias@example.test", timeZone: "UTC" }, [], { ...identity, provider: "caldav" });
+assert.equal(caldavAlias.provider === "caldav" && caldavAlias.action === "create" && caldavAlias.organizerAddress, "mailto:alias@example.test");
+assert.equal("organizerAddress" in organizerRequest("create", { ...draft, organizerAddress: "mailto:alias@example.test" }, [], identity), false);
+assert.equal("organizerAddress" in organizerRequest("update", { ...draft, organizerAddress: "mailto:alias@example.test", title: "Renamed" }, ["title"], identity, observation), false);

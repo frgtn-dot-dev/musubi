@@ -1,3 +1,4 @@
+import { OptionPicker } from "@/components/ui/OptionPicker";
 import { TimeZonePicker } from "./TimeZonePicker";
 import { DateTimePicker } from "@expo/ui/community/datetime-picker";
 import { useSettingsStore } from "@/store/useSettingsStore";
@@ -53,6 +54,7 @@ function OrganizerCreateActionBody({
   useEffect(() => {
     apiRef.current = api;
   }, [api]);
+  const [organizerAddresses, setOrganizerAddresses] = useState<string[] | undefined>();
   const [available, setAvailable] = useState<"google" | "caldav" | "microsoft" | null>(null),
     [open, setOpen] = useState(false);
   useEffect(() => {
@@ -60,7 +62,10 @@ function OrganizerCreateActionBody({
     apiRef.current
       .getOrganizerCalendar(calendarID)
       .then((result) => {
-        if (active) setAvailable(result.provider);
+        if (active) {
+          setAvailable(result.provider);
+          setOrganizerAddresses(result.provider === "caldav" ? result.organizerAddresses : undefined);
+        }
       })
       .catch(() => {});
     return () => {
@@ -76,6 +81,7 @@ function OrganizerCreateActionBody({
       ><Feather name="users" size={24} color={colors.fg2} /></Tap>
       {open && (
         <ProviderOrganizerEditor
+          organizerAddresses={organizerAddresses}
           provider={available}
           calendarID={calendarID}
           color={color}
@@ -86,6 +92,7 @@ function OrganizerCreateActionBody({
   ) : null;
 }
 export function ProviderOrganizerEditor({
+  organizerAddresses,
   calendarID,
   color,
   event,
@@ -93,6 +100,7 @@ export function ProviderOrganizerEditor({
   provider = observation?.organizerEdit?.provider ?? "google",
   onClose,
 }: {
+  organizerAddresses?: string[];
   calendarID: string;
   color: string;
   event?: Event;
@@ -120,6 +128,7 @@ export function ProviderOrganizerEditor({
       calendarID,
       color,
     });
+  const [addressPickerOpen, setAddressPickerOpen] = useState(false);
   const [picker, setPicker] = useState<{ key: "start" | "end"; mode: "date" | "time" }>();
   const [detailsOpen, setDetailsOpen] = useState(!!event);
   const dateFormat = useSettingsStore(s => s.dateFormat);
@@ -179,6 +188,7 @@ export function ProviderOrganizerEditor({
     setBusy(true);
     setError("");
     try {
+      if (!frozen.current && !event && organizerAddresses?.length && !organizerAddresses.includes(draft.organizerAddress ?? "")) throw new Error("Choose the organizer address for this meeting.");
       frozen.current ??= organizerRequest(
         action,
         draft,
@@ -292,6 +302,13 @@ export function ProviderOrganizerEditor({
               </View>
             ) : (
               <>
+                {!event && provider === "caldav" && organizerAddresses?.length ? <View style={styles.fieldContainer}>
+                  <Text style={styles.fieldLabel}>Organizer address</Text>
+                  <Tap accessibilityLabel="Organizer address" disabled={locked} onPress={() => setAddressPickerOpen(true)} style={{ flexDirection: "row", alignItems: "center", gap: spacing[2], paddingVertical: spacing[2] }}>
+                    <Feather name="mail" size={16} color={colors.fg3} /><Text style={[styles.fieldValueText, { flex: 1 }]}>{draft.organizerAddress?.slice(7) ?? "Choose an address"}</Text><Feather name="chevron-down" size={16} color={colors.fg3} />
+                  </Tap>
+                  {addressPickerOpen ? <OptionPicker visible title="Organizer address" options={organizerAddresses.map(value => ({value, label:value.slice(7)}))} value={draft.organizerAddress} onSelect={value => patch("organizerAddress", value)} onClose={() => setAddressPickerOpen(false)} /> : null}
+                </View> : null}
                 {fields.filter(([key]) => (!occurrence || key !== "guests") && !["description", "location"].includes(key)).map(renderField)}
                 {(provider === "caldav" && event && !canEditTime) || occurrence ? (
                   <View style={{ alignItems: "flex-end", paddingHorizontal: spacing[4] }}>

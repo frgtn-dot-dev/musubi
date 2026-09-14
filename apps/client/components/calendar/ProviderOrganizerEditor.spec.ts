@@ -341,3 +341,21 @@ it("creates Outlook with explicit server invitation policy and freezes retry ide
   button(create(), "Retry").onPress(); await settle();
   expect(h.save.mock.calls[1][0]).toEqual(saved);
 });
+
+it("requires a verified iCloud alias and preserves it through a frozen retry", async () => {
+  h.save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "pending" });
+  function create() {
+    h.index = 0;
+    return ProviderOrganizerEditor({ provider: "caldav", organizerAddresses: ["mailto:first@example.test", "mailto:second@example.test"], calendarID: "00000000-0000-4000-8000-000000000004", color: "red", onClose: h.close });
+  }
+  const field = (label: string) => nodes(create()).find(node => node.type === "TextInput" && node.props.accessibilityLabel === label)!.props;
+  field("Title").onChangeText("Planning"); field("Guest email addresses").onChangeText("guest@example.test");
+  button(create(), "Send invitations").onPress(); await settle();
+  expect(h.save).not.toHaveBeenCalled();
+  nodes(create()).find(node => node.type === "Tap" && node.props.accessibilityLabel === "Organizer address")!.props.onPress();
+  nodes(create()).find(node => node.type === "OptionPicker")!.props.onSelect("mailto:second@example.test");
+  button(create(), "Send invitations").onPress(); await settle();
+  expect(h.save.mock.calls[0][0]).toMatchObject({ provider: "caldav", organizerAddress: "mailto:second@example.test" });
+  button(create(), "Retry").onPress(); await settle();
+  expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
+});

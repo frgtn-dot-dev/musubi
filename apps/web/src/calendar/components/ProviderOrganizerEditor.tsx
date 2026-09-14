@@ -18,6 +18,7 @@ import { Button, IconButton } from "~/ui/Button";
 import { Dialog, DialogInfo } from "~/ui/Dialog";
 import { ConfirmationDialog } from "~/ui/ConfirmationDialog";
 import { Field } from "~/ui/Field";
+import { Select } from "~/ui/Select";
 import { Checkbox } from "~/ui/Checkbox";
 import { InlineError } from "~/ui/InlineError";
 import styles from "./styles/event-delivery.module.css";
@@ -49,13 +50,17 @@ function OrganizerCreateActionBody({
   connectionId?: string;
   onCreate?: (target: HTMLElement) => void;
 }) {
+  const [organizerAddresses, setOrganizerAddresses] = useState<string[] | undefined>();
   const [available, setAvailable] = useState<"google" | "caldav" | "microsoft" | null>(null),
     [trigger, setTrigger] = useState<HTMLElement | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     getOrganizerCalendar(calendarID, controller.signal, connectionId)
       .then((result) => {
-        if (!controller.signal.aborted) setAvailable(result.provider);
+        if (!controller.signal.aborted) {
+          setAvailable(result.provider);
+          setOrganizerAddresses(result.provider === "caldav" ? result.organizerAddresses : undefined);
+        }
       })
       .catch(() => {});
     return () => controller.abort();
@@ -74,6 +79,7 @@ function OrganizerCreateActionBody({
       </IconButton>
       {trigger ? (
         <ProviderOrganizerEditor
+          organizerAddresses={organizerAddresses}
           provider={available}
           calendarID={calendarID}
           color={color}
@@ -86,6 +92,7 @@ function OrganizerCreateActionBody({
   ) : null;
 }
 export function ProviderOrganizerEditor({
+  organizerAddresses,
   calendarID,
   color,
   event,
@@ -95,6 +102,7 @@ export function ProviderOrganizerEditor({
   returnFocus,
   onClose,
 }: {
+  organizerAddresses?: string[];
   calendarID: string;
   color: string;
   event?: Event;
@@ -155,6 +163,7 @@ export function ProviderOrganizerEditor({
     setBusy(true);
     setError("");
     try {
+      if (!frozen.current && !event && organizerAddresses?.length && !organizerAddresses.includes(draft.organizerAddress ?? "")) throw new Error("Choose the organizer address for this meeting.");
       frozen.current ??= organizerRequest(
         action,
         draft,
@@ -244,6 +253,7 @@ export function ProviderOrganizerEditor({
         ) : (
           <>
             <ProviderOrganizerFields
+              organizerAddresses={organizerAddresses}
               draft={draft}
               event={event}
               provider={provider}
@@ -282,6 +292,7 @@ export function ProviderOrganizerEditor({
 
 /** The provider management and shared creation flows keep one field contract. */
 export function ProviderOrganizerFields({
+  organizerAddresses,
   draft,
   event,
   provider,
@@ -290,6 +301,7 @@ export function ProviderOrganizerFields({
   occurrence = false,
   onChange,
 }: {
+  organizerAddresses?: string[];
   draft: OrganizerDraft;
   event?: Event;
   provider: "google" | "caldav" | "microsoft";
@@ -299,6 +311,7 @@ export function ProviderOrganizerFields({
   onChange: <Key extends keyof OrganizerDraft>(key: Key, value: OrganizerDraft[Key]) => void;
 }) {
   return <>
+    {!event && provider === "caldav" && organizerAddresses?.length ? <Field label="Organizer address"><Select label="Organizer address" placeholder="Choose an address" value={draft.organizerAddress ?? ""} disabled={locked} options={organizerAddresses.map(value => ({value, label: value.slice(7)}))} onChange={value => onChange("organizerAddress", value)} /></Field> : null}
             {(
               [
                 ["title", "Title"],

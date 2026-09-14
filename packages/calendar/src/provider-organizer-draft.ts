@@ -6,6 +6,7 @@ import {
   type ProviderOrganizerRequest,
 } from "@musubi/types";
 export type OrganizerDraft = {
+  organizerAddress?: string;
   title: string;
   description: string;
   location: string;
@@ -101,6 +102,7 @@ export function organizerRequest(
     return ProviderOrganizerRequestSchema.parse({
       ...common,
       action,
+      ...(provider === "caldav" && draft.organizerAddress ? { organizerAddress: draft.organizerAddress } : {}),
       color,
       content: {
         title: draft.title,
