@@ -74,6 +74,7 @@ async function main() {
   const origin = `http://127.0.0.1:${address.port}`;
   try {
     for (const scenario of [
+      "icloud-create-recovery",
       "public",
       "retime",
       "retime-no-op",
@@ -145,6 +146,31 @@ async function main() {
             supportsEvents: true,
           },
         );
+        if (scenario === "icloud-create-recovery") {
+          state.icloud = true; state.data = null;
+          const request = { provider: "caldav", action: "create", notificationPolicy: "server-invite", organizerAddress: "mailto:other@example.test", operationID: randomUUID(), eventID: randomUUID(), calendarID: calendar.id, color: "red", content: { title: "QA compatibility", description: null, location: null }, time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-09-16T12:00:00", endLocal: "2026-09-16T12:30:00" }, guests: [{ email: "guest@example.test", optional: false }] };
+          await queueProviderOrganizer(actor, request);
+          state.onPut = async () => { state.data = state.data!.replace("ORGANIZER:mailto:other@example.test", "ORGANIZER;EMAIL=self@example.test;CN=Owner:/canonical/principal/").replace(";RSVP=TRUE", ";SCHEDULE-STATUS=1.1"); };
+          config.api.icloudOrganizerCreateEnabled = false;
+          await deliverEventOutbox(request.operationID, () => caldavAdapter);
+          const [accepted] = await db.select().from(eventOutbox).where(eq(eventOutbox.id, request.operationID));
+          assert.ok(accepted!.payload.organizer!.dispatch!.acceptedAt);
+          assert.equal(state.puts, 1);
+          config.api.icloudOrganizerCreateEnabled = true;
+          const { caldavOrganizerTransport } = await import("./adapters/caldav_organizer_delivery");
+          const transport = caldavOrganizerTransport(async () => "Basic Zml4dHVyZTpmaXh0dXJl", async (owner, id, url) => owner === actor && id === account.id && url === collection);
+          await requestEventDeliveryRetry(actor, request.eventID, request.operationID);
+          await db.update(eventOutbox).set({ nextAttemptAt: new Date(0) }).where(eq(eventOutbox.id, request.operationID));
+          const recovered = await deliverEventOutbox(request.operationID, () => ({ ...caldavAdapter, caldavOrganizer: transport }));
+          assert.equal(recovered?.status, "completed");
+          assert.equal(state.puts, 1); assert.equal(state.deletes, 0);
+          const [mapping] = await db.select().from(externalEvents).where(eq(externalEvents.eventID, request.eventID));
+          assert.equal(mapping!.providerState!.organizer!.address, "mailto:self@example.test");
+          assert.equal((await queueProviderOrganizer(actor, request)).replayed, true);
+          config.api.icloudOrganizerCreateEnabled = false;
+          console.log("iCloud created meeting: accepted dispatch recovery, durable ACK/mapping and exactly one PUT OK");
+          continue;
+        }
         if (
           [
             "echo-dst-duration",

@@ -62,6 +62,7 @@ export async function createCaldavOrganizerFixture() {
     etag: '"before"',
     scheduleTag: '"schedule-before"',
     mode: "ok",
+    icloud: false,
     puts: 0,
     deletes: 0,
     reads: 0,
@@ -92,11 +93,16 @@ export async function createCaldavOrganizerFixture() {
     }
     if (req.method === "PROPFIND") {
       assert.equal(req.headers.depth, "0");
+      if (state.icloud && req.url?.startsWith("/collection/") && req.url.endsWith(".ics")) {
+        const props = state.mode === "icloud-property-missing" ? "<d:current-user-privilege-set/>" : `<d:current-user-privilege-set/><c:schedule-tag>${state.mode === "icloud-property-malformed" ? "bad" : ""}</c:schedule-tag>`;
+        res.writeHead(207, { "content-type": "application/xml" });
+        return res.end(`<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:response><d:href>${req.url}</d:href><d:propstat><d:prop>${props}</d:prop><d:status>HTTP/1.1 ${state.mode === "icloud-property-denied" ? "403 Forbidden" : "404 Not Found"}</d:status></d:propstat></d:response></d:multistatus>`);
+      }
       let props: string;
       if (req.url === "/collection/")
         props = `<d:current-user-principal><d:href>${state.mode === "cross-origin" ? "http://foreign.invalid/principal/" : "/principal/"}</d:href></d:current-user-principal><d:owner><d:href>${state.mode === "wrong-owner" ? "/other/" : "/principal/"}</d:href></d:owner><d:current-user-privilege-set><d:privilege><d:${state.mode === "no-bind" || state.mode === "no-unbind" ? "read" : "all"}/></d:privilege></d:current-user-privilege-set>`;
       else if (req.url === "/principal/")
-        props = `<c:calendar-user-address-set><d:href>mailto:self@example.test</d:href>${state.mode === "two-self" ? "<d:href>mailto:other@example.test</d:href>" : ""}</c:calendar-user-address-set><c:schedule-outbox-URL><d:href>/outbox/</d:href></c:schedule-outbox-URL>`;
+        props = `<c:calendar-user-address-set><d:href>mailto:self@example.test</d:href>${state.icloud ? `<d:href>/canonical/principal/</d:href><d:href>mailto:${state.mode === "icloud-identity-changed" ? "changed" : "other"}@example.test</d:href>` : state.mode === "two-self" ? "<d:href>mailto:other@example.test</d:href>" : ""}</c:calendar-user-address-set><c:schedule-outbox-URL><d:href>/outbox/</d:href></c:schedule-outbox-URL>`;
       else if (req.url === "/outbox/")
         props = `<d:resourcetype><d:collection/>${state.mode === "no-outbox" ? "" : "<c:schedule-outbox/>"}</d:resourcetype><d:current-user-privilege-set><d:privilege><c:${state.mode === "no-invite" ? "schedule-send-reply" : "schedule-send-invite"}/></d:privilege></d:current-user-privilege-set>`;
       else {
@@ -122,7 +128,7 @@ export async function createCaldavOrganizerFixture() {
       res.writeHead(200, {
         "content-type": "text/calendar",
         etag: state.mode === "weak-etag" ? 'W/"weak"' : state.etag,
-        ...(state.mode === "no-schedule-tag"
+        ...(state.icloud && state.mode !== "icloud-present-tag" || state.mode === "no-schedule-tag"
           ? {}
           : { "schedule-tag": state.scheduleTag }),
       });

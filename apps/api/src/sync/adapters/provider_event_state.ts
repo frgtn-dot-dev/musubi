@@ -33,7 +33,13 @@ export function microsoftEventState(input: unknown): ProviderEventState {
 }
 export function caldavEventState(component: ICAL.Component): ProviderEventState {
   const value = (name: string) => string(component.getFirstPropertyValue(name));
-  const propertyPerson = (property: ICAL.Property) => ({ address: string(property.getFirstValue()), name: string(property.getParameter("cn")), self: null });
+  const propertyPerson = (property: ICAL.Property) => {
+    const uri = string(property.getFirstValue()), email = string(property.getParameter("email"));
+    // EMAIL is provider display metadata for a calendar-address URI, never
+    // authentication proof; scheduling writes validate the native URI separately.
+    const address = uri && !/^mailto:/i.test(uri) && email && /^[^\s<>@,;:?#%\\]+@[^\s<>@,;:?#%\\]+$/.test(email) ? `mailto:${email}` : uri;
+    return { address, name: string(property.getParameter("cn")), self: null };
+  };
   const organizer = component.getFirstProperty("organizer");
   return ProviderEventStateSchema.parse({ provider: "caldav", organizer: organizer ? propertyPerson(organizer) : null, isOrganizer: null,
     attendees: component.getAllProperties("attendee").map(property => ({ ...propertyPerson(property), role: string(property.getParameter("role")), response: string(property.getParameter("partstat")) })),

@@ -24,3 +24,6 @@ assert.deepEqual(caldav.reminders, { provider: "caldav", alarms: [{ action: "AUD
 assert.equal(caldav.privacy, "PRIVATE");
 assert.ok(resource.includes("X-UNKNOWN:keep\r\n"), "read never rewrites the provider resource");
 console.log("Provider state reads: own response evidence, participant roles, native reminders and richer privacy/availability: OK");
+const icloud = resource.replace("ORGANIZER;CN=Owner:mailto:owner@example.test", "ORGANIZER;CN=Owner;EMAIL=primary@example.test:/canonical/principal/");
+assert.equal(caldavEventState(new ICAL.Component(ICAL.parse(icloud)).getFirstSubcomponent("vevent")!).organizer?.address, "mailto:primary@example.test");
+assert.ok(icloud.includes(":/canonical/principal/"), "display email never rewrites the native URI");
