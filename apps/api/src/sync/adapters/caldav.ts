@@ -1199,6 +1199,9 @@ export async function createCaldavSplitResource(externalCalendarId: string, spli
 
 async function rsvpAuthorization(userID: string, accountID: string, externalCalendarID: string) {
   if (!config.api.providerRsvpEditsEnabled) throw new EventWriteError("event-write", "unsupported");
+  return schedulingAuthorization(userID, accountID, externalCalendarID);
+}
+async function schedulingAuthorization(userID: string, accountID: string, externalCalendarID: string) {
   const accounts = await getCaldavAccountsByUser(userID);
   const calendars = await getUserExternalCalendars("caldav", userID, accountID);
   if (!accounts.some(item => item.id === accountID) || !calendars.some(item => item.externalCalendarID === externalCalendarID && item.supportsEvents)) throw new EventWriteError("event-write", "denied");
@@ -1379,7 +1382,12 @@ export function classifyCaldavCalendars(cals: DAVCalendar[]) {
 }
 
 export const caldavAdapter: CalendarAdapter = {
-  caldavOrganizer: caldavOrganizerTransport(async (userID, accountID) => { const accounts = await getCaldavAccountsByUser(userID); if (!accounts.some(account => account.id === accountID)) throw new EventWriteError("organizer", "denied"); return basicAuthForAccount(accountID); }),
+  caldavOrganizer: caldavOrganizerTransport(async (userID, accountID) => { const accounts = await getCaldavAccountsByUser(userID); if (!accounts.some(account => account.id === accountID)) throw new EventWriteError("organizer", "denied"); return basicAuthForAccount(accountID); }, async (userID, accountID, collection, resource) => {
+    if (!config.api.caldavOrganizerEditsEnabled || !config.api.icloudOrganizerCreateEnabled) return false;
+    await schedulingAuthorization(userID, accountID, collection);
+    const account = (await getCaldavAccountsByUser(userID)).find(item => item.id === accountID);
+    return !!account && isIcloudPersonalContentDestination(account.serverUrl, collection, resource);
+  }),
   async readCaldavAlarm(context, signal) {
     if (!config.api.caldavAlarmEditsEnabled) throw new EventWriteError("event-write", "unsupported");
     const { resource, authorization } = await resourceAuthorization(context.link.userID, context.link.accountID, context.link.externalCalendarID, { master: context.event, ref: context.mapping.ref }, signal);

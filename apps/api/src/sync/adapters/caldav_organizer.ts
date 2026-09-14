@@ -36,8 +36,11 @@ export type CaldavOrganizerNative = {
   proof: CaldavSchedulingProof;
 };
 export function caldavOrganizerNative(value: CaldavOrganizerNative) {
-  requireEventEtag(value.etag);
   requireEventEtag(value.scheduleTag);
+  return { ...caldavOrganizerContent(value), scheduleTag: value.scheduleTag };
+}
+function caldavOrganizerContent(value: Omit<CaldavOrganizerNative, "scheduleTag">) {
+  requireEventEtag(value.etag);
   const { proof, data } = value;
   if (
     proof.principal !== proof.owner ||
@@ -358,4 +361,54 @@ export function matchesCaldavOrganizer(
   } catch {
     return false;
   }
+}
+
+/** Read-only create acknowledgment for explicitly verified iCloud identities.
+ * Never used to authorize an update or to manufacture a Schedule-Tag. */
+export function observeIcloudOrganizerCreate(
+  current: Omit<CaldavOrganizerNative, "scheduleTag">,
+  desired: CaldavOrganizerDesired,
+  organizerURIs: string[],
+) {
+  if (current.id !== desired.id || current.iCalUID !== desired.iCalUID || !isDeepStrictEqual(current.proof, desired.proof)) fail();
+  const event = new ICAL.Component(ICAL.parse(current.data)).getFirstSubcomponent("vevent");
+  const wanted = new ICAL.Component(ICAL.parse(desired.data)).getFirstSubcomponent("vevent");
+  if (!event || !wanted) fail();
+  replaceEventProperties(current.data, 0, new Map());
+  const organizers = event.getAllProperties("organizer");
+  if (organizers.length !== 1) fail();
+  const organizer = organizers[0]!, wantedOrganizer = wanted.getFirstProperty("organizer")!;
+  const selected = address(wantedOrganizer.getFirstValue());
+  if (!current.proof.addresses.includes(selected)) fail();
+  const value = String(organizer.getFirstValue());
+  const email = organizer.getParameter("email");
+  const cn = organizer.getParameter("cn");
+  if (Object.keys(organizer.toJSON()[1]).some(key => !["email", "cn"].includes(key)) ||
+      email !== undefined && (typeof email !== "string" || !current.proof.addresses.includes(address(`mailto:${email}`))) ||
+      cn !== undefined && (typeof cn !== "string" || /[\r\n\x00-\x1f\x7f]/.test(cn))) fail();
+  if (value !== selected && (!organizerURIs.includes(new URL(value, current.id).href) || typeof email !== "string")) fail();
+  // Validate the physical header before replacing the validated display aliases.
+  caldavRsvpParameter(current.data, "organizer", 0, "cn");
+  const withoutDisplay = caldavRsvpParameter(caldavRsvpParameter(current.data, "organizer", 0, "cn"), "organizer", 0, "email");
+  let normalized = replaceEventProperties(withoutDisplay, 0, new Map([["organizer", [wantedOrganizer]]]));
+  const guests = event.getAllProperties("attendee"), expected = wanted.getAllProperties("attendee");
+  if (guests.length !== expected.length) fail();
+  if (new Set(guests.map(guest => guest.getFirstValue())).size !== guests.length) fail();
+  guests.forEach((guest, i) => {
+    const target = expected.find(item => item.getFirstValue() === guest.getFirstValue());
+    if (!target) fail();
+    const parameters = structuredClone(guest.toJSON()[1]);
+    const status = parameters["schedule-status"];
+    if (status !== undefined && (typeof status !== "string" || !/^\d\.\d+(?:\.\d+)?(?:,\d\.\d+(?:\.\d+)?)*$/.test(status))) fail();
+    delete parameters["schedule-status"];
+    if (parameters.rsvp === undefined && target.getParameter("rsvp") === "TRUE") parameters.rsvp = "TRUE";
+    if (!isDeepStrictEqual(parameters, target.toJSON()[1])) fail();
+    // Physical validation precedes permitted parameter ordering normalization.
+    for (const name of Object.keys(guest.toJSON()[1])) normalized = caldavRsvpParameter(normalized, "attendee", i, name);
+    for (const [name, value] of Object.entries(target.toJSON()[1])) normalized = caldavRsvpParameter(normalized, "attendee", i, name, String(value));
+  });
+  caldavOrganizerContent({ ...current, data: normalized });
+  if (Number(event.getFirstPropertyValue("sequence") ?? 0) < Number(wanted.getFirstPropertyValue("sequence") ?? 0) ||
+      !isDeepStrictEqual(comparable(normalized), comparable(desired.data))) fail();
+  return { native: current, state: caldavEventState(event) };
 }

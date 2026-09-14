@@ -158,3 +158,28 @@ The synthetic scenarios cover actual public admission, invalid-gap correction,
 UTC/named-zone/all-day changes, DURATION across DST, native echo before ACK,
 no-op, lost response and a guest reply arriving before readback. Web/native
 regressions retain the selected zone/type and exact frozen retry request.
+
+## iCloud create read-back compatibility
+
+`ICLOUD_ORGANIZER_CREATE_ENABLED` is separately off by default and requires
+`CALDAV_ORGANIZER_EDITS_ENABLED`. It only confirms a created one-off meeting;
+update, cancellation and rescheduling retain strict scheduling/version evidence.
+
+An authenticated, active iCloud account and exact collection/resource destination
+must remain eligible. Missing GET Schedule-Tag is accepted only after one exact
+resource PROPFIND reports empty 404 values for both schedule-tag and privileges,
+between two identical full GETs with the same strong ETag. This is read evidence,
+not permission to modify the existing resource. Collection bind and scheduling
+send-invite proof remain mandatory before creation.
+
+iCloud can replace the selected mailto organizer with its own principal URI and
+primary email. Confirmation requires that URI in the fresh authenticated address
+set and the EMAIL parameter among the same verified aliases. Provider details
+show the actual email, while native bytes remain untouched. Confirmation does
+not promise use of the selected sending alias or delivery of guest notifications.
+Only validated display parameters and an omitted RSVP=TRUE are normalized for
+create comparison; guests, roles, responses, UID, time and content must match.
+
+A previous accepted or uncertain dispatch is reconciled read-only using the same
+operation identity. It never sends a second PUT or invitation. Strict CalDAV
+Schedule-Tag validation is unchanged.

@@ -19,6 +19,7 @@ automatically loaded by Compose or the API.
 | EVENT_TIME_EDITS_ENABLED | true | Explicit local time create/copy/edit and supported provider time operations/import |
 | PROVIDER_ORGANIZER_EDITS_ENABLED | true | Supported Google organizer operations and Microsoft one-off create |
 | CALDAV_ORGANIZER_EDITS_ENABLED | true | Strictly proven CalDAV one-off organizer operations |
+| ICLOUD_ORGANIZER_CREATE_ENABLED | true | Read-only confirmation of iCloud-created meetings; no update/delete/reschedule fallback |
 | PROVIDER_RSVP_EDITS_ENABLED | true | Supported Google, Microsoft and CalDAV attendee replies |
 | ICLOUD_RSVP_EDITS_ENABLED | true | Separately proven one-off iCloud attendee compatibility; requires provider RSVP |
 | ICLOUD_PERSONAL_CONTENT_WRITES_ENABLED | true | Narrow personal iCloud master-content writes; requires explicit time |

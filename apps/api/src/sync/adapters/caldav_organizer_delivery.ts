@@ -1,3 +1,4 @@
+import { readIcloudOrganizerCreation } from "./icloud_organizer_creation";
 import { isDeepStrictEqual } from "node:util";
 import { config } from "@musubi/config";
 import {
@@ -29,6 +30,7 @@ function enabled() {
 }
 export function caldavOrganizerTransport(
   getAuthorization: (userID: string, accountID: string) => Promise<string>,
+  icloudCreateEligibility?: (userID: string, accountID: string, collection: string, resource: string) => Promise<boolean>,
 ) {
   return async (
     userID: string,
@@ -125,7 +127,18 @@ export function caldavOrganizerTransport(
         if (dispatch && dispatch.kind !== "caldav-organizer-dispatch")
           throw new ProviderEventWriteError("provider-conflict");
         const target = desired?.id ?? baseline!.id;
-        const current = await read(target);
+        const readCreated = async () => {
+          try { return { current: await read(target) }; }
+          catch (error) {
+            if (request.action !== "create" || !desired || !icloudCreateEligibility || !(error instanceof ProviderEventWriteError) || error.code !== "provider-version-unavailable") throw error;
+            const result = await readIcloudOrganizerCreation(target, desired, proof, authorization,
+              async () => (await getAuthorization(userID, accountID)) === authorization && await icloudCreateEligibility(userID, accountID, collection, target), signal);
+            return { observed: { kind: "observed" as const, ...result } };
+          }
+        };
+        const initial = await readCreated();
+        if (initial.observed) return initial.observed;
+        const current = initial.current;
         if (
           current &&
           desired &&
@@ -172,7 +185,9 @@ export function caldavOrganizerTransport(
         });
         assertProviderEventMutationResponse(response);
         await accepted();
-        const observed = await read(target);
+        const final = await readCreated();
+        if (final.observed) return final.observed;
+        const observed = final.current;
         if (request.action === "delete" && !observed)
           return { kind: "deleted" as const };
         if (

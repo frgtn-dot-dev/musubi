@@ -132,3 +132,27 @@ export async function readCaldavSchedulingProof(collection: string, resource: st
   if (![key(DAV, "all"), key(DAV, "write"), key(DAV, action === "create" ? "bind" : action === "delete" ? "unbind" : "write-content")].some(value => writable.has(value))) refuse();
   return { principal, owner, outbox, addresses };
 }
+
+/** Evidence for read-only iCloud create acknowledgment, separate from write ACLs. */
+export async function readIcloudOrganizerCreateEvidence(resource: string, proof: CaldavSchedulingProof, authorization: string, signal?: AbortSignal): Promise<string[]> {
+  const props = await rawProperties(resource, authorization, ["d:current-user-privilege-set", "c:schedule-tag"], signal);
+  for (const name of [key(DAV, "current-user-privilege-set"), key(CAL, "schedule-tag")]) {
+    const property = props.get(name);
+    if (property?.status !== 404 || property.value.text || property.value.children.length) refuse();
+  }
+  const identities = one(await properties(proof.principal, authorization, ["c:calendar-user-address-set"], signal), CAL, "calendar-user-address-set");
+  if (identities.text || !identities.children.length || identities.children.length > 100) refuse();
+  const emails: string[] = [], uris: string[] = [];
+  for (const identity of identities.children) {
+    if (identity.name !== key(DAV, "href") || identity.children.length || !identity.text || /[\s\\]/.test(identity.text)) refuse();
+    if (/^mailto:/i.test(identity.text)) {
+      if (!/^mailto:[^\s<>@,;:?#%\\]+@[^\s<>@,;:?#%\\]+$/i.test(identity.text)) refuse();
+      emails.push(identity.text.toLowerCase());
+    } else if (identity.text.startsWith("/") || /^https:/i.test(identity.text)) {
+      uris.push(safeURL(identity.text, proof.principal));
+    } else if (!/^urn:[a-z0-9][a-z0-9-]{0,31}:[^\s]+$/i.test(identity.text)) refuse();
+  }
+  if (new Set(uris).size !== uris.length || new Set(emails).size !== emails.length ||
+      JSON.stringify(emails.sort()) !== JSON.stringify(proof.addresses)) refuse();
+  return uris;
+}
