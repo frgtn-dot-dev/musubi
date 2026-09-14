@@ -1,5 +1,5 @@
 import { eventScopeRequest } from "@musubi/calendar";
-import type { Event } from "@musubi/types";
+import { hasKnownEventTime, type Event } from "@musubi/types";
 import {
     eventEditorBaseline,
     eventEditorBaselineRedacted,
@@ -231,7 +231,8 @@ function EditEventRoute() {
                         setSaving(true);
                         try {
                         const edited = updateEventFromForm(event, values);
-                        if ((event.recurrence && event.timeModel?.kind === "zoned" && edited.timeEdit?.kind === "zoned" && event.timeModel.timeZone !== edited.timeEdit.timeZone) ||
+                        if ((currentHomeCalendar?.provider === "caldav" && !event.recurrence && hasKnownEventTime(event)) ||
+                            (event.recurrence && event.timeModel?.kind === "zoned" && edited.timeEdit?.kind === "zoned" && event.timeModel.timeZone !== edited.timeEdit.timeZone) ||
                             (event.timeModel?.kind === "all-day" && /(?:^|\n)(?:EXDATE|RDATE)/.test((event.recurrence ?? "") + "\n" + (edited.recurrence ?? "")) && edited.recurrence !== event.recurrence)) {
                             if (!currentEvent || currentEvent.id !== event.id || currentEvent.revision !== event.revision || currentEvent.seriesID || currentEvent.originalStart) throw new Error("Refresh the stored series before saving this recurrence change.");
                             await eventMutations.applyEventScope(currentEvent, eventScopeRequest(currentEvent, event, "series", edited));

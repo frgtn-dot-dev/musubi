@@ -54,6 +54,7 @@ export function GlobalEventModals() {
           // The composer was opened on one occurrence; which occurrences the
           // edit belongs to is the composer's last question, not its first.
           return await applySeriesEdit({
+            provider: calendars.find(calendar => calendar.id === (composer.master ?? composer.prefilled)?.originCalendarID)?.provider,
             applyEventScope: (event, request) => applyEventScope(event, request, api),
             addEvent: (event) => addEvent(event, api),
             edited,

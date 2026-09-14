@@ -108,3 +108,12 @@ assert.deepEqual(removal, { updates: [{ ...master, recurrence: null }], creates:
 assert.equal(expand(apply(master, [], removal)).length, 1);
 assert.throws(() => planEventScope(master, cancelled.creates.map(child => ({ ...child, revision: 1 })), removalRequest));
 assert.deepEqual(master, before, "Removing recurrence preserves the immutable input");
+
+const personal = EventSchema.parse({ ...master, recurrence: null });
+const personalRequest = { operationID, expectedRevision: personal.revision, scope: "series", action: "update", patch: { title: "Personal", description: null, location: "Room" } };
+const personalPlan = planEventScope(personal, [], personalRequest);
+assert.equal(personalPlan.updates.length, 1); assert.deepEqual(personalPlan.creates, []); assert.deepEqual(personalPlan.deletes, []);
+assert.deepEqual(personalPlan.updates[0]!.timeModel, personal.timeModel);
+assert.deepEqual(planEventScope(personal, [], { ...personalRequest, patch: {} }), { updates: [], creates: [], deletes: [] });
+for (const invalid of [{ ...personalRequest, time: {kind:"all-day",startDate:"2026-03-28",endDate:"2026-03-28"} }, { ...personalRequest, patch: {recurrence:null} }, { operationID, expectedRevision: personal.revision, scope:"series",action:"delete" }]) assert.throws(() => planEventScope(personal, [], invalid));
+assert.throws(() => planEventScope(personal, [moved], personalRequest));

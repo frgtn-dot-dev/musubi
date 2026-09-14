@@ -349,7 +349,11 @@ function CalendarEventDetailsPopover({
 
     setSaving(true);
     try {
-		await onUpdateEvent(updateEventFromForm(master, values));
+		const edited = updateEventFromForm(master, values);
+    if (homeCalendar?.provider === "caldav" && !master.recurrence && hasKnownEventTime(master)) {
+      if (!onApplyEventScope) throw new Error("Scope editing is unavailable. Refresh before saving.");
+      await onApplyEventScope(master, eventScopeRequest(master, master, "series", edited));
+    } else await onUpdateEvent(edited);
 		onNotice("Event updated.");
     setEditing(false);
     setDraft(undefined);

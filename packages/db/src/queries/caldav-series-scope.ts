@@ -1,6 +1,6 @@
 import { caldavRdateEdit, assertCaldavSeriesUTCConversion, caldavExdateRestoration, planEventScope, resolveEventTimeEdit } from "@musubi/calendar";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
-import { EventSchema, EventWriteError, can, type Event, type EventScopeRequest, type EventTimeEdit, type OccurrenceStart } from "@musubi/types";
+import { isOneOffContentScope, EventSchema, EventWriteError, can, type Event, type EventScopeRequest, type EventTimeEdit, type OccurrenceStart } from "@musubi/types";
 import { db } from "..";
 import { calendarMembers, calendarEvents, events, externalCalendars, externalEvents, externalEventTombstones, eventOutbox } from "../schema";
 import type { DbTransaction } from "./calendars";
@@ -42,9 +42,9 @@ const unsupported = () => new EventWriteError("event-write", "unsupported", "Rec
 const strong = (value: unknown): value is string => typeof value === "string" && /^"[\x21\x23-\x7e\x80-\xff]*"$/.test(value);
 
 /** Caller holds lifecycle, resource, master and sorted child locks, in that order. */
-export async function caldavSeriesContext(tx: DbTransaction, actorID: string, master: Event, children: Event[], ownOperationID?: string, readOnly = false, allowRemovedRecurrence = false): Promise<CaldavSeriesContext> {
+export async function caldavSeriesContext(tx: DbTransaction, actorID: string, master: Event, children: Event[], ownOperationID?: string, readOnly = false, allowRemovedRecurrence = false, allowOneOffContent = false): Promise<CaldavSeriesContext> {
   const family = [master, ...children];
-  if (!master.originCalendarID || master.seriesID || master.originalStart || (!master.recurrence && !(allowRemovedRecurrence && master.recurrence === null && children.length === 0)) || master.isCanceled ||
+  if (!master.originCalendarID || master.seriesID || master.originalStart || (!master.recurrence && !((allowRemovedRecurrence || allowOneOffContent) && master.recurrence === null && children.length === 0)) || master.isCanceled ||
       family.some(event => event.creatorID !== actorID || event.originCalendarID !== master.originCalendarID || event.calendars.length !== 1 || event.calendars[0] !== master.originCalendarID || !["zoned", "floating", "all-day"].includes(event.timeModel?.kind ?? ""))) throw unsupported();
   const grantQuery = tx.select({ role: calendarMembers.role }).from(calendarMembers).where(and(eq(calendarMembers.calendarID, master.originCalendarID), eq(calendarMembers.userID, actorID)));
   const [grant] = await (readOnly ? grantQuery : grantQuery.for("share"));
@@ -70,7 +70,7 @@ export async function caldavSeriesContext(tx: DbTransaction, actorID: string, ma
   const retiredQuery = tx.select().from(events).where(and(eq(events.seriesID, master.id), sql`${events.deletedAt} is not null`)).orderBy(events.id);
   const retiredRows = await (readOnly ? retiredQuery : retiredQuery.for("share"));
   const retired = retiredRows.filter(item => !ids.includes(item.id));
-  if (allowRemovedRecurrence && retiredRows.length) throw unsupported();
+  if ((allowRemovedRecurrence || allowOneOffContent) && retiredRows.length) throw unsupported();
   if (retired.some(item => item.creatorID !== actorID || item.originCalendarID !== master.originCalendarID || !item.originalStart)) throw unsupported();
   return { master, children, ...(retired.length ? { retiredDefinitions: retired.map(({ id, revision, originalStart }) => ({ id, revision, originalStart })) } : {}), link: { id: link.id, userID: link.userID, provider: link.provider, accountID: link.accountID, externalCalendarID: link.externalCalendarID, disabled: link.disabled, supportsEvents: link.supportsEvents, calendarID: master.originCalendarID }, mappings: mappings.map(({ id, provider, eventID, calendarID, externalCalendarID, externalEventID, icalUid, externalSeriesID, originalStart, etag }) => ({ id, provider, eventID, calendarID, externalCalendarID, externalEventID, icalUid, externalSeriesID, originalStart, etag })) };
 }
@@ -108,10 +108,16 @@ export function normalizeCaldavScopeRequest(master: Event, request: EventScopeRe
     : request;
 }
 
+export function isCaldavOneOffContentWrite(write: Pick<CaldavSeriesWriteIntent, "baseline" | "patch" | "targetEventID" | "cancelTarget" | "newDefinition" | "time" | "followingDelete">): boolean {
+  return !write.baseline.children.length && !write.targetEventID && !write.cancelTarget && !write.newDefinition && !write.followingDelete
+    && isOneOffContentScope(write.baseline.master, { operationID: write.baseline.master.id, expectedRevision: write.baseline.master.revision!, scope: "series", action: "update", patch: write.patch, ...(write.time ? {time: write.time} : {}) });
+}
+
 /** Reconstruct the only permitted canonical change from the private input. */
 export function caldavSeriesDesired(write: Pick<CaldavSeriesWriteIntent, "baseline" | "patch" | "targetEventID" | "cancelTarget" | "newDefinition" | "time" | "followingDelete">): CaldavSeriesWriteIntent["baseline"] {
   if (!write.patch || typeof write.patch !== "object" || Array.isArray(write.patch) || Object.keys(write.patch).some(key => !["title", "description", "location", "recurrence"].includes(key))) throw unsupported();
   const { baseline, targetEventID } = write;
+  if (baseline.master.recurrence === null && !isCaldavOneOffContentWrite(write)) throw unsupported();
   if (write.followingDelete) {
     if (targetEventID || write.cancelTarget || write.newDefinition || write.time || Object.keys(write.patch).length) throw unsupported();
     const plan = planEventScope(baseline.master, baseline.children, { operationID: baseline.master.id, scope: "following", action: "delete", expectedRevision: baseline.master.revision, ...write.followingDelete });
@@ -185,7 +191,7 @@ export async function confirmCaldavSeriesOutbox(id: string, token: string, resul
       const links = await tx.select().from(calendarEvents).where(inArray(calendarEvents.eventID, [master.id, ...children.map(child => child.id)]));
       const snapshot = (event: typeof master) => EventSchema.parse({ ...event, calendars: links.filter(link => link.eventID === event.id).map(link => link.calendarID).sort() });
       let current: CaldavSeriesContext;
-      try { current = await caldavSeriesContext(tx, address.userID, snapshot(master), children.map(snapshot), address.id, false, address.payload.caldavSeries.write.patch.recurrence === null); }
+      try { current = await caldavSeriesContext(tx, address.userID, snapshot(master), children.map(snapshot), address.id, false, address.payload.caldavSeries.write.patch.recurrence === null, isCaldavOneOffContentWrite(address.payload.caldavSeries.write)); }
       catch (error) { if (error instanceof EventWriteError) return false; throw error; }
       const expected = { ...address.payload.caldavSeries.context, master: EventSchema.parse(address.payload.event) };
       const retained = current.children.filter(child => !removedIDs.has(child.id));

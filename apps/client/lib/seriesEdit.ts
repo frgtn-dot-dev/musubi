@@ -18,12 +18,14 @@ import { reminderRules, setEventReminderRule } from "@/services/notifications";
  */
 export async function applySeriesEdit({
     addEvent,
+    provider,
     applyEventScope,
     edited,
     master,
     occurrence,
     updateEvent,
 }: {
+    provider?: string | null;
     applyEventScope?: (event: Event, request: EventScopeRequest) => Promise<Event | undefined>;
     addEvent: (event: Event) => Promise<unknown>;
     edited: Event;
@@ -34,6 +36,13 @@ export async function applySeriesEdit({
     updateEvent: (event: Event) => Promise<unknown>;
 }): Promise<boolean | Event> {
     if (!master?.recurrence) {
+        const source = master ?? occurrence;
+        if (provider === "caldav" && hasKnownEventTime(source)) {
+            if (!applyEventScope) throw new Error("Scope editing is unavailable. Refresh before saving.");
+            const saved = await applyEventScope(source, eventScopeRequest(source, source, "series", edited, uuidv7));
+            if (!saved) throw new EventMutationError("Saved locally. Refresh to load the edited event.", true);
+            return saved;
+        }
         await updateEvent(edited);
         return true;
     }

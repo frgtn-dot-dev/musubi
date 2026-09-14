@@ -1,3 +1,4 @@
+import { isCaldavOneOffContentWrite } from "./caldav-series-scope";
 import { readCaldavAlarmResolution, replaceCaldavAlarm, type CaldavAlarmIntent, type CaldavAlarmResolution } from "./caldav-alarms";
 import { readCaldavSplitFuture, replaceCaldavSplitFuture, type CaldavSplitFutureSnapshot } from "./caldav-split-future";
 import { hasGooglePersonalReadRecovery } from "./google-personal-read-recovery";
@@ -231,7 +232,7 @@ async function resolutionContext(
       );
     })) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
     try {
-      caldavContext = await caldavSeriesContext(tx, userID, local, activeChildren.map(child => EventSchema.parse({ ...child, calendars: child.calendarEvents.map(link => link.calendarID).sort() })), row.id, true);
+      caldavContext = await caldavSeriesContext(tx, userID, local, activeChildren.map(child => EventSchema.parse({ ...child, calendars: child.calendarEvents.map(link => link.calendarID).sort() })), row.id, true, row.payload.caldavSeries.write.patch.recurrence === null, isCaldavOneOffContentWrite(row.payload.caldavSeries.write));
     } catch (error) {
       if (error instanceof EventWriteError) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
       throw error;

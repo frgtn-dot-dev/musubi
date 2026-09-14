@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { EventRevisionSchema, EventTimeContentPatchSchema } from "./event";
+import { EventRevisionSchema, EventTimeContentPatchSchema, type Event } from "./event";
 import { EventTimeEditSchema, OccurrenceStartSchema } from "./event_time";
 
 const identity = {
@@ -36,3 +36,11 @@ export const EventScopeResponseSchema = EventScopeOutcomeSchema.extend({
   localCommitted: z.literal(true),
   replayed: z.boolean(),
 });
+
+/** Narrow personal content intent; provider identity and raw resource proof remain server-owned. */
+export function isOneOffContentScope(master: Event, request: EventScopeRequest): boolean {
+  return master.recurrence === null && !master.seriesID && !master.originalStart && !master.isCanceled && !master.hasAttendees
+    && !!master.timeModel && master.timeModel.kind !== "legacy-unknown"
+    && request.action === "update" && request.scope === "series" && !request.time && request.ensureDefinition === undefined
+    && Object.keys(request.patch).every(key => ["title", "description", "location"].includes(key));
+}
