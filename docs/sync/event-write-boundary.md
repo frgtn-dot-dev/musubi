@@ -2,7 +2,7 @@
 
 K06 was accepted and squash-merged in PR #119. K07 adds durable intent and the
 request's first claimed attempt; independent K07 review remains pending.
-PRODUCT / MIN_CLIENT / MIN_PEER remain 0.1.8. Outlook existing mapped
+PRODUCT / MIN_CLIENT / MIN_PEER remain 0.2.0. Outlook existing mapped
 EVENT update/delete remains refused in both preflight and the direct adapter:
 its event-specific conditional enforcement is **unknown**, not proven unsupported.
 Read/create and existing genuinely local unlink remain available. Tasks are not
@@ -180,7 +180,7 @@ for new persisted intents. Automatic recovery still belongs to K08b.
   Actual browser SSE invalidation and native SSE callbacks cross frozen composers
   in regressions. Access-loss removal frames carry a revision; if the source row
   has already been purged, native requests authoritative full reconciliation.
-- PRODUCT / MIN_CLIENT / MIN_PEER stay 0.1.8, including member-token refusal and
+- PRODUCT / MIN_CLIENT / MIN_PEER stay 0.2.0, including member-token refusal and
   documented bootstrap exceptions. The wire snapshot is generated from the actual
   integrated request schemas. K01–K05 restrictions remain; K08 recovery and K12
   atomic scopes are absent. No live-provider certification, production migration

@@ -111,7 +111,7 @@ export const NotificationEmailsSchema = z
  .object({
   /** An event you are attending was cancelled or moved. */
   eventChanged: z.boolean(),
-  /** @deprecated Compatibility only; ignored since 0.1.8. */
+  /** @deprecated Compatibility only; ignored since 0.2.0. */
   pollDecided: z.boolean(),
  })
  .strict();

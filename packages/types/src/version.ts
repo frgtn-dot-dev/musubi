@@ -7,7 +7,7 @@
  * it now prevents is real, this file's predecessor sat two releases behind the
  * product it claimed to be.
  */
-export const PRODUCT_VERSION = "0.1.8";
+export const PRODUCT_VERSION = "0.2.0";
 
 /**
  * The oldest web/native requester this server will serve.
@@ -16,7 +16,7 @@ export const PRODUCT_VERSION = "0.1.8";
  * store, so it moves only when a release genuinely cannot serve them — see
  * `docs/releasing.md`.
  */
-export const MIN_CLIENT_VERSION = "0.1.8";
+export const MIN_CLIENT_VERSION = "0.2.0";
 export const CLIENT_VERSION_HEADER = "x-musubi-client-version";
 
 export function isCompatibleVersion(value: unknown, minimum: string): value is string {
@@ -33,7 +33,7 @@ export function isCompatibleVersion(value: unknown, minimum: string): value is s
  * connect time, by name, beats a handshake that fails later for reasons nobody
  * can read — see `docs/releasing.md`.
  */
-export const MIN_PEER_VERSION = "0.1.8";
+export const MIN_PEER_VERSION = "0.2.0";
 
 /**
  * Order two X.Y.Z versions. Negative when `left` is older.

@@ -4,9 +4,9 @@
 calendar writes, and Google organizer activation do not enable it. The local
 implementation uses fake HTTP and synthetic database evidence; no live scheduling
 server or actual guest delivery has been accepted. Live activation remains a
-separate operator decision. The coordinated unreleased 0.1.8 activation requires
-compatible product and enforced client/peer minimums of at least 0.1.8; see
-[the activation plan](../releases/core-0.1.8-activation.md). This does not
+separate operator decision. The coordinated unreleased 0.2.0 activation requires
+compatible product and enforced client/peer minimums of at least 0.2.0; see
+[the activation plan](../releases/core-0.2.0-activation.md). This does not
 replace live scheduling acceptance.
 
 The public organizer request discriminates `provider: caldav` and requires
