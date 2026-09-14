@@ -271,8 +271,8 @@ it("opens verified CalDAV creation in explicit UTC", async () => {
   api.save.mockResolvedValue({ status: "pending" });
   render(<ProviderOrganizerCreateAction calendarID={calendarID} color="red" />);
   fireEvent.click(await screen.findByRole("button", { name: "Create CalDAV meeting" }));
-  expect((screen.getByRole("textbox", { name: "Event time zone" }) as HTMLInputElement).value).toBe("UTC");
-  expect((screen.getByRole("textbox", { name: "Event time zone" }) as HTMLInputElement).disabled).toBe(true);
+  expect((screen.getByRole("combobox", { name: "Event time zone" }) as HTMLInputElement).value).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  expect((screen.getByRole("combobox", { name: "Event time zone" }) as HTMLInputElement).disabled).toBe(false);
   fireEvent.change(screen.getByRole("textbox", { name: "Title" }), { target: { value: "Meeting" } });
   fireEvent.change(screen.getByRole("textbox", { name: "Guest email addresses" }), { target: { value: "guest@example.test" } });
   fireEvent.click(screen.getByRole("button", { name: "Create and send invitations" }));
@@ -337,7 +337,7 @@ it("requires explicit cancellation of only the bound occurrence", async () => {
 it("reschedules in the proven native zone and preserves the frozen retry", async () => {
   api.save.mockRejectedValueOnce(new Error("Response lost")).mockResolvedValue({ status: "pending" });
   render(<ProviderOrganizerEditor calendarID={calendarID} color="red" event={event} observation={{ ...observation, organizerEdit: { ...observation.organizerEdit!, provider: "caldav", actions: ["update"], timeEdit: true } }} onClose={vi.fn()} />);
-  const zone = screen.getByRole("textbox", { name: "Event time zone" }) as HTMLInputElement;
+  const zone = screen.getByRole("combobox", { name: "Event time zone" }) as HTMLInputElement;
   expect(zone.value).toBe("Europe/Prague"); expect(zone.disabled).toBe(true);
   expect((screen.getByRole("checkbox", { name: "All day" }) as HTMLInputElement).disabled).toBe(true);
   fireEvent.change(screen.getByLabelText("Start", { exact: true }), { target: { value: "2026-10-25T10:00" } });
@@ -354,8 +354,8 @@ it("opens verified Outlook creation in explicit UTC", async () => {
   api.save.mockResolvedValue({ status: "pending" });
   render(<ProviderOrganizerCreateAction calendarID={calendarID} color="red" />);
   fireEvent.click(await screen.findByRole("button", { name: "Create Outlook meeting" }));
-  expect((screen.getByRole("textbox", { name: "Event time zone" }) as HTMLInputElement).value).toBe("UTC");
-  expect((screen.getByRole("textbox", { name: "Event time zone" }) as HTMLInputElement).disabled).toBe(true);
+  expect((screen.getByRole("combobox", { name: "Event time zone" }) as HTMLInputElement).value).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  expect((screen.getByRole("combobox", { name: "Event time zone" }) as HTMLInputElement).disabled).toBe(false);
   fireEvent.change(screen.getByRole("textbox", { name: "Title" }), { target: { value: "Meeting" } });
   fireEvent.change(screen.getByRole("textbox", { name: "Guest email addresses" }), { target: { value: "guest@example.test" } });
   fireEvent.click(screen.getByRole("button", { name: "Create and send invitations" }));

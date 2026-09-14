@@ -1,8 +1,5 @@
 import { ProviderEventDetails } from "./ProviderEventDetails";
 import { uuidv7 } from "uuidv7";
-import EventDeliveryModal from "./EventDeliveryModal";
-import { Btn } from "@/components/ui/Btn";
-import { remoteForCalendar } from "@/services/federation";
 import { Event, can, hasKnownEventTime, providerFlavor } from "@musubi/types";
 import { ProviderIcon } from "./ProviderIcon";
 import { colors, fonts, styles } from "@/constants/theme";
@@ -81,8 +78,6 @@ export default function EventDetailModal({
 	const userID = session?.user.id;
 	const { events, linkEvent, forkEvent, removeEvent, updateEvent } =
 		useEventsStore();
-	const [delivery, setDelivery] = useState<{ eventId: string; connectionId?: string }>();
-	if (!visible && delivery) setDelivery(undefined);
 	const [linkVisible, setLinkVisible] = useState(false);
 	const [forkVisible, setForkVisible] = useState(false);
 	const [unlinkVisible, setUnlinkVisible] = useState(false);
@@ -256,8 +251,10 @@ export default function EventDetailModal({
 				<Animated.View style={[styles.modalOverlay, fadeStyle]}>
 					<Pressable style={{ flex: 1 }} onPress={handleClose} accessible={false} />
 				</Animated.View>
-				<GestureDetector gesture={gesture}>
+
 					<Animated.View style={[styles.modalSheet, fadeStyle, slideStyle]}>
+						<GestureDetector gesture={gesture}>
+						  <View collapsable={false}>
 						<View style={styles.modalHandle} />
 
 						{/* Identity first: brush-stroke accent + title + when. */}
@@ -323,12 +320,13 @@ export default function EventDetailModal({
 								)}
 							</View>
 						</View>
+						  </View>
+						</GestureDetector>
 
 						<ScrollView
 							style={{ flexShrink: 1 }}
 							showsVerticalScrollIndicator={false}
 						>
-              {event ? <View style={styles.container}><Btn label="Delivery details" variant="secondary" onPress={() => setDelivery({ eventId: event.id!, connectionId: remoteForCalendar(event.originCalendarID ?? event.calendars[0])?.id })} /></View> : null}
 							{/* Where it lives — quiet metadata under the identity block. No
                   bottom border when nothing follows (avoids an empty "section"). */}
 							<View
@@ -355,7 +353,7 @@ export default function EventDetailModal({
 													key={cal}
 													accessible
 													accessibilityLabel={`${calendar.name} calendar${isOrigin ? ", Home calendar" : ""}${locked ? ", read-only" : ""}`}
-													style={[styles.pill, isOrigin && styles.pillEmphasized]}
+													style={[styles.pill, isOrigin && styles.pillEmphasized, isOrigin && { borderColor: colors.line3 }]}
 												>
 													{calendar.provider ? (
 														<ProviderIcon provider={providerFlavor(calendar)} color={calendar.color} />
@@ -773,9 +771,8 @@ export default function EventDetailModal({
 							}}
 						/>
 					</Animated.View>
-				</GestureDetector>
+
 			</GestureHandlerRootView>
-            <EventDeliveryModal visible={visible && !!delivery} eventId={delivery?.eventId} connectionId={delivery?.connectionId} onClose={() => setDelivery(undefined)} />
 		</Modal>
 	);
 }

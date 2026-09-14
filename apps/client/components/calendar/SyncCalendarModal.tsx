@@ -1,6 +1,5 @@
 import { GOOGLE_AVAILABILITY_SCOPE, parseInviteLink } from "@musubi/types";
 import AvailabilityModal from "./AvailabilityModal";
-import EventDeliveryModal from "./EventDeliveryModal";
 import { colors, fonts, styles } from "@/constants/theme";
 import { useServer } from "@/contexts/ServerContext";
 import { useApi } from "@/services/api";
@@ -45,10 +44,8 @@ type Props = {
 export default function SyncCalendarModal({ visible, onClose, onConnected, callbackURL = "/(tabs)" }: Props) {
   const { authClient, apiUrl } = useServer();
   const api = useApi();
-  const [deliveryVisible, setDeliveryVisible] = useState(false);
   const [availabilityVisible, setAvailabilityVisible] = useState(false);
   if (!visible && availabilityVisible) setAvailabilityVisible(false);
-  if (!visible && deliveryVisible) setDeliveryVisible(false);
 
   // Which providers this server can actually sync (same pattern as the welcome
   // screen's social buttons). null = unknown (old server / fetch failed) →
@@ -253,18 +250,21 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
         <Animated.View style={[styles.modalOverlay, fadeStyle]}>
           <Pressable style={{ flex: 1 }} onPress={handleClose} accessible={false} />
         </Animated.View>
-        <GestureDetector gesture={gesture}>
+
           <Animated.View style={[styles.modalSheet, fadeStyle, slideStyle]} onLayout={e => onSheetLayout(e.nativeEvent.layout.height)}>
+            <GestureDetector gesture={gesture}>
+              <View collapsable={false}>
             <View style={styles.modalHandle} />
             <View style={styles.modalTitleRow}>
               <Text style={styles.modalTitle}>{title}</Text>
             </View>
+              </View>
+            </GestureDetector>
 
             <ScrollView showsVerticalScrollIndicator={false}>
               {step === "providers" && (
                 <View style={styles.modalButtonsColumn}>
                   {availability?.origin === apiUrl && availability.enabled ? <Btn label="Check availability" variant="secondary" onPress={() => setAvailabilityVisible(true)} /> : null}
-                  <Btn label="Unfinished deliveries" variant="secondary" onPress={() => setDeliveryVisible(true)} />
                   {(shows("google") || shows("microsoft")) && (
                     <>
                       <SettingRowToggle
@@ -512,10 +512,9 @@ export default function SyncCalendarModal({ visible, onClose, onConnected, callb
               )}
             </ScrollView>
           </Animated.View>
-        </GestureDetector>
+
       </GestureHandlerRootView>
       <AvailabilityModal visible={visible && availabilityVisible} onClose={() => setAvailabilityVisible(false)} onReconnect={startGoogle} />
-      <EventDeliveryModal visible={visible && deliveryVisible} onClose={() => setDeliveryVisible(false)} />
     </Modal>
   );
 }

@@ -2385,3 +2385,7 @@
     .viewSwitcher > button { min-width: 0; padding-inline: var(--space-2); }
   }
 }
+
+.eventChip[data-task-completed] .eventTitle {
+  text-decoration: line-through;
+}

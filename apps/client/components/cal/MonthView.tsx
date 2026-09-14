@@ -1,3 +1,5 @@
+import { TaskStatusIcon } from "@/components/tasks/TaskStatusIcon";
+import { isCalendarTask } from "@musubi/calendar";
 import { Event } from "@musubi/types";
 import { colors, fonts } from "@/constants/theme";
 import { Tap } from "@/components/ui/Tap";
@@ -125,7 +127,7 @@ export const MonthView = memo(function MonthView({ base, events, weekStartsOn, e
                         paddingHorizontal: 3, height: 14, justifyContent: "center", marginBottom: 2,
                       }}>
                         <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 8.5, color: INK }}>
-                          {e.title}
+                          {isCalendarTask(e) ? <><TaskStatusIcon status={e.calendarTask.status} size={10} color={INK} />{" "}<Text style={{ textDecorationLine: e.calendarTask.status === "completed" ? "line-through" : "none" }}>{e.title}</Text></> : e.title}
                         </Text>
                       </View>
                     ))}
@@ -152,7 +154,7 @@ export const MonthView = memo(function MonthView({ base, events, weekStartsOn, e
                     borderRadius: 3, paddingHorizontal: 3, justifyContent: "center",
                   }}>
                     <Text numberOfLines={1} style={{ fontFamily: fonts.sans, fontSize: 8.5, color: INK }}>
-                      {sp.event.title}
+                      {isCalendarTask(sp.event) ? <><TaskStatusIcon status={sp.event.calendarTask.status} size={10} color={INK} />{" "}<Text style={{ textDecorationLine: sp.event.calendarTask.status === "completed" ? "line-through" : "none" }}>{sp.event.title}</Text></> : sp.event.title}
                     </Text>
                   </View>
                 ))}

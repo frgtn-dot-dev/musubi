@@ -2,6 +2,11 @@ import { ProviderOrganizerEditor } from "./ProviderOrganizerEditor";
 import { beforeEach, expect, it, vi } from "vitest";
 import { isValidElement, type ReactNode } from "react";
 import { EventSchema, type ProviderEventStateResponse } from "@musubi/types";
+vi.mock("./TimeZonePicker", () => ({ TimeZonePicker: "TimeZonePicker" }));
+vi.mock("@expo/ui/community/datetime-picker", () => ({ DateTimePicker: "DateTimePicker" }));
+vi.mock("@/store/useSettingsStore", () => ({ useSettingsStore: (select: any) => select({ dateFormat: "dmy", timeFormat: "24h" }) }));
+vi.mock("@/hooks/useModalAnimation", () => ({ useModalAnimation: (_visible: boolean, close: () => void) => ({ handleClose: close }) }));
+vi.mock("@/components/ui/BottomSheetFrame", () => ({ BottomSheetFrame: "BottomSheetFrame" }));
 const h = vi.hoisted(() => ({
   slots: [] as any[],
   index: 0,
@@ -29,7 +34,12 @@ vi.mock("react", async (original) => ({
     return h.slots[index];
   },
 }));
+vi.mock("@expo/vector-icons", () => ({ Feather: "Icon" }));
+vi.mock("@/components/ui/Tap", () => ({ Tap: "Tap" }));
 vi.mock("react-native", () => ({
+  Alert: { alert: vi.fn() },
+  Platform: { OS: "android" },
+  Switch: "Switch",
   KeyboardAvoidingView: "KeyboardAvoidingView",
   Keyboard: { dismiss: vi.fn() },
   Pressable: "Pressable",
@@ -113,6 +123,15 @@ function nodes(node: ReactNode): any[] {
   const props = node.props as any;
   return [{ type: node.type, props }, ...nodes(props.children)];
 }
+function chooseTime(key: string, value: string, draw = () => render()) {
+  const [day, clock] = value.split("T");
+  const [year, month, date] = day.split("-").map(Number);
+  const [hours, minutes] = clock.split(":").map(Number);
+  nodes(draw()).find(node => node.props.accessibilityLabel === `${key} date`)!.props.onPress();
+  nodes(draw()).find(node => node.type === "DateTimePicker")!.props.onValueChange({}, new Date(year, month - 1, date, 12));
+  nodes(draw()).find(node => node.props.accessibilityLabel === `${key} time`)!.props.onPress();
+  nodes(draw()).find(node => node.type === "DateTimePicker")!.props.onValueChange({}, new Date(2000, 0, 15, hours, minutes));
+}
 function button(tree: ReactNode, label: string) {
   return nodes(tree).find(
     (node) => node.type === "Btn" && node.props.label === label,
@@ -138,13 +157,13 @@ it("sends only a changed native note and freezes it after offline admission", as
     )!
     .props.onChangeText("Typed note");
   tree = render();
-  button(tree, "Save and notify guests").onPress();
+  button(tree, "Save & notify").onPress();
   await settle();
   tree = render();
   expect(
     nodes(tree).find((node) => node.type === "TextInput")!.props.editable,
   ).toBe(false);
-  button(tree, "Retry saved meeting action").onPress();
+  button(tree, "Retry").onPress();
   await settle();
   expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
   expect(h.save.mock.calls[0][0]).toMatchObject({
@@ -168,7 +187,7 @@ it("does not cancel or notify until the native confirmation is accepted", async 
   });
 });
 it("closing an untouched native organizer draft does not write", () => {
-  button(render(), "Close meeting editor").onPress();
+  button(render(), "Close").onPress();
   expect(h.close).toHaveBeenCalledOnce();
   expect(h.save).not.toHaveBeenCalled();
 });
@@ -192,16 +211,16 @@ it("allows correcting a guest after explicit native pre-admission rejection", as
   function field(tree: ReactNode, label: string) {
     return nodes(tree).find(
       (node) =>
-        node.type === "TextInput" && node.props.accessibilityLabel === label,
+        (node.type === "TextInput" || node.type === "TimeZonePicker") && node.props.accessibilityLabel === label,
     )!.props;
   }
   field(create(), "Title").onChangeText("Planning");
   field(create(), "Guest email addresses").onChangeText("owner@example.test");
-  button(create(), "Create and send invitations").onPress();
+  button(create(), "Send invitations").onPress();
   await settle();
   expect(field(create(), "Guest email addresses").editable).toBe(true);
   field(create(), "Guest email addresses").onChangeText("guest@example.test");
-  button(create(), "Create and send invitations").onPress();
+  button(create(), "Send invitations").onPress();
   await settle();
   expect(h.save.mock.calls[1][0].guests[0].email).toBe("guest@example.test");
   expect(h.save.mock.calls[1][0].operationID).not.toBe(
@@ -220,17 +239,17 @@ it("can correct a native DST-invalid time after explicit admission rejection", a
   function field(label: string) {
     return nodes(render()).find(
       (node) =>
-        node.type === "TextInput" && node.props.accessibilityLabel === label,
+        (node.type === "TextInput" || node.type === "TimeZonePicker") && node.props.accessibilityLabel === label,
     )!.props;
   }
-  field("Start (YYYY-MM-DDTHH:mm:ss)").onChangeText("2026-03-29T02:45:00");
-  field("End (YYYY-MM-DDTHH:mm:ss)").onChangeText("2026-03-29T03:15:00");
-  field("Event time zone").onChangeText("Europe/Prague");
-  button(render(), "Save and notify guests").onPress();
+  chooseTime("start", "2026-03-29T02:45:00");
+  chooseTime("end", "2026-03-29T03:15:00");
+  field("Event time zone").onChange("Europe/Prague");
+  button(render(), "Save & notify").onPress();
   await settle();
-  expect(field("Start (YYYY-MM-DDTHH:mm:ss)").editable).toBe(true);
-  field("Start (YYYY-MM-DDTHH:mm:ss)").onChangeText("2026-03-29T03:00:00");
-  button(render(), "Save and notify guests").onPress();
+  expect(nodes(render()).find(node => node.props.accessibilityLabel === "start time")!.props.disabled).toBe(false);
+  chooseTime("start", "2026-03-29T03:00:00");
+  button(render(), "Save & notify").onPress();
   await settle();
   expect(h.save.mock.calls[1][0].patch.time.startLocal).toBe(
     "2026-03-29T03:00:00.000",
@@ -240,10 +259,10 @@ it("keeps CalDAV native time out of content editing and sends the explicit serve
   h.save.mockResolvedValue({ status: "pending" });
   const observed = { ...observation, organizerEdit: { ...observation.organizerEdit!, provider: "caldav" as const, actions: ["update", "delete"] as ("update" | "delete")[] } };
   const tree = render(event, observed);
-  const fields = nodes(tree).filter(node => node.type === "TextInput");
+  const fields = nodes(tree).filter(node => node.type === "TextInput" || node.type === "TimeZonePicker");
   expect(fields.map(node => node.props.accessibilityLabel)).toEqual(["Title", "Notes", "Location"]);
   fields.find(node => node.props.accessibilityLabel === "Location")!.props.onChangeText("Changed room");
-  button(render(event, observed), "Save and notify guests").onPress();
+  button(render(event, observed), "Save & notify").onPress();
   await settle();
   expect(h.save.mock.calls[0][0]).toMatchObject({ provider: "caldav", notificationPolicy: "server-invite", patch: { location: "Changed room" } });
   expect(h.save.mock.calls[0][0].patch).not.toHaveProperty("time");
@@ -251,7 +270,7 @@ it("keeps CalDAV native time out of content editing and sends the explicit serve
 for (const action of ["update", "delete"] as const) it(`shows only the proven CalDAV ${action} control`, () => {
  const tree = render(event, { ...observation, organizerEdit: { ...observation.organizerEdit!, provider: "caldav", actions: [action] } });
  const buttons = nodes(tree).filter(node => node.type === "Btn").map(node => node.props.label);
- expect(buttons.includes("Save and notify guests")).toBe(action === "update");
+ expect(buttons.includes("Save & notify")).toBe(action === "update");
  expect(buttons.includes("Cancel meeting and notify guests")).toBe(action === "delete");
  expect(nodes(tree).find(node => node.type === "TextInput")!.props.editable).toBe(action === "update");
 });
@@ -261,8 +280,8 @@ it("keeps exact cancellation-only retry available after an ambiguous response", 
   button(render(event, observed), "Cancel meeting and notify guests").onPress();
   h.confirm.mock.calls[0][1](); await settle();
   const tree = render(event, observed);
-  expect(nodes(tree).filter(node => node.type === "Btn").map(node => node.props.label)).not.toContain("Save and notify guests");
-  button(tree, "Retry saved meeting action").onPress(); await settle();
+  expect(nodes(tree).filter(node => node.type === "Btn").map(node => node.props.label)).not.toContain("Save & notify");
+  button(tree, "Retry").onPress(); await settle();
   expect(h.save).toHaveBeenCalledTimes(2);
   expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
   expect(h.save.mock.calls[1][0]).toMatchObject({ action: "delete", provider: "caldav", notificationPolicy: "server-invite" });
@@ -276,7 +295,7 @@ it("uses explicit bound-occurrence content scope and omits time controls", async
   expect(nodes(tree).filter(node => node.type === "TextInput").map(node => node.props.accessibilityLabel)).toEqual(["Title", "Notes", "Location"]);
   nodes(tree).find(node => node.type === "TextInput" && node.props.accessibilityLabel === "Title")!.props.onChangeText("Changed occurrence");
   tree = render(child, observed);
-  button(tree, "Save and notify guests").onPress(); await settle();
+  button(tree, "Save & notify").onPress(); await settle();
   expect(h.save.mock.calls[0][0]).toMatchObject({ eventID: child.id, expectedRevision: 7, scope: "occurrence", expectedInstanceVersion: "b".repeat(64), patch: { title: "Changed occurrence" } });
   expect(h.save.mock.calls[0][0].patch).not.toHaveProperty("time");
 });
@@ -294,12 +313,12 @@ it("reschedules only within the observed zone and freezes the exact time request
  const observed = { ...observation, organizerEdit: { ...observation.organizerEdit!, provider: "caldav" as const, actions: ["update"] as ("update")[], timeEdit: true as const } };
  const source = { ...event, timeModel: { kind: "zoned" as const, timeZone: "Europe/Prague", startLocal: "2026-09-10T11:00:00.000", endLocal: "2026-09-10T12:00:00.000" } };
  const tree = render(source, observed);
- const fields = nodes(tree).filter(node => node.type === "TextInput");
- expect(fields.find(node => node.props.accessibilityLabel === "Event time zone")!.props.editable).toBe(false);
- fields.find(node => node.props.accessibilityLabel === "Start (YYYY-MM-DDTHH:mm:ss)")!.props.onChangeText("2026-09-11T11:00:00");
- fields.find(node => node.props.accessibilityLabel === "End (YYYY-MM-DDTHH:mm:ss)")!.props.onChangeText("2026-09-11T12:00:00");
- button(render(source, observed), "Save and notify guests").onPress(); await settle();
- button(render(source, observed), "Retry saved meeting action").onPress(); await settle();
+ const fields = nodes(tree).filter(node => node.type === "TextInput" || node.type === "TimeZonePicker");
+ expect(fields.find(node => node.props.accessibilityLabel === "Event time zone")!.props.disabled).toBe(true);
+ chooseTime("start", "2026-09-11T11:00:00", () => render(source, observed));
+ chooseTime("end", "2026-09-11T12:00:00", () => render(source, observed));
+ button(render(source, observed), "Save & notify").onPress(); await settle();
+ button(render(source, observed), "Retry").onPress(); await settle();
  expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
  expect(h.save.mock.calls[0][0].patch.time).toMatchObject({ kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-09-11T11:00:00.000" });
 });
@@ -310,15 +329,15 @@ it("creates Outlook with explicit server invitation policy and freezes retry ide
     h.index = 0;
     return ProviderOrganizerEditor({ provider: "microsoft", calendarID: "00000000-0000-4000-8000-000000000004", color: "red", onClose: h.close });
   }
-  const field = (tree: ReactNode, label: string) => nodes(tree).find(node => node.type === "TextInput" && node.props.accessibilityLabel === label)!.props;
-  expect(field(create(), "Event time zone").value).toBe("UTC");
-  expect(field(create(), "Event time zone").editable).toBe(false);
+  const field = (tree: ReactNode, label: string) => nodes(tree).find(node => (node.type === "TextInput" || node.type === "TimeZonePicker") && node.props.accessibilityLabel === label)!.props;
+  expect(field(create(), "Event time zone").value).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  expect(field(create(), "Event time zone").disabled).toBe(false);
   field(create(), "Title").onChangeText("Planning");
   field(create(), "Guest email addresses").onChangeText("guest@example.test");
-  button(create(), "Create and send invitations").onPress(); await settle();
+  button(create(), "Send invitations").onPress(); await settle();
   const saved = h.save.mock.calls[0][0];
   expect(saved).toMatchObject({ provider: "microsoft", action: "create", notificationPolicy: "server-invite", time: { timeZone: "UTC" } });
   expect(saved).not.toHaveProperty("sendUpdates");
-  button(create(), "Retry saved meeting action").onPress(); await settle();
+  button(create(), "Retry").onPress(); await settle();
   expect(h.save.mock.calls[1][0]).toEqual(saved);
 });

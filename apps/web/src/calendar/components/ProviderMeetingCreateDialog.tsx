@@ -81,8 +81,9 @@ export function ProviderMeetingCreateDialog({ calendars, initialCalendarID, retu
     const target = approved.find(calendar => calendar.id === calendarID);
     if (!target || target.id === selected?.id) return;
     try {
+      if (selected) meetingDraftForProvider(draft, target.provider);
       const nextDraft = selected
-        ? meetingDraftForProvider(draft, target.provider)
+        ? draft
         : initialMeetingDraft(target.provider, initial.current.date);
       initialized.current = true;
       setSelected(target);

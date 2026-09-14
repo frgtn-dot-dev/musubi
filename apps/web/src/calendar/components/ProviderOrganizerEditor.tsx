@@ -1,3 +1,4 @@
+import { TimeZonePicker } from "./TimeZonePicker";
 import { getServerOrigin } from "~/api/query-keys";
 import { useEffect, useRef, useState } from "react";
 import { CalendarPlus } from "lucide-react";
@@ -365,13 +366,7 @@ export function ProviderOrganizerFields({
                 </Field>
                 {!draft.allDay && (
                   <Field label="Event time zone">
-                    <input
-                      value={draft.timeZone}
-                      disabled={locked || provider !== "google"}
-                      onChange={(event) =>
-                        onChange("timeZone", event.target.value)
-                      }
-                    />
+                    <TimeZonePicker value={draft.timeZone} disabled={locked || (!!event && provider !== "google")} onChange={value => onChange("timeZone", value)} />
                   </Field>
                 )}
               </>

@@ -41,7 +41,12 @@ export function useKanbanDrag(onMove: (task: Task, status: Task["status"]) => Pr
       const bounds = scroller.getBoundingClientRect();
       if (x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom) {
         scroller.scrollLeft += x > bounds.right - 40 ? 10 : x < bounds.left + 40 ? -10 : 0;
-        scroller.scrollTop += y > bounds.bottom - 40 ? 10 : y < bounds.top + 40 ? -10 : 0;
+        const column = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-kanban-status]");
+        const body = column && scroller.contains(column) ? column.querySelector<HTMLElement>("[data-kanban-column-scroll]") : null;
+        if (body) {
+          const bodyBounds = body.getBoundingClientRect();
+          body.scrollTop += y > bodyBounds.bottom - 40 ? 10 : y < bodyBounds.top + 40 ? -10 : 0;
+        }
       }
       paint(); hit(); frame = requestAnimationFrame(tick);
     };

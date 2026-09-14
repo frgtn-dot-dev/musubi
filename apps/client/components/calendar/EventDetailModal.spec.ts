@@ -1,6 +1,8 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { isValidElement, type ReactNode } from "react";
 import { EventSchema } from "@musubi/types";
+vi.mock("./TimeZonePicker", () => ({ TimeZonePicker: "TimeZonePicker" }));
+vi.mock("@expo/ui/community/datetime-picker", () => ({ DateTimePicker: "DateTimePicker" }));
 
 const mocks = vi.hoisted(() => ({
   request: vi.fn(),

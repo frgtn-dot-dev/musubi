@@ -9,6 +9,12 @@ import {
 	type Route,
 } from "@playwright/test";
 
+async function chooseTimeZone(control: Locator, zone: string) {
+  await control.click();
+  await control.page().getByRole("textbox", { name: "Search Event time zone" }).fill(zone.replaceAll("_", " "));
+  await control.page().getByRole("option", { name: zone.replaceAll("_", " "), exact: true }).click();
+}
+
 // Geometry assertions and synthetic pointer coordinates require the final layout.
 // Keep real motion enabled; wait only for finite transitions already in flight.
 async function settleLayout(page: Page) {
@@ -8435,12 +8441,12 @@ for (const [width, theme, target] of [[1280, "light", "zoned"], [390, "dark", "a
       await expect(page.getByText("End date is not included.")).toBeVisible();
     }
     if (target === "zoned") {
-      await expect(page.getByRole("textbox", { name: "Event time zone", exact: true })).toHaveValue("");
+      await expect(page.getByRole("combobox", { name: "Event time zone", exact: true })).toHaveAttribute("value", "");
       await page.getByRole("button", { name: "Save", exact: true }).click();
       await expect(page.getByRole("alert")).toContainText("Enter a valid event time zone");
       expect(writes).toEqual([]);
       await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue("Explicit complete draft");
-      await page.getByRole("textbox", { name: "Event time zone", exact: true }).fill("America/New_York");
+      await chooseTimeZone(page.getByRole("combobox", { name: "Event time zone", exact: true }), "America/New_York");
     }
     await expectNoAccessibilityViolations(page);
     await page.screenshot({ path: testInfo.outputPath("explicit-time-model.png"), fullPage: true });
@@ -8530,7 +8536,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
     await page.getByRole("button", { name: "Create", exact: true }).click();
     await expect(page.getByRole("alert")).toContainText("Enter a valid event time zone");
     expect(writes).toHaveLength(0);
-    await page.getByRole("textbox", { name: "Event time zone", exact: true }).fill("Europe/Prague");
+    await chooseTimeZone(page.getByRole("combobox", { name: "Event time zone", exact: true }), "Europe/Prague");
     await page.getByRole("button", { name: "Create", exact: true }).click();
     await expect(page.getByRole("alert")).toContainText("Explicit time creation is not enabled");
     await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue("New civil event");
@@ -9559,7 +9565,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await page.locator('[data-day-key="2026-10-24"]').getByRole("button", { name: /UTC clock series/ }).click();
     await page.getByRole("button", { name: "Edit", exact: true }).click();
     await page.getByRole("button", { name: "More options", exact: true }).click();
-    await page.getByRole("textbox", { name: "Event time zone", exact: true }).fill("UTC");
+    await chooseTimeZone(page.getByRole("combobox", { name: "Event time zone", exact: true }), "UTC");
     await expect(page.getByLabel("Start time", { exact: true })).toHaveValue("02:30");
     const editor = page.getByRole("dialog", { name: "Edit series", exact: true });
     await expect(editor.getByText("Changes here apply to the recurring series.")).toBeVisible();
@@ -9998,7 +10004,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (con
     if (action === "delete") await expect(editor.getByRole("button", { name: "Save and notify guests" })).toHaveCount(0);
     if (action === "update") await expect(editor.getByRole("button", { name: "Cancel meeting and notify guests" })).toHaveCount(0);
     if (action !== "create") await expect(editor.getByLabel("Start", { exact: true })).toHaveCount(0);
-    else { await expect(editor.getByRole("textbox", { name: "Event time zone" })).toHaveValue("UTC"); await expect(editor.getByRole("textbox", { name: "Event time zone" })).toBeDisabled(); }
+    else { await expect(editor.getByRole("combobox", { name: "Event time zone" })).toHaveAttribute("value", "UTC"); await expect(editor.getByRole("combobox", { name: "Event time zone" })).toBeEnabled(); }
     if (action === "update") await editor.getByRole("textbox", { name: "Notes", exact: true }).fill("New explicit note");
     await expectNoAccessibilityViolations(page); expect(await editor.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
     await expectOrganizerPaintedAbovePopover(editor);
@@ -10125,7 +10131,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (con
     const trigger = page.getByRole("button", { name: "Manage CalDAV meeting", exact: true }); await trigger.click();
     const editor = page.getByRole("dialog", { name: "Manage CalDAV meeting", exact: true });
     await expect(editor.getByRole("checkbox", { name: "All day" })).toBeDisabled();
-    if (kind === "zoned") { await expect(editor.getByRole("textbox", { name: "Event time zone" })).toHaveValue("Europe/Prague"); await expect(editor.getByRole("textbox", { name: "Event time zone" })).toBeDisabled(); }
+    if (kind === "zoned") { await expect(editor.getByRole("combobox", { name: "Event time zone" })).toHaveAttribute("value", "Europe/Prague"); await expect(editor.getByRole("combobox", { name: "Event time zone" })).toBeDisabled(); }
     await editor.getByLabel("Start", { exact: true }).fill(kind === "all-day" ? "2026-07-27" : "2026-07-27T11:00");
     await editor.getByLabel("End", { exact: true }).fill(kind === "all-day" ? "2026-07-28" : "2026-07-27T12:00");
     await expect(editor).toContainText("Their existing responses will reset");
@@ -10164,8 +10170,8 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await page.getByRole("button", { name: "Calendars", exact: true }).click();
     const trigger = page.getByRole("button", { name: "Create Outlook meeting", exact: true }); await trigger.click();
     const editor = page.getByRole("dialog", { name: "Create meeting", exact: true });
-    await expect(editor.getByRole("textbox", { name: "Event time zone" })).toHaveValue("UTC");
-    await expect(editor.getByRole("textbox", { name: "Event time zone" })).toBeDisabled();
+    await expect(editor.getByRole("combobox", { name: "Event time zone" })).toHaveAttribute("value", "UTC");
+    await expect(editor.getByRole("combobox", { name: "Event time zone" })).toBeEnabled();
     await editor.getByRole("textbox", { name: "Title", exact: true }).fill("Guest planning");
     await editor.getByRole("textbox", { name: "Guest email addresses" }).fill("owner@example.test");
     await editor.getByRole("button", { name: "Create and send invitations" }).click();
@@ -10317,15 +10323,15 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
       await editor.getByRole("textbox", { name: "Guest email addresses" }).fill("guest@example.test");
       await editor.getByLabel("Start", { exact: true }).fill("2026-07-26T11:00");
       await editor.getByLabel("End", { exact: true }).fill("2026-07-26T12:00");
-      await editor.getByRole("textbox", { name: "Event time zone" }).fill("Europe/Prague");
+      await chooseTimeZone(editor.getByRole("combobox", { name: "Event time zone" }), "Europe/Prague");
       await calendar.click();
       await page.getByRole("option", { name: /Team/ }).click();
       await expect(calendar).toBeFocused();
       await expect(editor.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Shared meeting draft");
       await expect(editor.getByRole("textbox", { name: "Guest email addresses" })).toHaveValue("guest@example.test");
-      await expect(editor.getByLabel("Start", { exact: true })).toHaveValue(/2026-07-26T09:00/);
-      await expect(editor.getByRole("textbox", { name: "Event time zone" })).toHaveValue("UTC");
-      await expect(editor.getByRole("textbox", { name: "Event time zone" })).toBeDisabled();
+      await expect(editor.getByLabel("Start", { exact: true })).toHaveValue(/2026-07-26T11:00/);
+      await expect(editor.getByRole("combobox", { name: "Event time zone" })).toHaveAttribute("value", "Europe/Prague");
+      await expect(editor.getByRole("combobox", { name: "Event time zone" })).toBeEnabled();
       await expectNoAccessibilityViolations(page);
       expect(await editor.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
       await editor.screenshot({ path: testInfo.outputPath("shared-meeting.png") });
@@ -10632,3 +10638,52 @@ for (const kind of ["event", "task"] as const) {
     await expect(page.getByRole("dialog", { name: "Busy", exact: true })).toHaveCount(0);
   });
 }
+
+test("dated tasks appear in month and week and open task details", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await mockAuthenticatedReads(page);
+  let datedTask = {
+    id: "calendar-task-fixture", creatorID: "user-web-qa", calendarID: "personal",
+    title: "Calendar task deadline", status: "needs-action", start: "2026-07-27T08:00:00.000Z",
+    due: "2026-07-28T16:00:00.000Z", isAllDay: false, priority: 5,
+    percentComplete: 0, sequence: 0, description: "Task details from the calendar",
+  };
+  await page.route("**/api/v1/tasks", route => respond(route, { tasks: [datedTask,
+    { ...datedTask, id: "undated", title: "Undated task", start: null, due: null },
+  ] }));
+  await page.route("**/api/v1/tasks/calendar-task-fixture", async route => {
+    expect(route.request().method()).toBe("PUT");
+    datedTask = { ...datedTask, ...route.request().postDataJSON() };
+    await respond(route, datedTask);
+  });
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-27`);
+  const markers = page.locator('[data-event-id^="calendar-task:calendar-task-fixture:"]');
+  await expect(markers).toHaveCount(2);
+  await expect(page.getByRole("button", { name: /Undated task/ })).toHaveCount(0);
+  await expect(markers.first()).not.toHaveAttribute("data-draggable");
+  await markers.first().click();
+  const detail = page.getByRole("dialog", { name: "Calendar task deadline" });
+  await expect(detail).toBeVisible();
+  await expect(detail.getByText("Task details from the calendar")).toBeVisible();
+  await expect(detail.getByRole("combobox", { name: "Task status" })).toBeVisible();
+  await detail.getByRole("combobox", { name: "Task status" }).click();
+  await page.getByRole("option", { name: "Completed", exact: true }).click();
+  await expect(detail.getByRole("combobox", { name: "Task status" })).toContainText("Completed");
+  await detail.getByRole("button", { name: "Close task" }).click();
+  await expect(markers.first()).toHaveAttribute("data-task-completed", "");
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/week?date=2026-07-27`);
+  await expect(page.getByRole("button", { name: /Task deadline, Calendar task deadline/ })).toBeVisible();
+  await expect(page.locator('[data-time-event="calendar-task:calendar-task-fixture:start"]')).toBeVisible();
+  await page.screenshot({ path: "/tmp/musubi-calendar-tasks-web.png" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: /Task deadline, Calendar task deadline/ }).click();
+  await expect(page.getByRole("dialog", { name: "Calendar task deadline" })).toBeVisible();
+  const mobileDetail = page.getByRole("dialog", { name: "Calendar task deadline" });
+  await expect(mobileDetail.getByRole("combobox", { name: "Task status" })).toContainText("Completed");
+  expect(datedTask.status).toBe("completed");
+  await settleLayout(page);
+  await page.screenshot({ path: "/tmp/musubi-calendar-tasks-web-mobile.png" });
+  await expect(mobileDetail.getByRole("button", { name: "Close task" })).toBeInViewport();
+  expect(errors).toEqual([]);
+});

@@ -8,9 +8,13 @@ import { Mode } from "@musubi/calendar";
 import Animated, { interpolate, SharedValue, useAnimatedStyle } from "react-native-reanimated";
 import { SCREEN_HEADER_HEIGHT } from "@/constants/layout";
 
+import type { ReactNode } from "react";
+
 const BACK_BUTTON_SHIFT = 74;
 
 type Props = {
+  info?: ReactNode;
+  onAgenda?: () => void;
   anchorDate: Date;
   calMode: Mode;
   onModeChange: (mode: Mode) => void;
@@ -24,7 +28,7 @@ type Props = {
 
 export function CalendarHeader({
   anchorDate, calMode, onModeChange, onBackToMonth, drillSourceDate, drillProgress,
-  onTodayPress, onRefresh, refreshing,
+  onTodayPress, onRefresh, refreshing, info, onAgenda,
 }: Props) {
   const drillRequested = !!onBackToMonth;
   // While drilled, the title continues to describe the month underneath. Only
@@ -67,6 +71,7 @@ export function CalendarHeader({
 
           <Animated.View style={[{ alignSelf: 'flex-start', maxWidth: '100%' }, titleStyle]}>
             <ModeSwitch
+              onAgenda={onAgenda}
               mode={calMode}
               onChange={onModeChange}
               trigger={(open) => (
@@ -83,6 +88,7 @@ export function CalendarHeader({
         </View>
 
         <View style={{ flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+          {info}
           <Tap
             onPress={onTodayPress}
             style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 6 }}
@@ -92,7 +98,7 @@ export function CalendarHeader({
           </Tap>
           {onRefresh ? (
             refreshing ? (
-              <ActivityIndicator size="small" color={colors.fg3} />
+              <View style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }} accessibilityLabel="Refreshing calendars"><ActivityIndicator size="small" color={colors.fg3} /></View>
             ) : (
               <Tap
                 onPress={onRefresh}

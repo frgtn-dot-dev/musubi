@@ -1,0 +1,141 @@
+import { TaskEditorModal } from "@/components/tasks/TaskEditorModal";
+import { uuidv7 } from "uuidv7";
+import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
+import { taskPriorityLabel, formatTaskDate } from "@/lib/taskPresentation";
+import { useSettingsStore } from "@/store/useSettingsStore";
+import { ProviderIcon } from "@/components/calendar/ProviderIcon";
+import { CalendarFilterBar } from "@/components/calendar/CalendarFilterBar";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from "react-native";
+import { useFocusEffect } from "expo-router";
+import { Feather } from "@expo/vector-icons";
+import { can, providerFlavor, type Task, type TaskStatus } from "@musubi/types";
+import { colors, fonts, styles } from "@/constants/theme";
+import { useApi } from "@/services/api";
+import { useCalendarsStore } from "@/store/useCalendarsStore";
+import { Tap } from "@/components/ui/Tap";
+import { OptionPicker } from "@/components/ui/OptionPicker";
+import { Empty } from "@/components/ui/Empty";
+import { showToast } from "@/components/ui/Toast";
+import { userFacingError } from "@/lib/network";
+
+const phases: { value: TaskStatus; label: string; icon: "circle" | "clock" | "check-circle" | "x-circle" }[] = [
+  { value: "needs-action", label: "Needs action", icon: "circle" },
+  { value: "in-process", label: "In progress", icon: "clock" },
+  { value: "completed", label: "Completed", icon: "check-circle" },
+  { value: "cancelled", label: "Cancelled", icon: "x-circle" },
+];
+
+export default function TasksTab() {
+  const api = useApi();
+  const apiRef = useRef(api);
+  useEffect(() => { apiRef.current = api; }, [api]);
+  const dateFormat = useSettingsStore(s => s.dateFormat);
+  const timeFormat = useSettingsStore(s => s.timeFormat);
+  const { calendars, activeCals, soloCalId, toggleCal, soloCalendar } = useCalendarsStore();
+  const [phaseFilter, setPhaseFilter] = useState<TaskStatus>("needs-action");
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string>();
+  const [creating, setCreating] = useState<string>();
+  const newId = useRef(uuidv7());
+  const [detailId, setDetailId] = useState<string>();
+  const [selected, setSelected] = useState<Task>();
+  const [saving, setSaving] = useState<string>();
+  const request = useRef(0);
+  const refresh = useCallback(async () => {
+    const id = ++request.current;
+    setRefreshing(true);
+    try {
+      const next = await apiRef.current.getTasks();
+      if (id === request.current) { setTasks(next); setError(undefined); }
+    } catch (e) {
+      if (id === request.current) setError(userFacingError(e, "Could not load tasks."));
+    } finally { if (id === request.current) setRefreshing(false); }
+  }, []);
+  useFocusEffect(useCallback(() => { void refresh(); return () => { request.current++; }; }, [refresh]));
+
+  const changeTask = async (task: Task | undefined, change: { status: TaskStatus } | { priority: number }) => {
+    if (!task || saving) return;
+    setSaving(task.id);
+    try {
+      const saved = "status" in change ? await apiRef.current.setTaskStatus(task, change.status) : await apiRef.current.setTaskPriority(task, change.priority);
+      request.current++;
+      setRefreshing(false);
+      setTasks(current => current.map(task => task.id === saved.id ? saved : task));
+    } catch (e) {
+      showToast({ message: userFacingError(e, "Could not update task.") });
+      void refresh();
+    } finally { setSaving(undefined); }
+  };
+
+  const detail = tasks.find(task => task.id === detailId);
+  const detailCalendar = calendars.find(calendar => calendar.id === detail?.calendarID);
+  const detailEditable = can(detailCalendar?.role, "editTasks") && (!detailCalendar?.provider || detailCalendar.supportsTasks === true);
+
+  const filtered = tasks.filter(task => activeCals.has(task.calendarID));
+  const taskCalendars = calendars.filter(calendar => calendar.supportsTasks || !calendar.provider || tasks.some(task => task.calendarID === calendar.id));
+
+  return <View style={styles.screen}>
+    <View style={[styles.header, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
+      <Text style={styles.screenTitle}>Tasks</Text>
+      <Tap accessibilityLabel="Refresh tasks" onPress={() => void refresh()} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+        {refreshing ? <ActivityIndicator color={colors.fg3} /> : <Feather name="refresh-cw" size={18} color={colors.fg3} />}
+      </Tap>
+    </View>
+    <CalendarFilterBar calendars={taskCalendars} activeCals={activeCals} soloCalId={soloCalId} onToggle={toggleCal} onSolo={soloCalendar} />
+    <View accessibilityRole="tablist" style={{ flexDirection: "row", marginHorizontal: 16, marginTop: 8, marginBottom: 8, padding: 4, borderRadius: 16, backgroundColor: colors.bg1, borderWidth: 1, borderColor: colors.line }}>
+      {phases.map(phase => <Tap key={phase.value} accessibilityRole="tab" accessibilityLabel={`${phase.label}, ${filtered.filter(task => task.status === phase.value).length} tasks`} accessibilityState={{ selected: phaseFilter === phase.value }}
+        onPress={() => setPhaseFilter(phase.value)} style={{ flex: 1, minHeight: 52, paddingVertical: 7, alignItems: "center", justifyContent: "center", gap: 5, borderRadius: 12, backgroundColor: phaseFilter === phase.value ? colors.bg3 : "transparent" }}>
+        <Feather name={phase.icon} size={16} color={phaseFilter === phase.value ? colors.fg : colors.fg3} />
+        <Text style={{ fontFamily: fonts.sansMedium, fontSize: 10, color: phaseFilter === phase.value ? colors.fg : colors.fg3 }}>{phase.label}</Text>
+      </Tap>)}
+    </View>
+    <ScrollView key={phaseFilter} contentContainerStyle={{ padding: 16, paddingBottom: 32, gap: 24 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}>
+      {error ? <Text accessibilityRole="alert" style={{ color: colors.fg2 }}>{error}</Text> : null}
+      {!filtered.some(task => task.status === phaseFilter) && !refreshing && !error ? <Empty kanji="静" text="No tasks in this view" /> : null}
+      {phases.filter(phase => phase.value === phaseFilter).map(phase => {
+        const items = filtered.filter(task => task.status === phase.value);
+        if (!items.length) return null;
+        return <View key={phase.value} style={{ gap: 10 }}>
+          {items.map(task => {
+            const calendar = calendars.find(cal => cal.id === task.calendarID);
+            const editable = can(calendar?.role, "editTasks") && (!calendar?.provider || calendar.supportsTasks === true);
+            return <View key={task.id} style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.bg1 }}>
+              <Tap disabled={!editable || !!saving} accessibilityLabel={`Change status of ${task.title}, ${phase.label}`} onPress={() => setSelected(task)} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+                {saving === task.id ? <ActivityIndicator color={colors.fg3} /> : <Feather name={phase.icon} size={21} color={colors.fg3} />}
+              </Tap>
+              <Tap onPress={() => setDetailId(task.id)} accessibilityLabel={`Open task: ${task.title}`} style={{ flex: 1, gap: 7, minHeight: 44, justifyContent: "center" }}>
+                <Text style={{ fontFamily: fonts.sansMedium, fontSize: 15, color: colors.fg, textDecorationLine: task.status === "completed" ? "line-through" : "none" }}>{task.title}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <ProviderIcon provider={calendar ? providerFlavor(calendar) : undefined} color={calendar?.color ?? colors.fg3} />
+                  <Text style={{ flexShrink: 1, fontFamily: fonts.sans, fontSize: 12, color: colors.fg3 }}>{calendar?.name ?? "Calendar"}{task.due ? ` · ${formatTaskDate(task.due, task.isAllDay, dateFormat, timeFormat)}` : ""}</Text>
+                  {task.priority > 0 && task.priority <= 5 ? <>
+                  <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg3 }}>·</Text>
+                  <Feather name="flag" size={13} color={task.priority > 0 && task.priority <= 4 ? colors.accent : colors.fg3} />
+                  <Text style={{ fontFamily: fonts.sans, fontSize: 12, color: colors.fg3 }}>{taskPriorityLabel(task.priority)}</Text>
+                  </> : null}
+                  {task.description ? <Feather name="align-left" size={13} color={colors.fg3} /> : null}
+                  {task.recurrence ? <Feather name="repeat" size={13} color={colors.fg3} /> : null}
+                </View>
+              </Tap>
+            </View>;
+          })}
+        </View>;
+      })}
+    </ScrollView>
+    {!creating && calendars.some(calendar => can(calendar.role, "editTasks") && (!calendar.provider || calendar.supportsTasks === true)) ? <Tap style={styles.fab} haptic="thump" accessibilityLabel="Create task" onPress={() => {
+      const editable = calendars.filter(calendar => can(calendar.role, "editTasks") && (!calendar.provider || calendar.supportsTasks === true));
+      const target = editable.find(calendar => activeCals.has(calendar.id)) ?? editable[0];
+      if (target) { newId.current = uuidv7(); setCreating(target.id); }
+    }}><Text style={{ color: colors.onFill, fontSize: 28, lineHeight: 30 }}>+</Text></Tap> : null}
+    {creating ? <TaskEditorModal calendarID={creating} calendars={calendars.filter(calendar => can(calendar.role, "editTasks") && (!calendar.provider || calendar.supportsTasks === true))} onClose={() => setCreating(undefined)} onSave={async draft => {
+      const saved = await apiRef.current.createTask({ ...draft, id: newId.current });
+      request.current++; setTasks(current => [...current.filter(task => task.id !== saved.id), saved]);
+      setPhaseFilter(saved.status);
+      if (!activeCals.has(saved.calendarID)) toggleCal(saved.calendarID);
+    }} /> : null}
+    {detail ? <TaskDetailModal key={detail.id} task={detail} calendar={detailCalendar} editable={detailEditable} busy={!!saving} onSaved={saved => { request.current++; setTasks(current => saved ? current.map(item => item.id === saved.id ? saved : item) : current.filter(item => item.id !== detail.id)); }} onClose={() => setDetailId(undefined)} onStatus={status => void changeTask(detail, { status })} onPriority={priority => void changeTask(detail, { priority })} /> : null}
+    <OptionPicker visible={!!selected} title="Task status" options={phases} value={selected?.status} onSelect={value => void changeTask(selected, { status: value as TaskStatus })} onClose={() => setSelected(undefined)} />
+  </View>;
+}

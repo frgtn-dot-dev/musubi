@@ -1,4 +1,3 @@
-import { ProviderOrganizerCreateAction } from "./ProviderOrganizerEditor";
 import { colors, styles } from "@/constants/theme";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { Feather } from "@expo/vector-icons";
@@ -120,7 +119,8 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
   // Provider mirrors: only the connection owner may edit/delete (the server
   // enforces this too); provider-side read-only mirrors have role "viewer",
   // so can() already blocks them.
-  const showEdit = can(calendar?.role, "editCalendar") && (!isProviderMirror || isOwner);
+  const metadataLocked = calendar?.provider === "microsoft" && calendar.supportsEvents !== false && calendar.providerDefaultCalendar !== false;
+  const showEdit = !metadataLocked && can(calendar?.role, "editCalendar") && (!isProviderMirror || isOwner);
   const showDelete = can(calendar?.role, "deleteCalendar") && !calendar?.isDefault && (!isProviderMirror || isOwner);
   const showInvite = can(calendar?.role, "invite");
   const showLeave = !isOwner;                    // non-owners can leave
@@ -290,15 +290,18 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
         <Animated.View style={[styles.modalOverlay, fadeStyle]}>
           <Pressable style={{ flex: 1 }} onPress={handleClose} accessible={false} />
         </Animated.View>
-        <GestureDetector gesture={gesture}>
+
           <Animated.View style={[styles.modalSheet, fadeStyle, slideStyle]}>
+            <GestureDetector gesture={gesture}>
+              <View collapsable={false}>
             <View style={styles.modalHandle} />
             <View style={styles.modalTitleRow}>
               <Text style={styles.modalTitle}>{calendar?.name}</Text>
             </View>
+              </View>
+            </GestureDetector>
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.container}>
-                {visible && calendar && ["google", "caldav", "microsoft"].includes(calendar.provider ?? "") && calendar.role === "owner" ? <ProviderOrganizerCreateAction key={calendar.id} calendarID={calendar.id} color={calendar.color} /> : null}
                 <SettingRowAction
                   label="Remind Me"
                   value={
@@ -350,7 +353,7 @@ export default function CalendarSettingsModal({ calendar, visible, onClose, onDe
               </View>
             )}
           </Animated.View>
-        </GestureDetector>
+
       </GestureHandlerRootView>
       <MemberRolesModal
         calendar={calendar}

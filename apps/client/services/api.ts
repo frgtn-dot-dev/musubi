@@ -1,3 +1,4 @@
+import { TaskSchema, type Task, type TaskStatus, TaskUpdateSchema, TaskCreateSchema, type TaskCreate, type TaskUpdate } from "@musubi/types";
 import { ProviderOrganizerCalendarSchema, ProviderOrganizerReceiptSchema, type ProviderOrganizerRequest } from "@musubi/types";
 import { ProviderRsvpReceiptSchema, type ProviderRsvpEdit } from "@musubi/types";
 import { ProviderEventStateResponseSchema, ProviderReminderReceiptSchema, type AnyProviderReminderEdit } from "@musubi/types";
@@ -222,6 +223,55 @@ export function useApi() {
       // silently dropped `role: "owner"`, so the creator didn't get owner
       // actions (invite, roles) until the next full sync.
       return readWire(CalendarSchema, data, "POST /calendars");
+    },
+
+    async getTasks(): Promise<Task[]> {
+      const { error, data } = await authClient.$fetch<{ tasks: unknown[] }>(`${apiUrl}/api/${apiVersion}/tasks`);
+      throwOnError(error);
+      return readWire(TaskSchema.array(), data.tasks, "GET /tasks");
+    },
+
+    async createTask(task: TaskCreate): Promise<Task> {
+      const { error, data } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/tasks`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(TaskCreateSchema.parse(task)),
+      });
+      throwOnError(error);
+      return readWire(TaskSchema, data, "POST /tasks");
+    },
+
+    async updateTask(task: Task, update: TaskUpdate): Promise<Task> {
+      const body = TaskUpdateSchema.parse({ ...update, expectedProviderReadRetiredGeneration: task.providerReadRetiredGeneration ?? 0 });
+      const { error, data } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/tasks/${encodeURIComponent(task.id)}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      throwOnError(error);
+      return readWire(TaskSchema, data, "PUT /tasks");
+    },
+
+    async removeTask(task: Task): Promise<void> {
+      const { error } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/tasks/${encodeURIComponent(task.id)}`, { method: "DELETE" });
+      throwOnError(error);
+    },
+
+    async setTaskPriority(task: Task, priority: number): Promise<Task> {
+      const body = TaskUpdateSchema.parse({ ...task, priority,
+        expectedProviderReadRetiredGeneration: task.providerReadRetiredGeneration ?? 0 });
+      const { error, data } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/tasks/${encodeURIComponent(task.id)}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      throwOnError(error);
+      return readWire(TaskSchema, data, "PUT /tasks");
+    },
+
+    async setTaskStatus(task: Task, status: TaskStatus): Promise<Task> {
+      const body = TaskUpdateSchema.parse({ ...task, status, percentComplete: status === "completed" ? 100 : 0,
+        completedAt: status === "completed" ? new Date() : null,
+        expectedProviderReadRetiredGeneration: task.providerReadRetiredGeneration ?? 0 });
+      const { error, data } = await authClient.$fetch(`${apiUrl}/api/${apiVersion}/tasks/${encodeURIComponent(task.id)}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      throwOnError(error);
+      return readWire(TaskSchema, data, "PUT /tasks");
     },
 
     async getCalendars() {

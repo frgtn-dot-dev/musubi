@@ -74,12 +74,16 @@ export default function CalendarWidgetSettingsModal({ widgetId, onClose }: Props
         <Animated.View style={[styles.modalOverlay, fadeStyle]}>
           <Pressable style={{ flex: 1 }} onPress={handleClose} accessible={false} />
         </Animated.View>
-        <GestureDetector gesture={gesture}>
+
           <Animated.View style={[styles.modalSheet, fadeStyle, slideStyle]}>
+            <GestureDetector gesture={gesture}>
+              <View collapsable={false}>
             <View style={styles.modalHandle} />
             <View style={[styles.modalTitleRow, { paddingBottom: 6 }]}>
               <Text style={styles.modalTitle}>Widget calendars</Text>
             </View>
+              </View>
+            </GestureDetector>
             <Text style={{
               paddingHorizontal: 16,
               paddingBottom: 14,
@@ -124,7 +128,7 @@ export default function CalendarWidgetSettingsModal({ widgetId, onClose }: Props
               <Btn label="Done" onPress={handleClose} style={{ flex: 1 }} />
             </View>
           </Animated.View>
-        </GestureDetector>
+
       </GestureHandlerRootView>
     </Modal>
   );

@@ -95,11 +95,13 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
   const pages = workspace.pages.data;
   const activePage = pages?.find((page) => page.id === pageId);
   const tasksQuery = useQuery({
-    // Fetch only when the view needs tasks. Once fetched, the snapshot keeps
-    // them readable offline without turning every calendar Page into a request.
-    enabled: (taskView || searchActive) && !snapshot.offline,
+    // Dated tasks are part of every calendar view as well as the task list.
+    enabled: !snapshot.offline,
     queryFn: ({ signal }) => getTasks(signal),
     queryKey: queryKeys.tasks(getServerOrigin(), userId),
+    // Disk restoration may precede the latest mutation's debounced snapshot.
+    // Verify online even while the restored query is inside its stale window.
+    refetchOnMount: "always",
   });
   const searchEvents = useQuery({
     enabled: searchActive && !snapshot.offline,
@@ -127,7 +129,7 @@ function CalendarScreen({ editorOpen }: { editorOpen: boolean }) {
     workspace.events,
     workspace.pages,
     workspace.settings,
-    ...(taskView && (!snapshot.offline || tasksQuery.data !== undefined)
+    ...((!snapshot.offline || tasksQuery.data !== undefined)
       ? [tasksQuery]
       : []),
   ];

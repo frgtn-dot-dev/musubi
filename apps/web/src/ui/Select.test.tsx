@@ -40,3 +40,15 @@ describe("Select focus after an asynchronous choice", () => {
     });
   }
 });
+
+it("filters searchable choices and selects with the keyboard", async () => {
+  const user = userEvent.setup();
+  let chosen = "";
+  render(<Select label="Time zone" searchable value="UTC" options={[{value:"UTC",label:"UTC"},{value:"Europe/Prague",label:"Europe/Prague"}]} onChange={value => { chosen = value; }} />);
+  await user.click(screen.getByRole("combobox", { name: "Time zone" }));
+  const search = await screen.findByRole("textbox", { name: "Search Time zone" });
+  await user.type(search, "Prague");
+  expect(screen.queryByRole("option", { name: "UTC" })).toBeNull();
+  await user.keyboard("{ArrowDown}{Enter}");
+  expect(chosen).toBe("Europe/Prague");
+});

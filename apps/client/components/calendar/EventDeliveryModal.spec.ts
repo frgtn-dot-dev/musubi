@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { isValidElement, type ReactNode } from "react";
+vi.mock("./TimeZonePicker", () => ({ TimeZonePicker: "TimeZonePicker" }));
+vi.mock("@expo/ui/community/datetime-picker", () => ({ DateTimePicker: "DateTimePicker" }));
+vi.mock("@/components/ui/BottomSheetFrame", () => ({ BottomSheetFrame: "BottomSheetFrame" }));
 
 const h = vi.hoisted(() => ({
   callbacks: {} as Record<string, (...args: any[]) => void>,
@@ -380,7 +383,7 @@ vi.mock("@/components/ui/Tap", () => ({ Tap: "Tap" }));
 vi.mock("@/components/Avatar", () => ({ Avatar: "Avatar" }));
 vi.mock("@/components/ui/Toast", () => ({ showToast: vi.fn() }));
 
-it("opens a scoped delivery modal from the actual event detail callback", async () => {
+it("keeps delivery discovery out of the event detail", async () => {
   const { default: EventDetailModal } = await import("./EventDetailModal");
   const { remoteForCalendar } = await import("@/services/federation");
   vi.mocked(remoteForCalendar).mockReturnValue({
@@ -414,25 +417,7 @@ it("opens a scoped delivery modal from the actual event detail callback", async 
     for (const effect of h.effects.splice(0)) effect();
     return tree;
   };
-  buttons(renderDetail(), "Delivery details")[0].onPress();
-  const find = (node: ReactNode): any => {
-    if (Array.isArray(node)) return node.map(find).find(Boolean);
-    if (
-      !isValidElement<{
-        children?: ReactNode;
-        label?: string;
-        onPress?: () => void;
-      }>(node)
-    )
-      return;
-    if (node.type === EventDeliveryModal) return node.props;
-    return find(node.props.children);
-  };
-  expect(find(renderDetail())).toMatchObject({
-    visible: true,
-    eventId: id,
-    connectionId: "remote",
-  });
+  expect(buttons(renderDetail(), "Delivery details")).toHaveLength(0);
 });
 
 it("coalesces refreshes and reads the newest status after the active read settles", async () => {

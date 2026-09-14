@@ -39,12 +39,16 @@ export default function CalendarPickerModal({ title, visible, onClose, onSelect,
         <Animated.View style={[styles.modalOverlay, fadeStyle]}>
           <Pressable style={{ flex: 1 }} onPress={handleClose} accessible={false} />
         </Animated.View>
-        <GestureDetector gesture={gesture}>
+
           <Animated.View style={[styles.modalSheet, fadeStyle, slideStyle]}>
+            <GestureDetector gesture={gesture}>
+              <View collapsable={false}>
             <View style={styles.modalHandle} />
             <View style={styles.modalTitleRow}>
               <Text style={styles.modalTitle}>{title}</Text>
             </View>
+              </View>
+            </GestureDetector>
             <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 16, gap: 4 }} showsVerticalScrollIndicator={false}>
               {options.length === 0 ? (
                 <Text style={{ fontFamily: fonts.sans, fontSize: 13, color: colors.fg3 }}>
@@ -70,7 +74,7 @@ export default function CalendarPickerModal({ title, visible, onClose, onSelect,
               ))}
             </ScrollView>
           </Animated.View>
-        </GestureDetector>
+
       </GestureHandlerRootView>
     </Modal>
   );

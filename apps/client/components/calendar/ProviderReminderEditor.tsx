@@ -1,5 +1,7 @@
+import { BottomSheetFrame } from "@/components/ui/BottomSheetFrame";
+import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useRef, useState } from "react";
-import { Keyboard, KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Keyboard, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { uuidv7 } from "uuidv7";
 import { spacing } from "@musubi/design-system";
@@ -23,7 +25,8 @@ export function ProviderReminderEditor({ event, observation, onClose }: { event:
   const [error, setError] = useState(""); const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false); const pending = useRef(false);
   const lastRequest = useRef<{ key: string; request: AnyProviderReminderEdit } | null>(null);
-  function close() { if (!pending.current) { Keyboard.dismiss(); onClose(); } }
+  const motion = useModalAnimation(true, onClose);
+  function close() { if (!pending.current) { Keyboard.dismiss(); void motion.handleClose(); } }
   async function save() {
     if (pending.current || notice) return;
     pending.current = true; setBusy(true); setError("");
@@ -39,11 +42,7 @@ export function ProviderReminderEditor({ event, observation, onClose }: { event:
   const copy = { fontFamily: fonts.sans, color: colors.fg2 };
   const modeLabels = { defaults: "Calendar defaults", off: "Off", custom: "Custom" };
   return <ModalPortal visible onRequestClose={close}>
-    <View style={styles.modalOverlay}><Pressable style={{ flex: 1 }} onPress={close} accessible={false} /></View>
-    <KeyboardAvoidingView behavior="padding" pointerEvents="box-none" style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0, paddingTop: insets.top, justifyContent: "flex-end" }}>
-    <View style={[styles.modalSheet, { position: "relative", minHeight: 0, maxHeight: "100%" }]}>
-      <View style={styles.modalHandle} />
-      <View style={styles.modalTitleRow}><Text accessibilityRole="header" style={styles.modalTitle}>{caldav ? label : event.seriesID ? "Google reminders for this occurrence" : "Google reminders"}</Text></View>
+      <BottomSheetFrame motion={motion} onClose={close} dismissible={!busy} header={<View style={styles.modalTitleRow}><Text accessibilityRole="header" style={styles.modalTitle}>{caldav ? label : event.seriesID ? "Google reminders for this occurrence" : "Google reminders"}</Text></View>}>
       <ScrollView style={{ flexShrink: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: spacing[4], paddingBottom: spacing[4] + insets.bottom, gap: spacing[3] }}>
         <Text style={copy}>{caldav ? `${series ? "This alarm applies to every occurrence in this series. " : ""}This alarm is stored on the CalDAV event and may be shared with other calendar users. Calendar apps deliver it. Musubi reminders are separate; both may notify you.` : <>{event.seriesID ? "These Google reminders apply only to this occurrence. " : ""}Personal notifications from Google Calendar. Musubi reminders are separate; both apps may notify you.</>}</Text>
         {notice ? <Text accessibilityLiveRegion="polite" style={copy}>{notice}</Text> : <>
@@ -64,11 +63,12 @@ export function ProviderReminderEditor({ event, observation, onClose }: { event:
         </>}
         <Btn label={notice ? `Close ${label}` : `Cancel ${label}`} variant="secondary" disabled={busy} onPress={close} />
       </ScrollView>
-    </View>
-    </KeyboardAvoidingView>
+
+
     <OptionPicker visible={picker !== null} title={picker === "mode" ? "Reminder mode" : "Reminder method"} value={picker === "mode" ? draft.mode : typeof picker === "number" ? draft.overrides[picker]?.method : undefined} options={picker === "mode" ? [...(!caldav && !occurrence ? [{ value: "defaults", label: "Calendar defaults" }] : []), { value: "off", label: "Off" }, { value: "custom", label: "Custom" }] : [{ value: "popup", label: "Notification" }, { value: "email", label: "Email" }]} onClose={() => setPicker(null)} onSelect={value => {
       setDraft(current => picker === "mode" ? { mode: value as typeof current.mode, overrides: value === "custom" && !current.overrides.length ? [{ method: "popup", minutes: "15" }] : current.overrides } : { ...current, overrides: current.overrides.map((entry, index) => index === picker ? { ...entry, method: value as "popup" | "email" } : entry) });
       setPicker(null);
     }} />
-  </ModalPortal>;
+   </BottomSheetFrame>
+    </ModalPortal>;
 }

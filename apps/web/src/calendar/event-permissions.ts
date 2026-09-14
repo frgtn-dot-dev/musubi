@@ -1,3 +1,4 @@
+import { isCalendarTask } from "@musubi/calendar";
 import {
   can,
   EventMutationError,
@@ -22,6 +23,7 @@ export function getEditableTaskCalendars(calendars: Calendar[]) {
 }
 
 export function canEditEvent(event: Event, calendars: Calendar[]) {
+  if (isCalendarTask(event)) return false;
   if (event.originCalendarID) {
     return can(
       calendars.find((calendar) => calendar.id === event.originCalendarID)
@@ -39,6 +41,7 @@ export function canEditEvent(event: Event, calendars: Calendar[]) {
 }
 
 export function canRemoveEvent(event: Event, calendars: Calendar[]) {
+  if (isCalendarTask(event)) return false;
   return event.calendars.some((calendarId) =>
     can(
       calendars.find((calendar) => calendar.id === calendarId)?.role,

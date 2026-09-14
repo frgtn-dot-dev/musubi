@@ -798,6 +798,7 @@ export const externalCalendars = pgTable(
     providerAccessRevision: integer("provider_access_revision").notNull().default(0),
     supportsEvents: boolean("supports_events").notNull().default(true),
     supportsTasks: boolean("supports_tasks").notNull().default(false),
+    providerDefaultCalendar: boolean("provider_default_calendar"),
     disabled: boolean("disabled").notNull().default(false),
   },
   (t) => [

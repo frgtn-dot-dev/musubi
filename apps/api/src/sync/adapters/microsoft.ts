@@ -304,6 +304,37 @@ function microsoftTaskPath(taskListId: string, taskId?: string) {
   return `/me/todo/lists/${list}/tasks${taskId ? `/${encodeURIComponent(taskId)}` : ""}`;
 }
 
+// Some Graph task collections reject delta even with valid Tasks consent.
+// Fetch every page before returning a full snapshot so a partial response can
+// never trigger the engine's missing-task sweep. Retry delta on the next sync.
+async function fetchMicrosoftTaskSnapshot(
+  accessToken: string,
+  initialUrl: string,
+  fetchImpl: typeof fetch,
+): Promise<FetchChangesResult> {
+  const changes: NormalizedChange[] = [];
+  const visited = new Set<string>();
+  let url: string | null = initialUrl;
+  while (url) {
+    if (visited.has(url)) throw new Error("Outlook task pagination repeated a page");
+    visited.add(url);
+    const res = await graphGet(accessToken, url, fetchImpl);
+    if (!res.ok) throw await graphError(res);
+    const data = await res.json();
+    if (!Array.isArray(data.value) || data.value.some((item: any) => !item || typeof item.id !== "string" || !item.id)) {
+      throw new Error("Outlook task snapshot is incomplete");
+    }
+    if (data["@odata.nextLink"] != null && (typeof data["@odata.nextLink"] !== "string" || !data["@odata.nextLink"])) {
+      throw new Error("Outlook task pagination is invalid");
+    }
+    for (const item of data.value) {
+      changes.push({ kind: "task", data: toNormalizedMicrosoftTask(item) });
+    }
+    url = data["@odata.nextLink"] ?? null;
+  }
+  return { changes, nextCursor: null, reset: true };
+}
+
 export async function fetchMicrosoftTaskChanges(
   accessToken: string,
   taskListId: string,
@@ -325,6 +356,16 @@ export async function fetchMicrosoftTaskChanges(
       reset = true;
       url = initialUrl;
       continue;
+    }
+    if (res.status === 400) {
+      const detail = await res.clone().json().catch(() => null);
+      if (typeof detail?.error?.message === "string" && /delta query is not supported by this resource/i.test(detail.error.message)) {
+        return fetchMicrosoftTaskSnapshot(
+          accessToken,
+          `${graphBase}${microsoftTaskPath(taskListId)}?$top=${PAGE_SIZE}`,
+          fetchImpl,
+        );
+      }
     }
     if (!res.ok) throw await graphError(res);
     const data = await res.json();
@@ -626,6 +667,7 @@ export async function fetchMicrosoftChanges(
 }
 
 type GraphCalendar = {
+  isDefaultCalendar?: boolean;
   id: string;
   name: string;
   hexColor?: string | null;
@@ -643,6 +685,7 @@ export function microsoftEventPath(
 export function toExternalCalendar(c: GraphCalendar): ExternalCalendarInfo {
   return {
     externalId: c.id,
+    providerDefaultCalendar: typeof c.isDefaultCalendar === "boolean" ? c.isDefaultCalendar : null,
     name: c.name,
     // Graph must explicitly grant writes. Missing permission data is not a safe
     // reason to expose actions that can only fail later.
@@ -692,7 +735,7 @@ export const microsoftAdapter: CalendarAdapter = {
     const accessToken = await getAccessToken(userID, accountId);
     const calendars: ExternalCalendarInfo[] = [];
     let url: string | null =
-      `${GRAPH}/me/calendars?$select=id,name,hexColor,canEdit,canViewPrivateItems&$top=${PAGE_SIZE}`;
+      `${GRAPH}/me/calendars?$select=id,name,hexColor,canEdit,canViewPrivateItems,isDefaultCalendar&$top=${PAGE_SIZE}`;
     while (url) {
       const res = await graphGet(accessToken, url);
       if (!res.ok) throw await graphError(res);
@@ -1048,6 +1091,11 @@ export const microsoftAdapter: CalendarAdapter = {
       );
       if (!res.ok) throw await graphError(res);
       return;
+    }
+    const metadata = await graphGet(accessToken, `${GRAPH}/me/calendars/${encodeURIComponent(externalCalendarId)}?$select=isDefaultCalendar`);
+    if (!metadata.ok) throw await graphError(metadata);
+    if ((await metadata.json()).isDefaultCalendar !== false) {
+      throw new Error("The default Outlook calendar's name and color cannot be changed in Musubi.");
     }
     const res = await fetch(
       `${GRAPH}/me/calendars/${encodeURIComponent(externalCalendarId)}`,

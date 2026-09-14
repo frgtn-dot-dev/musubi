@@ -292,6 +292,7 @@ async function syncProviderImpl(
     const capabilities = {
       supportsEvents: cal.supportsEvents ?? true,
       supportsTasks: cal.supportsTasks ?? false,
+      providerDefaultCalendar: cal.providerDefaultCalendar ?? null,
     };
     const link = links.find((l) => l.externalCalendarID === cal.externalId);
     if (link) {

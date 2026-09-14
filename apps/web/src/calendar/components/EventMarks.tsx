@@ -1,3 +1,5 @@
+import { TaskStatusIcon } from "./TaskStatusIcon";
+import { isCalendarTask } from "@musubi/calendar";
 import type { Event } from "@musubi/types";
 import { Lock, Repeat, Users } from "lucide-react";
 import styles from "./workspace.module.css";
@@ -16,6 +18,7 @@ export function EventMarks({
   event: Event;
   readOnly?: boolean;
 }) {
+  if (isCalendarTask(event)) return <span aria-hidden="true" className={styles.eventMarks}><TaskStatusIcon status={event.calendarTask.status} size={12} /></span>;
   if (!event.recurrence && !event.hasAttendees && !readOnly) {
     return null;
   }

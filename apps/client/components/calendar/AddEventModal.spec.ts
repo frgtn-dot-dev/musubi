@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { isValidElement, type ReactNode } from "react";
 import { EventSchema, DEFAULT_REMINDER_RULE } from "@musubi/types";
+vi.mock("./TimeZonePicker", () => ({ TimeZonePicker: "TimeZonePicker" }));
 
 const state = vi.hoisted(() => ({
   platform: "android" as "android" | "ios",
@@ -670,6 +671,7 @@ it("requires an explicit zone when adopting a legacy event and commits the whole
   renderComposer(true);
   const picker = find(renderComposer(), props => props.title === "Time model")!;
   picker.onSelect("zoned");
+  find(renderComposer(), props => props.label === "Advanced time settings")!.onPress();
   const tree = renderComposer();
   const zone = find(tree, props => props.accessibilityLabel === "Event time zone")!;
   expect(zone.value).toBe("");
@@ -678,7 +680,7 @@ it("requires an explicit zone when adopting a legacy event and commits the whole
   expect(mocks.request).not.toHaveBeenCalled();
   expect(mocks.close).not.toHaveBeenCalled();
   expect(titleInput(renderComposer())!.value).toBe("Adopted draft");
-  zone.onChangeText("Europe/Prague");
+  zone.onChange("Europe/Prague");
   mocks.request.mockImplementationOnce(async (_url, options) => {
     const body = JSON.parse(options.body);
     return { error: null, data: { ...legacy, ...body.patch, ...resolveEventTimeEdit(body.time), revision: 2 } };
@@ -699,6 +701,7 @@ it("initializes the all-day switch from the event and converts on its first chan
   const toggle = find(renderComposer(true), props => props.accessibilityLabel === "All-day event")!;
   expect(toggle.value).toBe(true);
   toggle.onValueChange(false);
+  find(renderComposer(), props => props.label === "Advanced time settings")!.onPress();
   const tree = renderComposer();
   expect(find(tree, props => props.accessibilityLabel === "All-day event")!.value).toBe(false);
   expect(find(tree, props => props.accessibilityLabel === "Event time zone")!.value).toBe("");
@@ -822,16 +825,17 @@ it("saves a whole-series civil date shift across DST and schedules from the save
   expect(mocks.close).not.toHaveBeenCalled();
 });
 
-it("creates an explicit zoned draft after a missing-zone retry", async () => {
+it("prefills the local zone for a new explicit zoned draft", async () => {
   const { resolveEventTimeEdit } = await import("@musubi/calendar");
   useEditComposerStore.getState().open();
   renderComposer(true);
   titleInput(renderComposer())!.onChangeText("New zoned event");
   find(renderComposer(), props => props.title === "Time model")!.onSelect("zoned");
-  await find(renderComposer(), props => props.label === "Create")!.onPress();
-  expect(mocks.request).not.toHaveBeenCalled();
+
   expect(titleInput(renderComposer())!.value).toBe("New zoned event");
-  find(renderComposer(), props => props.accessibilityLabel === "Event time zone")!.onChangeText("Europe/Prague");
+  find(renderComposer(), props => props.label === "Advanced time settings")!.onPress();
+  expect(find(renderComposer(), props => props.accessibilityLabel === "Event time zone")!.value).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  find(renderComposer(), props => props.accessibilityLabel === "Event time zone")!.onChange("Europe/Prague");
   find(renderComposer(), props => props.accessibilityLabel === "Starts date (YYYY-MM-DD)")!.onChangeText("2026-07-21");
   find(renderComposer(), props => props.accessibilityLabel === "Ends date (YYYY-MM-DD)")!.onChangeText("2026-07-21");
   find(renderComposer(), props => props.accessibilityLabel === "Starts time (HH:mm)")!.onChangeText("09:00");
@@ -990,8 +994,9 @@ it("keeps explicit UTC clock fields in the native whole-series request", async (
   useEventsStore.setState({ events: [series] });
   presentEventDetail([series], series);
   useEditComposerStore.getState().open(useEventDetailStore.getState().event!);
-  const tree = renderComposer(true);
-  find(tree, props => props.accessibilityLabel === "Event time zone")!.onChangeText("UTC");
+  find(renderComposer(true), props => props.label === "Advanced time settings")!.onPress();
+  const tree = renderComposer();
+  find(tree, props => props.accessibilityLabel === "Event time zone")!.onChange("UTC");
   mocks.request.mockImplementationOnce(async (_url, options) => {
     const body = JSON.parse(options.body);
     useEventsStore.setState({ events: [{ ...series, ...resolveEventTimeEdit(body.time), revision: 2 }] });
@@ -1012,8 +1017,9 @@ it("converts the last generated COUNT occurrence without inventing a fold slot",
   expect(last.id).toBe(series.id + "_" + Date.parse("2026-10-24T00:30:00Z"));
   presentEventDetail([series], last);
   useEditComposerStore.getState().open(useEventDetailStore.getState().event!);
-  const tree = renderComposer(true);
-  find(tree, props => props.accessibilityLabel === "Event time zone")!.onChangeText("UTC");
+  find(renderComposer(true), props => props.label === "Advanced time settings")!.onPress();
+  const tree = renderComposer();
+  find(tree, props => props.accessibilityLabel === "Event time zone")!.onChange("UTC");
   mocks.request.mockImplementationOnce(async (_url, options) => {
     const body = JSON.parse(options.body);
     useEventsStore.setState({ events: [{ ...series, ...resolveEventTimeEdit(body.time), revision: 2 }] });

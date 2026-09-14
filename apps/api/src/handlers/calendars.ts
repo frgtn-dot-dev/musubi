@@ -275,6 +275,7 @@ export async function handlerGetCalendars(req: Request, res: Response) {
 					? link.syncStatus
 					: null,
 			syncErrorCode: ownsExternalAccount ? (link?.syncErrorCode ?? null) : null,
+			providerDefaultCalendar: link?.providerDefaultCalendar ?? null,
 			supportsTasks: link?.supportsTasks ?? true,
 			supportsEvents: link?.supportsEvents ?? true,
 		});

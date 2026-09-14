@@ -1,3 +1,4 @@
+import { instantToCivil, unambiguousCivilToInstant } from "./time-zone";
 import {
   ProviderOrganizerRequestSchema,
   type Event,
@@ -23,9 +24,10 @@ export function organizerNotificationNotice(provider: "google" | "caldav" | "mic
 }
 export function organizerDraft(
   event?: Event,
-  provider: "google" | "caldav" | "microsoft" = "google",
+  _provider: "google" | "caldav" | "microsoft" = "google",
 ): OrganizerDraft {
-  const day = new Date().toISOString().slice(0, 10),
+  const today = new Date(),
+    day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`,
     time = event?.timeModel;
   return {
     title: event?.title ?? "",
@@ -53,9 +55,7 @@ export function organizerDraft(
         ? time.timeZone
         : event
           ? ""
-          : provider !== "google"
-            ? "UTC"
-            : Intl.DateTimeFormat().resolvedOptions().timeZone,
+          : Intl.DateTimeFormat().resolvedOptions().timeZone,
     allDay: event?.isAllDay ?? false,
   };
 }
@@ -81,19 +81,22 @@ export function organizerRequest(
     provider !== "google"
       ? { ...ids, provider, notificationPolicy: "server-invite" }
       : { ...ids, provider, sendUpdates: "all" };
-  const time = draft.allDay
+  let time = draft.allDay
     ? {
-        kind: "all-day",
+        kind: "all-day" as const,
         startDate: draft.start.slice(0, 10),
         endDate: draft.end.slice(0, 10),
       }
     : {
-        kind: "zoned",
+        kind: "zoned" as const,
         timeZone: draft.timeZone,
         startLocal:
           draft.start.length === 16 ? `${draft.start}:00` : draft.start,
         endLocal: draft.end.length === 16 ? `${draft.end}:00` : draft.end,
       };
+  if (action === "create" && provider !== "google" && time.kind === "zoned" && time.timeZone !== "UTC") {
+    time = { ...time, startLocal: instantToCivil(unambiguousCivilToInstant(time.startLocal!, time.timeZone!), "UTC"), endLocal: instantToCivil(unambiguousCivilToInstant(time.endLocal!, time.timeZone!), "UTC"), timeZone: "UTC" };
+  }
   if (action === "create")
     return ProviderOrganizerRequestSchema.parse({
       ...common,

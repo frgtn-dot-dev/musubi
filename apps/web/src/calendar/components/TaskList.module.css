@@ -26,9 +26,9 @@
 
 .viewControls { display: flex; justify-content: flex-end; margin-bottom: var(--space-5); }
 .board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); align-items: stretch; padding-bottom: var(--space-4); }
-.column { position: relative; display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; min-height: calc(var(--space-8) * 6); container-type: inline-size; }
+.column { position: relative; display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; min-height: 0; container-type: inline-size; }
 .column + .column::before { content: ""; position: absolute; inset-block: 0; inset-inline-start: calc(var(--space-2) * -1); border-inline-start: 1px solid var(--border-subtle); }
-.column[data-drop-active] > .groupHeading { color: var(--text-primary); }
+.column[data-drop-active] .groupHeading { color: var(--text-primary); }
 @media (max-width: 1023px) { .board { grid-template-columns: repeat(4, minmax(280px, 1fr)); } }
 .column ul { display: grid; gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
 /* Cards deliberately have their own content hierarchy, independent of list rows. */
@@ -60,10 +60,10 @@
 
 /* A short save lock must not dim the whole board or change its geometry. */
 .column[data-saving] .kanbanCard[data-editable] button:disabled,
-.column[data-saving] > button:disabled { opacity: 1; }
+.column[data-saving] .columnHeading > button:disabled { opacity: 1; }
 
-.tasks[data-layout="kanban"] { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; padding-bottom: 0; }
-.tasks[data-layout="kanban"] .board { flex: 1 0 auto; padding-bottom: 0; }
+.tasks[data-layout="kanban"] { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow-x: auto; overflow-y: hidden; box-sizing: border-box; padding-bottom: 0; }
+.tasks[data-layout="kanban"] .board { flex: 1 1 0; min-height: 0; padding-bottom: 0; }
 
 .cardCalendar { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; }
 .cardCalendar svg { flex: none; }
@@ -71,3 +71,12 @@
 
 .listCalendarDetail { display: inline-flex; align-items: center; gap: var(--space-1); }
 .listCalendarDetail > :first-child, .cardCalendar > :first-child { flex: none; }
+
+.columnBody { display: flex; flex-direction: column; gap: var(--space-3); min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior-y: contain; padding-bottom: var(--space-4); }
+.columnBody > ul, .columnBody > button { flex: none; }
+.column > .groupHeading, .column > button { flex: none; }
+
+.columnHeading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); flex: none; }
+.columnHeading > button { flex: none; }
+
+.columnBody:focus-visible { outline: var(--focus-ring); outline-offset: -2px; }

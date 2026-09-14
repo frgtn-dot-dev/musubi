@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { colors, fonts, styles } from "@/constants/theme";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { Feather } from "@expo/vector-icons";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { ModalPortal as Modal } from "@/components/ui/ModalPortal";
 import { Btn } from "@/components/ui/Btn";
@@ -10,6 +11,7 @@ import { Tap } from "@/components/ui/Tap";
 export type PickerOption = { label: string; value: string };
 
 type Props = {
+  searchable?: boolean;
   visible: boolean;
   title: string;
   /** Reads under the title. For saying what the choice actually affects. */
@@ -37,6 +39,7 @@ type Props = {
  */
 export function OptionPicker({
   visible,
+  searchable = false,
   title,
   message,
   options,
@@ -46,6 +49,9 @@ export function OptionPicker({
 }: Props) {
   const { fadeStyle, handleClose } = useModalAnimation(visible, onClose);
 
+  const [query, setQuery] = useState("");
+  const List = searchable ? ScrollView : View;
+  const filtered = options.filter(option => !searchable || (option.label + " " + option.value).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
   const choose = (option: PickerOption) => {
     onSelect(option.value);
     handleClose();
@@ -100,17 +106,9 @@ export function OptionPicker({
               ) : null}
             </View>
 
-            {/* A plain View, not a ScrollView.
-                The longest list this ever shows is six rows — five choices plus
-                the extra one that appears when a rule set on another device has
-                no button here — which fits on any phone. A ScrollView sized by
-                `maxHeight` measured itself a little shorter than its content
-                every time, so every list scrolled and every list hid its last
-                few pixels, whether it held three options or five.
-                If some future list genuinely outgrows a screen, that is the
-                moment to make it scroll, and it can be measured then. */}
-            <View>
-              {options.map((option, index) => {
+            {searchable ? <TextInput accessibilityLabel={`Search ${title}`} placeholder="Search city or time zone" placeholderTextColor={colors.fg4} value={query} onChangeText={setQuery} autoCapitalize="none" autoCorrect={false} style={[styles.fieldValueText, { backgroundColor: colors.bg1, borderRadius: 8, padding: 12 }]} /> : null}
+            <List {...(searchable ? { style: { maxHeight: 260 }, keyboardShouldPersistTaps: "handled" as const } : {})}>
+              {filtered.map((option, index) => {
                 const selected = option.value === value;
                 return (
                   <Tap
@@ -149,7 +147,8 @@ export function OptionPicker({
                   </Tap>
                 );
               })}
-            </View>
+              {searchable && !filtered.length ? <Text style={{ color: colors.fg3 }}>No time zones found</Text> : null}
+            </List>
 
             {/* In a row, even alone. `btnSecondary` is `flex: 1` — built to
                 share a row with a confirm button — and in a column that flex

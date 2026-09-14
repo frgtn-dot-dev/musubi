@@ -1,5 +1,7 @@
+import { BottomSheetFrame } from "@/components/ui/BottomSheetFrame";
+import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useRef, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { uuidv7 } from "uuidv7";
 import { spacing } from "@musubi/design-system";
@@ -19,7 +21,8 @@ export function ProviderRsvpEditor({ event, observation, onClose }: { event: Eve
   const [error, setError] = useState(""); const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false); const pending = useRef(false);
   const lastRequest = useRef<ProviderRsvpEdit | null>(null);
-  function close() { if (!pending.current) onClose(); }
+  const motion = useModalAnimation(true, onClose);
+  function close() { if (!pending.current) void motion.handleClose(); }
   async function send() {
     if (pending.current || notice || !response) return;
     pending.current = true; setBusy(true); setError("");
@@ -33,11 +36,7 @@ export function ProviderRsvpEditor({ event, observation, onClose }: { event: Eve
   }
   const copy = { fontFamily: fonts.sans, color: colors.fg2 };
   return <ModalPortal visible onRequestClose={close}>
-    <View style={styles.modalOverlay}><Pressable style={{ flex: 1 }} onPress={close} accessible={false} /></View>
-    <View pointerEvents="box-none" style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0, paddingTop: insets.top, justifyContent: "flex-end" }}>
-    <View style={[styles.modalSheet, { position: "relative", minHeight: 0, maxHeight: "100%" }]}>
-      <View style={styles.modalHandle} />
-      <View style={styles.modalTitleRow}><Text accessibilityRole="header" style={styles.modalTitle}>{event.seriesID ? "Respond to this occurrence" : graph ? "Respond in Outlook" : caldav ? "Respond in calendar" : "Respond in Google"}</Text></View>
+      <BottomSheetFrame motion={motion} onClose={close} dismissible={!busy} header={<View style={styles.modalTitleRow}><Text accessibilityRole="header" style={styles.modalTitle}>{event.seriesID ? "Respond to this occurrence" : graph ? "Respond in Outlook" : caldav ? "Respond in calendar" : "Respond in Google"}</Text></View>}>
       <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: spacing[4], paddingBottom: spacing[4] + insets.bottom, gap: spacing[3] }}>
         <Text style={copy}>{event.seriesID ? "This Google response applies only to this occurrence. " : ""}{graph ? microsoftRsvpNotice : caldav ? caldavRsvpNotice : providerRsvpNotice}</Text>
         {notice ? <Text accessibilityLiveRegion="polite" style={copy}>{notice}</Text> : <>
@@ -47,8 +46,9 @@ export function ProviderRsvpEditor({ event, observation, onClose }: { event: Eve
         </>}
         <Btn label={notice ? (graph ? "Close Outlook response" : caldav ? "Close calendar response" : "Close Google response") : (graph ? "Cancel Outlook response" : caldav ? "Cancel calendar response" : "Cancel Google response")} variant="secondary" disabled={busy} onPress={close} />
       </ScrollView>
-    </View>
-    </View>
+
+
     <OptionPicker visible={picker} title={(caldav || graph) ? "Your response" : "Your Google response"} value={response} options={[...providerRsvpOptions]} onClose={() => setPicker(false)} onSelect={value => { setResponse(value); setPicker(false); }} />
-  </ModalPortal>;
+   </BottomSheetFrame>
+    </ModalPortal>;
 }

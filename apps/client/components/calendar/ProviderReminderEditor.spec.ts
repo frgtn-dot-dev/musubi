@@ -2,6 +2,8 @@ import { ProviderReminderEditor } from "./ProviderReminderEditor";
 import { beforeEach, expect, it, vi } from "vitest";
 import { isValidElement, type ReactNode } from "react";
 import { EventSchema, type ProviderEventStateResponse } from "@musubi/types";
+vi.mock("@/hooks/useModalAnimation", () => ({ useModalAnimation: (_visible: boolean, close: () => void) => ({ handleClose: close }) }));
+vi.mock("@/components/ui/BottomSheetFrame", () => ({ BottomSheetFrame: "BottomSheetFrame" }));
 const h = vi.hoisted(() => ({ slots: [] as any[], index: 0, save: vi.fn(), close: vi.fn() }));
 vi.mock("react", async original => ({ ...(await original<typeof import("react")>()),
   useState: (initial: any) => { const index = h.index++; if (!(index in h.slots)) h.slots[index] = typeof initial === "function" ? initial() : initial; return [h.slots[index], (value: any) => { h.slots[index] = typeof value === "function" ? value(h.slots[index]) : value; }]; },
@@ -17,7 +19,7 @@ vi.mock("@/services/api", () => ({ useApi: () => ({ editProviderReminders: h.sav
 const event = EventSchema.parse({ id: "00000000-0000-4000-8000-000000000001", revision: 7, title: "Meeting", start: new Date("2026-09-10T09:00:00Z"), end: new Date("2026-09-10T10:00:00Z"), isAllDay: false, organizer: "owner", creatorID: "owner", color: "red", calendars: ["source"], hasAttendees: false, isCanceled: false });
 const observation: ProviderEventStateResponse = { version: "a".repeat(64), reminderEdit: { provider: "google", expectedRevision: 7 }, state: { provider: "google", organizer: null, isOrganizer: false, attendees: [], attendeesComplete: true, ownResponse: null, reminders: { provider: "google", useDefault: false, overrides: [{ method: "email", minutes: 30 }] }, availability: null, privacy: null, status: null, eventType: null, conferenceURLs: [] } };
 function render(value = event) { h.index = 0; return ProviderReminderEditor({ event: value, observation, onClose: h.close }); }
-function nodes(node: ReactNode): any[] { if (Array.isArray(node)) return node.flatMap(nodes); if (!isValidElement(node)) return []; const props = node.props as any; return [{ type: node.type, props }, ...nodes(props.children)]; }
+function nodes(node: ReactNode): any[] { if (Array.isArray(node)) return node.flatMap(nodes); if (!isValidElement(node)) return []; const props = node.props as any; return [{ type: node.type, props }, ...nodes(props.header), ...nodes(props.children)]; }
 function button(tree: ReactNode, label: string) { return nodes(tree).find(node => node.type === "Btn" && node.props.label === label)!.props; }
 function input(tree: ReactNode) { return nodes(tree).find(node => node.type === "TextInput")!.props; }
 async function settle() { for (let i = 0; i < 8; i++) await Promise.resolve(); }
