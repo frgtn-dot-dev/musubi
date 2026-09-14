@@ -146,3 +146,30 @@ it("allows CalDAV discovery and initial import to outlast an ordinary request", 
   await vi.advanceTimersByTimeAsync(15_000);
   expect(await outcome).toBe("connected");
 });
+
+
+it("preserves explicit-time create and refuses a legacy copy on home and federation", async () => {
+  const { EventSchema } = await import("@musubi/types");
+  const { resolveEventTimeEdit } = await import("@musubi/calendar");
+  const { createEvent, forkEvent } = await import("./resources");
+  const time = { kind: "zoned" as const, timeZone: "Europe/Prague", startLocal: "2026-10-25T02:15:00.000", endLocal: "2026-10-25T03:15:00.000" };
+  const event = EventSchema.parse({ ...resolveEventTimeEdit(time), id: "00000000-0000-4000-8000-000000000018", revision: 3, title: "Fold", color: "red", creatorID: "owner", organizer: "owner", calendars: ["00000000-0000-4000-8000-000000000019"], isCanceled: false });
+  const fetch = vi.fn<(url: RequestInfo | URL, options?: RequestInit) => Promise<Response>>(async () => new Response(JSON.stringify(event), { status: 201, headers: { "content-type": "application/json" } }));
+  vi.stubGlobal("fetch", fetch);
+  for (const connection of [undefined, "connection"]) {
+    const prefix = connection ? "/api/v1/federation/s/connection/api/v1" : "/api/v1";
+    const created = await createEvent({ ...event, timeEdit: time }, connection);
+    const [url, options] = fetch.mock.calls.at(-1)!;
+    expect(url).toBe(`${prefix}/events/time`);
+    expect(JSON.parse(options!.body as string)).toMatchObject({ time, event: { id: event.id, calendars: event.calendars } });
+    expect(JSON.parse(options!.body as string).event).not.toHaveProperty("start");
+    expect(created.timeModel).toEqual(event.timeModel);
+    const count = fetch.mock.calls.length;
+    expect(() => createEvent(event, connection)).toThrow(/time-model-aware copy/);
+    expect(fetch).toHaveBeenCalledTimes(count);
+    await forkEvent(event.id, event.revision!, event.calendars[0], connection);
+    const [forkUrl, forkOptions] = fetch.mock.calls.at(-1)!;
+    expect(forkUrl).toBe(`${prefix}/events/${event.id}/fork`);
+    expect(JSON.parse(forkOptions!.body as string)).toEqual({ calendarID: event.calendars[0], expectedRevision: 3 });
+  }
+});

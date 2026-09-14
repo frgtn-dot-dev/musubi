@@ -1,5 +1,10 @@
 # K10 acceptance — časový model a identita výskytu
 
+> Aktualizace 2026-09-14: vlastník schválil aktivaci v dosud nevydané 0.1.8.
+> Historické požadavky níže na verzi novější než 0.1.8 nahrazuje
+> [aktuální aktivační plán](../releases/core-0.1.8-activation.md); produkční guard
+> nově vyžaduje kompatibilní produkt i klientská/peer minima alespoň 0.1.8.
+
 K10 uzavírá implementaci lokálního časového modelu, identity a společných konzumentů. Produkční aktivace a release nejsou součástí tohoto převzetí. K11–K15 zůstávají otevřené. Historické checkpointy v implementačním plánu popisují stav při jednotlivých PR; následující matice je aktuální souhrn.
 
 ## Převzaté chování a důkazy
