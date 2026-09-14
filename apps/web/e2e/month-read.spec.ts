@@ -8384,7 +8384,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
   await page.getByRole("button", { name: /Gap appointment/ }).click();
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(page.getByLabel("Start time", { exact: true })).toHaveValue("02:30");
-  await expect(page.getByText("Europe/Prague", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("When", { exact: true }).getByText("Europe/Prague", { exact: true })).toBeVisible();
   await page.getByRole("textbox", { name: "Event title" }).fill("Saved civil draft");
   // The existing control carries the displayed duration when moving the start.
   await page.getByLabel("Start time", { exact: true }).fill("03:00");
@@ -8533,10 +8533,8 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
     await page.getByRole("button", { name: "More options" }).click();
     await page.getByRole("combobox", { name: "Time model", exact: true }).click();
     await page.getByRole("option", { name: "Event time zone", exact: true }).click();
-    await page.getByRole("button", { name: "Create", exact: true }).click();
-    await expect(page.getByRole("alert")).toContainText("Enter a valid event time zone");
+    await expect(page.getByRole("combobox", { name: "Event time zone", exact: true })).toHaveAttribute("value", "Europe/Prague");
     expect(writes).toHaveLength(0);
-    await chooseTimeZone(page.getByRole("combobox", { name: "Event time zone", exact: true }), "Europe/Prague");
     await page.getByRole("button", { name: "Create", exact: true }).click();
     await expect(page.getByRole("alert")).toContainText("Explicit time creation is not enabled");
     await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue("New civil event");
@@ -10004,7 +10002,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (con
     if (action === "delete") await expect(editor.getByRole("button", { name: "Save and notify guests" })).toHaveCount(0);
     if (action === "update") await expect(editor.getByRole("button", { name: "Cancel meeting and notify guests" })).toHaveCount(0);
     if (action !== "create") await expect(editor.getByLabel("Start", { exact: true })).toHaveCount(0);
-    else { await expect(editor.getByRole("combobox", { name: "Event time zone" })).toHaveAttribute("value", "UTC"); await expect(editor.getByRole("combobox", { name: "Event time zone" })).toBeEnabled(); }
+    else { await expect(editor.getByRole("combobox", { name: "Event time zone" })).toHaveAttribute("value", "Europe/Prague"); await expect(editor.getByRole("combobox", { name: "Event time zone" })).toBeEnabled(); }
     if (action === "update") await editor.getByRole("textbox", { name: "Notes", exact: true }).fill("New explicit note");
     await expectNoAccessibilityViolations(page); expect(await editor.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
     await expectOrganizerPaintedAbovePopover(editor);
@@ -10170,7 +10168,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await page.getByRole("button", { name: "Calendars", exact: true }).click();
     const trigger = page.getByRole("button", { name: "Create Outlook meeting", exact: true }); await trigger.click();
     const editor = page.getByRole("dialog", { name: "Create meeting", exact: true });
-    await expect(editor.getByRole("combobox", { name: "Event time zone" })).toHaveAttribute("value", "UTC");
+    await expect(editor.getByRole("combobox", { name: "Event time zone" })).toHaveAttribute("value", "Europe/Prague");
     await expect(editor.getByRole("combobox", { name: "Event time zone" })).toBeEnabled();
     await editor.getByRole("textbox", { name: "Title", exact: true }).fill("Guest planning");
     await editor.getByRole("textbox", { name: "Guest email addresses" }).fill("owner@example.test");

@@ -95,14 +95,14 @@ export function Toolbar({
           >
             <MenuIcon aria-hidden="true" size={18} strokeWidth={1.6} />
           </IconButton>
-          <Button
+          {activeView !== "tasks" ? <Button
             className={styles.todayButton}
             size="compact"
             variant="secondary"
             onClick={onToday}
           >
             Today
-          </Button>
+          </Button> : null}
           {periodNavigation && !narrow ? (
             <div className={styles.navPair}>
               <IconButton

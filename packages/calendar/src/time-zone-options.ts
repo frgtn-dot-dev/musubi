@@ -6,5 +6,5 @@ export function timeZoneOptions(current = "") {
   const local = Intl.DateTimeFormat().resolvedOptions().timeZone;
   return [...new Set(["UTC", local, current, ...IANA_TIME_ZONES, ...zones].filter(Boolean))]
     .sort((a, b) => a === "UTC" ? -1 : b === "UTC" ? 1 : a.localeCompare(b))
-    .map(value => ({ value, label: value.replaceAll("_", " ") }));
+    .map(value => ({ value, label: value.replace(/_/g, " ") }));
 }
