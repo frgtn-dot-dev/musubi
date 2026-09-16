@@ -2,16 +2,16 @@
 
 <div align="center">
 
-<img src=".github/assets/icon.png" alt="Musubi icon" width="96" style="border-radius: 22px" />
+<img src=".github/assets/icon.svg" alt="Musubi icon" width="96" />
 
 # Musubi <sub><em>結び</em></sub>
 
 **Your people. Your events. One knot.**
 
-*The open-source, self-hostable calendar built for sharing — not just storing — your time.*
+*An open-source, self-hostable calendar for shared events, meetings, and tasks.*
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-e8e4d9?labelColor=0c0c0e)](LICENSE)
-[![Built with Expo](https://img.shields.io/badge/Expo-SDK%2056-c8553d?labelColor=0c0c0e&logo=expo&logoColor=e8e4d9)](https://expo.dev)
+[![Built with Expo](https://img.shields.io/badge/Expo-React%20Native-c8553d?labelColor=0c0c0e&logo=expo&logoColor=e8e4d9)](https://expo.dev)
 [![Self-hostable](https://img.shields.io/badge/self--host-your%20data-a8b5a0?labelColor=0c0c0e)](#run-it-yourself)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-7a8ba3?labelColor=0c0c0e)](#contributing)
 
@@ -25,56 +25,47 @@
 
 ## Why Musubi?
 
-Every calendar app treats **sharing as an afterthought**. Google Calendar locks your family into Google. Apple locks them into Apple. CalDAV apps sync, but sharing means emailing `.ics` attachments like it's 2009. And planning something with friends? That somehow still belongs to Facebook.
+Musubi brings shared calendars, events, and tasks into one place, with a desktop web client and a native mobile app. Connect existing calendars or host a server of your own.
 
-**Musubi** (結び — *the knot*) starts from the other end: **the people come first, the events tie you together.**
+- **Share an event across calendars.** Link the same event to several Musubi calendars, so the people involved see one shared event. Calendar roles and event ownership determine who can edit it.
+- **Keep different parts of life together.** Create pages for work, family, or personal plans, with their own calendar and item-type filters.
+- **Choose where your data lives.** Run the web client and API yourself with Docker. The source is MIT-licensed.
 
-- **Events are freed from calendars.** An event isn't trapped in one calendar — link it into your partner's, your team's, your friends'. One dinner, visible everywhere it matters, edited once.
-- **One node for your whole life.** Work, family, relationship, friends — separate calendars, separate people, one unified view. Your external Google, Outlook, Apple / iCloud, and CalDAV events flow in and out through two-way sync.
-- **Your server, your data.** Self-host the whole thing with Docker, or use it hosted. No ads, no profile building, MIT-licensed.
+Musubi (結び) means *a knot or connection* — the idea behind bringing people and their plans together.
 
-Nobody else is building exactly this: **an open calendar designed as social infrastructure, without being a social network.**
+## What it does
 
-<div align="center">
-<img src=".github/assets/phone.svg" alt="Musubi month view with the quick composer" width="300" />
-
-<sub>Month view with the docked quick-composer — zen ink-on-paper theme, light & dark.</sub>
-</div>
-
-## What it does today
-
-| | Feature | Details |
-| --- | --- | --- |
-| 結 | **Shared calendars** | Invite via link, roles (owner / editor / viewer), ownership transfer, live membership |
-| 空 | **Events beyond calendars** | One event in many calendars — link it, fork it, or keep it yours; the origin calendar governs editing |
-| 繋 | **Two-way external sync** | Google Calendar, Outlook / Microsoft 365, Apple / iCloud, and any CalDAV server — including recurring events *with exceptions*, read-only detection, multiple accounts |
-| 速 | **Realtime** | Changes appear on everyone's device instantly (Server-Sent Events), with an offline-tolerant delta cache underneath |
-| 月 | **A calendar UI built from scratch** | Month → day zoom animation, drag-to-create with grab handles, docked quick-composer — Google Calendar fluency, none of the Google |
-| 侘 | **Zen aesthetic** | Sumi ink on night / ink on washi paper, spring physics, deliberate haptics, kanji accents |
-| 鈴 | **Notifications** | Local reminders that survive edits, moves, and recurrence — even for synced events |
-| 卓 | **Android home-screen widgets** | Scrollable Agenda + adaptive month Calendar; recurring occurrences, deep-linked event/day detail, per-widget calendar filters, and light/dark themes |
-| 網 | **Desktop web client** | Month, week and agenda planning; event, calendar, account and page administration; the phone-sized web UI hands off to the native app |
-| 家 | **Self-hosting** | `docker-compose.yml` for the whole stack — web client and API on one origin behind a gateway, HTTPS included — or `docker-compose.api.yml` for the API alone |
-
-### Sync providers
-
-| Provider | Status |
+| Feature | Details |
 | --- | --- |
-| Google Calendar | Two-way |
-| Apple / iCloud | Two-way (CalDAV) |
-| Any CalDAV server (Nextcloud, Radicale, Fastmail…) | Two-way |
-| Outlook / Microsoft 365 | Two-way (Microsoft Graph) |
+| **Shared calendars** | Invite links, owner/editor/viewer roles, ownership transfer, and live membership updates |
+| **Events across calendars** | Link one event into multiple Musubi calendars, or make an independent copy |
+| **Calendar views** | Day, week, month, and agenda on desktop web; date and time pickers, drag-to-create, and side-panel editing |
+| **Tasks** | Status, priority, dates, and recurrence; list and Kanban layouts on web, with tasks also shown in calendar views when dated |
+| **Meetings** | Attendee and invitation details; provider-supported RSVP and organizer editing when enabled on the server |
+| **Personal pages** | Choose calendars and independently show events, tasks, and meetings |
+| **External sync** | Google Calendar, Microsoft Outlook, and CalDAV connections, including iCloud; multiple accounts, recurrence, and read-only calendars |
+| **Live updates** | Changes within Musubi arrive over Server-Sent Events; external calendars synchronize separately through provider polling |
+| **Mobile reminders and widgets** | Local reminders and Android agenda/month home-screen widgets, with calendar filters and light/dark themes |
+| **Self-hosting** | Docker Compose for the full web/API stack, an API-only setup, and a Dokploy configuration |
 
-## Where it's going
+### Provider support
 
-The mobile app, desktop web client, and self-hostable server are the foundation. The bigger picture:
+| Provider | Events | Tasks |
+| --- | --- | --- |
+| Google | Google Calendar | Google Tasks, with separate optional authorization |
+| Microsoft | Outlook / Microsoft 365 | Microsoft To Do, with separate optional authorization |
+| Apple / iCloud | CalDAV calendars | Depends on the task collections exposed by the server |
+| Other CalDAV servers | Supported calendar collections | Collections that support VTODO |
 
-- **Realtime provider push** — webhook-driven sync from Google/Outlook instead of polling (design done, see docs).
-- **Further out** — email notifications and reminders.
+Sync capabilities depend on the provider, permissions, and item type. A meeting you attend does not have the same editing permissions as one you organize. Some provider writes and Google free/busy availability are separately enabled by the server administrator; they are not all on by default. See the [sync documentation](https://musubi.pro/docs/architecture/sync/) and [activation guide](docs/releases/core-0.2.0-activation.md).
 
-Full backlog on the public [feedback and roadmap board](https://feedback.musubi.pro).
+> **Pre-1.0 and actively developing.** This README describes the current source branch; published app and server releases may lag behind it. Google Tasks authorization is still awaiting Google verification for the hosted project. Expect rough edges and [report issues](https://feedback.musubi.pro).
 
-> **Status: early.** Musubi is pre-1.0 and moving fast. It already runs daily on real devices, but expect sharp edges — and please [report them](https://feedback.musubi.pro).
+## What's next
+
+Current work focuses on provider compatibility, reliable meeting and task workflows, and polishing the web and mobile clients. Provider push notifications are a future extension to the current polling model.
+
+Follow the public [feedback and roadmap board](https://feedback.musubi.pro) for requests and priorities.
 
 ## Try it
 
@@ -82,7 +73,7 @@ Full backlog on the public [feedback and roadmap board](https://feedback.musubi.
   <img alt="Get it on Google Play" src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" height="64" />
 </a>
 
-iOS remains in testing; the current public download is on Google Play.
+**iOS beta:** [Join on TestFlight](https://testflight.apple.com/join/EqzdPVfC). iOS is available for testing; it is not a general App Store release yet.
 
 ## Run it yourself
 
@@ -107,7 +98,8 @@ The client uses custom native modules, so it needs a development build rather th
 
 | Layer | Tech |
 | --- | --- |
-| Mobile client | React Native 0.85 · Expo SDK 56 · Expo Router · Zustand · Reanimated · custom calendar engine (`apps/client/components/cal`) · native Android `RemoteViews` widgets bridged through a local Expo module |
+| Mobile client | React Native · Expo · Expo Router · Zustand · Reanimated · custom calendar engine (`apps/client/components/cal`) · native Android `RemoteViews` widgets bridged through a local Expo module |
+| Web client | React · TanStack Router/Query · Vite · Radix primitives |
 | Server | Express 5 · [Better Auth](https://www.better-auth.com/) · Zod · Server-Sent Events |
 | Data | Postgres · [Drizzle ORM](https://orm.drizzle.team/) · SQLite on-device cache with delta sync |
 | Sync engine | Provider-agnostic adapter interface (`CalendarAdapter`) — Google + Microsoft + CalDAV today, yours tomorrow |
@@ -115,7 +107,7 @@ The client uses custom native modules, so it needs a development build rather th
 
 ```text
 apps/
-  api/         Express server — auth, calendars, events, sync engine
+  api/         Express server — auth, calendars, events, tasks, sync engine
   client/      Expo / React Native app — the custom calendar UI
   web/         TanStack web client — desktop calendar and public pages
 packages/

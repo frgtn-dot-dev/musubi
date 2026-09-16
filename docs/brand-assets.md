@@ -112,13 +112,13 @@ every email keeps the old mark.
 
 | Where | Asset |
 | --- | --- |
-| `README.md:5` | `.github/assets/icon.png` |
-| `README.md:20` | `.github/assets/banner.svg` |
-| `README.md:39` | `.github/assets/phone.svg` — a UI preview, no mark in it |
+| `README.md` | `.github/assets/icon.svg` — copy of the current web favicon |
+| `README.md` | `.github/assets/banner.svg` — current mark and text lockup |
 
-`banner.svg` **draws the mark and the wordmark in code**: `<circle>` elements for
-the rings, a 結 glyph, and "Musubi" set in Georgia as live text. There is no file
-to swap here — changing the logo means editing SVG geometry.
+The README icon is copied from `apps/web/public/favicon.svg`. The banner embeds
+that file's two mark paths directly so GitHub can render a self-contained SVG.
+When the source mark changes, update both assets. The old phone illustration is
+no longer displayed in the README.
 
 ## Store listings
 
