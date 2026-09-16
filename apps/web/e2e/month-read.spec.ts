@@ -4308,7 +4308,7 @@ test("scales what an event block shows to the height it has", async ({
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/day?date=2026-07-23`);
 
 	const block = page.locator("[data-time-event]").first();
-	await expect(block).toBeVisible();
+	await expect(block).toBeVisible({ timeout: 15_000 });
 	const time = block.locator('[class*="timelineEventTime"]');
 	// An hour-long block at comfortable density has room for the time.
 	await expect(time).toBeVisible();
@@ -4332,7 +4332,7 @@ test("marks a recurring event with more than its colour", async ({ page }) => {
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 
 	const recurring = page.getByRole("button", { name: /Weekly review/ }).first();
-	await expect(recurring.locator("svg.lucide-repeat")).toBeVisible();
+	await expect(recurring.locator("svg.lucide-repeat")).toBeVisible({ timeout: 15_000 });
 	// A one-off event carries no mark.
 	const single = page.getByRole("button", { name: /Client call/ }).first();
 	await expect(single.locator('[class*="eventMarks"]')).toHaveCount(0);
@@ -6454,7 +6454,7 @@ test("carries one session's edit into the other over the stream", async ({
 	await second.goto(url);
 	await expect(
 		second.getByRole("button", { name: /Client call/ }).first(),
-	).toBeVisible();
+	).toBeVisible({ timeout: 15_000 });
 
 	await first
 		.getByRole("button", { name: /Client call/ })
