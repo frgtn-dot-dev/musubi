@@ -73,7 +73,7 @@ Follow the public [feedback and roadmap board](https://feedback.musubi.pro) for 
   <img alt="Get it on Google Play" src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" height="64" />
 </a>
 
-iOS remains in testing; the current public download is on Google Play.
+**iOS beta:** [Join on TestFlight](https://testflight.apple.com/join/EqzdPVfC). iOS is available for testing; it is not a general App Store release yet.
 
 ## Run it yourself
 
