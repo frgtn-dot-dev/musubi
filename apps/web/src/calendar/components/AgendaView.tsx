@@ -1,6 +1,6 @@
 import { isCalendarTask } from "@musubi/calendar";
-import type { Calendar, Event, Settings } from "@musubi/types";
-import { ChevronRight, MapPin } from "lucide-react";
+import { providerFlavor, type Calendar, type Event, type Settings } from "@musubi/types";
+import { MapPin } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
 	AGENDA_FREE_DAYS_MIN,
@@ -18,7 +18,8 @@ import {
 	EventDetailsPopover,
 	type EventActionHandlers,
 } from "./EventDetailsPopover";
-import styles from "./workspace.module.css";
+import { AccountMark } from "./ProviderIcon";
+import styles from "./AgendaView.module.css";
 
 type AgendaViewProps = EventActionHandlers & {
 	anchor: Date;
@@ -28,16 +29,8 @@ type AgendaViewProps = EventActionHandlers & {
 	weekStartsOn: Settings["weekStartsOn"];
 };
 
-const dayFormatter = new Intl.DateTimeFormat("en", {
-	day: "numeric",
-	month: "short",
-	weekday: "long",
-});
-const relativeDateFormatter = new Intl.DateTimeFormat("en", {
-	day: "numeric",
-	month: "short",
-});
-
+const weekdayFormatter = new Intl.DateTimeFormat("en", { weekday: "long" });
+const shortMonthFormatter = new Intl.DateTimeFormat("en", { month: "short" });
 const monthFormatter = new Intl.DateTimeFormat("en", { month: "long" });
 
 export function AgendaView({
@@ -163,23 +156,16 @@ export function AgendaView({
 								data-agenda-date={group.key}
 							>
 								<time className={styles.agendaDate} dateTime={group.key}>
-									{relative ? (
-										<>
-											<strong>{relative}</strong>
-											<span>{relativeDateFormatter.format(group.date)}</span>
-										</>
-									) : (
-										dayFormatter.format(group.date)
-									)}
+                  <strong>{group.date.getDate()}</strong>
+                  <span>{weekdayFormatter.format(group.date)}</span>
+                  <small>{relative || shortMonthFormatter.format(group.date)}</small>
 								</time>
 								<div className={styles.agendaEvents}>
 									{group.items.map((event) => {
 										const calendar = calendarsById.get(eventHomeCalendarId(event) ?? "");
 										const eventColor = calendar?.color ?? event.color;
-										const rangeLabel = getEventRangeLabel(event, timeFormat).replace(
-											" – ",
-											"–",
-										);
+                    const rangeLabel = getEventRangeLabel(event, timeFormat);
+                    const [starts, ends] = rangeLabel.split(" – ");
 
 										return (
 											<EventDetailsPopover
@@ -204,38 +190,20 @@ export function AgendaView({
 													)}, ${calendar?.name ?? "calendar"}`}
 													data-agenda-event={event.id}
 												>
-													<span className={styles.agendaEventTime}>{rangeLabel}</span>
+													<span className={styles.agendaEventTime}><strong>{starts}</strong>{ends ? <span>{ends}</span> : null}</span>
 													<span
 														className={styles.agendaEventRule}
 														style={{ backgroundColor: eventColor }}
 													/>
 													<span className={styles.agendaEventCopy}>
 														<span className={styles.agendaEventTitle}>{isCalendarTask(event) && event.calendarTask.status === "completed" ? <s>{event.title}</s> : event.title}</span>
-														{/* Only what this event actually has: an agenda row
-                                with empty slots reads as missing data. */}
-														{event.location ? (
-															<span className={styles.agendaEventWhere}>
-																<MapPin aria-hidden="true" size={12} strokeWidth={1.6} />
-																{event.location}
-															</span>
-														) : null}
-													</span>
-													{/* Always the cell, even when there is nothing to put in it:
-													    EventMarks renders null for a plain event, and a missing
-													    grid item slid the calendar name and the chevron a whole
-													    column left on every one of those rows. */}
-													<span className={styles.agendaEventMarks}>
-														<EventMarks event={event} />
-													</span>
-													<span className={styles.agendaEventCalendar}>
-														{calendar?.name ?? "Calendar"}
-													</span>
-													<ChevronRight
-														className={styles.agendaEventChevron}
-														aria-hidden="true"
-														size={14}
-														strokeWidth={1.4}
-													/>
+                          <span className={styles.agendaEventMeta}>
+                            <span><AccountMark flavor={calendar ? providerFlavor(calendar) : null} color={eventColor} size="compact" />{calendar?.name ?? "Calendar"}</span>
+                            {event.location ? <><span aria-hidden="true">·</span><span><MapPin aria-hidden="true" size={13} />{event.location}</span></> : null}
+                            {isCalendarTask(event) ? <><span aria-hidden="true">·</span><span>{event.calendarTask.status === "completed" ? "Completed task" : "Task"}</span></> : null}
+                            <EventMarks event={event} />
+                          </span>
+                        </span>
 												</button>
 											</EventDetailsPopover>
 										);

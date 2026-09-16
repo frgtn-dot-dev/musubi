@@ -1,3 +1,4 @@
+import { DateFormatContext } from "~/ui/DatePicker";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { type RefObject, useRef } from "react";
 import { DEFAULT_CALENDAR_COLOR } from "@musubi/types";
@@ -147,7 +148,7 @@ function NewEventForm({
   }
 
   return (
-    <EventEditorForm
+    <DateFormatContext.Provider value={settings?.dateFormat ?? "dmy"}><EventEditorForm
       calendars={calendars}
       localAccountName={user?.name || user?.email}
       initialValues={initialValues}
@@ -165,6 +166,6 @@ function NewEventForm({
       timeFormat={settings?.timeFormat ?? "24h"}
       titleRef={titleRef}
       weekStartsOn={settings?.weekStartsOn ?? "monday"}
-    />
+    /></DateFormatContext.Provider>
   );
 }

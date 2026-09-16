@@ -27,8 +27,8 @@ export function focusMovedToAnotherLayer(target: EventTarget | null): boolean {
  * `data-state` matters: a dismissed layer stays in the document while it animates
  * out, and by then the press it is closing for has already been handled.
  *
- * Persistent desktop editors stay interactive beside the grid, so their presence is
- * not a dismissal. Modal inspectors and their nested pickers still count.
+ * Every open inspector counts: the first background press dismisses it rather
+ * than starting another calendar gesture. Draft handles have their own drag path.
  * Dialogs count. A modal overlay swallows the press that closes it, but React
  * has removed the overlay by the time the *click* is dispatched, so the click
  * lands on whatever the overlay was covering — the grid, which creates from it.
@@ -38,7 +38,7 @@ function layerOpen(): boolean {
 
   return Boolean(
     document.querySelector(
-      '[data-ui="popover-content"][data-state="open"], [data-ui="menu-content"][data-state="open"], [role="dialog"][data-state="open"]:not([data-inspector-persistent]), [data-ui="inspector"][aria-modal="true"][data-state="open"]',
+      '[data-ui="popover-content"][data-state="open"], [data-ui="menu-content"][data-state="open"], [role="dialog"][data-state="open"]',
     ),
   );
 }

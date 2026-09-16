@@ -44,7 +44,7 @@
   --event-radius: 6px;
 
   --sidebar-width: 244px;
-  /* One width for the object inspector and the workspace space it reserves. */
+  /* Shared width for the desktop object inspector overlay. */
   --inspector-width: 480px;
   --toolbar-height: 132px;
   --date-header-height: 48px;

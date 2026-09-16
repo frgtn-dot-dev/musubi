@@ -1,4 +1,5 @@
 import { TaskEditorModal } from "@/components/tasks/TaskEditorModal";
+import { spacing, typeSizes } from "@musubi/design-system";
 import { uuidv7 } from "uuidv7";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { taskPriorityLabel, formatTaskDate } from "@/lib/taskPresentation";
@@ -84,29 +85,29 @@ export default function TasksTab() {
       </Tap>
     </View>
     <CalendarFilterBar calendars={taskCalendars} activeCals={activeCals} soloCalId={soloCalId} onToggle={toggleCal} onSolo={soloCalendar} />
-    <View accessibilityRole="tablist" style={{ flexDirection: "row", marginHorizontal: 16, marginTop: 8, marginBottom: 8, padding: 4, borderRadius: 16, backgroundColor: colors.bg1, borderWidth: 1, borderColor: colors.line }}>
+    <View accessibilityRole="tablist" style={{ flexDirection: "row", paddingHorizontal: spacing[2], backgroundColor: colors.bg1, borderBottomWidth: 1, borderBottomColor: colors.line }}>
       {phases.map(phase => <Tap key={phase.value} accessibilityRole="tab" accessibilityLabel={`${phase.label}, ${filtered.filter(task => task.status === phase.value).length} tasks`} accessibilityState={{ selected: phaseFilter === phase.value }}
-        onPress={() => setPhaseFilter(phase.value)} style={{ flex: 1, minHeight: 52, paddingVertical: 7, alignItems: "center", justifyContent: "center", gap: 5, borderRadius: 12, backgroundColor: phaseFilter === phase.value ? colors.bg3 : "transparent" }}>
+        onPress={() => setPhaseFilter(phase.value)} scaleTo={1} style={{ flex: 1, minHeight: 52, paddingVertical: spacing[2], alignItems: "center", justifyContent: "center", gap: spacing[1], borderBottomWidth: 2, borderBottomColor: phaseFilter === phase.value ? colors.fg3 : "transparent" }}>
         <Feather name={phase.icon} size={16} color={phaseFilter === phase.value ? colors.fg : colors.fg3} />
-        <Text style={{ fontFamily: fonts.sansMedium, fontSize: 10, color: phaseFilter === phase.value ? colors.fg : colors.fg3 }}>{phase.label}</Text>
+        <Text style={{ fontFamily: fonts.sans, fontSize: typeSizes[11], color: phaseFilter === phase.value ? colors.fg : colors.fg3 }}>{phase.label}</Text>
       </Tap>)}
     </View>
-    <ScrollView key={phaseFilter} contentContainerStyle={{ padding: 16, paddingBottom: 32, gap: 24 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}>
+    <ScrollView key={phaseFilter} contentContainerStyle={{ paddingHorizontal: spacing[4], paddingTop: spacing[1], paddingBottom: 96, gap: spacing[4] }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}>
       {error ? <Text accessibilityRole="alert" style={{ color: colors.fg2 }}>{error}</Text> : null}
       {!filtered.some(task => task.status === phaseFilter) && !refreshing && !error ? <Empty kanji="静" text="No tasks in this view" /> : null}
       {phases.filter(phase => phase.value === phaseFilter).map(phase => {
         const items = filtered.filter(task => task.status === phase.value);
         if (!items.length) return null;
-        return <View key={phase.value} style={{ gap: 10 }}>
-          {items.map(task => {
+        return <View key={phase.value}>
+          {items.map((task, index) => {
             const calendar = calendars.find(cal => cal.id === task.calendarID);
             const editable = can(calendar?.role, "editTasks") && (!calendar?.provider || calendar.supportsTasks === true);
-            return <View key={task.id} style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.bg1 }}>
+            return <View key={task.id} style={{ flexDirection: "row", alignItems: "center", gap: spacing[2], paddingVertical: spacing[3], borderBottomWidth: index < items.length - 1 ? 1 : 0, borderBottomColor: colors.line }}>
               <Tap disabled={!editable || !!saving} accessibilityLabel={`Change status of ${task.title}, ${phase.label}`} onPress={() => setSelected(task)} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
                 {saving === task.id ? <ActivityIndicator color={colors.fg3} /> : <Feather name={phase.icon} size={21} color={colors.fg3} />}
               </Tap>
-              <Tap onPress={() => setDetailId(task.id)} accessibilityLabel={`Open task: ${task.title}`} style={{ flex: 1, gap: 7, minHeight: 44, justifyContent: "center" }}>
-                <Text style={{ fontFamily: fonts.sansMedium, fontSize: 15, color: colors.fg, textDecorationLine: task.status === "completed" ? "line-through" : "none" }}>{task.title}</Text>
+              <Tap onPress={() => setDetailId(task.id)} accessibilityLabel={`Open task: ${task.title}`} scaleTo={1} style={{ flex: 1, gap: spacing[1], minHeight: 44, justifyContent: "center" }}>
+                <Text style={{ fontFamily: fonts.sans, fontSize: typeSizes[15], color: task.status === "completed" || task.status === "cancelled" ? colors.fg3 : colors.fg, textDecorationLine: task.status === "completed" ? "line-through" : "none" }}>{task.title}</Text>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <ProviderIcon provider={calendar ? providerFlavor(calendar) : undefined} color={calendar?.color ?? colors.fg3} />
                   <Text style={{ flexShrink: 1, fontFamily: fonts.sans, fontSize: 12, color: colors.fg3 }}>{calendar?.name ?? "Calendar"}{task.due ? ` · ${formatTaskDate(task.due, task.isAllDay, dateFormat, timeFormat)}` : ""}</Text>
@@ -135,7 +136,7 @@ export default function TasksTab() {
       setPhaseFilter(saved.status);
       if (!activeCals.has(saved.calendarID)) toggleCal(saved.calendarID);
     }} /> : null}
-    {detail ? <TaskDetailModal key={detail.id} task={detail} calendar={detailCalendar} editable={detailEditable} busy={!!saving} onSaved={saved => { request.current++; setTasks(current => saved ? current.map(item => item.id === saved.id ? saved : item) : current.filter(item => item.id !== detail.id)); }} onClose={() => setDetailId(undefined)} onStatus={status => void changeTask(detail, { status })} onPriority={priority => void changeTask(detail, { priority })} /> : null}
+    {detail ? <TaskDetailModal key={detail.id} task={detail} relatedTask={tasks.find(item => item.id === detail.relatedTo)} onOpenRelated={setDetailId} calendar={detailCalendar} editable={detailEditable} busy={!!saving} onSaved={saved => { request.current++; setTasks(current => saved ? current.map(item => item.id === saved.id ? saved : item) : current.filter(item => item.id !== detail.id)); }} onClose={() => setDetailId(undefined)} onStatus={status => void changeTask(detail, { status })} onPriority={priority => void changeTask(detail, { priority })} /> : null}
     <OptionPicker visible={!!selected} title="Task status" options={phases} value={selected?.status} onSelect={value => void changeTask(selected, { status: value as TaskStatus })} onClose={() => setSelected(undefined)} />
   </View>;
 }

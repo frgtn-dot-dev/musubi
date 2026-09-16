@@ -1,7 +1,8 @@
+import { Popover, PopoverContent, PopoverTrigger } from "~/ui/Popover";
 import type { Settings } from "@musubi/types";
 import { getMonthGrid } from "@musubi/calendar/layout";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Button, IconButton } from "~/ui/Button";
 import { SectionLabel } from "~/ui/SectionLabel";
 import { getLongDateLabel, getWeekdayLabels } from "../calendar-math";
@@ -24,6 +25,7 @@ const startOfMonth = (date: Date) =>
 export function MiniCalendar({
   anchor,
   showToday = false,
+  monthYearSelectors = false,
   label = "Jump to date",
   max,
   min,
@@ -32,6 +34,7 @@ export function MiniCalendar({
 }: {
   anchor: Date;
   showToday?: boolean;
+  monthYearSelectors?: boolean;
   label?: string;
   max?: string;
   min?: string;
@@ -45,6 +48,44 @@ export function MiniCalendar({
   const [seededFrom, setSeededFrom] = useState(() => monthKey(anchor));
   // Undefined focus means "follow the anchor" — the common case, and what a
   // paged month falls back to.
+  const [yearPickerOpen, setYearPickerOpen] = useState(false);
+  const [browsedYear, setBrowsedYear] = useState(anchor.getFullYear());
+  const minYear = min ? Number(min.slice(0, 4)) : 100;
+  const maxYear = max ? Number(max.slice(0, 4)) : 9999;
+  const yearWheelRef = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return;
+    let accumulated = 0;
+    let lastStep = -Infinity;
+    let lastEvent = -Infinity;
+    let lastDirection = 0;
+    let burstDistance = 0;
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey || event.deltaY === 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const now = performance.now();
+      const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 100 : 1);
+      const direction = Math.sign(delta);
+      // Pausing or reversing restores fine control immediately.
+      if (now - lastEvent > 180 || direction !== lastDirection) {
+        accumulated = 0;
+        burstDistance = 0;
+        lastStep = -Infinity;
+      }
+      lastDirection = direction;
+      burstDistance += Math.abs(delta);
+      lastEvent = now;
+      accumulated += delta;
+      const interval = burstDistance >= 500 ? 24 : burstDistance >= 300 ? 40 : burstDistance >= 160 ? 60 : 120;
+      if (Math.abs(accumulated) < 40 || now - lastStep < interval) return;
+      setBrowsedYear(year => Math.max(minYear, Math.min(maxYear, year + direction)));
+      accumulated = 0;
+      lastStep = now;
+    };
+    node.addEventListener("wheel", onWheel, { passive: false });
+    return () => node.removeEventListener("wheel", onWheel);
+  }, [minYear, maxYear]);
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [focused, setFocused] = useState<string>();
 
   function showMonth(next: Date) {
@@ -83,6 +124,15 @@ export function MiniCalendar({
       ? anchorKey
       : days.map(toDateKey).find((dateKey) => !unavailable(dateKey));
 
+  function changeYear(year: number) {
+    if (year < minYear || year > maxYear) return;
+    let nextMonth = month.getMonth();
+    if (min && year === Number(min.slice(0, 4))) nextMonth = Math.max(nextMonth, Number(min.slice(5, 7)) - 1);
+    if (max && year === Number(max.slice(0, 4))) nextMonth = Math.min(nextMonth, Number(max.slice(5, 7)) - 1);
+    showMonth(new Date(year, nextMonth, 1));
+    setYearPickerOpen(false);
+  }
+
   function focusDate(day: Date) {
     const dateKey = toDateKey(day);
     if (unavailable(dateKey)) return;
@@ -111,11 +161,68 @@ export function MiniCalendar({
           <ChevronLeft aria-hidden="true" size={15} strokeWidth={1.7} />
         </IconButton>
         <div className={styles.miniMonthActions}>
-        <SectionLabel className={styles.miniTitle}>
+        {monthYearSelectors ? <div className={styles.miniPeriodSelectors}>
+          <Popover open={monthPickerOpen} onOpenChange={setMonthPickerOpen}>
+            <PopoverTrigger asChild>
+              <Button className={styles.miniMonthTrigger} size="compact" variant="ghost" aria-label={`Month: ${month.toLocaleDateString("en", { month: "long" })}`}>
+                {month.toLocaleDateString("en", { month: "long" })}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="center" aria-label="Choose month" className={styles.monthPickerPopover}>
+              <div className={styles.monthPickerGrid}>
+                {Array.from({ length: 12 }, (_, index) => {
+                  const name = new Date(2026, index, 1).toLocaleDateString("en", { month: "long" });
+                  return <Button key={index} variant="ghost"
+                    aria-label={name} aria-pressed={index === month.getMonth()}
+                    disabled={Boolean((min && toDateKey(new Date(month.getFullYear(), index + 1, 0)) < min) || (max && toDateKey(new Date(month.getFullYear(), index, 1)) > max))}
+                    onClick={() => { showMonth(new Date(month.getFullYear(), index, 1)); setMonthPickerOpen(false); }}>
+                    <span className={styles.monthPickerContents}><span className={styles.monthPickerNumber}>{String(index + 1).padStart(2, "0")}</span>
+                    <span className={styles.monthPickerName}>{name}</span></span>
+                  </Button>;
+                })}
+              </div>
+            </PopoverContent>
+          </Popover>
+          <Popover open={yearPickerOpen} onOpenChange={(open) => {
+            if (open) setBrowsedYear(month.getFullYear());
+            setYearPickerOpen(open);
+          }}>
+            <PopoverTrigger asChild>
+              <Button className={styles.miniMonthTrigger} size="compact" variant="ghost"
+                aria-label={`Year: ${month.getFullYear()}`}>
+                {month.getFullYear()}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="center" aria-label="Choose year" className={styles.yearPickerPopover}>
+              <div className={styles.yearPickerRow} ref={yearWheelRef}>
+                <IconButton label="Previous year" size="compact"
+                  disabled={browsedYear <= minYear}
+                  onClick={() => setBrowsedYear(year => Math.max(minYear, year - 1))}>
+                  <ChevronLeft aria-hidden="true" size={16} />
+                </IconButton>
+                {[browsedYear - 1, browsedYear, browsedYear + 1].map((year, position) => (
+                  <Button key={position} variant="ghost"
+                    className={year === browsedYear ? styles.yearPickerCenter : styles.yearPickerNeighbor}
+                    aria-label={`Choose ${year}`}
+                    aria-pressed={year === month.getFullYear()}
+                    disabled={year < minYear || year > maxYear}
+                    onClick={() => changeYear(year)}>
+                    {year}
+                  </Button>
+                ))}
+                <IconButton label="Next year" size="compact"
+                  disabled={browsedYear >= maxYear}
+                  onClick={() => setBrowsedYear(year => Math.min(maxYear, year + 1))}>
+                  <ChevronRight aria-hidden="true" size={16} />
+                </IconButton>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div> : <SectionLabel className={styles.miniTitle}>
           {/* Short month: the toolbar already spells the period out in full,
               and this one has seven columns to fit. */}
           {month.toLocaleDateString("en", { month: "short", year: "numeric" })}
-        </SectionLabel>
+        </SectionLabel>}
       {showToday ? <Button className={styles.miniCalendarToday} size="compact" variant="ghost" disabled={unavailable(todayKey)} onClick={() => {
         showMonth(startOfMonth(new Date()));
         onDateChange(todayKey);

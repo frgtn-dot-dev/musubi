@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState, type ReactElement, type ReactNode } from "react";
+import { type ReactElement, type ReactNode } from "react";
 import { getServerOrigin } from "~/api/query-keys";
 import type { PageConfigV1 } from "@musubi/types";
 import { render as renderBase, screen, within } from "@testing-library/react";
@@ -103,6 +103,22 @@ describe("Workspace", () => {
       id: "my-calendar",
       name: "My calendar",
     });
+  });
+
+  it("saves item type switches in Page settings", async () => {
+    const user = userEvent.setup();
+    const onSavePage = vi.fn(async input => ({
+      page: { ...commonProps.pages[0]!, config: input.config, revision: 2 }, status: "saved" as const,
+    }));
+    render(<Workspace {...commonProps} onSavePage={onSavePage} />);
+    await user.click(screen.getByRole("button", { name: "Edit My calendar" }));
+    const dialog = within(screen.getByRole("dialog", { name: "Page settings" }));
+    await user.click(dialog.getByRole("switch", { name: "Events" }));
+    await user.click(dialog.getByRole("switch", { name: "Tasks" }));
+    await user.click(dialog.getByRole("button", { name: "Save" }));
+    expect(onSavePage).toHaveBeenCalledWith(expect.objectContaining({
+      config: expect.objectContaining({ filters: [{ type: "item-types", value: ["meetings"] }] }),
+    }));
   });
 
   it("switches views without drafting Page settings", async () => {
@@ -801,34 +817,19 @@ describe("Workspace", () => {
     expect(screen.getByRole("dialog", { name: "New task" })).not.toBeNull();
   });
 
-  it("preserves a task creation request across the first Tasks loading screen", async () => {
+  it.each(["month", "week", "agenda"] as const)("opens and reopens a task sidebar without leaving %s", async (activeView) => {
     const user = userEvent.setup();
-    function LoadingRoute() {
-      const [view, setView] = useState<"month" | "tasks">("month");
-      const [loading, setLoading] = useState(false);
-      const [taskCreateRequest, setTaskCreateRequest] = useState(0);
-      if (loading) return <button onClick={() => setLoading(false)}>Finish loading tasks</button>;
-      return (
-        <Workspace
-          {...commonProps}
-          activeView={view}
-          taskCreateRequest={taskCreateRequest}
-          onTaskCreateRequestChange={setTaskCreateRequest}
-          onViewChange={() => { setView("tasks"); setLoading(true); }}
-        />
-      );
+    const onViewChange = vi.fn();
+    render(<Workspace {...commonProps} activeView={activeView} onViewChange={onViewChange} />);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await user.click(screen.getByRole("button", { name: "Create event, meeting or task" }));
+      await user.click(screen.getByRole("menuitem", { name: "Task" }));
+      const editor = screen.getByRole("dialog", { name: "New task" });
+      expect(editor).not.toBeNull();
+      expect(onViewChange).not.toHaveBeenCalled();
+      await user.click(within(editor).getByRole("button", { name: "Close task editor" }));
+      expect(screen.queryByRole("dialog", { name: "New task" })).toBeNull();
     }
-    render(<LoadingRoute />);
-    await user.click(screen.getByRole("button", { name: "Create event, meeting or task" }));
-    await user.click(screen.getByRole("menuitem", { name: "Task" }));
-    expect(screen.queryByRole("dialog", { name: "New task" })).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Finish loading tasks" }));
-    expect(screen.getByRole("dialog", { name: "New task" })).not.toBeNull();
-    await user.click(within(screen.getByRole("dialog", { name: "New task" })).getByRole("button", { name: "Close task editor" }));
-    expect(screen.queryByRole("dialog", { name: "New task" })).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Create event, meeting or task" }));
-    await user.click(screen.getByRole("menuitem", { name: "Task" }));
-    expect(screen.getByRole("dialog", { name: "New task" })).not.toBeNull();
   });
 
   it("offers tasks but not events for a task-only calendar", async () => {
@@ -1009,7 +1010,7 @@ describe("Workspace", () => {
       screen.getByRole("textbox", { name: "Event title" }),
       "Studio time",
     );
-    await user.click(screen.getByRole("button", { name: "More options" }));
+    await user.click(screen.getByRole("button", { name: "Expand event editor" }));
 
     expect(onOpenFullEditor).toHaveBeenCalledWith(
       expect.objectContaining({ title: "Studio time" }),

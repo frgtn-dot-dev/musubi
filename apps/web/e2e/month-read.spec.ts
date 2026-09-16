@@ -918,11 +918,17 @@ test("reads, filters and continuously loads the authenticated Agenda", async ({
 
 	const tomorrowRow = page.locator('[data-agenda-date="2026-08-14"]');
 	await expect(tomorrowRow).toContainText("Tomorrow");
-	const todayHeights = await tomorrowRow.evaluate((row) => ({
-		events: row.children[1]!.getBoundingClientRect().height,
-		row: row.getBoundingClientRect().height,
-	}));
-	expect(todayHeights.row - todayHeights.events).toBeLessThanOrEqual(1);
+	const todayHeights = await tomorrowRow.evaluate((row) => {
+		const style = getComputedStyle(row);
+		return {
+			events: row.children[1]!.getBoundingClientRect().height,
+			content: row.getBoundingClientRect().height
+				- parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)
+				- parseFloat(style.borderTopWidth) - parseFloat(style.borderBottomWidth),
+		};
+	});
+	// The date label must not inflate the event area; day padding is intentional.
+	expect(todayHeights.content - todayHeights.events).toBeLessThanOrEqual(1);
 
 	await page.getByRole("button", { name: /Design review/ }).click();
 	// Scoped to the preview: the agenda row shows the location too.
@@ -1081,7 +1087,7 @@ test("uses the shared time grid as a one-column Day", async ({ page }) => {
 	await expect(page.getByText("Friday, July 24, 2026")).toBeVisible();
 });
 
-test("docks Day event details and restores the calendar on close", async ({
+test("overlays Day event details without resizing the calendar", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 1280, height: 800 });
@@ -1110,8 +1116,8 @@ test("docks Day event details and restores the calendar on close", async ({
 	expect(detailsBox.height).toBe(800);
 	const dockedArea = (await calendarArea.boundingBox())!;
 	expect(dockedArea.x).toBe(areaBox.x);
-	expect(dockedArea.width).toBe(areaBox.width - detailsBox.width);
-	expect(dockedArea.x + dockedArea.width).toBe(detailsBox.x);
+	expect(dockedArea.width).toBe(areaBox.width);
+	expect(dockedArea.x + dockedArea.width).toBe(detailsBox.x + detailsBox.width);
 	await expect(trigger).toBeVisible();
 	await expect(page).toHaveURL(/day\?date=2026-07-23/);
 	await details.getByRole("button", { name: "Close event details" }).click();
@@ -1386,7 +1392,7 @@ test("scrolls a long calendar list inside the creation Inspector", async ({ page
 		.getByRole("dialog", { name: "Create event", exact: true })
 		.boundingBox())!;
 	const actionsBox = (await page
-		.getByRole("button", { name: "More options" })
+		.getByRole("button", { name: "Expand event editor" })
 		.locator("xpath=..")
 		.boundingBox())!;
 	expect(actionsBox.y).toBeGreaterThanOrEqual(popoverBox.y);
@@ -1993,7 +1999,7 @@ test("keeps the chosen interval visible while quick create is open", async ({
 	await expect(page.getByText("03:00–04:00")).toHaveCount(0);
 });
 
-test("a second month drag replaces the first draft, not both", async ({
+test("a background drag dismisses the old draft before a new gesture creates", async ({
 	page,
 }) => {
 	await mockAuthenticatedReads(page);
@@ -2010,7 +2016,7 @@ test("a second month drag replaces the first draft, not both", async ({
 	await expect(page.locator("[data-draft]")).toHaveCount(1);
 
 	await settleLayout(page);
-	// The current panel stays mounted until the next range is committed.
+	// The first background gesture only dismisses the current panel.
 	const from = page.locator('[data-day-key="2026-07-28"]');
 	const to = page.locator('[data-day-key="2026-07-30"]');
 	const fromBox = (await from.boundingBox())!;
@@ -2023,15 +2029,15 @@ test("a second month drag replaces the first draft, not both", async ({
 	await page.mouse.move(toBox.x + toBox.width / 2, toBox.y + toBox.height - 6, {
 		steps: 8,
 	});
-	await expect(page.locator("[data-live]")).toHaveCount(3);
-	await expect(page.locator("[data-draft]")).toHaveCount(0);
-	await expect(page.getByRole("dialog", { name: "Create event" })).toHaveCount(
-		1,
-	);
-
-	// Releasing keeps the new one. The replaced popover restores focus to its own
-	// origin cell as it goes, which must not read as a dismissal of the new one.
-	await page.mouse.up();
+  await page.mouse.up();
+  await expect(page.locator("[data-live]")).toHaveCount(0);
+  await expect(page.locator("[data-draft]")).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Create event" })).toHaveCount(0);
+  await page.mouse.move(fromBox.x + fromBox.width / 2, fromBox.y + fromBox.height - 6);
+  await page.mouse.down();
+  await page.mouse.move(toBox.x + toBox.width / 2, toBox.y + toBox.height - 6, { steps: 8 });
+  await expect(page.locator("[data-live]")).toHaveCount(3);
+  await page.mouse.up();
 	await expect(page.getByRole("dialog", { name: "Create event" })).toBeVisible();
 	await expect(page.locator("[data-draft]")).toHaveCount(3);
 	await expect(page.getByRole("button", { name: /^Date:/ })).toContainText(
@@ -4057,6 +4063,16 @@ test("drags across month days to create an all-day range", async ({ page }) => {
 	await expect(page.locator("[data-live]")).toHaveCount(0);
 	await expect(page.locator("[data-draft]")).toHaveCount(3);
 
+  // The first background click closes this draft without creating another one.
+  await page.mouse.click(fromBox.x + 20, fromBox.y + fromBox.height - 12);
+  await expect(page.getByRole("dialog", { name: "Create event", exact: true })).toHaveCount(0);
+  // A fresh gesture after dismissal must still create a multi-day range.
+  await page.mouse.move(fromBox.x + 20, fromBox.y + fromBox.height - 12);
+  await page.mouse.down();
+  await page.mouse.move(toBox.x + 20, toBox.y + toBox.height - 12, { steps: 8 });
+  await expect(page.locator("[data-live]")).toHaveCount(3);
+  await page.mouse.up();
+  await expect(page.getByRole("button", { name: /^Ends:/ })).toContainText("Friday, July 31, 2026");
 	await page.keyboard.press("Escape");
 	await expect(page.locator("[data-draft]")).toHaveCount(0);
 });
@@ -4459,7 +4475,7 @@ test("opens creation in a full-height Inspector on a narrow viewport", async ({
 });
 
 for (const width of [1024, 1280, 1555]) {
-  test(`docked event panel keeps toolbar actions reachable at ${width}px`, async ({ page }, testInfo) => {
+  test(`overlay event panel preserves calendar geometry at ${width}px`, async ({ page }, testInfo) => {
     const runtimeErrors: string[] = [];
     page.on("pageerror", error => runtimeErrors.push(error.message));
     await page.setViewportSize({ width, height: 916 });
@@ -4472,32 +4488,16 @@ for (const width of [1024, 1280, 1555]) {
     const details = page.getByRole("dialog", { name: "Docked toolbar check", exact: true });
     await expect(details).toBeVisible();
     await settleLayout(page);
-    const panelBox = (await details.boundingBox())!;
-    expect((await calendar.boundingBox())!.width).toBe(before.width - panelBox.width);
-    // Reserving space must resize the month, not crop its trailing days.
+    expect((await calendar.boundingBox())!.width).toBe(before.width);
+    // Overlaying the panel must not resize any of the calendar columns.
     const weekdays = calendar.getByRole("columnheader");
     await expect(weekdays).toHaveCount(7);
     for (const weekday of await weekdays.all()) {
       const box = (await weekday.boundingBox())!;
       expect(box.x).toBeGreaterThanOrEqual(before.x);
-      expect(box.x + box.width).toBeLessThanOrEqual(panelBox.x + 1);
+      expect(box.x + box.width).toBeLessThanOrEqual(before.x + before.width + 1);
     }
     expect(await calendar.evaluate(element => element.scrollWidth - element.clientWidth)).toBe(0);
-    for (const name of ["Search events and actions", "Calendar sync coverage", "Create event, meeting or task"]) {
-      const button = page.getByRole("button", { name, exact: true });
-      await expect(button).toBeInViewport();
-      const box = (await button.boundingBox())!;
-      expect(box.x + box.width).toBeLessThanOrEqual(panelBox.x);
-      expect(await button.evaluate(element => {
-        const r = element.getBoundingClientRect();
-        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-        return hit === element || element.contains(hit);
-      })).toBe(true);
-    }
-    await page.getByRole("button", { name: "Calendar sync coverage", exact: true }).click();
-    await expect(page.getByRole("dialog", { name: "Calendar sync coverage", exact: true })).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(details).toBeVisible();
     await expectNoAccessibilityViolations(page);
     expect(runtimeErrors).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath(`docked-toolbar-${width}.png`) });
@@ -5008,7 +5008,7 @@ for (const reload of [false, true]) {
 
 			// The inspector exposes the complete form and retains the full-page handoff.
 			await expect(
-				page.getByRole("button", { name: "More options" }),
+				page.getByRole("button", { name: "Expand event editor" }),
 			).toBeVisible();
 			await expect(page.getByPlaceholder("Add location")).toBeVisible();
 			await expect(page.getByLabel("Repeat")).toBeVisible();
@@ -5020,7 +5020,7 @@ for (const reload of [false, true]) {
 				.fill("Client call revised");
 			await expectNoAccessibilityViolations(page);
 
-			await page.getByRole("button", { name: "More options" }).click();
+			await page.getByRole("button", { name: "Expand event editor" }).click();
 			await expect(page).toHaveURL(/\/event\/client-call\?/);
 			await expect(page).toHaveURL(/title=Client\+call\+revised/);
 			await expect(
@@ -5034,7 +5034,7 @@ for (const reload of [false, true]) {
 			await expect(page.getByPlaceholder("Add location")).toBeVisible();
 			await expect(page.getByLabel("Repeat")).toBeVisible();
 			await expect(
-				page.getByRole("button", { name: "More options" }),
+				page.getByRole("button", { name: "Expand event editor" }),
 			).toHaveCount(0);
 			await expectNoAccessibilityViolations(page);
 
@@ -5079,7 +5079,7 @@ test("makes the scope of a recurring event edit explicit", async ({ page }) => {
 	// The popover badges the series and its Edit is one word; "series" is spelled
 	// out again by the editor it opens.
 	await page.getByRole("button", { exact: true, name: "Edit" }).click();
-	await page.getByRole("button", { name: "More options" }).click();
+	await page.getByRole("button", { name: "Expand event editor" }).click();
 
 	await expect(page).toHaveURL(/\/event\/weekly-review\?/);
 	await expect(page.getByRole("heading", { name: "Edit series" })).toBeVisible();
@@ -5097,7 +5097,7 @@ test("hands the draft to a full editor page and back", async ({ page }) => {
 	await page
 		.getByRole("textbox", { name: "Event title" })
 		.fill("Quarterly review");
-	await page.getByRole("button", { name: "More options" }).click();
+	await page.getByRole("button", { name: "Expand event editor" }).click();
 
 	// A real page, with the draft in the URL so a reload cannot lose it.
 	await expect(page).toHaveURL(/\/event\/new\?/);
@@ -5109,7 +5109,7 @@ test("hands the draft to a full editor page and back", async ({ page }) => {
 	// The full set of fields is here, with no disclosure left.
 	await expect(page.getByPlaceholder("Add location")).toBeVisible();
 	await expect(page.getByLabel("Repeat")).toBeVisible();
-	await expect(page.getByRole("button", { name: "More options" })).toHaveCount(
+	await expect(page.getByRole("button", { name: "Expand event editor" })).toHaveCount(
 		0,
 	);
 	await expectNoAccessibilityViolations(page);
@@ -5144,7 +5144,7 @@ test("uses the desktop event editor as a fixed multi-column workspace", async ({
 	await mockAuthenticatedReads(page);
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 	await openCreateEvent(page);
-	await page.getByRole("button", { name: "More options" }).click();
+	await page.getByRole("button", { name: "Expand event editor" }).click();
 
 	const editor = page.getByRole("dialog", { name: "New event" });
 	const surface = editor.locator("header + div");
@@ -5283,7 +5283,7 @@ test("keeps the full event editor usable on a narrow viewport", async ({
 	await page
 		.getByRole("textbox", { name: "Event title" })
 		.fill("Mobile planning");
-	await page.getByRole("button", { name: "More options" }).click();
+	await page.getByRole("button", { name: "Expand event editor" }).click();
 
 	await expect(page).toHaveURL(/\/event\/new\?/);
 	await expect(page.getByRole("heading", { name: "New event" })).toBeVisible();
@@ -5317,7 +5317,7 @@ test("leaving the full event editor keeps the calendar where it was", async ({
 	await mockAuthenticatedReads(page);
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 	await page.locator('[data-day-key="2026-07-15"]').click();
-	await page.getByRole("button", { name: "More options" }).click();
+	await page.getByRole("button", { name: "Expand event editor" }).click();
 	await expect(page).toHaveURL(/\/month\/event\/new\?/);
 
 	await page.getByRole("button", { name: "Close event editor" }).click();
@@ -5954,7 +5954,7 @@ for (const shift of [false, true]) {
 			await page.getByRole("combobox", { name: "Start time" }).fill("13:00");
 			await page.getByRole("combobox", { name: "Start time" }).press("Tab");
 		}
-		await page.getByRole("button", { name: "More options" }).click();
+		await page.getByRole("button", { name: "Expand event editor" }).click();
 		await expect(
 			page.getByText("Changes here apply to the recurring series."),
 		).toBeVisible();
@@ -7133,12 +7133,14 @@ test("opens a day-view preview on screen, not over the sidebar", async ({
 	expect(box.x + box.width).toBeLessThanOrEqual(width);
 });
 
-test("event details stay open on outside clicks and grid gestures until explicitly closed", async ({ page }) => {
+test("event details close on outside clicks without creating another event", async ({ page }) => {
   await mockAuthenticatedReads(page);
   for (const view of ["day", "month"]) {
     await page.goto(`/app/p/${DEFAULT_PAGE_ID}/${view}?date=2026-07-23`);
     await page.getByRole("button", { name: /Project check-in/ }).first().click();
     const details = page.getByRole("dialog", { name: "Project check-in", exact: true });
+    await expect(details).toBeVisible();
+    await details.getByRole("heading", { name: "Project check-in", exact: true }).click();
     await expect(details).toBeVisible();
     const target = view === "day"
       ? page.locator("[data-time-grid-column]").first()
@@ -7146,16 +7148,8 @@ test("event details stay open on outside clicks and grid gestures until explicit
     const bounds = (await target.boundingBox())!;
     const point = { x: bounds.x + 20, y: view === "day" ? page.viewportSize()!.height - 120 : bounds.y + bounds.height - 12 };
     await page.mouse.click(point.x, point.y);
-    await expect(details).toBeVisible();
-    await expect(page.getByRole("dialog", { name: "Create event", exact: true })).toHaveCount(0);
-    await page.mouse.move(point.x, point.y);
-    await page.mouse.down();
-    await page.mouse.move(view === "day" ? point.x : point.x + bounds.width * 2, view === "day" ? point.y - 80 : point.y, { steps: 6 });
-    await page.mouse.up();
-    await expect(details).toBeVisible();
-    await expect(page.getByRole("dialog", { name: "Create event", exact: true })).toHaveCount(0);
-    await details.getByRole("button", { name: "Close event details" }).click();
     await expect(details).toHaveCount(0);
+    await expect(page.getByRole("dialog", { name: "Create event", exact: true })).toHaveCount(0);
     const closedBounds = (await target.boundingBox())!;
     await page.mouse.click(closedBounds.x + 20, view === "day" ? page.viewportSize()!.height - 120 : closedBounds.y + closedBounds.height - 12);
     await expect(page.getByRole("dialog", { name: "Create event", exact: true })).toBeVisible();
@@ -7894,7 +7888,7 @@ test("scrolls the calendar list inside the editor layer, not the layer", async (
 	);
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-08-07`);
 	await openCreateEvent(page);
-	await page.getByRole("button", { name: "More options" }).click();
+	await page.getByRole("button", { name: "Expand event editor" }).click();
 
 	const dialog = page.getByRole("dialog", { name: "New event" });
 	const body = dialog.locator("header + div");
@@ -8109,7 +8103,7 @@ for (const editor of ["full", "handoff"] as const) {
 		await expect.poll(() => readsAfterChange).toBeGreaterThan(0);
 		await expect(secondTitle).toHaveValue("K06 retained title");
 		if (editor === "handoff")
-			await second.getByRole("button", { name: "More options" }).click();
+			await second.getByRole("button", { name: "Expand event editor" }).click();
 		const stale = second.waitForResponse(
 			(response) =>
 				response.request().method() === "PATCH" &&
@@ -8427,7 +8421,7 @@ for (const [width, theme, target] of [[1280, "light", "zoned"], [390, "dark", "a
     await page.getByRole("button", { name: /Choose time model/ }).click();
     await page.getByRole("button", { name: "Edit", exact: true }).click();
     await page.getByRole("textbox", { name: "Event title" }).fill("Explicit complete draft");
-    await page.getByRole("button", { name: "More options", exact: true }).click();
+    await page.getByRole("button", { name: "Expand event editor", exact: true }).click();
     const timeHelp = page.getByRole("button", { name: "Help for Time model", exact: true });
     await expect(page.getByText("The selected model interprets", { exact: false })).toHaveCount(0);
     await timeHelp.focus();
@@ -8484,7 +8478,7 @@ for (const [width, theme, full] of [[390, "dark", false], [1280, "light", true]]
     await page.getByRole("button", { name: /^Date:/ }).click();
     await page.getByRole("dialog", { name: "Choose date" }).getByRole("gridcell", { name: "Monday, March 30, 2026" }).click();
     if (full) {
-      await page.getByRole("button", { name: "More options", exact: true }).click();
+      await page.getByRole("button", { name: "Expand event editor", exact: true }).click();
       await expect(page.getByRole("button", { name: /^Date:/ })).toContainText("March 29, 2026");
     }
     await page.getByRole("button", { name: "Save", exact: true }).click();
@@ -8530,7 +8524,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
     await page.goto("/app/p/my-calendar/week?date=2026-07-30");
     await openCreateEvent(page);
     await page.getByRole("textbox", { name: "Event title" }).fill("New civil event");
-    await page.getByRole("button", { name: "More options" }).click();
+    await page.getByRole("button", { name: "Expand event editor" }).click();
     await page.getByRole("combobox", { name: "Time model", exact: true }).click();
     await page.getByRole("option", { name: "Event time zone", exact: true }).click();
     await expect(page.getByRole("combobox", { name: "Event time zone", exact: true })).toHaveAttribute("value", "Europe/Prague");
@@ -9129,7 +9123,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
       await page.getByRole("button", { name: "Create", exact: true }).click();
       await expect(page.getByRole("alert")).toBeVisible();
       expect(writes).toHaveLength(1);
-      if (mode === "quick-handoff") await page.getByRole("button", { name: "More options" }).click();
+      if (mode === "quick-handoff") await page.getByRole("button", { name: "Expand event editor" }).click();
       const id = (writes[0].event ?? writes[0]).id;
       await expect(page).toHaveURL(new RegExp(`createID=${id}`));
       await page.reload();
@@ -9338,7 +9332,7 @@ for (const mode of ["compact", "generated", "full"] as const) {
     await page.getByRole("button", { name: "Edit", exact: true }).click();
     await page.getByRole("textbox", { name: "Event title" }).fill("My typed title");
     if (mode === "full") {
-      await page.getByRole("button", { name: "More options", exact: true }).click();
+      await page.getByRole("button", { name: "Expand event editor", exact: true }).click();
       await expect(page).toHaveURL(/\/event\//);
     }
     const emit = () => page.evaluate(() => {
@@ -9562,7 +9556,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await page.goto("/app/p/my-calendar/month?date=2026-10-24");
     await page.locator('[data-day-key="2026-10-24"]').getByRole("button", { name: /UTC clock series/ }).click();
     await page.getByRole("button", { name: "Edit", exact: true }).click();
-    await page.getByRole("button", { name: "More options", exact: true }).click();
+    await page.getByRole("button", { name: "Expand event editor", exact: true }).click();
     await chooseTimeZone(page.getByRole("combobox", { name: "Event time zone", exact: true }), "UTC");
     await expect(page.getByLabel("Start time", { exact: true })).toHaveValue("02:30");
     const editor = page.getByRole("dialog", { name: "Edit series", exact: true });
@@ -9834,7 +9828,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await page.goto("/app/p/my-calendar/month?date=2026-03-29");
     await page.locator('[data-day-key="2026-03-28"]').getByRole("button", { name: /Imported excluded dates/ }).click();
     await page.getByRole("button", { name: "Edit", exact: true }).click();
-    await page.getByRole("button", { name: "More options", exact: true }).click();
+    await page.getByRole("button", { name: "Expand event editor", exact: true }).click();
     const editor = page.getByRole("dialog", { name: "Edit series", exact: true });
     await expect(editor.getByText("Changes here apply to the recurring series.")).toBeVisible();
     await editor.getByRole("button", { name: "Restore 2026-03-29", exact: true }).click();
@@ -9956,7 +9950,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await page.goto("/app/p/my-calendar/month?date=2026-03-29");
     await page.locator('[data-day-key="2026-03-29"]').getByRole("button", { name: /Additional series date/ }).click();
     await page.getByRole("button", { name: "Edit", exact: true }).click();
-    await page.getByRole("button", { name: "More options", exact: true }).click();
+    await page.getByRole("button", { name: "Expand event editor", exact: true }).click();
     const editor = page.getByRole("dialog", { name: "Edit series", exact: true });
     await expect(editor.getByText("Changes here apply to the recurring series.")).toBeVisible();
     if (remove) await editor.getByRole("button", { name: "Remove additional date", exact: true }).click();
@@ -10530,11 +10524,18 @@ for (const width of [1280, 390]) {
       await expect(board.getByRole("region", { name, exact: true })).toBeAttached();
     }
     if (width === 1280) {
+      for (const scroller of await board.locator("[data-kanban-column-scroll]").all()) {
+        expect(await scroller.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+      }
       const handle = page.getByRole("button", { name: "Drag Kanban review to another status; or use its status selector" });
       await board.getByRole("button", { name: "Kanban review", exact: true }).click();
+      const taskDetail = page.getByRole("dialog", { name: "Kanban review", exact: true });
+      await expect(taskDetail).toBeVisible();
+      await taskDetail.getByRole("button", { name: "Edit", exact: true }).click();
       await expect(page.getByRole("dialog", { name: "Edit task" })).toBeVisible();
       await expect(page.locator("[data-drag-preview]")).toHaveCount(0);
       await page.getByRole("button", { name: "Close task editor" }).click();
+      await taskDetail.getByRole("button", { name: "Close task", exact: true }).click();
       const start = await handle.locator("xpath=ancestor::li").boundingBox();
       const target = await board.getByRole("region", { name: "In progress", exact: true }).boundingBox();
       if (!start || !target) throw new Error("Missing drag geometry");
@@ -10634,6 +10635,8 @@ for (const kind of ["event", "task"] as const) {
     await refresh();
     await expect(page.getByText(`This ${kind} is no longer available.`)).toBeVisible();
     await expect(page.getByRole("dialog", { name: "Busy", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: kind === "task" ? "Close task" : "Close event", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Search events and actions", exact: true })).toBeFocused();
   });
 }
 
@@ -10668,7 +10671,10 @@ test("dated tasks appear in month and week and open task details", async ({ page
   await detail.getByRole("combobox", { name: "Task status" }).click();
   await page.getByRole("option", { name: "Completed", exact: true }).click();
   await expect(detail.getByRole("combobox", { name: "Task status" })).toContainText("Completed");
-  await detail.getByRole("button", { name: "Close task" }).click();
+  const emptyCell = page.locator('[data-day-key="2026-07-29"]');
+  await emptyCell.click();
+  await expect(detail).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Create event", exact: true })).toHaveCount(0);
   await expect(markers.first()).toHaveAttribute("data-task-completed", "");
   await page.goto(`/app/p/${DEFAULT_PAGE_ID}/week?date=2026-07-27`);
   await expect(page.getByRole("button", { name: /Task deadline, Calendar task deadline/ })).toBeVisible();
@@ -10684,4 +10690,74 @@ test("dated tasks appear in month and week and open task details", async ({ page
   await page.screenshot({ path: "/tmp/musubi-calendar-tasks-web-mobile.png" });
   await expect(mobileDetail.getByRole("button", { name: "Close task" })).toBeInViewport();
   expect(errors).toEqual([]);
+});
+
+
+test("a draft in a crowded month cell keeps every chip above the next week", async ({ page }) => {
+  await page.setViewportSize({ width: 1455, height: 896 });
+  const crowded = Array.from({ length: 8 }, (_, index) => event(
+    `draft-crowded-${index}`, `Crowded draft event ${index + 1}`, "personal", "#b3492f",
+    `2026-07-23T${String(9 + index).padStart(2, "0")}:00:00.000Z`,
+    `2026-07-23T${String(10 + index).padStart(2, "0")}:00:00.000Z`,
+  ));
+  await mockAuthenticatedReads(page, { ...events, events: crowded });
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
+  const cell = page.locator('[data-day-key="2026-07-23"]');
+  const following = page.locator('[data-day-key="2026-07-30"]');
+  const before = await following.boundingBox();
+  await cell.click({ position: { x: 14, y: 14 } });
+  await expect(cell.locator('[data-draft]')).toHaveCount(1);
+  await expect(cell.getByRole("button", { name: /more$/ })).toBeVisible();
+  await expect.poll(() => cell.evaluate(element => {
+    const bounds = element.getBoundingClientRect();
+    return [...element.querySelectorAll<HTMLElement>('[data-event-id], [data-draft], button')]
+      .every(item => item.getBoundingClientRect().bottom <= bounds.bottom);
+  })).toBe(true);
+  expect((await following.boundingBox())!.y).toBeCloseTo(before!.y, 0);
+  await expect(page.getByRole("textbox", { name: "Event title" })).toBeVisible();
+});
+
+test("toolbar task creation stays in the current week and uses an inspector", async ({ page }) => {
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/week?date=2026-07-26`);
+  await page.getByRole("button", { name: "Create event, meeting or task" }).click();
+  await page.getByRole("menuitem", { name: "Task", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "New task" });
+  await expect(editor).toBeVisible();
+  await expect(page).toHaveURL(/\/week\?date=2026-07-26/);
+  await expect(editor.getByRole("heading", { name: "New task" })).toBeVisible();
+  const box = await editor.boundingBox();
+  expect(box!.x).toBeGreaterThan(page.viewportSize()!.width / 2);
+  await editor.getByRole("button", { name: "Close task editor" }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(page).toHaveURL(/\/week\?date=2026-07-26/);
+});
+
+test("page item switches persist and separate meetings from events", async ({ page }) => {
+  const personal = event("personal-filter", "Personal filter item", "personal", "#b3492f", "2026-08-06T09:00:00Z", "2026-08-06T10:00:00Z");
+  const meeting = { ...personal, id: "meeting-filter", title: "Provider meeting filter item", isMeeting: true };
+  await mockAuthenticatedReads(page, { ...events, events: [personal, meeting] });
+  let savedPage = { ...defaultPage };
+  await page.route("**/api/v1/pages", route => respond(route, [savedPage]));
+  await page.route("**/api/v1/pages/*", async route => {
+    const body = route.request().postDataJSON();
+    savedPage = { ...savedPage, config: body.config, name: body.name, revision: savedPage.revision + 1 };
+    await respond(route, savedPage);
+  });
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-08-06`);
+  await expect(page.getByRole("button", { name: /Personal filter item/ }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Edit My calendar" }).click();
+  const dialog = page.getByRole("dialog", { name: "Page settings" });
+  await dialog.getByRole("switch", { name: "Events", exact: true }).click();
+  await dialog.getByRole("switch", { name: "Tasks", exact: true }).click();
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Personal filter item/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Provider meeting filter item/ }).first()).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", { name: /Personal filter item/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Provider meeting filter item/ }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Edit My calendar" }).click();
+  await expect(dialog.getByRole("switch", { name: "Events", exact: true })).not.toBeChecked();
+  await expect(dialog.getByRole("switch", { name: "Meetings", exact: true })).toBeChecked();
 });

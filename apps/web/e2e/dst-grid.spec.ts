@@ -66,7 +66,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await page.mouse.click(point.x, point.y);
     await page.getByRole("textbox", { name: "Event title" }).fill(`Fold ${fold}`);
     if (fold === 1) {
-      await page.getByRole("button", { name: "More options", exact: true }).press("Enter");
+      await page.getByRole("button", { name: "Expand event editor", exact: true }).press("Enter");
       await expect(page).toHaveURL(/exactRange=/);
       await page.reload();
     }

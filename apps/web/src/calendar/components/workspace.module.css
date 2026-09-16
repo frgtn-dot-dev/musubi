@@ -30,15 +30,7 @@
 	overflow: hidden;
 }
 
-/* The shared Inspector portals to body. Reserve the same width for every open
-   desktop object panel, including read-only details, without duplicating its
-   selection state in Workspace. Modal inspectors keep the full calendar below. */
-@media (min-width: 1024px) {
-	:global(body:has([data-ui="inspector"][data-state="open"]:not([aria-modal="true"]))) .workspace {
-		padding-inline-end: var(--inspector-width);
-	}
-}
-
+/* Desktop inspectors overlay the workspace; calendar geometry stays stable. */
 .sidebar {
 	--sidebar-overlay: 0;
 	position: relative;
@@ -183,6 +175,8 @@
 	gap: 10px;
 	padding: 16px 14px;
 }
+
+.pageList { display: flex; flex-direction: column; gap: var(--space-1); }
 
 .pageList,
 /* Inline padding only: the space under it is the section's gap now. */
@@ -1439,6 +1433,8 @@
 
 .monthWeek {
 	min-height: 0;
+	/* Keep horizontal multi-day joins, but never paint into another week. */
+	overflow: clip;
 }
 
 .dayCell {
@@ -1742,6 +1738,7 @@
 }
 
 .monthOverflowHeader p {
+	white-space: nowrap;
 	color: var(--text-secondary);
 	font-size: var(--text-11);
 }
@@ -2359,7 +2356,6 @@
 }
 
 @media (min-width: 1024px) and (prefers-reduced-motion: no-preference) {
-  .workspace { transition: padding-inline-end var(--motion-panel) ease-out; }
   .monthTitle { transition: font-size var(--motion-panel) ease-out; }
 }
 
@@ -2368,17 +2364,14 @@
   .toolbar .monthTitle { margin-inline-start: 0; }
 }
 
-/* Start title resizing with the inspector, not when its animated reservation
-   eventually crosses the toolbar's container breakpoint. */
+/* Desktop titles retain their size while an inspector overlays the workspace. */
 @media (min-width: 1024px) {
   .toolbar .monthTitle { font-size: clamp(1.45rem, 2.1vw, 2rem); }
   .toolbar .monthTitle[data-view="multi-week"] { font-size: clamp(1.15rem, 1.5vw, 1.45rem); }
-  :global(body:has([data-ui="inspector"][data-state="open"]:not([aria-modal="true"]))) .toolbar .monthTitle {
-    font-size: var(--text-22);
-  }
+
 }
 
-/* With a docked inspector, keep every desktop action inside the calendar.
+/* On compact desktop workspaces, keep actions inside the calendar.
    The segmented control remains a single pill; action rows may wrap around it. */
 @media (min-width: 1024px) {
   @container calendar-toolbar (max-width: 699px) {
@@ -2392,3 +2385,27 @@
 .eventChip[data-task-completed] .eventTitle {
   text-decoration: line-through;
 }
+
+.miniPeriodSelectors { display: flex; align-items: center; gap: 0; }
+.miniPeriodSelectors > button { width: auto; min-width: 0; padding-inline: var(--space-2); }
+.miniMonthActions:has(.miniPeriodSelectors) { transform: translateX(var(--space-1)); }
+
+.monthPickerPopover { width: 304px; }
+.monthPickerGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-1); padding: var(--space-2); }
+.monthPickerGrid > button { display: flex; flex-direction: column; justify-content: center; gap: var(--space-1); min-width: 0; min-height: 64px; padding: var(--space-1); }
+.monthPickerNumber { font-size: var(--text-18); font-variant-numeric: tabular-nums; }
+.monthPickerName { font-size: var(--text-10); }
+
+.monthPickerContents { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); }
+.monthPickerGrid > button[aria-pressed], .miniPeriodSelectors .miniMonthTrigger[aria-expanded] { border-color: transparent; background: transparent; color: var(--text-secondary); }
+.monthPickerGrid > button:hover:not(:disabled), .miniPeriodSelectors .miniMonthTrigger:hover { background: var(--surface-raised); color: var(--text-primary); }
+
+.yearPickerPopover { width: 304px; }
+.yearPickerRow { display: grid; grid-template-columns: var(--compact-control-height) minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 1fr) var(--compact-control-height); align-items: center; gap: var(--space-1); padding: var(--space-2); }
+.yearPickerRow > button { min-width: 0; padding-inline: var(--space-1); font-variant-numeric: tabular-nums; }
+.yearPickerRow .yearPickerCenter { font-size: var(--text-24); min-height: 56px; color: var(--text-primary); }
+.yearPickerRow .yearPickerNeighbor { font-size: var(--text-13); color: var(--text-secondary); }
+.yearPickerRow > button[aria-pressed] { background: transparent; border-color: transparent; }
+.yearPickerRow > button:hover:not(:disabled) { background: var(--surface-raised); color: var(--text-primary); }
+
+.miniHeader:has(.miniPeriodSelectors) { margin-bottom: var(--space-2); }

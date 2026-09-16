@@ -23,7 +23,7 @@ it.each(["00", "01"])("carries Prague's %s:30Z fold through quick create and ful
   await user.click(screen.getByRole("button", { name: "Create" }));
   expect(onCreate).toHaveBeenCalledOnce();
   expect(onCreate.mock.calls[0]![0]).toMatchObject(exactRange);
-  await user.click(screen.getByRole("button", { name: "More options" }));
+  await user.click(screen.getByRole("button", { name: "Expand event editor" }));
   const values = onMoreOptions.mock.calls[0]![0] as EventFormValues;
   quick.unmount();
   const fullWrite = vi.fn();

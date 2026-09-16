@@ -78,7 +78,7 @@ export function useCalendarTasks() {
       select(event.calendarTask.id);
       return true;
     }, []),
-    detail: detail && calendar ? <TaskDetailModal key={scope + detail.id} task={detail} calendar={calendar}
+    detail: detail && calendar ? <TaskDetailModal key={scope + detail.id} task={detail} relatedTask={tasks.find(item => item.id === detail.relatedTo)} onOpenRelated={select} calendar={calendar}
       editable={editable} busy={busy} onSaved={saved => {
         request.current++;
         setSnapshot(previous => ({ scope, tasks: saved ? previous.tasks.map(item => item.id === saved.id ? saved : item) : previous.tasks.filter(item => item.id !== detail.id) }));

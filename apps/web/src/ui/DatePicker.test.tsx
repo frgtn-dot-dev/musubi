@@ -1,7 +1,7 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { DatePicker } from "./DatePicker";
+import { DatePicker, DateFormatContext } from "./DatePicker";
 
 function renderPicker(
   onChange: (value: string) => void,
@@ -101,4 +101,87 @@ describe("DatePicker", () => {
     });
     await waitFor(() => expect(document.activeElement).toBe(nextMonth));
   });
+});
+
+
+it.each([
+  ["dmy", "28/07/2026", "05/08/2026", "DD/MM/YYYY"],
+  ["mdy", "07/28/2026", "08/05/2026", "MM/DD/YYYY"],
+  ["ymd", "2026-07-28", "2026-08-05", "YYYY-MM-DD"],
+] as const)("uses %s for typed dates", async (format, initial, entry, placeholder) => {
+  const user = userEvent.setup(), onChange = vi.fn();
+  render(<DateFormatContext.Provider value={format}><DatePicker label="Date" value="2026-07-28" weekStartsOn="monday" onChange={onChange} /></DateFormatContext.Provider>);
+  await user.click(screen.getByRole("button", { name: /Date:/ }));
+  const input = screen.getByRole("textbox", { name: "Exact date" }) as HTMLInputElement;
+  expect(input.value).toBe(initial);
+  expect(input.placeholder).toBe(placeholder);
+  await user.clear(input);
+  await user.type(input, entry + "{Enter}");
+  expect(onChange).toHaveBeenCalledWith("2026-08-05");
+});
+
+it("changes year and month without committing a date", async () => {
+  const onChange = vi.fn(), user = userEvent.setup();
+  renderPicker(onChange);
+  await user.click(screen.getByRole("button", { name: /Date:/ }));
+  await user.click(screen.getByRole("button", { name: "Year: 2026" }));
+  await user.click(screen.getByRole("button", { name: "Next year" }));
+  expect(onChange).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "Choose 2028" }));
+  expect(screen.queryByRole("button", { name: "Choose 2028" })).toBeNull();
+  await user.click(screen.getByRole("button", { name: /^Month:/ }));
+  await user.click(screen.getByRole("button", { name: "February" }));
+  expect(onChange).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("gridcell", { name: "Tuesday, February 29, 2028" }));
+  expect(onChange).toHaveBeenCalledWith("2028-02-29");
+});
+
+
+it("browses years with the wheel without selecting a date or scrolling the page", async () => {
+  const onChange = vi.fn(), user = userEvent.setup();
+  renderPicker(onChange);
+  await user.click(screen.getByRole("button", { name: /Date:/ }));
+  await user.click(screen.getByRole("button", { name: "Year: 2026" }));
+  const defaultAllowed = fireEvent.wheel(screen.getByRole("button", { name: "Choose 2026" }), { deltaY: 100 });
+  expect(defaultAllowed).toBe(false);
+  expect(screen.getByRole("button", { name: "Choose 2028" })).toBeTruthy();
+  expect(onChange).not.toHaveBeenCalled();
+});
+
+
+it("accelerates continuous wheel scrolling and resets after pausing or reversing", async () => {
+  const user = userEvent.setup();
+  renderPicker(vi.fn());
+  await user.click(screen.getByRole("button", { name: /Date:/ }));
+  await user.click(screen.getByRole("button", { name: "Year: 2026" }));
+  const center = screen.getByRole("button", { name: "Choose 2026" });
+  let now = 1000;
+  const clock = vi.spyOn(performance, "now").mockImplementation(() => now);
+  try {
+    fireEvent.wheel(center, { deltaY: 100 });
+    expect(center.textContent).toBe("2027");
+    now += 60;
+    fireEvent.wheel(center, { deltaY: 100 });
+    expect(center.textContent).toBe("2028");
+    now += 40;
+    fireEvent.wheel(center, { deltaY: 100 });
+    expect(center.textContent).toBe("2029");
+    now += 40;
+    fireEvent.wheel(center, { deltaY: 100 });
+    expect(center.textContent).toBe("2030");
+    now += 24;
+    fireEvent.wheel(center, { deltaY: 100 });
+    expect(center.textContent).toBe("2031");
+    now += 1;
+    fireEvent.wheel(center, { deltaY: -100 });
+    expect(center.textContent).toBe("2030");
+    now += 500;
+    fireEvent.wheel(center, { deltaY: -40 });
+    expect(center.textContent).toBe("2029");
+    now += 70;
+    fireEvent.wheel(center, { deltaY: -40 });
+    expect(center.textContent).toBe("2029");
+  } finally {
+    clock.mockRestore();
+  }
 });

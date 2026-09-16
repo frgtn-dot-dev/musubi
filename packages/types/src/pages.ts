@@ -131,6 +131,10 @@ export type BuiltInViewConfig = z.infer<typeof BuiltInViewConfigSchema>;
 export type PageViewId = BuiltInViewConfig["id"];
 
 export const PageFilterSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("item-types"),
+    value: z.array(z.enum(["events", "tasks", "meetings"])).max(3),
+  }).strict(),
   z
     .object({
       type: z.literal("attendance"),

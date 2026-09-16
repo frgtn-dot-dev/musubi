@@ -518,7 +518,7 @@ describe("EventEditorForm panel all-day dates", () => {
 			timeKind: timeKind && timeKind !== "legacy-unknown" ? "all-day" : timeKind,
 		});
 		expect(changed.mock.lastCall?.[0].timeZone).toBeUndefined();
-		expect(screen.getByText("End date is not included.")).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Help for end date" })).toBeTruthy();
 		await user.click(screen.getByRole("button", { name: /^Ends:/ }));
 		const exactDate = screen.getByRole("textbox", { name: "Exact date" });
 		await user.clear(exactDate);

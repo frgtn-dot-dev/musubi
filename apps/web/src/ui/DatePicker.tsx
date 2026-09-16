@@ -1,6 +1,6 @@
 import type { Settings } from "@musubi/types";
 import { ChevronDown } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef, useState, createContext, useContext } from "react";
 import { getLongDateLabel, parseDateKey } from "~/calendar/calendar-math";
 import { MiniCalendar } from "~/calendar/components/MiniCalendar";
 import { toDateKey } from "~/calendar/date-key";
@@ -8,6 +8,23 @@ import { Button } from "./Button";
 import { classNames } from "./class-names";
 import { Popover, PopoverContent, PopoverTrigger } from "./Popover";
 import styles from "./primitives.module.css";
+
+export const DateFormatContext = createContext<Settings["dateFormat"]>("ymd");
+
+function formatEntry(value: string, format: Settings["dateFormat"]) {
+  if (!isDateKey(value)) return value;
+  const [year, month, day] = value.split("-");
+  return format === "dmy" ? `${day}/${month}/${year}` : format === "mdy" ? `${month}/${day}/${year}` : value;
+}
+
+function parseEntry(value: string, format: Settings["dateFormat"]) {
+  const match = value.trim().match(format === "ymd" ? /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/ : /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  if (!match) return "";
+  const [, a, b, c] = match;
+  const [year, month, day] = format === "ymd" ? [a!, b!, c!] : format === "dmy" ? [c!, b!, a!] : [c!, a!, b!];
+  const result = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  return isDateKey(result) ? result : "";
+}
 
 export type DatePickerProps = {
   id?: string;
@@ -63,19 +80,23 @@ export function DatePicker({
   value,
   weekStartsOn,
 }: DatePickerProps) {
+  const dateFormat = useContext(DateFormatContext);
+  const entryPlaceholder = dateFormat === "dmy" ? "DD/MM/YYYY" : dateFormat === "mdy" ? "MM/DD/YYYY" : "YYYY-MM-DD";
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState(value);
+  const [draft, setDraft] = useState(() => formatEntry(value, dateFormat));
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const validValue = isDateKey(value);
   const anchor = validValue ? parseDateKey(value) : new Date();
-  const draftValid = isAvailable(draft, min, max);
+  const parsedDraft = parseEntry(draft, dateFormat);
+  const draftValid = isAvailable(parsedDraft, min, max);
   const today = toDateKey(new Date());
   const todayAvailable = isAvailable(today, min, max);
 
   function choose(nextValue: string) {
     if (!isAvailable(nextValue, min, max)) return;
     onChange(nextValue);
-    setDraft(nextValue);
+    setDraft(formatEntry(nextValue, dateFormat));
     setOpen(false);
   }
 
@@ -83,13 +104,14 @@ export function DatePicker({
     <Popover
       open={open}
       onOpenChange={(nextOpen) => {
-        if (nextOpen) setDraft(value);
+        if (nextOpen) setDraft(formatEntry(value, dateFormat));
         setOpen(nextOpen);
       }}
     >
       <PopoverTrigger asChild>
         <button
           id={id}
+          ref={triggerRef}
           aria-describedby={describedBy}
           aria-invalid={invalid}
           aria-label={`${label}: ${
@@ -114,6 +136,8 @@ export function DatePicker({
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           requestAnimationFrame(() => {
+            const active = document.activeElement;
+            if (active !== document.body && active !== triggerRef.current && active !== contentRef.current) return;
             const selected =
               contentRef.current?.querySelector<HTMLElement>(
                 '[role="gridcell"][aria-selected="true"]',
@@ -124,6 +148,7 @@ export function DatePicker({
       >
         <MiniCalendar
           anchor={anchor}
+          monthYearSelectors
           label={`Choose ${label.toLocaleLowerCase()}`}
           max={max}
           min={min}
@@ -132,17 +157,17 @@ export function DatePicker({
         />
         <div className={styles.datePickerEntry}>
           <label>
-            <span>Exact date</span>
+            <span className={styles.visuallyHidden}>Exact date</span>
             <input
               aria-invalid={draft.length > 0 && !draftValid}
               inputMode="numeric"
-              placeholder="YYYY-MM-DD"
+              placeholder={entryPlaceholder}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key !== "Enter" || !draftValid) return;
                 event.preventDefault();
-                choose(draft);
+                choose(parsedDraft);
               }}
             />
           </label>
@@ -170,11 +195,11 @@ export function DatePicker({
         {/* Only when it is wrong: the calendar above is the instruction. */}
         {draft.length > 0 && !draftValid ? (
           <p className={styles.datePickerHint} role="alert">
-            {min && draft < min
-              ? `Choose ${min} or later.`
-              : max && draft > max
-                ? `Choose ${max} or earlier.`
-                : "Use the format YYYY-MM-DD."}
+            {min && parsedDraft && parsedDraft < min
+              ? `Choose ${formatEntry(min, dateFormat)} or later.`
+              : max && parsedDraft && parsedDraft > max
+                ? `Choose ${formatEntry(max, dateFormat)} or earlier.`
+                : `Use the format ${entryPlaceholder}.`}
           </p>
         ) : null}
       </PopoverContent>

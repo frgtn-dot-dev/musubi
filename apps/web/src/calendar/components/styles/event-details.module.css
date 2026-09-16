@@ -32,7 +32,7 @@
   display: grid;
   flex: 1;
   min-width: 0;
-  gap: var(--space-2);
+  gap: var(--space-4);
 }
 
 .detailsHeader h2,
@@ -381,7 +381,7 @@
 .detailPopover .detailsHeader,
 .detailPopover .editorHeader { position: relative; flex: none; padding: var(--space-6) var(--layer-inline) var(--space-4); border-bottom: 0; }
 .detailPopover .detailsHeader::before,
-.detailPopover .editorHeader::before { display: none; }
+.detailPopover .editorHeader::before { display: block; top: var(--space-6); bottom: auto; height: var(--space-7); background: var(--event-accent, var(--accent-primary)); }
 .detailPopover .detailsBody { flex: 1; min-height: 0; overflow-y: auto; scroll-padding-block: var(--layer-body-block); overscroll-behavior: contain; align-content: start; gap: var(--space-4); padding: var(--space-4) var(--layer-inline); }
 .detailPopover .whenList,
 .detailPopover .infoList,
@@ -405,3 +405,8 @@
 .detailPopover .reminderLabel { font-size: var(--text-13); letter-spacing: normal; text-transform: none; font-weight: 400; }
 
 .detailPopover .attendeeAnswer { padding-inline: 0; padding-left: calc(var(--space-5) + var(--space-2)); }
+
+.infoList a { color: var(--text-secondary); text-decoration: underline; overflow-wrap: anywhere; }
+
+.editorHeaderActions { display: flex; align-items: center; gap: var(--space-1); flex: none; }
+.editorHeaderActions > div:empty { display: none; }

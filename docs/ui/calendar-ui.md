@@ -49,8 +49,8 @@ scroll ani aktivní objekt.
 | Dialog dopadu | Koho/co to ovlivní? | velmi vysoká | recurrence scope, nevratné |
 
 **R4 — Lokální akce má lokální reakci.** Klik na slot zachová výběr v gridu a
-otevře pravý panel s jeho datem a časem. Panel na desktopu vyhradí místo vpravo a zúží kalendář i jeho horní lištu,
-aby ovládání zůstalo dostupné. Validace je u pole, které ji způsobilo. Drag ukazuje čas u taženého objektu.
+otevře pravý panel s jeho datem a časem. Panel na desktopu překryje pravý okraj kalendáře bez změny jeho šířky.
+Nezakrytá část zůstává interaktivní. Validace je u pole, které ji způsobilo. Drag ukazuje čas u taženého objektu.
 
 **R5 — Dvě rychlosti, bez ztráty draftu.** Quick create ↔ full editor si předají
 všechno rozpracované. Editor nikdy nezakládá nový prázdný draft.
@@ -167,15 +167,14 @@ Radix positioning wrappers. Child pickers must remain clickable above the
 dialog in both anchored and narrow sheet layouts; features do not set z-index.
 
 Event creation uses the same right Inspector and complete EventEditorForm as
-editing. Desktop panels reserve their shared width in the workspace; the
-toolbar adapts to its available container width, keeping every action reachable.
-The month grid also fits that width with all seven days visible; compact chip
-anatomy follows the month container width instead of the browser window.
+editing. Desktop panels overlay the right edge of the workspace without reserving width.
+Calendar columns and toolbar typography retain their geometry while the panel is open.
+Clicking outside event details closes the panel without also creating an event underneath. Unsaved edits retain their discard confirmation. Closing reveals the covered controls and days.
 Narrow screens retain a modal panel. Toolbar, search, keyboard, month cells and time-grid gestures preserve
 their date/time defaults and return focus. The header and actions stay fixed;
 fields share one scroller. The displayed all-day end date is exclusive; the
-form adapts it to Musubi’s inclusive last date for drafts and writes. More options may
-hand the same draft to the full editor page, including exact DST-fold instants.
+form adapts it to Musubi’s inclusive last date for drafts and writes. The header’s expand icon hands the same draft to the full editor page, including
+exact DST-fold instants; the panel footer only contains Cancel and Save/Create.
 
 Only one object inspector is active. Clicking outside event details keeps them
 open; the close button or Escape dismisses them, and another event trigger
@@ -1186,7 +1185,7 @@ Desktop retains the view pills when an inspector is open, wrapping actions where
 needed. The mini-calendar owns Today and month arrows; toolbar paging is retained
 on narrow screens. Month wheel navigation advances once per gesture burst. Shared
 pills slide their selection, calendar views and periods crossfade, and inspectors
-and the title resize together in 120 ms. Reduced-motion settings disable these
+slide over the workspace in 120 ms without resizing the calendar or its title. Reduced-motion settings disable these
 transitions. User-menu actions include sign out, leaving the full profile width
 for name and email.
 
@@ -1211,3 +1210,9 @@ Kanban columns scroll independently below a fixed header containing the status,
 count and Add task action. Each scroll region is keyboard-focusable; drag edge
 scrolling follows the column under the pointer while horizontal board scrolling
 remains available on narrow screens.
+
+Page settings Filters includes independent Events, Tasks and Meetings switches.
+An omitted item-types filter means all types; an empty array means none. The
+selection is saved per Page and applies to calendar grids, Agenda and the task
+list/board. Meetings include local attendance-enabled events and invitations
+identified by the connected provider's readable attendee metadata.

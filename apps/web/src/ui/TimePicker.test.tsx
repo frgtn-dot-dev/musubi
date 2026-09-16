@@ -214,3 +214,30 @@ describe("TimePicker", () => {
     );
   });
 });
+
+it("desktop dial confirms once, restores focus without reopening, and cancels with Escape", async () => {
+  const original = window.matchMedia;
+  Object.defineProperty(window, "matchMedia", { configurable: true, value: (query: string) => ({ ...original(query), matches: query.includes("pointer: fine") }) });
+  try {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    renderPicker(onChange);
+    const input = screen.getByRole("combobox", { name: "Start time" });
+    await user.click(input);
+    screen.getByRole("slider", { name: "Hour dial" }).focus();
+    await user.keyboard("{ArrowRight}{Enter}");
+    expect(onChange).not.toHaveBeenCalled();
+    await user.keyboard("{ArrowRight}{Enter}");
+    expect(onChange).toHaveBeenCalledExactlyOnceWith("10:01");
+    await waitFor(() => expect(document.activeElement).toBe(input));
+    expect(input.getAttribute("aria-expanded")).toBe("false");
+    await user.click(input);
+    screen.getByRole("slider", { name: "Hour dial" }).focus();
+    await user.keyboard("{ArrowRight}{Escape}");
+    await waitFor(() => expect(document.activeElement).toBe(input));
+    expect(input.getAttribute("aria-expanded")).toBe("false");
+    expect(onChange).toHaveBeenCalledTimes(1);
+  } finally {
+    Object.defineProperty(window, "matchMedia", { configurable: true, value: original });
+  }
+});
