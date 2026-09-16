@@ -10494,6 +10494,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     expect(saved?.recurrence).toMatch(/^FREQ=WEEKLY;BYDAY=/);
     expect(saved?.start).toBeTruthy();
     await page.getByRole("button", { name: /Weekly UI review/ }).click();
+    await page.getByRole("dialog", { name: "Weekly UI review", exact: true }).getByRole("button", { name: "Edit", exact: true }).click();
     await page.getByText("Recurrence", { exact: true }).click();
     await expect(page.getByRole("combobox", { name: "Repeat", exact: true })).toContainText("Every week");
   });
@@ -10527,7 +10528,7 @@ for (const width of [1280, 390]) {
       for (const scroller of await board.locator("[data-kanban-column-scroll]").all()) {
         expect(await scroller.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
       }
-      const handle = page.getByRole("button", { name: "Drag Kanban review to another status; or use its status selector" });
+      const handle = page.getByRole("button", { name: "Drag Kanban review to another status; press Enter to open task details" });
       await board.getByRole("button", { name: "Kanban review", exact: true }).click();
       const taskDetail = page.getByRole("dialog", { name: "Kanban review", exact: true });
       await expect(taskDetail).toBeVisible();
@@ -10569,8 +10570,10 @@ for (const width of [1280, 390]) {
       releaseResponse?.();
       await expect.poll(() => task.status).toBe("in-process");
     } else {
-      await page.getByRole("combobox", { name: "Status of Kanban review" }).click();
+      await board.getByRole("button", { name: "Kanban review", exact: true }).click();
+      await page.getByRole("combobox", { name: "Task status", exact: true }).click();
       await page.getByRole("option", { name: "In progress", exact: true }).click();
+      await page.getByRole("button", { name: "Close task", exact: true }).click();
     }
     await expect(board.getByRole("region", { name: "In progress", exact: true }).getByRole("button", { name: /^Kanban review/ })).toBeVisible();
     expect(task.recurrence).toBe("FREQ=WEEKLY");
