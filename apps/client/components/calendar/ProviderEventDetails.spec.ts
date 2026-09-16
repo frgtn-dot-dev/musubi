@@ -9,6 +9,7 @@ vi.mock("react", async original => ({ ...(await original<typeof import("react")>
   useEffect: (effect: () => void, deps: any[]) => { const index = h.index++; if (!(index in h.slots)) { h.slots[index] = deps; h.effects.push(effect); } },
 }));
 vi.mock("react-native", () => ({ Text: "Text", View: "View" }));
+vi.mock("@expo/vector-icons", () => ({ Feather: "Icon", Ionicons: "Icon" }));
 vi.mock("@/constants/theme", () => ({ colors: {}, fonts: {}, styles: {} }));
 vi.mock("@/components/ui/Btn", () => ({ Btn: "Btn" }));
 vi.mock("./ProviderRsvpEditor", () => ({ ProviderRsvpEditor: "ProviderRsvpEditor" }));

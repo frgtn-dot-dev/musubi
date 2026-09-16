@@ -184,15 +184,15 @@ it("updates status inline without dropping recurrence", async () => {
   expect(screen.queryByRole("dialog")).toBeNull();
 });
 
-it("preserves completion on priority edits and exposes failed writes", async () => {
+it("exposes failed inline status writes", async () => {
   const user = userEvent.setup();
   const completedAt = new Date();
   const task = TaskSchema.parse({ id: "inline", creatorID: "owner", calendarID: fixtureCalendars[0]!.id, title: "Inline task", status: "completed", completedAt, percentComplete: 100 });
   const props = { ...emptyTaskProps(), tasks: [task], onUpdate: vi.fn(async () => { throw new Error("offline"); }) };
   render(<TaskList {...props} />);
-  await user.click(screen.getByRole("combobox", { name: "Priority of Inline task" }));
-  await user.click(screen.getByRole("option", { name: "High (1)" }));
-  expect(props.onUpdate).toHaveBeenCalledWith(task.id, expect.objectContaining({ priority: 1, status: "completed", completedAt, percentComplete: 100 }));
+  await user.click(screen.getByRole("combobox", { name: "Status of Inline task" }));
+  await user.click(screen.getByRole("option", { name: "In progress" }));
+  expect(props.onUpdate).toHaveBeenCalledWith(task.id, expect.objectContaining({ status: "in-process", completedAt: null, percentComplete: 0 }));
   expect(await screen.findByRole("dialog", { name: "Edit task" })).toBeTruthy();
   expect(screen.getByText(/This task could not be updated/)).toBeTruthy();
 });
@@ -244,11 +244,13 @@ it("shows all four Kanban columns and creates tasks directly in their phase", as
   expect(props.onCreate).toHaveBeenCalledWith(expect.objectContaining({ status: "completed", percentComplete: 100, completedAt: expect.any(Date) }));
 });
 
-it("offers a keyboard path from the drag handle to the status selector", async () => {
+it("offers a keyboard path from the drag handle to task details", async () => {
   const task = TaskSchema.parse({ id: "drag", title: "Drag task", creatorID: "owner", calendarID: fixtureCalendars[0]!.id });
-  render(<TaskList {...emptyTaskProps()} tasks={[task]} layout="kanban" />);
+  const onOpenTask = vi.fn();
+  render(<TaskList {...emptyTaskProps()} tasks={[task]} layout="kanban" onOpenTask={onOpenTask} />);
+  expect(screen.queryByRole("combobox")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: /Drag Drag task to another status/ }), { detail: 0 });
-  expect(document.activeElement).toBe(screen.getByRole("combobox", { name: "Status of Drag task" }));
+  expect(onOpenTask).toHaveBeenCalledWith(task);
 });
 
 it("keeps read-only Kanban cards visible without drag or create actions", () => {
@@ -257,7 +259,7 @@ it("keeps read-only Kanban cards visible without drag or create actions", () => 
   expect(screen.getByText("Read only task")).toBeTruthy();
   expect(screen.queryByRole("button", { name: /Drag Read only task/ })).toBeNull();
   expect(screen.queryByRole("button", { name: "Add task" })).toBeNull();
-  expect(screen.getByRole("combobox", { name: "Status of Read only task" })).toHaveProperty("disabled", true);
+  expect(screen.queryByRole("combobox")).toBeNull();
 });
 
 it("lets touch gestures scroll the card while keeping touch drag on its handle", () => {
@@ -305,4 +307,17 @@ it("follows the active pointer even when a child stops move and release propagat
     card.removeEventListener("pointerup", stop);
     cleanup();
   }
+});
+
+it("collapses a list group without losing its count or tasks", async () => {
+  const user = userEvent.setup();
+  const task = TaskSchema.parse({ id: "collapse", title: "Collapsible task", creatorID: "owner", calendarID: fixtureCalendars[0]!.id });
+  render(<TaskList {...emptyTaskProps()} tasks={[task]} />);
+  const toggle = screen.getByRole("button", { name: "Needs action 1" });
+  await user.click(toggle);
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  expect(screen.queryByRole("combobox")).toBeNull();
+  await user.click(toggle);
+  expect(screen.getByRole("combobox", { name: "Status of Collapsible task" })).toBeTruthy();
+  expect(screen.queryByRole("combobox", { name: "Priority of Collapsible task" })).toBeNull();
 });

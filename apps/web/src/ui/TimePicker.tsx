@@ -1,12 +1,20 @@
 import type { Settings } from "@musubi/types";
 import { ChevronDown } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { useId, useRef, useState, useSyncExternalStore } from "react";
 import { createTimeGeometry } from "~/calendar/time-geometry";
 import { classNames } from "./class-names";
 import { Popover, PopoverAnchor, PopoverContent } from "./Popover";
+import { TimeDial } from "./TimeDial";
 import { Segmented } from "./Segmented";
 import styles from "./primitives.module.css";
 
+const desktopQuery = "(min-width: 600px) and (pointer: fine)";
+const subscribeDesktop = (callback: () => void) => {
+  const query = matchMedia(desktopQuery);
+  query.addEventListener("change", callback);
+  return () => query.removeEventListener("change", callback);
+};
+const isDesktop = () => matchMedia(desktopQuery).matches;
 const TIME_PATTERN = /^(\d{1,2})(?::(\d{1,2}))?\s*(am|pm)?$/i;
 const SNAP_MINUTES = createTimeGeometry().snapMinutes;
 const MINUTES_PER_DAY = 24 * 60;
@@ -151,8 +159,10 @@ export function TimePicker({
   timeFormat,
   value,
 }: TimePickerProps) {
+  const desktop = useSyncExternalStore(subscribeDesktop, isDesktop, () => false);
   const id = useId();
   const inputRef = useRef<HTMLInputElement>(null);
+  const returningFocus = useRef(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const optionRefs = useRef(new Map<string, HTMLButtonElement>());
   const [column, setColumn] = useState<Column>("hour");
@@ -238,6 +248,14 @@ export function TimePicker({
     setDirty(false);
   }
 
+  function restoreInputFocus() {
+    requestAnimationFrame(() => {
+      returningFocus.current = true;
+      inputRef.current?.focus();
+      returningFocus.current = false;
+    });
+  }
+
   function choose(
     nextValue: string,
     { returnFocus = true }: { returnFocus?: boolean } = {},
@@ -248,7 +266,7 @@ export function TimePicker({
     setDirty(false);
     setOpen(false);
     if (returnFocus) {
-      requestAnimationFrame(() => inputRef.current?.focus());
+      restoreInputFocus();
     }
   }
 
@@ -308,12 +326,12 @@ export function TimePicker({
         <div className={classNames(styles.timePicker, className)}>
           <input
             id={controlId}
-            aria-activedescendant={open ? activeId : undefined}
+            aria-activedescendant={open && !desktop ? activeId : undefined}
             aria-autocomplete="list"
-            aria-controls={`${id}-hours ${id}-minutes`}
+            aria-controls={desktop ? `${id}-dial` : `${id}-hours ${id}-minutes`}
             aria-describedby={[describedBy, `${id}-hint`].filter(Boolean).join(" ")}
             aria-expanded={open}
-            aria-haspopup="listbox"
+            aria-haspopup={desktop ? "dialog" : "listbox"}
             aria-invalid={invalid || (fieldInvalid ?? false)}
             aria-label={label}
             autoComplete="off"
@@ -351,7 +369,7 @@ export function TimePicker({
               if (!open) openList();
             }}
             onFocus={() => {
-              if (!open) openList();
+              if (!open && !returningFocus.current) openList();
             }}
             onKeyDown={(event) => {
               if (event.key === "ArrowDown") {
@@ -408,7 +426,7 @@ export function TimePicker({
             strokeWidth={1.5}
           />
           <span className={styles.visuallyHidden} id={`${id}-hint`}>
-            Type a time or use the arrow keys to choose from the list.
+            Type a time or use the arrow keys to choose hours and minutes.
           </span>
         </div>
       </PopoverAnchor>
@@ -417,9 +435,16 @@ export function TimePicker({
           align="start"
           aria-label={`Choose ${label.toLocaleLowerCase()}`}
           className={styles.timePickerPopover}
+          style={desktop ? { width: 292 } : undefined}
+          id={desktop ? `${id}-dial` : undefined}
           ref={contentRef}
           side="bottom"
           sideOffset={6}
+          onEscapeKeyDown={() => {
+            setDraft(formatTimeValue(value, timeFormat));
+            setDirty(false);
+            restoreInputFocus();
+          }}
           onCloseAutoFocus={(event) => event.preventDefault()}
           onInteractOutside={(event) => {
             if (event.target === inputRef.current) {
@@ -451,7 +476,9 @@ export function TimePicker({
               }}
             />
           ) : null}
-          <div className={styles.timePickerColumns}>
+          {desktop ? <TimeDial hour={activeHour} minute={activeMinute} format={timeFormat} phase={column}
+            hours={hourOptions} minutes={minuteOptions} onPhase={setColumn}
+            onPreview={moveTo} onChoose={(hour, minute) => choose(minutesToTime(hour * 60 + minute))} /> : <div className={styles.timePickerColumns}>
             {(
               [
                 { key: "hour", label: "Hour", steps: hourOptions },
@@ -529,6 +556,7 @@ export function TimePicker({
               </div>
             ))}
           </div>
+          }
           <p
             className={styles.timePickerHint}
             role={invalid ? "alert" : undefined}

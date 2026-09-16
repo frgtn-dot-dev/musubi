@@ -221,6 +221,7 @@ function CalendarEventDetailsPopover({
 	const [deliveryTarget, setDeliveryTarget] = useState<{ context: string; eventId: string }>();
   const [providerRsvpEditor, setProviderRsvpEditor] = useState<{ context: string; eventId: string; occurrence: boolean; observation: ProviderEventStateResponse }>();
   const [providerReminderEditor, setProviderReminderEditor] = useState<{ context: string; eventId: string; occurrence: boolean; observation: ProviderEventStateResponse }>();
+	const [expandActionContainer, setExpandActionContainer] = useState<HTMLDivElement | null>(null);
 	const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteButtonElement, setDeleteButtonElement] = useState<HTMLButtonElement | null>(null);
@@ -636,17 +637,10 @@ function CalendarEventDetailsPopover({
 				<PopoverContent
 					aria-labelledby={titleId}
 					className={styles.detailPopover}
-					onClick={(clickEvent) => clickEvent.stopPropagation()}
-					/* React portals bubble events to the React parent, not the DOM
-               one: without this a press on the title reaches the day cell this
-               popover is rendered from and starts its drag-to-create gesture, so
-               selecting text opened a draft instead. Click was already stopped
-               for the same reason. */
-					onPointerDown={(pointerEvent) => pointerEvent.stopPropagation()}
+
           accessibleTitle={editing ? "Edit event" : event.title}
           persistent={editing}
           onFocusOutside={focusEvent => focusEvent.preventDefault()}
-          onInteractOutside={outsideEvent => outsideEvent.preventDefault()}
 					onEscapeKeyDown={(escapeEvent) => {
 						if (!targetAction) return;
 						escapeEvent.preventDefault();
@@ -668,6 +662,8 @@ function CalendarEventDetailsPopover({
 						<>
 							<header className={styles.editorHeader}>
 								<h2 id={titleId}>{master.recurrence ? "Edit series" : "Edit event"}</h2>
+                <div className={styles.editorHeaderActions}>
+                  <div ref={setExpandActionContainer} />
 								<IconButton
 									label="Close event editor"
 									size="compact"
@@ -675,6 +671,7 @@ function CalendarEventDetailsPopover({
 								>
 									<X size={17} strokeWidth={1.6} />
 								</IconButton>
+                </div>
 							</header>
 							<EventEditorForm
                 rdateMaster={homeCalendar?.provider === "caldav" && !liveMaster.seriesID ? liveMaster : undefined}
@@ -684,6 +681,7 @@ function CalendarEventDetailsPopover({
 								calendars={calendars}
                 localAccountName={user.name}
                 layout="panel"
+                expandActionContainer={expandActionContainer}
 								initialValues={draft?.values ?? eventFormValues(
 									master.recurrence && onRestoreEvent ? occurrence : master,
 								)}

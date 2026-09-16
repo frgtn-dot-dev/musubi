@@ -1895,18 +1895,15 @@ export function AddEventModal({
             </View>
           </>
         )}
-        <SettingRowAction label="Advanced time settings" onPress={() => setTimeSettingsOpen(open => !open)} />
+        <SettingRowAction label="Advanced time settings" subdued expanded={timeSettingsOpen}
+          onPress={() => setTimeSettingsOpen(open => !open)}
+          onInfoPress={() => Alert.alert("Advanced time settings", "The time model determines how the dates and times in this editor are interpreted. Changing it may change when the event occurs.\n\nEvent time zone: uses the selected zone, including its daylight saving rules.\n\nFloating local time: keeps the same local clock time without a fixed time zone.\n\nAll-day dates: uses calendar dates without a time or time zone.\n\nOlder events may have no specified model. A time zone is not inferred for them.")} />
         {timeSettingsOpen && <>
-        <SettingRowAction label="Time model" value={timeDraft?.timeKind === "zoned" ? "Event time zone" : timeDraft?.timeLabel ?? "Not specified"}
-          detail="The selected model interprets the dates and times below. Changing it may change when the event occurs."
+        <SettingRowAction label="Time model" subdued value={timeDraft?.timeKind === "zoned" ? "Event time zone" : timeDraft?.timeLabel ?? "Not specified"}
           onPress={() => setTimeModelPicker(true)} />
         {timeDraft?.timeKind === "zoned" && <View style={styles.fieldContainer}>
-          <Text style={styles.fieldValueText}>Event time zone</Text>
-          <TimeZonePicker accessibilityLabel="Event time zone" value={timeDraft.timeZone ?? ""} disabled={isLoading} onChange={value => setTimeDraft(current => current && ({ ...current, timeZone: value, timeLabel: value }))} />
+          <TimeZonePicker subdued accessibilityLabel="Event time zone" value={timeDraft.timeZone ?? ""} disabled={isLoading} onChange={value => setTimeDraft(current => current && ({ ...current, timeZone: value, timeLabel: value }))} />
         </View>}
-        {timeDraft && <Text style={styles.fieldValueText}>
-          {timeDraft.timeLabel}
-        </Text>}
         </>}
       </ScrollView>
       {!docked && (
@@ -1922,7 +1919,6 @@ export function AddEventModal({
         </View>
       )}
       <OptionPicker visible={timeModelPicker} title="Time model"
-        message="Uses the dates and times shown in the editor. No zone is inferred for older events."
         options={[{ value: "zoned", label: "Event time zone" }, { value: "floating", label: "Floating local time" }, { value: "all-day", label: "All-day dates" }]}
         value={timeDraft?.timeKind}
         onSelect={value => {

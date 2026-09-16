@@ -73,6 +73,7 @@ export function QuickCreate({
   userName,
   weekStartsOn,
 }: QuickCreateProps) {
+  const [expandActionContainer, setExpandActionContainer] = useState<HTMLDivElement | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const saving = useRef(false);
   const handoff = useRef(false);
@@ -148,13 +149,15 @@ export function QuickCreate({
           accessibleTitle="Create event"
           persistent
           className={styles.detailPopover}
-          onClick={event => event.stopPropagation()}
-          onPointerDown={event => event.stopPropagation()}
+
           onOpenAutoFocus={event => { event.preventDefault(); titleRef.current?.focus(); }}
-          // The grid remains interactive: moving this draft changes its time,
-          // and opening another object goes through the shared draft guard.
+          // The existing draft can still be dragged; background presses close
+          // through the same unsaved-changes guard as the close button.
           onFocusOutside={event => event.preventDefault()}
-          onInteractOutside={event => event.preventDefault()}
+          onPointerDownOutside={event => {
+            const target = event.detail.originalEvent.target;
+            if (target instanceof Element && target.closest("[data-draft]")) event.preventDefault();
+          }}
           onCloseAutoFocus={event => {
             event.preventDefault();
             if (!handoff.current && anchor.returnFocus?.isConnected) anchor.returnFocus.focus();
@@ -162,14 +165,18 @@ export function QuickCreate({
         >
           <header className={styles.editorHeader}>
             <h2>New event</h2>
+            <div className={styles.editorHeaderActions}>
+            <div ref={setExpandActionContainer} />
             <IconButton label="Close new event" size="compact" onClick={() => requestClose(() => {})}>
               <X aria-hidden="true" size={17} strokeWidth={1.6} />
             </IconButton>
+            </div>
           </header>
           <EventEditorForm
             calendars={calendars}
             localAccountName={userName?.trim() || email}
             layout="panel"
+            expandActionContainer={expandActionContainer}
             titleRef={titleRef}
             onExpand={onMoreOptions ? values => { handoff.current = true; onMoreOptions(values); } : undefined}
             initialValues={draft ?? initialValues}

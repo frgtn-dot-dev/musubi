@@ -28,7 +28,7 @@ function TimePickerExample({
     <article className={styles.card}>
       <div className={styles.copy}>
         <h3>{title}</h3>
-        <p>Type directly or use the snapped keyboard-navigable list.</p>
+        <p>Type a time or drag the clock hand from hours to minutes.</p>
       </div>
       <div className={styles.controlRow}>
         <label>Time</label>

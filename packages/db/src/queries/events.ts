@@ -1,6 +1,6 @@
 import { appendEventOutbox, reserveEventMutation, type EventOutboxIntent } from "./event-outbox";
 import { lockCalendarLifecycle } from "./calendar-lifecycle";
-import { and, eq, gt, gte, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, getTableColumns, gt, gte, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "..";
 import {
 	type NewEvent,
@@ -9,6 +9,8 @@ import {
 	eventUsers,
 	eventOutbox,
 	events,
+	externalEvents,
+	externalCalendars,
 	user,
 } from "../schema";
 
@@ -154,7 +156,17 @@ export async function getUsersEvents(
 			);
 
 	return db
-		.select({ event: events, calendarID: calendarEvents.calendarID })
+		.select({ event: { ...getTableColumns(events),
+      isMeeting: sql<boolean>`${events.hasAttendees} OR EXISTS (
+        SELECT 1 FROM ${externalEvents}
+        INNER JOIN ${externalCalendars} ON ${externalCalendars.calendarID} = ${externalEvents.calendarID}
+        WHERE ${externalEvents.eventID} = ${events.id}
+          AND ${externalEvents.calendarID} = ${events.originCalendarID}
+          AND ${externalCalendars.userID} = ${userID}
+          AND ${externalEvents.readRedactionRevision} IS NULL
+          AND jsonb_array_length(COALESCE(${externalEvents.providerState}->'attendees', '[]'::jsonb)) > 0
+      )`,
+    }, calendarID: calendarEvents.calendarID })
 		.from(calendarMembers)
 		.innerJoin(
 			calendarEvents,

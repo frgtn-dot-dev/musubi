@@ -16,14 +16,14 @@ function respond(route: Route, body: unknown, status = 200) {
 function event(id: string, start: string, end: string) {
   return { id, title: id, start, end, revision: 1, calendars: [calendarID], originCalendarID: calendarID, creatorID: "dst-user", color: "#b3492f", isAllDay: false, isCanceled: false, hasAttendees: false, organizer: "dst@example.invalid", recurrence: null };
 }
-async function fixture(page: Page, initial = [] as ReturnType<typeof event>[]) {
+async function fixture(page: Page, initial = [] as ReturnType<typeof event>[], weekStartsOn = "monday") {
   const errors: string[] = [];
   runtimeErrors.set(page, errors);
   page.on("pageerror", error => errors.push(error.message));
   await page.addInitScript(() => sessionStorage.setItem("musubi-mobile-web-test-bypass", "true"));
   const writes: { method: string; body: any }[] = [];
   let events = [...initial];
-  const settings = { dateFormat: "dmy", defaultCalendarView: "week", notificationsOnByDefault: false, onboarded: true, theme: "system", timeFormat: "24h", weekStartsOn: "monday" };
+  const settings = { dateFormat: "dmy", defaultCalendarView: "week", notificationsOnByDefault: false, onboarded: true, theme: "system", timeFormat: "24h", weekStartsOn };
   await page.route(/^https?:\/\/[^/]+\/api\//, route => respond(route, []));
   await page.route("**/api/auth/get-session", route => respond(route, { session: { id: "dst-session", userId: "dst-user", createdAt: stamp, updatedAt: stamp, expiresAt: "2027-01-01T00:00:00Z", token: "fixture" }, user: { id: "dst-user", name: "DST QA", email: "dst@example.invalid", emailVerified: true, createdAt: stamp, updatedAt: stamp, image: null } }));
   await page.route("**/api/v1/calendars", route => respond(route, [{ id: calendarID, name: "Personal", color: "#b3492f", creatorID: "dst-user", members: [], role: "owner", isDefault: true }]));
@@ -66,7 +66,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await page.mouse.click(point.x, point.y);
     await page.getByRole("textbox", { name: "Event title" }).fill(`Fold ${fold}`);
     if (fold === 1) {
-      await page.getByRole("button", { name: "More options", exact: true }).press("Enter");
+      await page.getByRole("button", { name: "Expand event editor", exact: true }).press("Enter");
       await expect(page).toHaveURL(/exactRange=/);
       await page.reload();
     }
@@ -93,7 +93,7 @@ test("DST keyboard move then resize preserves second occurrence UTC", async ({ p
 
 test("DST spring hole rejects pointer creation and retains an existing draft after invalid drop", async ({ page }, info) => {
   await page.setViewportSize({ width: 1440, height: 1100 });
-  const writes = await fixture(page);
+  const writes = await fixture(page, [], "sunday");
   await page.goto(`/app/p/${pageID}/week?date=2026-03-29`);
   const hole = page.locator('[data-time-grid-column="2026-03-29"] [data-time-axis-hole]');
   await expect(hole).toHaveCount(1);
@@ -104,16 +104,15 @@ test("DST spring hole rejects pointer creation and retains an existing draft aft
   await page.mouse.click(valid.x, valid.y);
   await page.getByRole("textbox", { name: "Event title" }).fill("Keep spring draft");
   const draft = page.locator('[data-time-grid-column="2026-03-29"] [data-draft]').first();
-  // The docked panel narrows the week; bring the last column into view
-  // before hit-testing its draft rather than pointing underneath the panel.
+  // Hit-test the exposed part of the draft beside the overlay panel.
   await draft.scrollIntoViewIfNeeded();
   const box = (await draft.boundingBox())!;
-  expect(await page.evaluate(({x,y}) => document.elementFromPoint(x,y)?.closest("[data-draft]")?.outerHTML, {x:box.x+box.width-3,y:box.y+14})).toContain("data-draft");
-  await page.mouse.move(box.x + box.width - 3, box.y + 14);
+  expect(await page.evaluate(({x,y}) => document.elementFromPoint(x,y)?.closest("[data-draft]")?.outerHTML, {x:box.x+20,y:box.y+14})).toContain("data-draft");
+  await page.mouse.move(box.x + 20, box.y + 14);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width - 3, box.y + 30, { steps: 4 });
+  await page.mouse.move(box.x + 20, box.y + 30, { steps: 4 });
   await expect(draft).toHaveAttribute("data-dragging", "");
-  await page.mouse.move(box.x + box.width - 3, box.y + 80, { steps: 12 });
+  await page.mouse.move(box.x + 20, box.y + 80, { steps: 12 });
   await page.mouse.up();
   await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue("Keep spring draft");
   await page.screenshot({ path: info.outputPath("spring-invalid-draft.png") });

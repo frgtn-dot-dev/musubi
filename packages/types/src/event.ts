@@ -26,6 +26,8 @@ export const EventSchema = z.object({
   isCanceled: z.boolean(),
   isAllDay: z.boolean(),
   hasAttendees: z.boolean().default(false),
+  /** Read-only classification, including provider invitations. */
+  isMeeting: z.boolean().optional(),
   description: z.string().nullish(),
   location: z.string().nullish(),
   recurrence: z.string().nullish(),
@@ -37,10 +39,11 @@ export type Event = z.infer<typeof EventSchema>;
 const eventWriteDate = z
   .union([z.date(), z.iso.datetime({ offset: true })])
   .pipe(z.coerce.date());
-export const EventCreateRequestSchema = EventSchema.omit({ providerReadRetiredRevision: true, revision: true, timeModel: true, seriesID: true, originalStart: true })
+export const EventCreateRequestSchema = EventSchema.omit({ isMeeting: true, providerReadRetiredRevision: true, revision: true, timeModel: true, seriesID: true, originalStart: true })
   .extend({ start: eventWriteDate, end: eventWriteDate })
   .strict();
 export const EventPatchSchema = EventSchema.omit({
+  isMeeting: true,
   id: true,
   providerReadRetiredRevision: true,
   revision: true,
@@ -107,7 +110,7 @@ export function eventCreateOperation(event: EventWriteRequest) {
   if (!event.timeEdit) return { path: "/events" as const, body: eventCreateRequest(event) };
   if (event.seriesID || event.originalStart || event.scopeEdit)
     throw new Error("This draft requires an occurrence-aware create. No changes were saved.");
-  const { providerReadRetiredRevision, start, end, isAllDay, revision, timeModel, seriesID, originalStart, ...content } = EventSchema.parse(event);
+  const { isMeeting, providerReadRetiredRevision, start, end, isAllDay, revision, timeModel, seriesID, originalStart, ...content } = EventSchema.parse(event);
   return { path: "/events/time" as const, body: EventTimeCreateRequestSchema.parse({ event: content, time: event.timeEdit }) };
 }
 
@@ -214,7 +217,7 @@ export function eventCreateRequest(
 ): z.infer<typeof EventCreateRequestSchema> {
   if (hasKnownEventTime(event))
     throw new Error("This event requires a time-model-aware copy. No changes were saved.");
-  const { providerReadRetiredRevision: _retiredRevision, revision: _revision, timeModel: _timeModel, seriesID: _seriesID, originalStart: _originalStart, ...create } = EventSchema.parse(event);
+  const { isMeeting: _isMeeting, providerReadRetiredRevision: _retiredRevision, revision: _revision, timeModel: _timeModel, seriesID: _seriesID, originalStart: _originalStart, ...create } = EventSchema.parse(event);
   return EventCreateRequestSchema.parse(create);
 }
 

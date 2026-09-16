@@ -5,11 +5,21 @@ import { Btn } from "@/components/ui/Btn";
 import { remoteForCalendar } from "@/services/federation";
 import type { Event, ProviderEventStateResponse } from "@musubi/types";
 import { assertCaldavSeriesAlarmObservation, canManageProviderOrganizer, providerEventDetails } from "@musubi/calendar";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ComponentProps } from "react";
+import { Feather } from "@expo/vector-icons";
+import { ProviderIcon } from "./ProviderIcon";
 import { Text, View } from "react-native";
+import { spacing, typeSizes } from "@musubi/design-system";
 import { colors, fonts, styles } from "@/constants/theme";
 import { useApi } from "@/services/api";
 import { useServer } from "@/contexts/ServerContext";
+
+const detailIcons: Record<string, ComponentProps<typeof Feather>["name"]> = {
+  Organizer: "user", "Your role": "user-check", "Your provider response": "message-circle",
+  "Provider participants": "users", "Participant list": "users",
+  "Provider alarms": "bell", "Provider reminders": "bell", Availability: "clock",
+  Privacy: "lock", "Provider status": "activity", "Provider event type": "calendar",
+};
 
 export function ProviderEventDetails({ event, userId, observationRevision, seriesMaster }: { seriesMaster?: Event; event: Event; userId: string; observationRevision?: number }) {
   const { apiUrl } = useServer();
@@ -61,15 +71,23 @@ export function ProviderEventDetailsBody({ event, userId, seriesMaster }: { seri
   const current = result?.key === key ? result : undefined;
   if (current?.state === null) return null;
   const details = current?.state ? providerEventDetails(current.state) : undefined;
-  const textStyle = { fontFamily: fonts.sans, color: colors.fg2 };
+  const textStyle = { fontFamily: fonts.serif, fontSize: typeSizes[13], color: colors.fg2 };
   return <View style={styles.fieldContainer}>
-    <Text accessibilityRole="header" style={styles.fieldLabel}>{details ? `${details.provider} details` : "Provider details"}</Text>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing[2], marginBottom: spacing[2] }}>
+      <ProviderIcon provider={current?.state?.provider} />
+      <Text accessibilityRole="header" style={[styles.fieldLabel, { marginBottom: 0, flex: 1 }]}>{details ? `${details.provider} details` : "Provider details"}</Text>
+    </View>
+    <View style={{ padding: spacing[3], gap: spacing[2], backgroundColor: colors.bg3, borderColor: colors.line, borderWidth: 1, borderRadius: 8, marginBottom: spacing[3] }}>
     {details ? <>
       <Text style={textStyle}>{event.seriesID ? "These settings describe this occurrence. " : event.recurrence ? "These settings describe the series, not an individual occurrence. " : ""}Imported provider settings. {current?.reminderEdit || current?.rsvpEdit ? "Available actions are shown below." : `Change these in ${details.provider}.`}</Text>
-      {details.rows.map(row => <Text key={row.label} style={textStyle}>{row.label}: {row.value}</Text>)}
+      {details.rows.map(row => <View key={row.label} style={{ flexDirection: "row", alignItems: "flex-start", gap: spacing[2] }}>
+        <Feather name={detailIcons[row.label] ?? "info"} size={15} color={colors.fg3} accessible={false} />
+        <Text style={[textStyle, { flex: 1 }]}>{row.label}: {row.value}</Text>
+      </View>)}
       <Text style={textStyle}>Provider notifications and Musubi reminders are separate. Both apps may notify you.</Text>
     </> : <Text accessibilityLiveRegion="polite" style={textStyle}>{current?.failed ? "Provider details could not be loaded. Reopen this event to retry." : "Loading provider details…"}</Text>}
     {openError ? <Text accessibilityRole="alert" style={textStyle}>{openError}</Text> : null}
+    </View>
     {current?.reminderEdit && current.state && current.version && !event.recurrence && !(current.reminderEdit.provider === "caldav" && current.reminderEdit.scope === "series") ? <>
       <Btn label={current?.reminderEdit?.provider === "caldav" ? "Edit CalDAV event alarms" : event.seriesID ? "Edit reminders for this occurrence" : "Edit Google reminders"} variant="secondary" loading={opening} onPress={() => void openEditor()} />
     </> : null}

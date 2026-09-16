@@ -2496,7 +2496,7 @@
 	.inspector {
 		border-block: 0;
 		border-inline-end: 0;
-		box-shadow: none;
+		box-shadow: var(--shadow-overlay);
 	}
 }
 
@@ -2581,3 +2581,7 @@
   min-height: 0;
   flex: 1 1 auto;
 }
+
+.select.select_iconOnly { width: 36px; min-width: 36px; height: 36px; min-height: 36px; justify-content: center; padding: 0; border-color: transparent; background: transparent; box-shadow: none; color: var(--text-secondary); }
+.select.select_iconOnly:hover { background: var(--surface-raised); }
+.select_iconOnly .selectValue { gap: 0; }

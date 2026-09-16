@@ -28,6 +28,10 @@ type OptionsProps = {
 }
 
 type ActionProps = {
+  expanded?: boolean;
+  subdued?: boolean;
+  onInfoPress?: () => void;
+  disabled?: boolean;
   label: string;
   detail?: string;
   value?: string;
@@ -158,15 +162,35 @@ export function SettingRowOptions({
   );
 }
 
-export function SettingRowAction({ label, detail, value, external, onPress, secret }: ActionProps) {
+export function SettingRowAction({ label, detail, value, external, onPress, secret, disabled, expanded, onInfoPress, subdued = false }: ActionProps) {
+  if (onInfoPress && onPress) {
+    return (
+      <View style={[rowStyle, { borderColor: colors.line, paddingVertical: 0 }]}>
+        <Tap onPress={onPress} disabled={disabled} scaleTo={1}
+          accessibilityLabel={label} accessibilityState={{ expanded }}
+          style={{ flexShrink: 1, minHeight: 44, justifyContent: "center" }}>
+          <Text style={{ fontFamily: fonts.sans, fontSize: subdued ? typeSizes[13] : typeSizes[15], color: subdued ? colors.fg3 : colors.fg2 }}>{label}</Text>
+        </Tap>
+        <Tap onPress={onInfoPress} accessibilityLabel={`About ${label.toLowerCase()}`}
+          style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+          <Feather name="info" size={16} color={colors.fg3} accessible={false} />
+        </Tap>
+        <Tap onPress={onPress} disabled={disabled} scaleTo={1}
+          accessibilityLabel={label} accessibilityState={{ expanded }}
+          style={{ flex: 1, minWidth: 44, minHeight: 44, alignItems: "flex-end", justifyContent: "center" }}>
+          <Feather name={expanded ? "chevron-down" : "chevron-right"} size={15} color={colors.fg4} accessible={false} />
+        </Tap>
+      </View>
+    );
+  }
   const content = (
     <>
       <View style={{ flex: 1, gap: 2 }}>
         <Text
           style={{
             fontFamily: fonts.sans,
-            fontSize: typeSizes[15],
-            color: colors.fg2,
+            fontSize: subdued ? typeSizes[13] : typeSizes[15],
+            color: subdued ? colors.fg3 : colors.fg2,
           }}
         >
           {label}
@@ -195,7 +219,7 @@ export function SettingRowAction({ label, detail, value, external, onPress, secr
         </Text>
       ) : null}
       {onPress && !secret ? (
-        <Feather name={external ? "external-link" : "chevron-right"} size={15} color={colors.fg4} />
+        <Feather name={external ? "external-link" : expanded ? "chevron-down" : "chevron-right"} size={15} color={colors.fg4} />
       ) : null}
     </>
   );
@@ -217,9 +241,11 @@ export function SettingRowAction({ label, detail, value, external, onPress, secr
   return (
     <Tap
       onPress={onPress}
+      disabled={disabled}
       scaleTo={1}
       style={[rowStyle, { borderColor: colors.line, gap: spacing[3] }]}
       accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled, ...(expanded === undefined ? {} : { expanded }) }}
       accessibilityLabel={label}
     >
       {content}

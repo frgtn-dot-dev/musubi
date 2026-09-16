@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/tanstack-react";
 import { useState } from "react";
 import { expect, screen, userEvent, waitFor, within } from "storybook/test";
 import { DESKTOP_MODES } from "../../.storybook/modes";
-import { DatePicker } from "./DatePicker";
+import { DatePicker, DateFormatContext } from "./DatePicker";
 import styles from "./PickerStories.module.css";
 
 const INITIAL_DATE = "2026-08-01";
@@ -21,7 +21,7 @@ function DatePickerExample({ disabled, max, min, title }: DatePickerExampleProps
     <article className={styles.card}>
       <div className={styles.copy}>
         <h3>{title}</h3>
-        <p>Calendar recognition plus exact YYYY-MM-DD entry.</p>
+        <p>Choose month and year, or type a date in your preferred format.</p>
       </div>
       <div className={styles.controlRow}>
         <label>Date</label>
@@ -85,4 +85,15 @@ export const RangeAndDisabled: Story = {
       <DatePickerExample disabled title="Unavailable date" />
     </div>
   ),
+};
+
+
+export const DayFirst: Story = {
+  ...Overview,
+  render: () => <DateFormatContext.Provider value="dmy"><DatePickerExample title="Day / month / year" /></DateFormatContext.Provider>,
+};
+
+export const MonthFirst: Story = {
+  ...Overview,
+  render: () => <DateFormatContext.Provider value="mdy"><DatePickerExample title="Month / day / year" /></DateFormatContext.Provider>,
 };

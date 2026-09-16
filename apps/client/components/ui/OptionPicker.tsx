@@ -1,14 +1,14 @@
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 import { colors, fonts, styles } from "@/constants/theme";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { Feather } from "@expo/vector-icons";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { FlatList, Pressable, Text, TextInput, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { ModalPortal as Modal } from "@/components/ui/ModalPortal";
 import { Btn } from "@/components/ui/Btn";
 import { Tap } from "@/components/ui/Tap";
 
-export type PickerOption = { label: string; value: string };
+export type PickerOption = { label: string; value: string; icon?: ComponentProps<typeof Feather>["name"] };
 
 type Props = {
   searchable?: boolean;
@@ -50,11 +50,52 @@ export function OptionPicker({
   const { fadeStyle, handleClose } = useModalAnimation(visible, onClose);
 
   const [query, setQuery] = useState("");
-  const List = searchable ? ScrollView : View;
-  const filtered = options.filter(option => !searchable || (option.label + " " + option.value).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  const search = query.trim().toLocaleLowerCase();
+  const filtered = searchable && search ? options.filter(option => (option.label + " " + option.value).toLocaleLowerCase().includes(search)) : options;
   const choose = (option: PickerOption) => {
     onSelect(option.value);
     handleClose();
+  };
+
+  const renderOption = (option: PickerOption, index: number) => {
+    const selected = option.value === value;
+    return (
+      <Tap
+        key={option.value}
+        haptic="select"
+        scaleTo={1}
+        onPress={() => choose(option)}
+        accessibilityRole="radio"
+        accessibilityState={{ checked: selected }}
+        accessibilityLabel={option.label}
+        style={{
+          alignItems: "center",
+          borderColor: colors.line,
+          // Dividers between, not around: a line above the first row
+          // would fence the list off from its own title.
+          borderTopWidth: index === 0 ? 0 : 1,
+          flexDirection: "row",
+          gap: 12,
+          justifyContent: "space-between",
+          paddingVertical: 12,
+        }}
+      >
+        {option.icon ? <Feather name={option.icon} size={17} color={colors.fg3} accessible={false} /> : null}
+        <Text
+          style={{
+            color: selected ? colors.fg : colors.fg2,
+            flex: 1,
+            fontFamily: fonts.sans,
+            fontSize: 15,
+          }}
+        >
+          {option.label}
+        </Text>
+        {selected ? (
+          <Feather name="check" size={16} color={colors.accent} />
+        ) : null}
+      </Tap>
+    );
   };
 
   return (
@@ -107,48 +148,20 @@ export function OptionPicker({
             </View>
 
             {searchable ? <TextInput accessibilityLabel={`Search ${title}`} placeholder="Search city or time zone" placeholderTextColor={colors.fg4} value={query} onChangeText={setQuery} autoCapitalize="none" autoCorrect={false} style={[styles.fieldValueText, { backgroundColor: colors.bg1, borderRadius: 8, padding: 12 }]} /> : null}
-            <List {...(searchable ? { style: { maxHeight: 260 }, keyboardShouldPersistTaps: "handled" as const } : {})}>
-              {filtered.map((option, index) => {
-                const selected = option.value === value;
-                return (
-                  <Tap
-                    key={option.value}
-                    haptic="select"
-                    scaleTo={1}
-                    onPress={() => choose(option)}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: selected }}
-                    accessibilityLabel={option.label}
-                    style={{
-                      alignItems: "center",
-                      borderColor: colors.line,
-                      // Dividers between, not around: a line above the first row
-                      // would fence the list off from its own title.
-                      borderTopWidth: index === 0 ? 0 : 1,
-                      flexDirection: "row",
-                      gap: 12,
-                      justifyContent: "space-between",
-                      paddingVertical: 12,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: selected ? colors.fg : colors.fg2,
-                        flex: 1,
-                        fontFamily: fonts.sans,
-                        fontSize: 15,
-                      }}
-                    >
-                      {option.label}
-                    </Text>
-                    {selected ? (
-                      <Feather name="check" size={16} color={colors.accent} />
-                    ) : null}
-                  </Tap>
-                );
-              })}
-              {searchable && !filtered.length ? <Text style={{ color: colors.fg3 }}>No time zones found</Text> : null}
-            </List>
+            {searchable ? (
+              <FlatList
+                style={{ height: 260 }}
+                data={filtered}
+                keyExtractor={option => option.value}
+                renderItem={({ item, index }) => renderOption(item, index)}
+                extraData={value}
+                initialNumToRender={8}
+                maxToRenderPerBatch={8}
+                windowSize={5}
+                keyboardShouldPersistTaps="handled"
+                ListEmptyComponent={<Text style={{ color: colors.fg3 }}>No time zones found</Text>}
+              />
+            ) : <View>{filtered.map(renderOption)}</View>}
 
             {/* In a row, even alone. `btnSecondary` is `flex: 1` — built to
                 share a row with a confirm button — and in a column that flex

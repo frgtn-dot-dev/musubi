@@ -1,11 +1,12 @@
-import { CalendarDays, GripVertical, Circle, CircleCheck, Clock3, CircleX, Flag, FlagOff, Plus, Repeat2, Trash2 } from "lucide-react";
+import { formatTaskDate } from "../task-format";
+import { X, ChevronDown, CalendarDays, GripVertical, Circle, CircleCheck, Clock3, CircleX, Flag, FlagOff, Plus, Repeat2, Trash2 } from "lucide-react";
 import {
   describeAdvanced,
   isEditableRRule,
   parseAdvanced,
   splitRecurrence,
 } from "@musubi/calendar/rrule-editor";
-import { Fragment, useLayoutEffect, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Fragment, useId, useLayoutEffect, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { providerFlavor } from "@musubi/types";
 import type {
   Calendar,
@@ -17,9 +18,11 @@ import type {
 import { parseDateKey } from "../calendar-math";
 import { toDateKey } from "../date-key";
 import { Button, IconButton } from "~/ui/Button";
-import { Checkbox } from "~/ui/Checkbox";
+import { Switch } from "~/ui/Switch";
 import { DatePicker } from "~/ui/DatePicker";
-import { Dialog } from "~/ui/Dialog";
+import type { Dialog } from "~/ui/Dialog";
+import { Inspector, InspectorContent } from "~/ui/Inspector";
+import surfaceStyles from "~/ui/primitives.module.css";
 import { Disclosure } from "~/ui/Disclosure";
 import { Empty } from "~/ui/Empty";
 import { Field } from "~/ui/Field";
@@ -35,6 +38,10 @@ import { RecurrenceEditor } from "./RecurrenceEditor";
 import styles from "./TaskList.module.css";
 
 type TaskListProps = {
+  editorOnly?: boolean;
+  initialEditTask?: Task;
+  onEditorClose?: () => void;
+  onOpenTask?: (task: Task) => void;
   showLayoutControl?: boolean;
   layout?: "list" | "kanban";
   onLayoutChange?: (layout: "list" | "kanban") => void;
@@ -46,7 +53,7 @@ type TaskListProps = {
   onCreate: (task: TaskCreate) => Promise<Task>;
   onRemove: (task: Task) => Promise<void>;
   onUpdate: (id: string, task: TaskUpdate) => Promise<Task>;
-  settings: Pick<Settings, "timeFormat" | "weekStartsOn">;
+  settings: Pick<Settings, "timeFormat" | "weekStartsOn"> & Partial<Pick<Settings, "dateFormat">>;
   tasks: Task[];
   sourceTasks?: Task[];
   sourceCalendars?: Calendar[];
@@ -60,7 +67,7 @@ export const TASK_STATUSES = [
   { label: "Completed", value: "completed", icon: <CircleCheck size={16} /> },
   { label: "Cancelled", value: "cancelled", icon: <CircleX size={16} /> },
 ];
-const TASK_PRIORITIES = Array.from({ length: 10 }, (_, priority) => ({
+export const TASK_PRIORITIES = Array.from({ length: 10 }, (_, priority) => ({
   label: priority === 0 ? "No priority" : `${priority <= 4 ? "High" : priority === 5 ? "Medium" : "Low"} (${priority})`,
   value: String(priority),
   icon: priority === 0 ? <FlagOff size={16} /> : <Flag size={16} fill={priority <= 4 ? "currentColor" : "none"} />,
@@ -153,6 +160,7 @@ export function replaceTaskTime(value: Date | null | undefined, time: string) {
 }
 
 export function TaskList({
+  editorOnly = false, initialEditTask, onEditorClose, onOpenTask,
   showLayoutControl = true,
   layout: controlledLayout,
   onLayoutChange,
@@ -205,9 +213,9 @@ export function TaskList({
   )?.id;
   const [handledCreateRequest, setHandledCreateRequest] =
     useState(createRequest);
-  const [editing, setEditing] = useState<Task>();
+  const [editing, setEditing] = useState<Task | undefined>(initialEditTask);
   const [draft, setDraft] = useState<Draft | undefined>(() =>
-    createRequest && firstEditableCalendarID && !offline
+    initialEditTask ? { ...taskUpdate(initialEditTask), id: initialEditTask.id } : createRequest && firstEditableCalendarID && !offline
       ? emptyDraft(firstEditableCalendarID)
       : undefined,
   );
@@ -271,6 +279,7 @@ export function TaskList({
     setRemovedTaskID(undefined);
     setError("");
     onCreateRequestHandled();
+    onEditorClose?.();
   }
 
   function closeEditor() {
@@ -358,6 +367,30 @@ export function TaskList({
     }
   }
 
+  const editor = draft ? (
+        <TaskEditor
+          busy={busy}
+          unavailable={Boolean(editing && removedTaskID === editing.id)}
+          calendars={calendars}
+          draft={draft}
+          editableCalendarIds={editableCalendarIds}
+          editing={editing}
+          error={error}
+          initialFocus={titleRef}
+          settings={settings}
+          onChange={next => {
+            if (draft) setOwnedFields(previous => [...new Set([...previous, ...["title", "description", "url", "relatedTo"].filter(field => next[field as keyof Draft] !== draft[field as keyof Draft])])]);
+            setDraft(next);
+          }}
+          onDelete={editing && removedTaskID !== editing.id ? remove : undefined}
+          onOpenChange={(open) => {
+            if (!open) closeEditor();
+          }}
+          onSubmit={submit}
+        />
+      ) : null;
+  if (editorOnly) return editor;
+
   return (
     <section aria-label="Tasks" className={styles.tasks} data-layout={layout} data-kanban-scroll>
       {showLayoutControl ? <div className={styles.viewControls}>
@@ -392,39 +425,19 @@ export function TaskList({
             editableCalendarIds={editableCalendarIds}
             label={label}
             icon={icon}
-            onEdit={openEdit}
+            onEdit={onOpenTask ?? openEdit}
             onUpdateInline={updateInline}
             busy={inlineBusy || busy}
             saving={inlineBusy}
             controls={inlineControls}
             timeFormat={settings.timeFormat}
+            dateFormat={settings.dateFormat ?? "dmy"}
             tasks={tasks.filter(task => task.status === value)}
           />
         ))
       )}
       </div>
-      {draft ? (
-        <TaskEditor
-          busy={busy}
-          unavailable={Boolean(editing && removedTaskID === editing.id)}
-          calendars={calendars}
-          draft={draft}
-          editableCalendarIds={editableCalendarIds}
-          editing={editing}
-          error={error}
-          initialFocus={titleRef}
-          settings={settings}
-          onChange={next => {
-            if (draft) setOwnedFields(previous => [...new Set([...previous, ...["title", "description", "url", "relatedTo"].filter(field => next[field as keyof Draft] !== draft[field as keyof Draft])])]);
-            setDraft(next);
-          }}
-          onDelete={editing && removedTaskID !== editing.id ? remove : undefined}
-          onOpenChange={(open) => {
-            if (!open) closeEditor();
-          }}
-          onSubmit={submit}
-        />
-      ) : null}
+      {editor}
     </section>
   );
 }
@@ -447,6 +460,7 @@ function TaskGroup({
   controls,
   saving,
   timeFormat,
+  dateFormat,
   tasks,
 }: {
   kanban: boolean;
@@ -466,8 +480,11 @@ function TaskGroup({
   saving: boolean;
   controls: React.RefObject<Map<string, HTMLButtonElement>>;
   timeFormat: Settings["timeFormat"];
+  dateFormat: Settings["dateFormat"];
   tasks: Task[];
 }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const bodyId = useId();
   if (!tasks.length && !kanban) return null;
   const placeholder = <li key="drop-placeholder" className={styles.dropPlaceholder} data-drop-placeholder aria-hidden="true">Move to {label.toLowerCase()}</li>;
   return (
@@ -480,27 +497,22 @@ function TaskGroup({
     >
       <div className={kanban ? styles.columnHeading : undefined}>
         <SectionLabel className={styles.groupHeading}>
-          <span aria-hidden="true">{icon}</span>{label}{" "}<span>{tasks.length}</span>
+          {kanban ? <><span aria-hidden="true">{icon}</span>{label}{" "}<span>{tasks.length}</span></> :
+            <Button variant="ghost" className={styles.groupToggle} aria-expanded={!collapsed} aria-controls={bodyId} onClick={() => setCollapsed(value => !value)}>
+              <ChevronDown size={14} aria-hidden="true" className={styles.groupChevron} data-collapsed={collapsed || undefined} />
+              <span aria-hidden="true">{icon}</span>{label}{" "}<span>{tasks.length}</span>
+            </Button>}
         </SectionLabel>
         {kanban && onCreate ? <Button variant="ghost" size="compact" disabled={busy} icon={<Plus size={16} />} onClick={onCreate}>Add task</Button> : null}
       </div>
-      <div className={kanban ? styles.columnBody : undefined} data-kanban-column-scroll={kanban ? "" : undefined} tabIndex={kanban ? 0 : undefined} role={kanban ? "region" : undefined} aria-label={kanban ? `${label} tasks` : undefined}>
+      <div id={bodyId} hidden={!kanban && collapsed} className={kanban ? styles.columnBody : undefined} data-kanban-column-scroll={kanban ? "" : undefined} tabIndex={kanban ? 0 : undefined} role={kanban ? "region" : undefined} aria-label={kanban ? `${label} tasks` : undefined}>
       {kanban && !tasks.length && !dropActive ? <p className={styles.emptyColumn}>No tasks</p> : null}
       <ul>
         {tasks.map((task) => {
           const calendar = calendarById.get(task.calendarID);
           const complete = task.status === "completed";
           const editable = editableCalendarIds.has(task.calendarID);
-          const due = task.due?.toLocaleString(undefined, {
-            month: "short",
-            day: "numeric",
-            year: "numeric",
-            ...(!task.isAllDay ? {
-              hour: "numeric" as const,
-              minute: "2-digit" as const,
-              hour12: timeFormat === "12h",
-            } : {}),
-          });
+          const due = task.due ? formatTaskDate(task.due, task.isAllDay, { timeFormat, dateFormat }) : undefined;
           const status = task.status === "in-process"
             ? "In progress"
             : task.status === "cancelled" ? "Cancelled" : undefined;
@@ -520,21 +532,14 @@ function TaskGroup({
                 <Select
                   ref={node => { if (node) controls.current.set(`${task.id}:status`, node); else controls.current.delete(`${task.id}:status`); }}
                   label={`Status of ${task.title}`}
+                  iconOnly
                   options={TASK_STATUSES}
                   size="compact"
                   value={task.status}
                   disabled={!editable || busy}
                   onChange={status => void onUpdateInline(task, { status: status as Task["status"] })}
                 />
-                <Select
-                  ref={node => { if (node) controls.current.set(`${task.id}:priority`, node); else controls.current.delete(`${task.id}:priority`); }}
-                  label={`Priority of ${task.title}`}
-                  options={TASK_PRIORITIES}
-                  size="compact"
-                  value={String(task.priority)}
-                  disabled={!editable || busy}
-                  onChange={priority => void onUpdateInline(task, { priority: Number(priority) })}
-                />
+
               </div>
           );
           if (kanban) return (
@@ -549,9 +554,9 @@ function TaskGroup({
               }}>
               <div className={styles.cardHeader}>
                 <span className={styles.cardCalendar}>{providerMark}<span>{calendar?.name ?? "Unknown calendar"}</span></span>
-                {editable ? <IconButton className={styles.dragHandle} label={`Drag ${task.title} to another status; or use its status selector`} size="compact" disabled={busy}
+                {editable ? <IconButton className={styles.dragHandle} label={`Drag ${task.title} to another status; press Enter to open task details`} size="compact" disabled={busy}
                   onPointerDown={event => onDragTask(task, event)}
-                  onClick={event => { if (event.detail === 0) controls.current.get(`${task.id}:status`)?.focus(); }}><GripVertical size={16} /></IconButton> : <span>Read only</span>}
+                  onClick={event => { if (event.detail === 0) onEdit(task); }}><GripVertical size={16} /></IconButton> : <span>Read only</span>}
               </div>
               {editable ? <Button variant="ghost" className={styles.cardTitle} disabled={busy} onClick={() => onEdit(task)}>{title}</Button> : <p className={styles.cardTitle}>{title}</p>}
               {task.description ? <p className={styles.cardDescription}>{task.description}</p> : null}
@@ -559,7 +564,6 @@ function TaskGroup({
                 {due ? <span><CalendarDays size={14} aria-hidden="true" />{due}</span> : <span>No due date</span>}
                 {task.recurrence ? <span title={taskRecurrenceSummary(task.recurrence, task.start)}><Repeat2 size={14} aria-hidden="true" />Repeats</span> : null}
               </div>
-              {controlsMarkup}
             </li>
             </Fragment>
           );
@@ -588,6 +592,20 @@ function TaskGroup({
   );
 }
 
+function TaskEditorSurface({ busy, ...props }: Parameters<typeof Dialog>[0] & { busy: boolean }) {
+  return <Inspector open={props.open} onOpenChange={props.onOpenChange} onRequestClose={() => { if (!busy) props.onOpenChange(false); }}>
+    <InspectorContent accessibleTitle={typeof props.title === "string" ? props.title : "Task editor"} onFocusOutside={event => event.preventDefault()}
+      onOpenAutoFocus={event => { event.preventDefault(); props.initialFocus?.current?.focus(); }}>
+      <header className={surfaceStyles.dialogHeader}>
+        <h2 className={surfaceStyles.dialogTitle}>{props.title}</h2>
+        <IconButton label="Close task editor" disabled={busy} onClick={() => props.onOpenChange(false)}><X size={18} /></IconButton>
+      </header>
+      <div className={`${surfaceStyles.dialogBody} ${surfaceStyles.dialogBody_padded}`}>{props.children}</div>
+      <footer className={surfaceStyles.dialogFooter}>{props.footer}</footer>
+    </InspectorContent>
+  </Inspector>;
+}
+
 function TaskEditor({
   busy,
   unavailable,
@@ -611,7 +629,7 @@ function TaskEditor({
   editing?: Task;
   error: string;
   initialFocus: React.RefObject<HTMLInputElement | null>;
-  settings: Pick<Settings, "timeFormat" | "weekStartsOn">;
+  settings: Pick<Settings, "timeFormat" | "weekStartsOn"> & Partial<Pick<Settings, "dateFormat">>;
   onChange: (draft: Draft) => void;
   onDelete?: () => Promise<void>;
   onOpenChange: (open: boolean) => void;
@@ -632,7 +650,8 @@ function TaskEditor({
     });
 
   return (
-    <Dialog
+    <TaskEditorSurface
+      busy={busy}
       closeLabel="Close task editor"
       footer={
         <>
@@ -739,13 +758,12 @@ function TaskEditor({
             </div>;
           })}
         </div>
-        <Checkbox
+        <Row label="All day" trailing={<Switch
           checked={draft.isAllDay}
           label="All day"
-          onChange={(event) =>
-            onChange({ ...draft, isAllDay: event.target.checked })
-          }
-        />
+          disabled={busy}
+          onCheckedChange={isAllDay => onChange({ ...draft, isAllDay })}
+        />} />
         <Field label="Notes">
           <textarea
             rows={4}
@@ -791,6 +809,6 @@ function TaskEditor({
         </Disclosure>
         {error ? <InlineError>{error}</InlineError> : null}
       </form>
-    </Dialog>
+    </TaskEditorSurface>
   );
 }

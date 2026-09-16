@@ -130,9 +130,7 @@ export function MonthCalendar({
   weekStartsOn,
   ...eventActions
 }: MonthCalendarProps) {
-  // A click that closed a layer is doing that and nothing else. Only the click
-  // is guarded, not the press: a drag that begins over an open draft is meant
-  // to replace it, which is a gesture and not a dismissal.
+  // The first background gesture only dismisses the open panel or menu.
   const dismissGuard = useLayerDismissGuard();
   const {
     begin: beginRangeCreate,
@@ -367,10 +365,9 @@ export function MonthCalendar({
           // touches, not only the ones it covers: an all-day event is one block
           // per cell, so a cell that did not step aside would break the bar it
           // carries a day short of the range.
-          // ponytail: the reserved line is not charged against eventCapacity —
-          // a full cell shows a sliver past its clip for the length of the
-          // gesture. Charging it would fold a chip into "+N more" mid-drag and
-          // put a hole in the very bar this is here to keep whole.
+          // Draft and move previews consume real slots. Apply the same budget
+          // to the whole week so multi-day bars remain aligned without pushing
+          // the overflow link into the following week's date heading.
           const rowHits = (from: string, to: string) =>
             from <= weekTo && to >= weekFrom;
           const draftRow = Boolean(
@@ -388,7 +385,8 @@ export function MonthCalendar({
             0,
             ...laneSpans.map((span) => span.lane + 1),
           );
-          const visibleLaneCount = visibleLaneLimit(laneCount, eventCapacity);
+          const reservedSlots = Number(draftRow) + Number(previewRow);
+          const visibleLaneCount = visibleLaneLimit(laneCount, Math.max(0, eventCapacity - reservedSlots));
 
           return (
             <div className={styles.monthWeek} role="row" key={weekFrom}>
@@ -477,7 +475,7 @@ export function MonthCalendar({
                         pointerEvent.button !== 0 ||
                         dismissGuard.pressDismissedLayer() ||
                         (pointerEvent.target instanceof Element &&
-                          pointerEvent.target.closest("button"))
+                          pointerEvent.target.closest("button,[role=dialog],[role=menu],[data-radix-popper-content-wrapper]"))
                       ) {
                         return;
                       }
@@ -506,6 +504,8 @@ export function MonthCalendar({
                     tabIndex={focusedIndex === index ? 0 : -1}
                     data-day-key={dateKey}
                     onClick={(event) => {
+                      // Portaled inspector content belongs to its own surface.
+                      if (event.target instanceof Element && event.target.closest('[role="dialog"], [role="menu"]')) return;
                       // A drag already opened quick create for its range.
                       if (
                         muted ||
@@ -738,12 +738,10 @@ export function MonthCalendar({
                             onPointerDown={(event) => event.stopPropagation()}
                           >
                             <div className={styles.monthOverflowHeader}>
-                              <h2>{getLongDateLabel(day)}</h2>
+                              <h2>{day.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</h2>
                               <p>
                                 {itemCount}{" "}
-                                {itemCount === 1
-                                  ? "calendar item"
-                                  : "calendar items"}
+                                {itemCount === 1 ? "item" : "items"}
                               </p>
                             </div>
                             <div className={styles.monthOverflowList}>

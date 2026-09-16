@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { TimeZonePicker } from "./TimeZonePicker";
 import { chooseEventTimeKind } from "@musubi/calendar";
 import {
@@ -20,6 +21,7 @@ import {
 	House,
 	Link2,
 	MapPin,
+	Maximize2,
 	Repeat2,
 	UsersRound,
 } from "lucide-react";
@@ -33,8 +35,7 @@ import {
 	useState,
 } from "react";
 import { useNarrowViewport } from "~/design/use-narrow-viewport";
-import { Button } from "~/ui/Button";
-import { Checkbox } from "~/ui/Checkbox";
+import { Button, IconButton } from "~/ui/Button";
 import { DatePicker } from "~/ui/DatePicker";
 import { Field } from "~/ui/Field";
 import { HelpTooltip } from "~/ui/HelpTooltip";
@@ -102,11 +103,12 @@ type EventEditorFormProps = {
 	 */
 	compact?: boolean;
 	/**
-	 * Where "More options" leads when the extra fields belong somewhere else — a
-	 * full page, in practice. It receives what is already filled in, so the draft
-	 * travels with the user. Absent reveals the rest in place.
+	 * Opens the full editor with the current draft. Panel shells render the action
+	 * in their header; compact forms can also disclose the remaining fields in place.
 	 */
 	onExpand?: (values: EventFormValues) => void;
+	/** Header slot; the form retains the current draft and saving guard. */
+	expandActionContainer?: HTMLElement | null;
 	initialValues: EventFormValues;
 	/** Retain a draft across an access-change unmount without retaining provider baselines. */
 	onValuesChange?: (values: EventFormValues) => void;
@@ -154,6 +156,7 @@ export function EventEditorForm({
 	onCancel,
 	onDraftChange,
 	onExpand,
+	expandActionContainer,
 	onError,
 	onSubmit,
 	submissionState,
@@ -343,7 +346,7 @@ export function EventEditorForm({
 
 	// Popovers grow down; narrow sheets grow up. Keep the toggle on the
 	// anchored side of the conditional time row, with matching DOM/tab order.
-	const allDayToggle = panel ? (
+	const allDayToggle = (
 		<Row
 			className={styles.toggleRow}
 			size="compact"
@@ -351,15 +354,17 @@ export function EventEditorForm({
 			label="All day"
 			trailing={<Switch label="All day" checked={values.isAllDay} disabled={saving} onCheckedChange={changeAllDay} />}
 		/>
-	) : (
-		<Checkbox
-			checked={values.isAllDay}
-			className={styles.toggleRow}
-			disabled={saving}
-			label="All day"
-			onChange={(event) => changeAllDay(event.target.checked)}
-		/>
 	);
+
+  const attendanceToggle = (
+					<Row
+						className={styles.toggleRow}
+						size="compact"
+						icon={<UsersRound size={18} strokeWidth={1.5} />}
+						label={<span className={styles.fieldLabel}><label htmlFor={`${id}-attendance`}>Allow attendance</label> <HelpTooltip label="Help for Allow attendance">Guests can respond to this event.</HelpTooltip></span>}
+						trailing={<Switch id={`${id}-attendance`} label="Allow attendance" checked={values.hasAttendees} disabled={saving} onCheckedChange={hasAttendees => patch({ hasAttendees })} />}
+					/>
+  );
 
 	const timeModelFields = values.timeEditable && expanded ? (
 			<>
@@ -387,7 +392,7 @@ export function EventEditorForm({
 			<Field
 				className={styles.titleField}
 				label="Event title"
-				labelHidden={!panel}
+				labelHidden
 				variant={fieldVariant}
 			>
 				<input
@@ -401,13 +406,10 @@ export function EventEditorForm({
 			</Field>
 
 			<section
-				aria-labelledby={`${id}-when-heading`}
+				aria-label="When"
 				className={`${styles.section} ${styles.whenSection}`}
 				data-editor-section="when"
 			>
-				<SectionLabel className={styles.sectionLabel} id={`${id}-when-heading`}>
-					When
-				</SectionLabel>
 			{layout === "popover" && timeModelFields}
 			{!panel && values.timeLabel && <p className={styles.timeContext}>{values.timeLabel}</p>}
 				<div className={styles.pickerRow}>
@@ -415,7 +417,7 @@ export function EventEditorForm({
 					<span aria-hidden="true" className={styles.pickerLabel}>
 						Date
 					</span>
-					<DatePicker
+					<Field label="Date" labelHidden><DatePicker
 						className={styles.pickerValue}
 						disabled={saving}
 						label="Date"
@@ -429,7 +431,7 @@ export function EventEditorForm({
 									: {}),
 							})
 						}
-					/>
+					/></Field>
 				</div>
 
 				{!narrow && !panel ? allDayToggle : null}
@@ -444,16 +446,16 @@ export function EventEditorForm({
 							Time
 						</span>
 						<Body {...(panel ? { className: styles.timeRange } : {})}>
-						<TimePicker
+						<Field label="Start time" labelHidden><TimePicker
 							disabled={saving}
 							label="Start time"
 							max={LATEST_START_TIME}
 							timeFormat={timeFormat}
 							value={values.startTime}
 							onChange={changeStartTime}
-						/>
+						/></Field>
 						<span className={styles.timeSeparator}>to</span>
-						<TimePicker
+						<Field label="End time" labelHidden><TimePicker
 							disabled={saving}
 							label="End time"
 							max={LATEST_END_TIME}
@@ -470,7 +472,7 @@ export function EventEditorForm({
 							timeFormat={timeFormat}
 							value={values.endTime}
 							onChange={(endTime) => patch({ endTime })}
-						/>
+						/></Field>
 						</Body>
 					</div>
 				) : null}
@@ -478,10 +480,11 @@ export function EventEditorForm({
 				    Musubi's inclusive last date, just like grid selections. */}
 				<div className={styles.pickerRow}>
 					<CalendarDays aria-hidden="true" size={17} strokeWidth={1.5} />
-					<span aria-hidden="true" className={styles.pickerLabel}>
-						Ends
-					</span>
-					<DatePicker
+					<span className={`${styles.pickerLabel} ${styles.endDateLabel}`}>
+                        Ends
+                        {panel && values.isAllDay ? <HelpTooltip label="Help for end date">The end date is not included. A one-day event ends on the following date.</HelpTooltip> : null}
+                    </span>
+					<Field label="Ends" labelHidden><DatePicker
 						className={styles.pickerValue}
 						disabled={saving}
 						label="Ends"
@@ -489,10 +492,10 @@ export function EventEditorForm({
 						value={panel && values.isAllDay ? shiftDayKey(values.endDate, 1) : values.endDate}
 						weekStartsOn={weekStartsOn}
 						onChange={(endDate) => patch({ endDate: panel && values.isAllDay ? shiftDayKey(endDate, -1) : endDate })}
-					/>
+					/></Field>
 				</div>
 
-				{panel && values.isAllDay ? <p className={styles.timeContext}>End date is not included.</p> : null}
+
 
 				{narrow || panel ? allDayToggle : null}
 
@@ -521,28 +524,19 @@ export function EventEditorForm({
 						/>
 					</Field>
 				) : null}
-				{layout === "page" && timeModelFields ? <div className={styles.pageTimeSettings}>
-					<SectionLabel>Time settings</SectionLabel>
+				{expanded && layout === "page" ? attendanceToggle : null}
+                {layout === "page" && timeModelFields ? <div className={styles.pageTimeSettings}>
 					{timeModelFields}
 				</div> : null}
 			</section>
 
 			{expanded ? (
 				<section
-					aria-labelledby={`${id}-details-heading`}
+					aria-label="Details"
 					className={`${styles.section} ${styles.detailsSection}`}
 					data-editor-section="details"
 				>
-					<SectionLabel className={styles.sectionLabel} id={`${id}-details-heading`}>
-						Details
-					</SectionLabel>
-					<Row
-						className={styles.toggleRow}
-						size="compact"
-						icon={<UsersRound size={18} strokeWidth={1.5} />}
-						label={<span className={styles.fieldLabel}><label htmlFor={`${id}-attendance`}>Allow attendance</label> <HelpTooltip label="Help for Allow attendance">Guests can respond to this event.</HelpTooltip></span>}
-						trailing={<Checkbox id={`${id}-attendance`} label="Allow attendance" labelHidden checked={values.hasAttendees} disabled={saving} onChange={event => patch({ hasAttendees: event.target.checked })} />}
-					/>
+                    {layout !== "page" ? attendanceToggle : null}
 					<Field
 						className={panel ? styles.detailField : undefined}
 						label={
@@ -651,10 +645,7 @@ export function EventEditorForm({
 						<legend className={styles.visuallyHidden}>
 							Calendars for this event
 						</legend>
-						<div aria-hidden="true" className={styles.calendarPlacementHeader}>
-							<span>Appears in</span>
-							<span>Home</span>
-						</div>
+
 
 						{calendarGroups.map((group) => (
 							<div className={styles.calendarGroup} key={group.key}>
@@ -776,11 +767,12 @@ export function EventEditorForm({
 			</FormBody>
 
 			<div className={styles.actions}>
-				{panel && expanded && onExpand ? (
-					<Button className={styles.expandAction} disabled={saving} variant="ghost" onClick={handleExpand}>
-						More options
-					</Button>
-				) : null}
+                {panel && expanded && onExpand && expandActionContainer ? createPortal(
+                  <IconButton label="Expand event editor" size="compact" disabled={saving} onClick={handleExpand}>
+                    <Maximize2 aria-hidden="true" size={17} strokeWidth={1.6} />
+                  </IconButton>,
+                  expandActionContainer,
+                ) : null}
 				{expanded ? (
 					<Button disabled={saving} variant="secondary" onClick={onCancel}>
 						Cancel

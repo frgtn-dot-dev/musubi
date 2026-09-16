@@ -32,6 +32,7 @@ import {
 } from "../page-icons";
 import type { Density } from "../time-geometry";
 import { CalendarVisibilityPill } from "./CalendarVisibilityPill";
+import { PAGE_ITEM_TYPES, pageItemTypes } from "../page-item-filters";
 import styles from "./styles/page-settings.module.css";
 
 // Steps rather than a free number: every value between 12 and 16 weeks looks
@@ -96,6 +97,7 @@ export function PageSettingsDialog({
     resolvePageIcon(page.config.icon, page.isDefault),
   );
   const [view, setView] = useState<PageConfigV1["view"]>(page.config.view);
+  const [filters, setFilters] = useState(page.config.filters);
   const [visibility, setVisibility] = useState(page.config.calendarVisibility);
   const [busy, setBusy] = useState(false);
   const [isDefault, setIsDefault] = useState(page.isDefault);
@@ -112,13 +114,15 @@ export function PageSettingsDialog({
     trimmedName !== page.name ||
     icon !== resolvePageIcon(page.config.icon, page.isDefault) ||
     JSON.stringify(view) !== JSON.stringify(page.config.view) ||
-    !visibilityEquals(visibility, page.config.calendarVisibility);
+    !visibilityEquals(visibility, page.config.calendarVisibility) ||
+    JSON.stringify(filters) !== JSON.stringify(page.config.filters);
   const canSave = Boolean(trimmedName) && dirty && !busy;
   const visibleCalendarIds = calendarIdsForVisibility(visibility, calendars);
 
   const draftConfig = (): PageConfigV1 => ({
     ...page.config,
     calendarVisibility: visibility,
+    filters,
     icon,
     view,
   });
@@ -451,8 +455,17 @@ export function PageSettingsDialog({
 
           <SettingsSection
             title="Filters"
-            description={`${visibleCalendarIds.length} of ${calendars.length} calendars shown on this page`}
           >
+            {PAGE_ITEM_TYPES.map(type => (
+              <RowToggle key={type} label={{ events: "Events", tasks: "Tasks", meetings: "Meetings" }[type]}
+                checked={pageItemTypes(filters).includes(type)} disabled={busy}
+                onCheckedChange={checked => setFilters(current => {
+                  const selected = pageItemTypes(current);
+                  const value = PAGE_ITEM_TYPES.filter(item => item === type ? checked : selected.includes(item));
+                  const others = current.filter(filter => filter.type !== "item-types");
+                  return value.length === PAGE_ITEM_TYPES.length ? others : [...others, { type: "item-types", value }];
+                })} />
+            ))}
             {/* Calendar visibility belongs to the Page, so it is configured here
               with its other saved presentation choices instead of in the
               calendar toolbar. */}

@@ -177,12 +177,15 @@ function buttons(node: ReactNode, label: string): any[] {
     !isValidElement<{
       children?: ReactNode;
       label?: string;
+      accessibilityLabel?: string;
+      header?: ReactNode;
       onPress?: () => void;
     }>(node)
   )
     return [];
   return [
-    ...(node.props.label === label ? [node.props] : []),
+    ...((node.props.label === label || node.props.accessibilityLabel === label) ? [node.props] : []),
+    ...buttons(node.props.header, label),
     ...buttons(node.props.children, label),
   ];
 }

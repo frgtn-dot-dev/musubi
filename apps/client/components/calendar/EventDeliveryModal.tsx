@@ -2,7 +2,11 @@ import { BottomSheetFrame } from "@/components/ui/BottomSheetFrame";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEffect, useRef, useState } from "react";
-import { AppState, ScrollView, Text, View } from "react-native";
+import { Alert, AppState, ScrollView, Text, View } from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { Tap } from "@/components/ui/Tap";
+import { SettingRowAction } from "@/components/SettingRow";
+import { ProviderIcon } from "./ProviderIcon";
 import { uuidv7 } from "uuidv7";
 import { spacing, typeSizes } from "@musubi/design-system";
 import {
@@ -233,14 +237,22 @@ export function DeliveryBody({
   };
   return (
     <ModalPortal visible onRequestClose={close}>
-      <BottomSheetFrame motion={motion} onClose={close} dismissible={!busy} header={<View style={styles.modalTitleRow}>
-          <Text accessibilityRole="header" style={styles.modalTitle}>
+      <BottomSheetFrame motion={motion} onClose={close} dismissible={!busy} header={<View style={[styles.modalTitleRow, { gap: spacing[1] }]}>
+{selectedId && !eventId && !comparison ? <Tap accessibilityLabel="Back to saved deliveries" disabled={busy} onPress={() => { setSelectedId(undefined); setError(""); setNotice(""); }} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}><Feather name="arrow-left" size={18} color={colors.fg3} /></Tap> : null}
+          <Text accessibilityRole="header" style={[styles.modalTitle, { flex: 1 }]}>
             {comparison
               ? "Review remote changes"
               : selectedId
                 ? "Delivery"
                 : "Unfinished deliveries"}
           </Text>
+          {!comparison ? <Tap accessibilityLabel="Refresh status" disabled={busy || loading} onPress={refresh} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}><Feather name="refresh-cw" size={18} color={colors.fg3} /></Tap> : null}
+          <Tap accessibilityLabel="About deliveries" accessibilityHint="Shows more information"
+            onPress={() => Alert.alert("About deliveries", "Status of saved changes. Unsaved edits in a form are not included.\n\nUnfinished deliveries includes changes that still need delivery or attention, including deleted events. An empty list does not certify every connected calendar.")}
+            style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+            <Feather name="info" size={18} color={colors.fg3} />
+          </Tap>
+<Tap accessibilityLabel="Close delivery" disabled={busy} onPress={close} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}><Feather name="x" size={18} color={colors.fg3} /></Tap>
         </View>}>
         <ScrollView
           contentContainerStyle={{
@@ -249,9 +261,6 @@ export function DeliveryBody({
             gap: spacing[3],
           }}
         >
-          <Text style={copy}>
-            Status of saved changes. Unsaved edits in a form are not included.
-          </Text>
           {error ? (
             <Text accessibilityRole="alert" style={copy}>
               {error}
@@ -325,11 +334,14 @@ export function DeliveryBody({
               ) : null}
               {receipt && receipt.eventId === selectedId ? (
                 <>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing[2] }}>
+                    <Feather name="archive" size={15} color={colors.fg3} accessible={false} />
                   <Text style={copy}>
                     {receipt.localRevision !== null
                       ? "Saved version in Musubi"
                       : "Retained delivery records"}
                   </Text>
+                  </View>
                   {receipt.targets.length === 0 ? (
                     <Text style={copy}>
                       No external destinations are visible. This does not
@@ -340,40 +352,56 @@ export function DeliveryBody({
                     const actions = eventDeliveryActions(target);
                     return (
                       <View key={target.targetId} style={{ gap: spacing[2] }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing[2] }}>
+                          <ProviderIcon provider={target.provider} />
                         <Text
                           accessibilityRole="header"
-                          style={[copy, { fontFamily: fonts.sansMedium }]}
+                          style={[copy, { fontFamily: fonts.sansMedium, flex: 1 }]}
                         >
                           {target.calendarName ?? "Former calendar"} ·{" "}
                           {target.provider}
                         </Text>
-                        <Text style={copy}>
+                        </View>
+                        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: spacing[2], padding: spacing[3], backgroundColor: colors.bg3, borderColor: colors.line, borderWidth: 1, borderRadius: 8 }}>
+                        <Feather name="file-text" size={15} color={colors.fg3} accessible={false} />
+                        <Text style={[copy, { fontFamily: fonts.serif, flex: 1 }]}>
                           {eventDeliveryLabel(target)}.{" "}
                           {eventDeliveryExplanation(target)}
                           {target.latestRevision !== target.revision
                             ? " A newer saved change is waiting behind this operation."
                             : ""}
                         </Text>
+                        </View>
                         {target.updatedAt ? (
-                          <Text style={copy}>
+                          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: spacing[2] }}>
+                            <Feather name="clock" size={15} color={colors.fg3} accessible={false} />
+                          <Text style={[copy, { flex: 1 }]}>
                             Record updated {target.updatedAt.toLocaleString()}
                           </Text>
+                          </View>
                         ) : null}
                         {target.retryAt ? (
-                          <Text style={copy}>
+                          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: spacing[2] }}>
+                            <Feather name="refresh-cw" size={15} color={colors.fg3} accessible={false} />
+                          <Text style={[copy, { flex: 1 }]}>
                             Next attempt no earlier than{" "}
                             {target.retryAt.toLocaleString()}
                           </Text>
+                          </View>
                         ) : null}
                         {!target.owned ? (
-                          <Text style={copy}>
+                          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: spacing[2] }}>
+                            <Feather name="lock" size={15} color={colors.fg3} accessible={false} />
+                          <Text style={[copy, { flex: 1 }]}>
                             Only the connection owner can retry or resolve this
                             operation.
                           </Text>
+                          </View>
                         ) : null}
                         {actions.retry ? (
                           <Btn
                             label={eventDeliveryRetryLabel(target)}
+                            style={{ marginTop: spacing[3] }}
                             variant="secondary"
                             disabled={busy || loading}
                             onPress={() =>
@@ -439,25 +467,15 @@ export function DeliveryBody({
               ) : null}
               {!selectedId && inbox?.items.length === 0 ? (
                 <Text style={copy}>
-                  No unfinished deliveries found for your account on this
-                  server. This does not certify every connected calendar.
+                  No unfinished deliveries.
                 </Text>
               ) : null}
-              {!selectedId
-                ? inbox?.items.map((item) => (
-                    <Btn
-                      key={item.eventId}
-                      label={item.savedTitle || "Untitled event"}
-                      variant="secondary"
-                      disabled={busy}
-                      onPress={() => {
-                        setSelectedId(item.eventId);
-                        setError("");
-                        setNotice("");
-                      }}
-                    />
-                  ))
-                : null}
+              {!selectedId && inbox?.items.length ? <View>
+                {inbox.items.map((item) => (
+                  <SettingRowAction key={item.eventId} label={item.savedTitle || "Untitled event"}
+                    disabled={busy} onPress={() => { setSelectedId(item.eventId); setError(""); setNotice(""); }} />
+                ))}
+              </View> : null}
               {!selectedId && inbox?.nextCursor ? (
                 <Btn
                   label="Load more"
@@ -489,32 +507,8 @@ export function DeliveryBody({
                   }}
                 />
               ) : null}
-              <Btn
-                label="Refresh status"
-                variant="secondary"
-                disabled={busy || loading}
-                onPress={refresh}
-              />
-              {selectedId && !eventId ? (
-                <Btn
-                  label="Back to saved deliveries"
-                  variant="secondary"
-                  disabled={busy}
-                  onPress={() => {
-                    setSelectedId(undefined);
-                    setError("");
-                    setNotice("");
-                  }}
-                />
-              ) : null}
             </>
           )}
-          <Btn
-            label="Close delivery"
-            variant="secondary"
-            disabled={busy}
-            onPress={close}
-          />
         </ScrollView>
 
      </BottomSheetFrame>

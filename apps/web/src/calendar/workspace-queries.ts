@@ -71,6 +71,9 @@ export function useWorkspaceQueries(
     enabled,
     queryFn: ({ signal }) => getPages(signal),
     queryKey: queryKeys.pages(origin, userId),
+    // A reload can restore the snapshot written just before a page was saved.
+    // Revalidate it immediately so saved filters are not temporarily reverted.
+    staleTime: 0,
   });
   const events = useQuery({
     enabled,

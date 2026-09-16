@@ -1,5 +1,8 @@
+import { DateFormatContext } from "~/ui/DatePicker";
+import { applyTheme } from "~/design/theme";
+import { pageItemTypes, eventItemType } from "../page-item-filters";
 import { calendarTasks, isCalendarTask } from "@musubi/calendar";
-import { CalendarTaskContext } from "./CalendarTaskDetails";
+import { CalendarTaskContext, TaskDetails } from "./CalendarTaskDetails";
 import { eventDayKeys, getMonthGrid } from "@musubi/calendar/layout";
 import { getTimeGridDays } from "../time-grid-math";
 import { getAgendaGroups } from "../agenda-math";
@@ -506,9 +509,10 @@ export function Workspace({
   const [createIntent, setCreateIntent] = useState<CreateIntent>();
   const createSaving = useRef(false);
   const [localTaskCreateRequest, setLocalTaskCreateRequest] = useState(0);
+  useEffect(() => { applyTheme(settings.theme); }, [settings.theme]);
   const [searchTaskId, setSearchTaskId] = useState<string>();
+  const taskReturnFocus = useRef<HTMLElement | null>(null);
   const [searchDetailId, setSearchDetailId] = useState<string>();
-  const searchTask = (searchAccount?.data?.tasks ?? tasks).find(task => task.id === searchTaskId);
   const searchDetail = (searchAccount?.data?.events ?? events).find(event => event.id === searchDetailId);
   useEffect(() => {
     onSearchActiveChange?.(searchOpen || !!searchTaskId || !!searchDetailId);
@@ -634,14 +638,15 @@ export function Workspace({
 
   const pageTitle = activePage.name;
 
+  const itemTypes = pageItemTypes(workingConfig.filters);
+  const visibleTasks = tasks.filter(task => itemTypes.includes("tasks") && visibleCalendarIds.includes(task.calendarID));
   const visibleEvents = useMemo(
     () =>
       [...events, ...calendarTasks(tasks, calendars)].filter((event) =>
-        event.calendars.some((calendarId) =>
-          visibleCalendarIds.includes(calendarId),
-        ),
+        itemTypes.includes(isCalendarTask(event) ? "tasks" : eventItemType(event)) &&
+        event.calendars.some((calendarId) => visibleCalendarIds.includes(calendarId)),
       ),
-    [events, tasks, calendars, visibleCalendarIds],
+    [events, tasks, calendars, visibleCalendarIds, itemTypes],
   );
   const searchVisibleEventIds = useMemo(() => {
     if (activeView === "tasks") return [];
@@ -942,6 +947,7 @@ export function Workspace({
     const created = await onCreatePage({
       config: {
         ...newPageConfig(activeView, workingConfig.view, visibleCalendarIds),
+        filters: workingConfig.filters,
         icon: input.icon,
       },
       name: input.name,
@@ -950,7 +956,8 @@ export function Workspace({
   }
 
   return (
-    <CalendarTaskContext.Provider value={{ tasks, calendars, settings, offline, update: onUpdateTask }}>
+    <DateFormatContext.Provider value={settings.dateFormat}>
+    <CalendarTaskContext.Provider value={{ tasks: searchAccount?.data?.tasks ?? tasks, calendars: searchAccount?.data?.calendars ?? calendars, settings, offline, update: onUpdateTask, remove: onRemoveTask }}>
     <div className={styles.workspace}>
       <Sidebar
         activePageId={pageId}
@@ -1057,10 +1064,7 @@ export function Workspace({
           navigationTriggerRef={sidebarTriggerRef}
           onCreateEvent={(target) => openCreateAtDate(date, target)}
           onCreateMeeting={(returnFocus) => setMeetingCreate({ returnFocus })}
-          onCreateTask={() => {
-            setTaskCreateRequest((request) => request + 1);
-            if (activeView !== "tasks") handleViewChange("tasks");
-          }}
+          onCreateTask={() => requestInspectorTransition(() => setTaskCreateRequest(request => request + 1))}
           onOpenSearch={() => setSearchOpen(true)}
           onPeriodChange={changePeriod}
           onOpenSidebar={() => setSidebarOpen(true)}
@@ -1127,8 +1131,8 @@ export function Workspace({
           // Agenda is one continuous list, so it has no period to page.
           onPointerDown={view.swipeable ? swipePeriod.onPointerDown : undefined}
         >
-          {activeView === "tasks" ? (
             <TaskList
+              editorOnly={activeView !== "tasks"}
               showLayoutControl={false}
               layout={taskLayout ?? localTaskLayout}
               onLayoutChange={onTaskLayoutChange}
@@ -1152,14 +1156,13 @@ export function Workspace({
               offline={offline}
               onCreateRequestHandled={consumeTaskCreateRequest}
               settings={settings}
-              tasks={tasks.filter((task) =>
-                visibleCalendarIds.includes(task.calendarID),
-              )}
+              tasks={visibleTasks}
               onCreate={onCreateTask}
+              onOpenTask={task => { taskReturnFocus.current = document.activeElement as HTMLElement; requestInspectorTransition(() => setSearchTaskId(task.id)); }}
               onRemove={onRemoveTask}
               onUpdate={onUpdateTask}
             />
-          ) : activeView === "agenda" ? (
+          {activeView === "tasks" ? null : activeView === "agenda" ? (
             <AgendaView
               anchor={anchor}
               calendars={calendars}
@@ -1325,8 +1328,8 @@ export function Workspace({
             if (returnFocus) setMeetingCreate({ returnFocus });
           }}
           canCreateTasks={editableTaskCalendars.length > 0}
-          onCreateTask={() => { setTaskCreateRequest(value => value + 1); handleViewChange("tasks"); }}
-          onTaskSelect={task => setSearchTaskId(task.id)}
+          onCreateTask={() => requestInspectorTransition(() => setTaskCreateRequest(value => value + 1))}
+          onTaskSelect={task => { taskReturnFocus.current = searchTriggerRef.current; requestInspectorTransition(() => setSearchTaskId(task.id)); }}
           inputRef={searchRef}
           onCreateEvent={() => {
             const target = searchTriggerRef.current;
@@ -1346,13 +1349,7 @@ export function Workspace({
           setQuery={setSearchQuery}
         />
 
-        <Dialog closeLabel="Close task" open={Boolean(searchTaskId)} onOpenChange={open => { if (!open) setSearchTaskId(undefined); }} title={searchTask?.title ?? "Task"} returnFocus={searchTriggerRef}>
-          {!searchTask ? <p>This task is no longer available.</p> : null}
-          <p>{calendars.find(calendar => calendar.id === searchTask?.calendarID)?.name}</p>
-          <p>{searchTask?.status.replace("in-process", "In progress").replace("needs-action", "Needs action")}</p>
-          {searchTask?.due ? <p>Due {searchTask.due.toLocaleString()}</p> : null}
-          {searchTask?.description ? <p>{searchTask.description}</p> : null}
-        </Dialog>
+        {searchTaskId ? <TaskDetails key={searchTaskId} taskId={searchTaskId} returnFocus={taskReturnFocus} open onOpenChange={open => { if (!open) setSearchTaskId(undefined); }} /> : null}
 
         <Dialog closeLabel="Close event" open={Boolean(searchDetailId)} onOpenChange={open => { if (!open) setSearchDetailId(undefined); }} title={searchDetail?.title ?? "Event"} returnFocus={searchTriggerRef}>
           {searchDetail ? <>
@@ -1565,5 +1562,6 @@ export function Workspace({
       />
     </div>
     </CalendarTaskContext.Provider>
+    </DateFormatContext.Provider>
   );
 }

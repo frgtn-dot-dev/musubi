@@ -29,6 +29,8 @@ export type SelectProps = Omit<
 	"children" | "defaultValue" | "onChange" | "value"
 > & {
 	label: string;
+	/** Show only the selected option icon while keeping the accessible label. */
+	iconOnly?: boolean;
 	searchable?: boolean;
 	onChange: (value: string) => void;
 	options: readonly SelectOption[];
@@ -54,6 +56,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
 			disabled = false,
 			label,
 			searchable = false,
+            iconOnly = false,
 			onChange,
 			options,
 			placeholder = "Choose an option",
@@ -227,6 +230,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
 						aria-label={triggerProps["aria-label"] ?? label}
 						className={classNames(
 							styles.select,
+                            iconOnly && styles.select_iconOnly,
 							size === "compact" && styles.select_compact,
 							className,
 						)}
@@ -259,16 +263,16 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
 									{selectedOption.icon}
 								</span>
 							) : null}
-							<span>
+							<span className={iconOnly ? styles.visuallyHidden : undefined}>
 								{selectedOption ? optionText(selectedOption) : placeholder}
 							</span>
 						</span>
-						<ChevronDown
+						{!iconOnly ? <ChevronDown
 							aria-hidden="true"
 							className={styles.selectChevron}
 							size={16}
 							strokeWidth={1.5}
-						/>
+						/> : null}
 					</button>
 				</PopoverTrigger>
 				{open ? (

@@ -945,7 +945,7 @@ export function TimeGridView({
 										// also leave a draft behind the thing it just closed.
 										dismissGuard.pressDismissedLayer() ||
 										(pointerEvent.target instanceof Element &&
-											pointerEvent.target.closest("button,[data-availability-interval]"))
+											pointerEvent.target.closest("button,[data-availability-interval],[role=dialog],[role=menu],[data-radix-popper-content-wrapper]"))
 									) {
 										return;
 									}
@@ -971,7 +971,7 @@ export function TimeGridView({
 										// dismisses on pointerdown, so nothing is open to ask about
 										// by now — the press had to be remembered.
 										dismissGuard.consumeDismiss() ||
-										(event.target instanceof Element && event.target.closest("button,[data-availability-interval]"))
+										(event.target instanceof Element && event.target.closest('button,[data-availability-interval],[role="dialog"],[role="menu"]'))
 									) {
 										return;
 									}

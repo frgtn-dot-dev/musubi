@@ -1,3 +1,4 @@
+import { DateFormatContext } from "~/ui/DatePicker";
 import { eventScopeRequest } from "@musubi/calendar";
 import { hasKnownEventTime, type Event } from "@musubi/types";
 import {
@@ -207,7 +208,7 @@ function EditEventRoute() {
                     title="This event is read-only"
                 />
             ) : (
-                <EventEditorForm
+                <DateFormatContext.Provider value={workspace.settings.data?.dateFormat ?? "dmy"}><EventEditorForm
                     rdateMaster={currentHomeCalendar?.provider === "caldav" && currentEvent && currentEvent.revision === event.revision && !currentEvent.seriesID && !currentEvent.originalStart ? currentEvent : undefined}
                     key={`${event.id}:${privacyRevision ?? "initial"}`}
                     onValuesChange={values => {
@@ -246,7 +247,7 @@ function EditEventRoute() {
                     weekStartsOn={
                         workspace.settings.data?.weekStartsOn ?? "monday"
                     }
-                />
+                /></DateFormatContext.Provider>
             )}
         </Dialog>
         <ConfirmationDialog elevated open={discardOpen} onOpenChange={setDiscardOpen} returnFocus={titleRef} title="Discard unsaved changes?" description="Your changes have not been saved." closeLabel="Keep editing" cancelLabel="Keep editing" confirmLabel="Discard changes" onConfirm={back}><p>The original event will stay unchanged.</p></ConfirmationDialog>

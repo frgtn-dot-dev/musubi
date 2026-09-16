@@ -14,32 +14,34 @@ import { ProviderIcon } from "@/components/calendar/ProviderIcon";
 import { colors, fonts, styles } from "@/constants/theme";
 import { ModalPortal } from "@/components/ui/ModalPortal";
 import { Tap } from "@/components/ui/Tap";
-import { OptionPicker } from "@/components/ui/OptionPicker";
+import { OptionPicker, type PickerOption } from "@/components/ui/OptionPicker";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useSettingsStore } from "@/store/useSettingsStore";
-import { taskPriorityLabel, formatTaskDate } from "@/lib/taskPresentation";
+import { taskPriorityLabel, formatTaskDate, taskRepeatLabel } from "@/lib/taskPresentation";
 import { showToast } from "@/components/ui/Toast";
 
-const statuses = [
-  { value: "needs-action", label: "Needs action" },
-  { value: "in-process", label: "In progress" },
-  { value: "completed", label: "Completed" },
-  { value: "cancelled", label: "Cancelled" },
+const statuses: PickerOption[] = [
+  { value: "needs-action", label: "Needs action", icon: "circle" },
+  { value: "in-process", label: "In progress", icon: "clock" },
+  { value: "completed", label: "Completed", icon: "check-circle" },
+  { value: "cancelled", label: "Cancelled", icon: "x-circle" },
 ];
-function DetailRow({ icon, label, value }: { icon: React.ComponentProps<typeof Feather>["name"]; label: string; value: string }) {
+function DetailRow({ icon, label, value, link = false }: { icon: React.ComponentProps<typeof Feather>["name"]; label: string; value: string; link?: boolean }) {
   return <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
     <Feather name={icon} size={17} color={colors.fg3} style={{ marginTop: 2 }} />
-    <View style={{ flex: 1, gap: 5 }}><Text style={styles.sectionLabel}>{label}</Text><Text selectable style={copy}>{value}</Text></View>
+    <View style={{ flex: 1, gap: 5 }}><Text style={styles.sectionLabel}>{label}</Text><Text selectable={!link} numberOfLines={link ? 2 : undefined} ellipsizeMode="tail" style={[copy, link && { textDecorationLine: "underline" }]}>{value}</Text></View>
   </View>;
 }
 const copy = { fontFamily: fonts.sans, fontSize: 14, color: colors.fg2 };
 
-export function TaskDetailModal({ task, calendar, editable, busy: externalBusy, onClose, onStatus, onPriority, onSaved }: {
+export function TaskDetailModal({ task, calendar, editable, busy: externalBusy, onClose, onStatus, onPriority, onSaved, relatedTask, onOpenRelated }: {
+  relatedTask?: Task; onOpenRelated?: (id: string) => void;
   task: Task; calendar?: Calendar; editable: boolean; busy: boolean;
   onSaved: (task: Task | null) => void; onClose: () => void; onStatus: (status: TaskStatus) => void; onPriority: (priority: number) => void;
 }) {
   const api = useApi();
   const [editing, setEditing] = useState(false);
+  const [multilineTitle, setMultilineTitle] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const busy = externalBusy || actionBusy;
   const [picker, setPicker] = useState<"status" | "priority">();
@@ -50,6 +52,7 @@ export function TaskDetailModal({ task, calendar, editable, busy: externalBusy, 
   const date = (value: Date, timed = !task.isAllDay) => formatTaskDate(value, !timed, dateFormat, timeFormat);
   const close = () => { if (!busy) handleClose(); };
   const priorities = [...new Set([0, 1, 5, 9, task.priority])].sort((a, b) => a - b).map(value => ({ value: String(value), label: taskPriorityLabel(value) }));
+  const repeat = taskRepeatLabel(task);
   const status = statuses.find(item => item.value === task.status)?.label ?? task.status;
   return <ModalPortal visible onRequestClose={close}>
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -59,16 +62,16 @@ export function TaskDetailModal({ task, calendar, editable, busy: externalBusy, 
         <GestureDetector gesture={gesture.enabled(!busy)}>
           <View collapsable={false}>
         <View style={styles.modalHandle} />
-        <View style={{ flexDirection: "row", gap: 14, alignItems: "flex-start", paddingTop: 6, paddingBottom: 0 }}>
+        <View style={{ flexDirection: "row", gap: 14, alignItems: "flex-start", paddingTop: 6, paddingBottom: multilineTitle ? 12 : 0 }}>
           <View style={{ flex: 1, flexDirection: "row", gap: 14, alignItems: "stretch" }}>
           <View style={{ width: 3, borderRadius: 2, backgroundColor: calendar?.color ?? colors.fg3, marginVertical: 4 }} />
-          <Text accessibilityRole="header" style={{ flex: 1, fontFamily: fonts.serif, fontSize: 26, lineHeight: 32, color: colors.fg, textDecorationLine: task.status === "completed" ? "line-through" : "none" }}>{task.title}</Text>
+          <Text accessibilityRole="header" onTextLayout={event => setMultilineTitle(event.nativeEvent.lines.length > 1)} style={{ flex: 1, fontFamily: fonts.serif, fontSize: 26, lineHeight: 32, color: colors.fg, textDecorationLine: task.status === "completed" ? "line-through" : "none" }}>{task.title}</Text>
           </View>
           <Tap onPress={close} accessibilityLabel="Close task" style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}><Feather name="x" size={20} color={colors.fg3} /></Tap>
         </View>
           </View>
         </GestureDetector>
-        <ScrollView contentContainerStyle={{ gap: 20, paddingTop: 4, paddingBottom: 12 }}>
+        <ScrollView contentContainerStyle={{ gap: 20, paddingTop: 4, paddingBottom: 24 }}>
           {calendar ? (
             <View style={[styles.horizontalPillView, { flexWrap: "wrap" }]}>
               <View accessible accessibilityLabel={`${calendar.name} calendar${!can(calendar.role, "editTasks") ? ", read-only" : ""}`}
@@ -88,17 +91,29 @@ export function TaskDetailModal({ task, calendar, editable, busy: externalBusy, 
             <Tap disabled={!editable || busy} onPress={() => setPicker("priority")} accessibilityLabel={`Task priority: ${taskPriorityLabel(task.priority)}`} style={{ flex: 1, minHeight: 48, padding: 12, borderRadius: 12, backgroundColor: colors.bg3, flexDirection: "row", alignItems: "center", gap: 8 }}><Feather name="flag" size={15} color={colors.fg3} /><Text style={[copy, { flexShrink: 1 }]}>{taskPriorityLabel(task.priority)}</Text></Tap>
           </View>
           {busy ? <ActivityIndicator color={colors.fg3} /> : null}
-          {task.description ? <DetailRow icon="file-text" label="Notes" value={task.description} /> : null}
+          {task.description ? <View style={{ gap: 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Feather name="file-text" size={17} color={colors.fg3} accessible={false} />
+              <Text style={styles.sectionLabel}>Notes</Text>
+            </View>
+            <View style={{ padding: 12, backgroundColor: colors.bg3, borderColor: colors.line, borderWidth: 1, borderRadius: 8 }}>
+              <Text selectable style={{ fontFamily: fonts.serif, fontSize: 13, color: colors.fg2 }}>{task.description}</Text>
+            </View>
+          </View> : null}
           <View style={{ gap: 12 }}>
             <DetailRow icon="calendar" label="Starts" value={task.start ? date(task.start) : "Not set"} />
             <DetailRow icon="clock" label="Due" value={`${task.due ? date(task.due) : "Not set"}${task.isAllDay ? " · All day" : ""}`} />
             {task.completedAt ? <DetailRow icon="check-circle" label="Completed" value={date(task.completedAt, true)} /> : null}
-            {task.recurrence ? <DetailRow icon="repeat" label="Repeat" value={task.recurrence} /> : null}
-            {task.relatedTo ? <DetailRow icon="git-branch" label="Related task" value={task.relatedTo} /> : null}
+            {repeat ? <DetailRow icon="repeat" label="Repeat" value={repeat} /> : null}
+            {task.relatedTo ? relatedTask && onOpenRelated ? (
+              <Tap disabled={busy} accessibilityRole="link" accessibilityLabel={`Open related task: ${relatedTask.title}`} onPress={() => onOpenRelated(relatedTask.id)}>
+                <DetailRow icon="git-branch" label="Related task" value={relatedTask.title || "Untitled task"} link />
+              </Tap>
+            ) : <DetailRow icon="git-branch" label="Related task" value={relatedTask?.title || "Task unavailable"} /> : null}
             {task.url ? <Tap onPress={() => {
               if (!/^https?:\/\//i.test(task.url!)) { showToast({ message: "This link type cannot be opened." }); return; }
               void Linking.openURL(task.url!).catch(() => showToast({ message: "Could not open task link." }));
-            }} accessibilityLabel="Open task link"><DetailRow icon="link" label="Link" value={task.url} /></Tap> : null}
+            }} accessibilityRole="link" accessibilityLabel="Open task link"><DetailRow icon="link" label="Link" value={task.url} link /></Tap> : null}
           </View>
         </ScrollView>
         {editable ? <View style={{ flexDirection: "row", justifyContent: "space-between", marginHorizontal: -22, paddingBottom: insets.bottom, borderTopWidth: 1, borderTopColor: colors.line }}>
