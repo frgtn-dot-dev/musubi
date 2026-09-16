@@ -129,13 +129,6 @@ export function Dialog({
               returnFocus && "current" in returnFocus
                 ? returnFocus.current
                 : returnFocus;
-            // Keep focus in a newly opened surface, but still restore a nested
-            // dialog's trigger when it belongs to the surviving parent dialog.
-            const focusedDialog = document.activeElement?.closest('[role="dialog"][data-state="open"]');
-            if (focusedDialog && focusedDialog !== event.target && !focusedDialog.contains(returnTarget ?? null)) {
-              event.preventDefault();
-              return;
-            }
             if (!returnTarget?.isConnected) return;
             event.preventDefault();
             returnTarget.focus();
