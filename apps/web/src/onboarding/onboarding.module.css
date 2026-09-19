@@ -43,6 +43,9 @@
 }
 
 .note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
   margin: 0;
   color: var(--text-secondary);
   font-size: var(--text-12);
@@ -62,4 +65,10 @@
   color: var(--text-primary);
   font-size: var(--text-12);
   font-weight: 500;
+}
+
+.taskPermission {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
 }

@@ -227,13 +227,17 @@ export function Onboarding({
         {step === 3 ? (
           <div className={styles.providers}>
             {providers.includes("google") || providers.includes("microsoft") ? (
-              <Checkbox
-                checked={includeTasks}
-                description="When off, no new Tasks permission is requested. Previously granted access is not revoked."
-                disabled={busy}
-                label="Include Tasks (optional)"
-                onChange={(event) => setIncludeTasks(event.target.checked)}
-              />
+              <div className={styles.taskPermission}>
+                <Checkbox
+                  checked={includeTasks}
+                  disabled={busy}
+                  label="Include Tasks (optional)"
+                  onChange={(event) => setIncludeTasks(event.target.checked)}
+                />
+                <HelpTooltip label="About optional Tasks access">
+                  When off, no new Tasks permission is requested. Previously granted access is not revoked.
+                </HelpTooltip>
+              </div>
             ) : null}
             {providers.includes("google") ? (
               <Button

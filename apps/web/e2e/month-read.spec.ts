@@ -6647,7 +6647,8 @@ test("offers the sign-in providers this server can actually finish", async ({
 		.toEqual(
 			expect.objectContaining({
 				// The page someone was interrupted for has to survive the round trip.
-				callbackURL: "/app/p/my-calendar/week",
+				callbackURL: new URL("/app/p/my-calendar/week", page.url()).href,
+				errorCallbackURL: new URL("/login?error=oauth", page.url()).href,
 				provider: "google",
 			}),
 		);
