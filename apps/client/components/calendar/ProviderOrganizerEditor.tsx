@@ -1,6 +1,6 @@
 import { OptionPicker } from "@/components/ui/OptionPicker";
 import { TimeZonePicker } from "./TimeZonePicker";
-import { DateTimePicker } from "@expo/ui/community/datetime-picker";
+import { DateTimePicker } from "@/components/ui/DateTimePicker";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { formatDateMedium, formatTime } from "@/lib/datetimeFormat";
 import { BottomSheetFrame } from "@/components/ui/BottomSheetFrame";

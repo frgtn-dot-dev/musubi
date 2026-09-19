@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Platform, ScrollView, Switch, Text, TextInput, View } from "react-native";
-import { DateTimePicker } from "@expo/ui/community/datetime-picker";
+import { DateTimePicker } from "@/components/ui/DateTimePicker";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TaskUpdateSchema, providerFlavor, type Calendar, type Task, type TaskUpdate } from "@musubi/types";

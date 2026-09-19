@@ -22,7 +22,7 @@ vi.mock("react-native", () => ({
   Platform: { get OS() { return h.platform; } },
   ScrollView: "ScrollView", Switch: "Switch", Text: "Text", TextInput: "TextInput", View: "View",
 }));
-vi.mock("@expo/ui/community/datetime-picker", () => ({ DateTimePicker: "DateTimePicker" }));
+vi.mock("@/components/ui/DateTimePicker", () => ({ DateTimePicker: "DateTimePicker" }));
 vi.mock("@expo/vector-icons", () => ({ Feather: "Feather" }));
 vi.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ bottom: 0 }) }));
 vi.mock("@/components/ui/ModalPortal", () => ({ ModalPortal: "ModalPortal" }));

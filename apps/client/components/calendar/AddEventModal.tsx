@@ -52,7 +52,7 @@ import {
   GestureDetector,
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
-import { DateTimePicker } from "@expo/ui/community/datetime-picker";
+import { DateTimePicker } from "@/components/ui/DateTimePicker";
 import { useServer } from "@/contexts/ServerContext";
 import { EVENT_HINTS } from "@/constants/event_hints";
 import { Feather } from "@expo/vector-icons";
