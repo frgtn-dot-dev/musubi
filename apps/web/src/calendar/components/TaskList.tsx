@@ -112,8 +112,19 @@ export function taskUpdate(task: Task): TaskUpdate {
   };
 }
 
-export function taskDateKey(value: Date | null | undefined) {
-  return value ? toDateKey(value) : "";
+export function taskDateKey(value: Date | null | undefined, allDay = false) {
+  return value ? (allDay ? value.toISOString().slice(0, 10) : toDateKey(value)) : "";
+}
+
+/** All-day dates are UTC calendar days, never instants in the browser's zone. */
+export function withTaskAllDay<T extends { start?: Date | null; due?: Date | null; isAllDay: boolean }>(draft: T, allDay: boolean): T {
+  if (draft.isAllDay === allDay) return draft;
+  const convert = (value: Date | null | undefined) => {
+    if (!value) return value;
+    const day = taskDateKey(value, draft.isAllDay);
+    return allDay ? new Date(`${day}T00:00:00.000Z`) : parseDateKey(day);
+  };
+  return { ...draft, isAllDay: allDay, start: convert(draft.start), due: convert(draft.due) };
 }
 
 /** Keep an existing time-of-day while a date picker replaces only its date. */
@@ -141,11 +152,12 @@ export function taskTime(value: Date | null | undefined) {
 export function taskRecurrenceSummary(
   recurrence: string | null | undefined,
   start?: Date | null,
+  allDay = false,
 ) {
   if (!recurrence) return "Does not repeat";
   const { rrule, extras } = splitRecurrence(recurrence);
   if (extras.length || !isEditableRRule(rrule)) return "Custom recurrence";
-  const config = parseAdvanced(rrule, start?.getDay());
+  const config = parseAdvanced(rrule, allDay ? start?.getUTCDay() : start?.getDay());
   if (!start && !rrule.includes("BYDAY=")) config.days = new Set();
   return describeAdvanced(config);
 }
@@ -310,7 +322,8 @@ export function TaskList({
     setBusy(true);
     setError("");
     try {
-      const input = { ...draft, title: draft.title.trim() };
+      const calendar = calendars.find(calendar => calendar.id === draft.calendarID);
+      const input = { ...withTaskAllDay(draft, calendar?.provider === "google" || draft.isAllDay), title: draft.title.trim() };
       if (editing) await onUpdate(editing.id, input);
       else await onCreate({ ...input, id: crypto.randomUUID() });
       resetEditor();
@@ -562,7 +575,7 @@ function TaskGroup({
               {task.description ? <p className={styles.cardDescription}>{task.description}</p> : null}
               <div className={styles.cardMeta}>
                 {due ? <span><CalendarDays size={14} aria-hidden="true" />{due}</span> : <span>No due date</span>}
-                {task.recurrence ? <span title={taskRecurrenceSummary(task.recurrence, task.start)}><Repeat2 size={14} aria-hidden="true" />Repeats</span> : null}
+                {task.recurrence ? <span title={taskRecurrenceSummary(task.recurrence, task.start, task.isAllDay)}><Repeat2 size={14} aria-hidden="true" />Repeats</span> : null}
               </div>
             </li>
             </Fragment>
@@ -635,13 +648,15 @@ function TaskEditor({
   onOpenChange: (open: boolean) => void;
   onSubmit: (event: FormEvent) => Promise<void>;
 }) {
+  const googleTasks = calendars.find(calendar => calendar.id === draft.calendarID)?.provider === "google";
+  const dateOnly = googleTasks || draft.isAllDay;
   const calendarOptions = calendars
     .filter((calendar) => editableCalendarIds.has(calendar.id))
     .map((calendar) => ({ label: calendar.name, value: calendar.id, icon: <AccountMark size="compact" flavor={providerFlavor(calendar)} /> }));
   const updateDate = (key: "start" | "due", value: string) =>
     onChange({
-      ...draft,
-      [key]: value ? replaceTaskDate(draft[key], value) : null,
+      ...withTaskAllDay(draft, dateOnly),
+      [key]: value ? (dateOnly ? new Date(`${value}T00:00:00.000Z`) : replaceTaskDate(draft[key], value)) : null,
     });
   const updateTime = (key: "start" | "due", value: string) =>
     onChange({
@@ -702,7 +717,7 @@ function TaskEditor({
               label="Calendar"
               options={calendarOptions}
               value={draft.calendarID}
-              onChange={(calendarID) => onChange({ ...draft, calendarID })}
+              onChange={(calendarID) => onChange(withTaskAllDay({ ...draft, calendarID }, calendars.find(calendar => calendar.id === calendarID)?.provider === "google" || draft.isAllDay))}
             />
         </Field>
         <div className={styles.fields}>
@@ -736,17 +751,17 @@ function TaskEditor({
         <div className={styles.scheduleFields}>
           {(["start", "due"] as const).map(endpoint => {
             const label = endpoint === "start" ? "Start" : "Due";
-            return <div className={styles.dateTimeRow} data-all-day={draft.isAllDay || undefined} key={endpoint}>
+            return <div className={styles.dateTimeRow} data-all-day={dateOnly || undefined} key={endpoint}>
               <Field label={`${label} date`}>
                 <DatePicker
                   label={`${label} date`}
-                  value={taskDateKey(draft[endpoint])}
+                  value={taskDateKey(draft[endpoint], draft.isAllDay)}
                   weekStartsOn={settings.weekStartsOn}
                   onChange={value => updateDate(endpoint, value)}
                   onClear={() => updateDate(endpoint, "")}
                 />
               </Field>
-              {!draft.isAllDay ? <Field label={`${label} time`}>
+              {!dateOnly ? <Field label={`${label} time`}>
                 <TimePicker
                   label={`${label} time`}
                   placeholder="Select time"
@@ -758,12 +773,12 @@ function TaskEditor({
             </div>;
           })}
         </div>
-        <Row label="All day" trailing={<Switch
+        {!googleTasks ? <Row label="All day" trailing={<Switch
           checked={draft.isAllDay}
           label="All day"
           disabled={busy}
-          onCheckedChange={isAllDay => onChange({ ...draft, isAllDay })}
-        />} />
+          onCheckedChange={isAllDay => onChange(withTaskAllDay(draft, isAllDay))}
+        />} /> : null}
         <Field label="Notes">
           <textarea
             rows={4}
@@ -777,13 +792,13 @@ function TaskEditor({
           density="compact"
           icon={<Repeat2 aria-hidden="true" size={16} />}
           label="Recurrence"
-          detail={taskRecurrenceSummary(draft.recurrence, draft.start)}
+          detail={taskRecurrenceSummary(draft.recurrence, draft.start, draft.isAllDay)}
         >
           {!draft.start && !draft.due ? <p>Choose a start or due date to set repetition.</p> : null}
           <RecurrenceEditor
             followStartDate={false}
-            date={taskDateKey(draft.start) || taskDateKey(draft.due) || toDateKey(new Date())}
-            allDay={draft.isAllDay}
+            date={taskDateKey(draft.start, draft.isAllDay) || taskDateKey(draft.due, draft.isAllDay) || toDateKey(new Date())}
+            allDay={dateOnly}
             weekStartsOn={settings.weekStartsOn}
             disabled={busy || unavailable || (!draft.start && !draft.due)}
             value={draft.recurrence ?? ""}

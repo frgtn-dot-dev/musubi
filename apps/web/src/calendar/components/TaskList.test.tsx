@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  withTaskAllDay,
   replaceTaskDate,
   replaceTaskTime,
   taskDateKey,
@@ -320,4 +321,82 @@ it("collapses a list group without losing its count or tasks", async () => {
   await user.click(toggle);
   expect(screen.getByRole("combobox", { name: "Status of Collapsible task" })).toBeTruthy();
   expect(screen.queryByRole("combobox", { name: "Priority of Collapsible task" })).toBeNull();
+});
+describe.each(["Europe/Prague", "America/Los_Angeles"])("date-only task scheduling in %s", timezone => {
+  beforeEach(() => vi.stubEnv("TZ", timezone));
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("keeps the selected local day when sending a Google Tasks due date", () => {
+    expect(new Date(2026, 8, 25).getTimezoneOffset()).toBe(timezone === "Europe/Prague" ? -120 : 420);
+    for (const month of [0, 8]) {
+      const draft = { isAllDay: false, start: null, due: new Date(2026, month, 25, 0, 0) };
+      const normalized = withTaskAllDay(draft, true);
+      expect(normalized.due?.toISOString()).toBe(`2026-${String(month + 1).padStart(2, "0")}-25T00:00:00.000Z`);
+      expect(taskDateKey(normalized.due, true)).toBe(taskDateKey(draft.due));
+      expect(withTaskAllDay(normalized, false).due?.getDate()).toBe(25);
+      expect(withTaskAllDay(normalized, true)).toBe(normalized);
+    }
+  });
+
+  it("keeps a Google date's UTC calendar day in the picker in any timezone", () => {
+    expect(taskDateKey(new Date("2026-09-25T00:00:00Z"), true)).toBe("2026-09-25");
+  });
+
+  it("creates Google tasks with date-only scheduling and allows clearing the date", async () => {
+    const user = userEvent.setup();
+    const googleCalendar = { ...fixtureCalendars[0]!, provider: "google" as const };
+    const props = { ...emptyTaskProps(), calendars: [googleCalendar] };
+    render(<TaskList {...props} />);
+    await user.click(screen.getByRole("button", { name: "Create task" }));
+    await user.type(screen.getByRole("textbox", { name: "Title" }), "Book train tickets");
+    expect(screen.queryByRole("switch", { name: "All day" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Due time" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Start time" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: /^Due date:/ }));
+    await user.type(screen.getByRole("textbox", { name: "Exact date" }), "2026-09-25{Enter}");
+    await user.click(screen.getByRole("button", { name: "Save task" }));
+    expect(props.onCreate).toHaveBeenCalledWith(expect.objectContaining({ isAllDay: true, due: new Date("2026-09-25T00:00:00Z"), start: null }));
+
+    const created = await props.onCreate.mock.results[0]!.value;
+    cleanup();
+    render(<TaskList {...props} tasks={[created]} />);
+    await user.click(screen.getByRole("button", { name: /Book train tickets/ }));
+    await user.click(screen.getByRole("button", { name: "Due date: Friday, September 25, 2026" }));
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+    await user.click(screen.getByRole("button", { name: "Save task" }));
+    expect(props.onUpdate).toHaveBeenCalledWith(created.id, expect.objectContaining({ due: null }));
+  });
+
+  it("keeps the displayed day when moving a timed draft to a Google task list", async () => {
+    const user = userEvent.setup();
+    const googleCalendar = { ...fixtureCalendars[1]!, provider: "google" as const, name: "Google Tasks" };
+    const props = { ...emptyTaskProps(), calendars: [fixtureCalendars[0]!, googleCalendar], editableCalendarIds: new Set([fixtureCalendars[0]!.id, googleCalendar.id]) };
+    render(<TaskList {...props} />);
+    await user.click(screen.getByRole("button", { name: "Create task" }));
+    await user.type(screen.getByRole("textbox", { name: "Title" }), "Book train tickets");
+    expect(screen.getByRole("combobox", { name: "Due time" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: /^Due date:/ }));
+    await user.type(screen.getByRole("textbox", { name: "Exact date" }), "2026-09-25{Enter}");
+    await user.click(screen.getByRole("combobox", { name: "Calendar" }));
+    await user.click(screen.getByRole("option", { name: "Google Tasks" }));
+    expect(screen.getByRole("button", { name: "Due date: Friday, September 25, 2026" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Save task" }));
+    expect(props.onCreate).toHaveBeenCalledWith(expect.objectContaining({ calendarID: googleCalendar.id, isAllDay: true, due: new Date("2026-09-25T00:00:00Z") }));
+  });
+
+  it("keeps the UTC weekday when setting recurrence on an all-day task", async () => {
+    const user = userEvent.setup();
+    const due = new Date("2026-09-25T00:00:00Z");
+    const task = TaskSchema.parse({ id: "all-day", creatorID: "owner", calendarID: fixtureCalendars[0]!.id, title: "Weekly review", due, start: null, isAllDay: true });
+    const props = { ...emptyTaskProps(), tasks: [task] };
+    render(<TaskList {...props} />);
+    await user.click(screen.getByRole("button", { name: /Weekly review/ }));
+    expect(screen.getByRole("button", { name: "Due date: Friday, September 25, 2026" })).toBeTruthy();
+    await user.click(screen.getByText("Recurrence", { exact: true }));
+    await user.click(screen.getByRole("combobox", { name: "Repeat" }));
+    await user.click(screen.getByRole("option", { name: "Every week" }));
+    await user.click(screen.getByRole("button", { name: "Save task" }));
+    expect(props.onUpdate).toHaveBeenCalledWith(task.id, expect.objectContaining({ due, recurrence: "FREQ=WEEKLY;BYDAY=FR", start: null }));
+    expect(taskRecurrenceSummary("FREQ=WEEKLY", due, true)).toBe("Every week on Fri");
+  });
 });

@@ -208,10 +208,11 @@ function LoginRoute() {
     // A full-page redirect to the provider and back; nothing after this runs on
     // success. `callbackURL` is where the browser lands afterwards, so the
     // redirect someone was interrupted for survives the round trip.
+    // Relative callbacks resolve against the API, which may be on another origin.
     void authClient
       .signIn.social({
-        callbackURL: safeRedirect(redirect),
-        errorCallbackURL: "/login?error=oauth",
+        callbackURL: new URL(safeRedirect(redirect), window.location.origin).href,
+        errorCallbackURL: new URL("/login?error=oauth", window.location.origin).href,
         provider,
       })
       .catch(() => {
