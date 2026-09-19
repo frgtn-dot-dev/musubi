@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { isValidElement, type ReactNode } from "react";
 import { EventSchema, type ProviderEventStateResponse } from "@musubi/types";
 vi.mock("./TimeZonePicker", () => ({ TimeZonePicker: "TimeZonePicker" }));
-vi.mock("@expo/ui/community/datetime-picker", () => ({ DateTimePicker: "DateTimePicker" }));
+vi.mock("@/components/ui/DateTimePicker", () => ({ DateTimePicker: "DateTimePicker" }));
 vi.mock("@/store/useSettingsStore", () => ({ useSettingsStore: (select: any) => select({ dateFormat: "dmy", timeFormat: "24h" }) }));
 vi.mock("@/hooks/useModalAnimation", () => ({ useModalAnimation: (_visible: boolean, close: () => void) => ({ handleClose: close }) }));
 vi.mock("@/components/ui/BottomSheetFrame", () => ({ BottomSheetFrame: "BottomSheetFrame" }));

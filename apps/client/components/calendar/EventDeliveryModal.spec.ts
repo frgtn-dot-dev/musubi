@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { isValidElement, type ReactNode } from "react";
 vi.mock("./TimeZonePicker", () => ({ TimeZonePicker: "TimeZonePicker" }));
-vi.mock("@expo/ui/community/datetime-picker", () => ({ DateTimePicker: "DateTimePicker" }));
+vi.mock("@/components/ui/DateTimePicker", () => ({ DateTimePicker: "DateTimePicker" }));
 vi.mock("@/components/ui/BottomSheetFrame", () => ({ BottomSheetFrame: "BottomSheetFrame" }));
 
 const h = vi.hoisted(() => ({
