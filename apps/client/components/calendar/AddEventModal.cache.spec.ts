@@ -116,7 +116,7 @@ vi.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ bottom: 0, top: 0 }),
 }));
 vi.mock("@expo/vector-icons", () => ({ Ionicons: "Icon", Feather: "Icon" }));
-vi.mock("@expo/ui/community/datetime-picker", () => ({
+vi.mock("@/components/ui/DateTimePicker", () => ({
   DateTimePicker: "DateTimePicker",
 }));
 vi.mock("@/components/ui/Tap", () => ({ Tap: "Tap" }));
