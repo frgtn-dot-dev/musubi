@@ -59,7 +59,7 @@
     "expo-router": "catalog:",
     "storybook": "10.5.5",
     "turbo": "^2.10.11",
-    "typescript": "~5.9.3",
+    "typescript": "~6.0.3",
     "vitest": "4.1.11"
   }
 }
