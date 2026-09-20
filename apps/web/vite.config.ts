@@ -4,6 +4,15 @@ import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
 
 export default defineConfig({
+	build: {
+		rolldownOptions: {
+			output: {
+				// Shared schema and route chunks form cycles. Initialize their source
+				// modules in order so a schema never runs before Zod's constructors.
+				strictExecutionOrder: true,
+			},
+		},
+	},
 	plugins: [
 		tanstackStart({
 			srcDirectory: "src",

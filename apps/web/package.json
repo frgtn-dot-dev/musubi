@@ -18,7 +18,8 @@
     "test": "vitest run --project=unit",
     "test:storybook": "vitest run --project=storybook",
     "lint": "eslint .storybook src --max-warnings 0",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:production": "playwright test --config=playwright.production.config.ts"
   },
   "dependencies": {
     "@expo-google-fonts/inter-tight": "0.4.2",

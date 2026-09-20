@@ -361,6 +361,67 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.scope }}
           cache-to: type=gha,scope=${{ matrix.scope }},mode=max
 
+  web-smoke:
+    name: Web production container boots in Chromium
+    runs-on: ubuntu-24.04
+    needs: docker
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Exclude unused preinstalled Chrome package feeds
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome*.list \
+            /etc/apt/sources.list.d/google-chrome*.sources
+      - name: Install Playwright browser
+        run: pnpm --filter @musubi/web exec playwright install --with-deps chromium
+      - uses: >-
+          docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - uses: >-
+          docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: musubi-web:smoke
+          cache-from: type=gha,scope=web-amd64
+      - name: Start the production web container
+        run: docker run -d --name musubi-web-smoke -p 127.0.0.1:4330:3000 musubi-web:smoke
+      - name: Wait for the container to report healthy
+        run: |
+          for _ in $(seq 1 30); do
+            if [ "$(docker inspect -f '{{.State.Health.Status}}' musubi-web-smoke)" = healthy ]; then
+              exit 0
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' musubi-web-smoke)" != true ]; then
+              docker logs musubi-web-smoke
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "::error::The production web container never became healthy"
+          docker logs musubi-web-smoke
+          exit 1
+      # HTTP health alone cannot detect a crash while browser chunks initialize.
+      # Mock API responses; exercise real production JS, not the Vite dev server.
+      - run: pnpm --filter @musubi/web test:e2e:production
+      - if: failure()
+        run: docker logs musubi-web-smoke
+      - if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: playwright-production-report
+          path: apps/web/test-results
+          retention-days: 7
+      - if: always()
+        run: docker rm -f musubi-web-smoke || true
+
   smoke:
     name: API container boots and serves
     runs-on: ubuntu-latest
