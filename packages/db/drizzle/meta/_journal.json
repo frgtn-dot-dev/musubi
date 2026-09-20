@@ -547,6 +547,13 @@
       "when": 1789307582801,
       "tag": "0077_shallow_young_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1789899621743,
+      "tag": "0078_release_0_2_0_announcement",
+      "breakpoints": true
     }
   ]
 }
