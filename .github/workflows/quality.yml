@@ -153,8 +153,13 @@ jobs:
           fi
 
   integration:
-    name: Database integration
+    name: Database integration (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     # The suites below are the ones that talk to a real Postgres: advisory
     # locks, poll race conditions, federation token rotation. None of them can
@@ -209,7 +214,19 @@ jobs:
       - name: Apply migrations to an empty database
         run: pnpm db:migrate
 
-      - run: pnpm test:db
+      # Each matrix job owns its Postgres; suites stay sequential within it.
+      # Expand test:db so new integration suites are included automatically.
+      - run: node --test scripts/ci-shards.test.mjs
+      - run: node scripts/ci-shards.mjs db ${{ matrix.shard }}/4
+        env:
+          CI_SHARD_OUTPUT_DIR: ${{ runner.temp }}/ci-db
+
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: database-timings-${{ matrix.shard }}
+          path: ${{ runner.temp }}/ci-db
+          retention-days: 7
 
   e2e:
     name: Web end-to-end (${{ matrix.shard }}/4)
@@ -230,9 +247,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Four native Playwright shards give each quarter of the suite its own
-      # runner. The browser download and dev server stay off the check job's
-      # critical path.
+      # Balance individual tests using recorded durations, rather than adjacent
+      # quarters of the large Month suite. New tests receive a default weight.
       - name: Exclude unused preinstalled Chrome package feeds
         # Playwright downloads its own pinned Chromium. Runner-provided Chrome
         # feeds can have inconsistent indexes and are not OS dependency sources.
@@ -244,8 +260,17 @@ jobs:
         run: >-
           pnpm --filter @musubi/web exec playwright install --with-deps chromium
 
-      - run: >-
-          pnpm --filter @musubi/web test:e2e --shard=${{ matrix.shard }}/4
+      - run: node --test scripts/ci-shards.test.mjs
+      - run: node scripts/ci-shards.mjs web ${{ matrix.shard }}/4
+        env:
+          CI_SHARD_OUTPUT_DIR: ${{ runner.temp }}/ci-web
+
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: web-timings-${{ matrix.shard }}
+          path: ${{ runner.temp }}/ci-web
+          retention-days: 7
 
       - if: failure()
         uses: >-
