@@ -19,7 +19,15 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
 const value = (label: string) => (screen.getByLabelText(label, { exact: true }) as HTMLInputElement).value;
 const change = (label: string, value: string) => {
-  if (label === "Event time zone") { fireEvent.click(screen.getByRole("combobox", { name: label })); fireEvent.click(screen.getByRole("option", { name: value })); }
+  if (label === "Event time zone") {
+    fireEvent.click(screen.getByRole("combobox", { name: label }));
+    // Use the picker's search instead of computing accessible names for every
+    // time zone on each draft fill, which can exhaust the test budget in CI.
+    fireEvent.change(screen.getByRole("textbox", { name: `Search ${label}` }), {
+      target: { value },
+    });
+    fireEvent.click(screen.getByRole("option", { name: value }));
+  }
   else fireEvent.change(screen.getByLabelText(label, { exact: true }), { target: { value } });
 };
 async function choose(name: string) {
