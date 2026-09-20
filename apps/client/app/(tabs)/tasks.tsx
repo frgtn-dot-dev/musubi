@@ -44,11 +44,16 @@ export default function TasksTab() {
   const [selected, setSelected] = useState<Task>();
   const [saving, setSaving] = useState<string>();
   const request = useRef(0);
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (syncProviders = false) => {
     const id = ++request.current;
+    const currentApi = apiRef.current;
     setRefreshing(true);
     try {
-      const next = await apiRef.current.getTasks();
+      // Explicit refresh pulls provider changes, just like the calendar screen.
+      // Focus and mutation recovery only reload the saved snapshot.
+      if (syncProviders) await currentApi.syncProviderCalendars();
+      if (id !== request.current) return;
+      const next = await currentApi.getTasks();
       if (id === request.current) { setTasks(next); setError(undefined); }
     } catch (e) {
       if (id === request.current) setError(userFacingError(e, "Could not load tasks."));
@@ -80,7 +85,7 @@ export default function TasksTab() {
   return <View style={styles.screen}>
     <View style={[styles.header, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
       <Text style={styles.screenTitle}>Tasks</Text>
-      <Tap accessibilityLabel="Refresh tasks" onPress={() => void refresh()} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+      <Tap accessibilityLabel="Refresh tasks" onPress={() => void refresh(true)} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
         {refreshing ? <ActivityIndicator color={colors.fg3} /> : <Feather name="refresh-cw" size={18} color={colors.fg3} />}
       </Tap>
     </View>
@@ -92,7 +97,7 @@ export default function TasksTab() {
         <Text style={{ fontFamily: fonts.sans, fontSize: typeSizes[11], color: phaseFilter === phase.value ? colors.fg : colors.fg3 }}>{phase.label}</Text>
       </Tap>)}
     </View>
-    <ScrollView key={phaseFilter} contentContainerStyle={{ paddingHorizontal: spacing[4], paddingTop: spacing[1], paddingBottom: 96, gap: spacing[4] }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}>
+    <ScrollView key={phaseFilter} contentContainerStyle={{ paddingHorizontal: spacing[4], paddingTop: spacing[1], paddingBottom: 96, gap: spacing[4] }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh(true)} />}>
       {error ? <Text accessibilityRole="alert" style={{ color: colors.fg2 }}>{error}</Text> : null}
       {!filtered.some(task => task.status === phaseFilter) && !refreshing && !error ? <Empty kanji="静" text="No tasks in this view" /> : null}
       {phases.filter(phase => phase.value === phaseFilter).map(phase => {
