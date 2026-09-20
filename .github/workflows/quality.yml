@@ -311,20 +311,37 @@ jobs:
 
   docker:
     name: Build ${{ matrix.name }} image
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: API
             dockerfile: apps/api/Dockerfile
-            scope: api
+            scope: api-amd64
+            platform: linux/amd64
+            runner: ubuntu-24.04
           - name: web
             dockerfile: apps/web/Dockerfile
-            scope: web
+            scope: web-amd64
+            platform: linux/amd64
+            runner: ubuntu-24.04
           - name: docs
             dockerfile: packages/docs/Dockerfile
             scope: docs
+            platform: linux/amd64
+            runner: ubuntu-24.04
+          - name: API (arm64)
+            dockerfile: apps/api/Dockerfile
+            scope: api-arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+          - name: web (arm64)
+            dockerfile: apps/web/Dockerfile
+            scope: web-arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
@@ -332,14 +349,14 @@ jobs:
       - uses: >-
           docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
 
-      # Per-image cache scope: sharing one scope would make the two matrix jobs
-      # overwrite each other's layers on every run.
+      # Each image and architecture owns its cache, shared with the release build.
       # docker/build-push-action v6
       - uses: >-
           docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
         with:
           context: .
           file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platform }}
           push: false
           cache-from: type=gha,scope=${{ matrix.scope }}
           cache-to: type=gha,scope=${{ matrix.scope }},mode=max
@@ -383,7 +400,7 @@ jobs:
           file: apps/api/Dockerfile
           load: true
           tags: musubi-api:smoke
-          cache-from: type=gha,scope=api
+          cache-from: type=gha,scope=api-amd64
 
       # ENVIRONMENT=prod on purpose: it is the mode real installs run, and the
       # one that enforces the auth secret. The secret is generated here and dies
