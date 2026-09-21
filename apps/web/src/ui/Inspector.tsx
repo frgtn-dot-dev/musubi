@@ -9,7 +9,7 @@ import { useInspectorPreference, type InspectorPresentation } from "./inspector-
 type WindowPosition = { x: number; y: number };
 type ActiveInspector = { id: symbol; close: (after: () => void) => void };
 const InspectorContext = createContext<{
-  id: symbol; modal: boolean; open: boolean;
+  id: symbol; modal: boolean; open: boolean; expanded: boolean;
   presentation: InspectorPresentation;
   setPresentation: (value: InspectorPresentation) => void;
   position: RefObject<WindowPosition | null>;
@@ -39,11 +39,13 @@ export function useInspectorPresentation(open: boolean) {
 }
 
 /** One selected object at a time. The owner can guard deactivation for a draft. */
-export function Inspector({ open, onOpenChange, onRequestClose, children, presentation: controlledPresentation, onPresentationChange, position: controlledPosition }: {
+export function Inspector({ open, onOpenChange, onRequestClose, children, expanded = false, presentation: controlledPresentation, onPresentationChange, position: controlledPosition }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onRequestClose: (after: () => void) => void;
   children: ReactNode;
+  /** Expand the same mounted editor without losing its draft or window placement. */
+  expanded?: boolean;
   presentation?: InspectorPresentation;
   onPresentationChange?: (value: InspectorPresentation) => void;
   position?: RefObject<WindowPosition | null>;
@@ -62,7 +64,7 @@ export function Inspector({ open, onOpenChange, onRequestClose, children, presen
     activeInspector = { id: identity, close: after => close.current(after) };
     return () => { if (activeInspector?.id === identity) activeInspector = undefined; };
   }, [open, id]);
-  return <InspectorContext.Provider value={{ id, modal, open, presentation, setPresentation, position }}><DialogPrimitive.Root modal={modal} open={open} onOpenChange={next => {
+  return <InspectorContext.Provider value={{ id, modal, open, expanded, presentation, setPresentation, position }}><DialogPrimitive.Root modal={modal} open={open} onOpenChange={next => {
     if (!next) { onRequestClose(() => {}); return; }
     if (activeInspector && activeInspector.id !== id) activeInspector.close(() => onOpenChange(true));
     else onOpenChange(true);
@@ -78,7 +80,7 @@ export function InspectorHeaderActions({ children }: { children: ReactNode }) {
   const inspector = useContext(InspectorContext);
   const floating = inspector?.presentation === "floating";
   return <div className={styles.inspectorHeaderActions}>
-    {inspector && !inspector.modal ? <>
+    {inspector && !inspector.modal && !inspector.expanded ? <>
       {floating ? <IconButton size="compact" data-inspector-move="" label="Move window with arrow keys" title="Drag to move · Arrow keys to move · Shift for larger steps"
         onKeyDown={event => {
           const direction = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key];
@@ -118,7 +120,8 @@ export const InspectorContent = forwardRef<ElementRef<typeof DialogPrimitive.Con
     const inspector = useContext(InspectorContext);
     const identity = inspector?.id;
     const position = inspector?.position;
-    const floating = !inspector?.modal && inspector?.presentation === "floating";
+    const expanded = inspector?.expanded;
+    const floating = !expanded && !inspector?.modal && inspector?.presentation === "floating";
     const content = useRef<HTMLDivElement | null>(null);
     // Radix mounts portal content after its parent; position when the DOM arrives.
     const [attached, setAttached] = useState(false);
@@ -152,7 +155,7 @@ export const InspectorContent = forwardRef<ElementRef<typeof DialogPrimitive.Con
     return <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay data-dialog-overlay="" className={styles.dialogOverlay} />
       <DialogPrimitive.Content aria-modal={inspector?.modal || undefined} data-ui="inspector" data-inspector-persistent={persistent ? "" : undefined} aria-describedby={undefined} {...props}
-        data-presentation={floating ? "floating" : "panel"}
+        data-presentation={expanded ? "expanded" : floating ? "floating" : "panel"}
         onPointerDown={event => {
           props.onPointerDown?.(event);
           if (event.defaultPrevented || !floating || event.button !== 0 || !(event.target instanceof Element)) return;
@@ -180,7 +183,7 @@ export const InspectorContent = forwardRef<ElementRef<typeof DialogPrimitive.Con
         onClick={event => { props.onClick?.(event); event.stopPropagation(); }}
         onCloseAutoFocus={event => { if (activeInspector && activeInspector.id !== identity) { event.preventDefault(); return; } props.onCloseAutoFocus?.(event); }}
         ref={contentRef}
-        className={classNames(styles.dialog, styles.dialog_right, styles.inspector, floating && styles.inspector_floating, className)}>
+        className={classNames(styles.dialog, styles.dialog_right, styles.inspector, floating && styles.inspector_floating, expanded && styles.inspector_expanded, className)}>
         <DialogPrimitive.Title className={styles.visuallyHidden} aria-hidden="true">{accessibleTitle}</DialogPrimitive.Title>
         {children}
       </DialogPrimitive.Content>

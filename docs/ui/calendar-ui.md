@@ -182,8 +182,12 @@ Clicking outside event details closes the panel without also creating an event u
 Narrow screens retain a modal panel. Toolbar, search, keyboard, month cells and time-grid gestures preserve
 their date/time defaults and return focus. The header and actions stay fixed;
 fields share one scroller. The displayed all-day end date is exclusive; the
-form adapts it to Musubi’s inclusive last date for drafts and writes. The header’s expand icon hands the same draft to the full editor page, including
-exact DST-fold instants; the panel footer only contains Cancel and Save/Create.
+form adapts it to Musubi’s inclusive last date for drafts and writes. During creation,
+the header’s expand icon widens the same mounted form over the current calendar:
+no navigation, URL changes or draft handoff. Collapse restores the previous panel
+or floating placement. Draft identity, exact DST-fold instants and failed-save
+feedback survive either direction. Existing-event editing can still open its full
+editor route. The panel footer only contains Cancel and Save/Create.
 
 Only one object inspector is active. Clicking outside event details keeps them
 open; the close button or Escape dismisses them, and another event trigger

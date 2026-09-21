@@ -421,7 +421,6 @@ export function SettingsDialog({
                     />
                     <RowOptions
                       label="Open details as"
-                      detail="Default for events and tasks on this browser. Small screens use a panel."
                       stacked
                       options={[{ label: "Side panel", value: "panel" }, { label: "Floating window", value: "floating" }]}
                       value={inspectorPresentation}

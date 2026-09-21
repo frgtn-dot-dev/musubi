@@ -19,6 +19,7 @@ import { toDateKey } from "../date-key";
 import { getEventMutationError } from "../event-permissions";
 import { type EventWhen, EventEditorForm } from "./EventEditorForm";
 import styles from "./styles/event-details.module.css";
+import editorStyles from "./styles/event-editor.module.css";
 
 export type QuickCreateAnchor = {
   returnFocus?: HTMLElement | null;
@@ -37,8 +38,6 @@ type QuickCreateProps = {
   onCreated: (event: Event) => void;
   onSavingChange?: (saving: boolean) => void;
   onOpenChange: (open: boolean) => void;
-  /** Optional handoff to the full editor page; the panel already shows all fields. */
-  onMoreOptions?: (values: EventFormValues) => void;
   exactRange?: ExactEventRange;
   endDate?: string;
   endTime?: string;
@@ -60,7 +59,6 @@ export function QuickCreate({
   onDraftChange,
   onCreated,
   onSavingChange,
-  onMoreOptions,
   onOpenChange,
   endDate,
   exactRange,
@@ -76,7 +74,7 @@ export function QuickCreate({
   const [expandActionContainer, setExpandActionContainer] = useState<HTMLDivElement | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const saving = useRef(false);
-  const handoff = useRef(false);
+  const [expanded, setExpanded] = useState(false);
   const confirmationReturnFocus = useRef<HTMLElement | null>(null);
   const [draft, setDraft] = useState<EventFormValues>();
   const [submissionState, setSubmissionState] = useState<{ saving: boolean; error?: ReturnType<typeof getEventMutationError> }>({ saving: false });
@@ -144,7 +142,7 @@ export function QuickCreate({
 
   return (
     <>
-      <Inspector open={open} onOpenChange={onOpenChange} onRequestClose={requestClose}>
+      <Inspector open={open} onOpenChange={onOpenChange} onRequestClose={requestClose} expanded={expanded}>
         <InspectorContent
           accessibleTitle="Create event"
           persistent
@@ -160,7 +158,7 @@ export function QuickCreate({
           }}
           onCloseAutoFocus={event => {
             event.preventDefault();
-            if (!handoff.current && anchor.returnFocus?.isConnected) anchor.returnFocus.focus();
+            if (anchor.returnFocus?.isConnected) anchor.returnFocus.focus();
           }}
         >
           <header data-inspector-header="" className={styles.editorHeader}>
@@ -172,27 +170,30 @@ export function QuickCreate({
               </IconButton>
             </InspectorHeaderActions>
           </header>
-          <EventEditorForm
-            calendars={calendars}
-            localAccountName={userName?.trim() || email}
-            layout="panel"
-            expandActionContainer={expandActionContainer}
-            titleRef={titleRef}
-            onExpand={onMoreOptions ? values => { handoff.current = true; onMoreOptions(values); } : undefined}
-            initialValues={draft ?? initialValues}
-            onValuesChange={values => { setDraft(values); setSubmissionState({ saving: false }); }}
-            submissionState={submissionState}
-            when={when}
-            onCancel={() => requestClose(() => {})}
-            onDraftChange={onDraftChange}
-            onError={(error, values) =>
-              getEventMutationError(error, "create", calendars.find(calendar => calendar.id === values.calendarId))
-            }
-            onSubmit={handleSubmit}
-            submitLabel="Create"
-            timeFormat={timeFormat}
-            weekStartsOn={weekStartsOn}
-          />
+          <div className={editorStyles.inspectorFit}>
+            <EventEditorForm
+              calendars={calendars}
+              localAccountName={userName?.trim() || email}
+              layout={expanded ? "page" : "panel"}
+              expandActionContainer={expandActionContainer}
+              titleRef={titleRef}
+              onExpand={() => setExpanded(true)}
+              onCollapse={expanded ? () => setExpanded(false) : undefined}
+              initialValues={draft ?? initialValues}
+              onValuesChange={values => { setDraft(values); setSubmissionState({ saving: false }); }}
+              submissionState={submissionState}
+              when={when}
+              onCancel={() => requestClose(() => {})}
+              onDraftChange={onDraftChange}
+              onError={(error, values) =>
+                getEventMutationError(error, "create", calendars.find(calendar => calendar.id === values.calendarId))
+              }
+              onSubmit={handleSubmit}
+              submitLabel="Create"
+              timeFormat={timeFormat}
+              weekStartsOn={weekStartsOn}
+            />
+          </div>
         </InspectorContent>
       </Inspector>
       <ConfirmationDialog

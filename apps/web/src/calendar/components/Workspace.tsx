@@ -1414,14 +1414,6 @@ export function Workspace({
               startTime: draft.isAllDay ? undefined : draft.startTime,
             })
           }
-          onMoreOptions={
-            onOpenFullEditor
-              ? (values) => {
-                  setCreateIntent(undefined);
-                  onOpenFullEditor(values);
-                }
-              : undefined
-          }
           onOpenChange={(open) => {
             if (!open) {
               setCreateIntent(undefined);

@@ -2574,6 +2574,22 @@
 /* A full-height scroller must not stretch the form's grid rows to fill it. */
 .inspectorFormBody { align-content: start; }
 
+/* The workspace size matches Dialog, while the same inspector stays mounted. */
+.dialog.inspector_expanded {
+  inset: 0;
+  margin: auto;
+  width: min(1440px, calc(100vw - 2 * var(--layer-viewport-gutter)));
+  height: min(900px, calc(100dvh - 2 * var(--layer-viewport-gutter)));
+  max-height: calc(100dvh - 2 * var(--layer-viewport-gutter));
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sheet);
+}
+.dialog.inspector_expanded[data-state="open"] { animation: none; }
+.dialog.inspector_expanded[data-state="closed"] { animation: inspector-float-out var(--motion-fast) ease-in; }
+@media (max-width: 599px) {
+  .dialog.inspector_expanded { width: 100vw; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; }
+}
+
 @media (min-width: 1024px) {
   .dialog.inspector_floating {
     inset: var(--layer-viewport-gutter) auto auto calc(50vw - var(--inspector-width) / 2);
@@ -2592,7 +2608,7 @@
 @keyframes inspector-float-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes inspector-float-out { from { opacity: 1; } to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .dialog.inspector_floating[data-state] { animation: none; }
+  .dialog.inspector_floating[data-state], .dialog.inspector_expanded[data-state] { animation: none; }
 }
 
 .selectPopover[data-searchable] {

@@ -5085,52 +5085,53 @@ test("makes the scope of a recurring event edit explicit", async ({ page }) => {
 	await expectNoAccessibilityViolations(page);
 });
 
-test("hands the draft to a full editor page and back", async ({ page }) => {
-	await mockAuthenticatedReads(page);
-	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/week?date=2026-07-30`);
-
-	await openCreateEvent(page);
-	await page
-		.getByRole("textbox", { name: "Event title" })
-		.fill("Quarterly review");
-	await page.getByRole("button", { name: "Expand event editor" }).click();
-
-	// A real page, with the draft in the URL so a reload cannot lose it.
-	await expect(page).toHaveURL(/\/event\/new\?/);
-	await expect(page).toHaveURL(/title=Quarterly\+review/);
-	await expect(page.getByRole("heading", { name: "New event" })).toBeVisible();
-	await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue(
-		"Quarterly review",
-	);
-	// The full set of fields is here, with no disclosure left.
-	await expect(page.getByPlaceholder("Add location")).toBeVisible();
-	await expect(page.getByLabel("Repeat")).toBeVisible();
-	await expect(page.getByRole("button", { name: "Expand event editor" })).toHaveCount(
-		0,
-	);
-	await expectNoAccessibilityViolations(page);
-
-	await page.reload();
-	await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue(
-		"Quarterly review",
-	);
-
-	const writes: Array<{ title: string }> = [];
-	await page.route("**/api/v1/events", async (route) => {
-		if (route.request().method() === "POST") {
-			writes.push(route.request().postDataJSON() as { title: string });
-		}
-		return route.fallback();
-	});
-	await page.getByPlaceholder("Add location").fill("Studio B");
-	await page.getByRole("button", { exact: true, name: "Create" }).click();
-
-	// Saving lands back on the view and date it started from.
-	await expect(page).toHaveURL(/\/week\?date=2026-07-30/);
-	expect(writes[0]!.title).toBe("Quarterly review");
-	await expect(
-		page.getByRole("button", { name: /Quarterly review/ }).first(),
-	).toBeVisible();
+test("expands the creation draft in place and returns to its floating position", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockAuthenticatedReads(page);
+  await page.goto(`/app/p/${DEFAULT_PAGE_ID}/week?date=2026-07-30`);
+  await openCreateEvent(page);
+  const url = page.url();
+  const editor = page.getByRole("dialog", { name: "Create event", exact: true });
+  await editor.getByRole("button", { name: "Float window", exact: true }).click();
+  await editor.getByRole("button", { name: "Move window with arrow keys" }).press("Shift+ArrowLeft");
+  const originalBox = (await editor.boundingBox())!;
+  const calendar = page.locator("[data-calendar-area]");
+  const scrollTop = await calendar.evaluate(node => node.scrollTop);
+  await editor.getByRole("textbox", { name: "Event title" }).fill("Quarterly review");
+  await editor.getByPlaceholder("Add location").fill("Studio B");
+  await editor.getByRole("button", { name: "Expand event editor" }).click();
+  await expect(page).toHaveURL(url);
+  await expect(editor).toHaveAttribute("data-presentation", "expanded");
+  await expect(editor.getByRole("textbox", { name: "Event title" })).toHaveValue("Quarterly review");
+  await expect(editor.getByPlaceholder("Add location")).toHaveValue("Studio B");
+  await expect(editor.getByLabel("Repeat")).toBeVisible();
+  await expect(editor.getByRole("button", { name: "Collapse event editor" })).toBeFocused();
+  await expectNoAccessibilityViolations(page);
+  await editor.getByPlaceholder("Add notes").fill("Bring the roadmap.");
+  await editor.getByRole("button", { name: "Collapse event editor" }).click();
+  await expect(editor).toHaveAttribute("data-presentation", "floating");
+  await editor.evaluate(async node => { await Promise.all(node.getAnimations().map(animation => animation.finished)); });
+  const restoredBox = (await editor.boundingBox())!;
+  expect(restoredBox.x).toBeCloseTo(originalBox.x, 0);
+  expect(restoredBox.y).toBeCloseTo(originalBox.y, 0);
+  await expect(editor.getByPlaceholder("Add notes")).toHaveValue("Bring the roadmap.");
+  expect(await calendar.evaluate(node => node.scrollTop)).toBe(scrollTop);
+  await editor.getByRole("button", { name: "Dock to side" }).click();
+  await editor.getByRole("button", { name: "Expand event editor" }).click();
+  await editor.getByRole("button", { name: "Collapse event editor" }).click();
+  await expect(editor).toHaveAttribute("data-presentation", "panel");
+  await editor.getByRole("button", { name: "Expand event editor" }).click();
+  const writes: Array<{ title: string; location: string }> = [];
+  await page.route("**/api/v1/events", async route => {
+    if (route.request().method() === "POST") writes.push(route.request().postDataJSON());
+    return route.fallback();
+  });
+  await editor.getByRole("button", { exact: true, name: "Create" }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(page).toHaveURL(url);
+  expect(writes).toHaveLength(1);
+  expect(writes[0]).toMatchObject({ title: "Quarterly review", location: "Studio B" });
+  await expect(page.getByRole("button", { name: /Quarterly review/ }).first()).toBeVisible();
 });
 
 test("uses the desktop event editor as a fixed multi-column workspace", async ({
@@ -5142,7 +5143,7 @@ test("uses the desktop event editor as a fixed multi-column workspace", async ({
 	await openCreateEvent(page);
 	await page.getByRole("button", { name: "Expand event editor" }).click();
 
-	const editor = page.getByRole("dialog", { name: "New event" });
+	const editor = page.getByRole("dialog", { name: "Create event", exact: true });
 	const surface = editor.locator("header + div");
 	const form = editor.locator('form[data-layout="page"]');
 	const when = form.locator('[data-editor-section="when"]');
@@ -5281,9 +5282,10 @@ test("keeps the full event editor usable on a narrow viewport", async ({
 		.fill("Mobile planning");
 	await page.getByRole("button", { name: "Expand event editor" }).click();
 
-	await expect(page).toHaveURL(/\/event\/new\?/);
+	await expect(page).toHaveURL(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 	await expect(page.getByRole("heading", { name: "New event" })).toBeVisible();
-	await expect(page.getByRole("textbox", { name: "Event title" })).toBeFocused();
+	await expect(page.getByRole("button", { name: "Collapse event editor" })).toBeFocused();
+	await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue("Mobile planning");
 	await expect(page.getByRole("button", { name: /^Date:/ })).toBeVisible();
 	await expect(page.getByRole("textbox", { name: "Location", exact: true })).toBeVisible();
 	await expect(
@@ -5302,7 +5304,8 @@ test("keeps the full event editor usable on a narrow viewport", async ({
 	});
 	await create.scrollIntoViewIfNeeded();
 	await expect(create).toBeVisible();
-	await page.getByRole("button", { name: "Close event editor" }).click();
+	await page.getByRole("button", { name: "Close new event" }).click();
+	await page.getByRole("button", { name: "Discard event", exact: true }).click();
 	await expect(page).toHaveURL(/\/month\?date=2026-07-26/);
 	expect(runtimeErrors).toEqual([]);
 });
@@ -5314,9 +5317,9 @@ test("leaving the full event editor keeps the calendar where it was", async ({
 	await page.goto(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 	await page.locator('[data-day-key="2026-07-15"]').click();
 	await page.getByRole("button", { name: "Expand event editor" }).click();
-	await expect(page).toHaveURL(/\/month\/event\/new\?/);
+	await expect(page).toHaveURL(`/app/p/${DEFAULT_PAGE_ID}/month?date=2026-07-26`);
 
-	await page.getByRole("button", { name: "Close event editor" }).click();
+	await page.getByRole("button", { name: "Close new event" }).click();
 	await expect(page).toHaveURL(/\/month\?date=2026-07-26/);
 });
 
@@ -7890,7 +7893,7 @@ test("scrolls the calendar list inside the editor layer, not the layer", async (
 	await openCreateEvent(page);
 	await page.getByRole("button", { name: "Expand event editor" }).click();
 
-	const dialog = page.getByRole("dialog", { name: "New event" });
+	const dialog = page.getByRole("dialog", { name: "Create event", exact: true });
 	const body = dialog.locator("header + div");
 	const form = dialog.locator('form[data-layout="page"]');
 	const placement = form.locator('[data-ui="calendar-placement"]');
@@ -9084,12 +9087,12 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
 }
 
 for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
-  for (const mode of ["quick-handoff", "zoned", "all-day"] as const) {
-    test(`creation draft identity survives lost response and reload ${mode} ${theme}`, async ({ page }) => {
+  for (const mode of ["quick-expand", "zoned", "all-day"] as const) {
+    test(`creation draft identity survives lost response and expansion or reload ${mode} ${theme}`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
       const calendarID = "00000000-0000-4000-8000-000000000155";
-      await mockAuthenticatedReads(page, { ...events, events: [] }, [{ ...calendars[0]!, id: calendarID, ...(mode === "quick-handoff" ? {} : { provider: "microsoft" as const }) }]);
+      await mockAuthenticatedReads(page, { ...events, events: [] }, [{ ...calendars[0]!, id: calendarID, ...(mode === "quick-expand" ? {} : { provider: "microsoft" as const }) }]);
       const writes: any[] = [];
       const intercept = async (route: Route) => {
         if (route.request().method() !== "POST") return route.fallback();
@@ -9107,7 +9110,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
       await page.route("**/api/v1/events", intercept);
       await page.route("**/api/v1/events/time", intercept);
       const draftUrl = `/app/p/${DEFAULT_PAGE_ID}/week/event/new?date=2026-07-30&view=week&calendarId=${calendarID}&title=Creation+retry&startTime=09%3A30&endTime=10%3A30&timeKind=${mode}${mode === "all-day" ? "&allDay=true" : ""}&timeZone=Europe%2FPrague&recurrence=RRULE%3AFREQ%3DDAILY%3BCOUNT%3D4`;
-      if (mode === "quick-handoff") {
+      if (mode === "quick-expand") {
         await page.goto(`/app/p/${DEFAULT_PAGE_ID}/week?date=2026-07-30`);
         await openCreateEvent(page);
         await page.getByRole("textbox", { name: "Event title" }).fill("Creation retry");
@@ -9115,17 +9118,25 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
       await page.getByRole("button", { name: "Create", exact: true }).click();
       await expect(page.getByRole("alert")).toBeVisible();
       expect(writes).toHaveLength(1);
-      if (mode === "quick-handoff") await page.getByRole("button", { name: "Expand event editor" }).click();
       const id = (writes[0].event ?? writes[0]).id;
-      await expect(page).toHaveURL(new RegExp(`createID=${id}`));
-      await page.reload();
+      if (mode === "quick-expand") {
+        const url = page.url();
+        await page.getByRole("button", { name: "Expand event editor" }).click();
+        await expect(page.getByRole("alert")).toBeVisible();
+        await page.getByRole("button", { name: "Collapse event editor" }).click();
+        await page.getByRole("button", { name: "Expand event editor" }).click();
+        await expect(page).toHaveURL(url);
+      } else {
+        await expect(page).toHaveURL(new RegExp(`createID=${id}`));
+        await page.reload();
+      }
       await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue("Creation retry");
       await expectNoAccessibilityViolations(page);
       await page.getByRole("button", { name: "Create", exact: true }).click();
       await expect(page.getByRole("textbox", { name: "Event title" })).toHaveCount(0);
       expect(writes).toHaveLength(2);
       expect(writes[1]).toEqual(writes[0]);
-      if (mode !== "quick-handoff") {
+      if (mode !== "quick-expand") {
         expect(writes[1].time.kind).toBe(mode);
         expect(writes[1].event.recurrence).toBe("RRULE:FREQ=DAILY;COUNT=4");
         expect(writes[1].event.createID).toBeUndefined();
