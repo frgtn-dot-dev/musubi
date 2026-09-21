@@ -1,4 +1,4 @@
-import { microsoftEventPatchEtag } from "./adapters/microsoft_event_content";
+import { microsoftEventVersion } from "./adapters/microsoft_event_content";
 import { withProviderOrganizerLease, markProviderOrganizer, completeProviderOrganizer } from "@musubi/db";
 import { confirmCaldavAlarm } from "@musubi/db";
 import { googleReminderInstanceEvidence, googleReminderInstanceProjection } from "./adapters/google_reminder_instance";
@@ -554,6 +554,26 @@ export async function deliverEventOutbox(
             signal,
           );
           remoteSnapshot = snapshot(expectedRef, evidence);
+          // A new operation created by an explicit, current comparison may send
+          // once. Retrying that operation (including after a crash) may not.
+          const firstExplicitResolution =
+            row.attempts === 1 &&
+            row.payload.resolution?.expectedRemoteExists === true &&
+            row.payload.resolution.expectedRemoteEtag === expectedRef.etag;
+          if (
+            evidence && row.provider === "microsoft" &&
+            row.action === "delete" && row.reconciling &&
+            !firstExplicitResolution
+          ) {
+            // A timed-out DELETE may still arrive at Graph. Seeing the same
+            // version now does not authorize another unconditional deletion.
+            await finishEventOutbox(row.id, token, "unconfirmed", "provider-write-failed", {
+              uncertain: true,
+              remoteSnapshot,
+              nextAttemptAt: new Date(Date.now() + 3_600_000),
+            });
+            return;
+          }
           if (!evidence && row.action === "delete") recovered = true;
           else if (
             evidence &&
@@ -564,10 +584,11 @@ export async function deliverEventOutbox(
             recovered = true;
           } else if (
             evidence &&
-            (row.provider === "microsoft" && row.action === "update" ? microsoftEventPatchEtag(expectedRef.etag) : strongEventEtag(expectedRef.etag)) &&
+            (row.provider === "microsoft" ? microsoftEventVersion(expectedRef.etag) : strongEventEtag(expectedRef.etag)) &&
             evidence.ref.etag === expectedRef.etag
           ) {
-            // A differing accepted version still needs the conditional write.
+            // Content differs at the accepted version: proceed through the
+            // provider's write guards (Graph DELETE has only a preflight).
           } else throw new ProviderEventWriteError("provider-conflict");
           remoteSnapshot = null;
         } else if (row.predecessorID) {

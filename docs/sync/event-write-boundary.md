@@ -2,19 +2,24 @@
 
 K06 was accepted and squash-merged in PR #119. K07 adds durable intent and the
 request's first claimed attempt; independent K07 review remains pending.
-PRODUCT / MIN_CLIENT / MIN_PEER remain 0.2.0. Outlook existing mapped
-EVENT update/delete remains refused in both preflight and the direct adapter:
-its event-specific conditional enforcement is **unknown**, not proven unsupported.
-Read/create and existing genuinely local unlink remain available. Tasks are not
-EVENT concurrency evidence and their serializers are not changed by this work.
+This change leaves product and compatibility versions unchanged. Outlook mapped personal events now
+support bounded content PATCH and explicitly accepted, preflight-guarded DELETE
+as described below. Other Outlook event edits remain refused. Read/create and
+genuinely local unlink remain available. Tasks are not EVENT concurrency evidence
+and their serializers are not changed by this work.
 
 ## Provider contract and evidence
 
 - Outlook personal-event content PATCH has bounded [live evidence](../audits/outlook-event-cas-20260921.md).
-  Its exact native weak `@odata.etag` is preserved only for title/notes/location
-  PATCH of owned, attendee-free, non-recurring, non-online events. It is not
-  converted to a strong tag. DELETE ignored stale If-Match in the live test and
-  remains refused; this evidence does not enable time or meeting/series edits.
+  Its exact native weak `@odata.etag` is preserved for title/notes/location PATCH
+  and before-delete comparisons of owned, attendee-free, non-recurring,
+  non-online events. It is not converted to a strong tag. DELETE ignored stale
+  If-Match on both documented routes. [Guarded deletion](../audits/outlook-guarded-delete-20260921.md)
+  therefore uses a fresh permission/kind/version check, with the product owner's
+  explicit acceptance of the remaining GET-to-DELETE race. An ambiguous attempt
+  is observed read-only; another DELETE requires a new explicitly confirmed
+  intent. This is not atomic conflict protection and does not enable time,
+  meeting, shared-calendar or series mutations.
 
 - Google Calendar's [conditional modification guide](https://developers.google.com/workspace/calendar/api/guides/version-resources)
   documents exact resource `etag` in `If-Match` for update/delete and stale-version

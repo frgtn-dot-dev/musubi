@@ -1,0 +1,19 @@
+{
+  "at": "2026-09-21T15:38:44.474Z",
+  "route": "/v1.0/me/events/{id}",
+  "cases": [
+    {
+      "scenario": "stale",
+      "deleteStatus": 204,
+      "afterStatus": 404,
+      "requestID": "11308f3b-680c-4194-bc3f-a5c1e040bb8f"
+    },
+    {
+      "scenario": "fresh",
+      "deleteStatus": 204,
+      "afterStatus": 404,
+      "requestID": "d845c414-99ff-4124-a062-a8dc952a2326"
+    }
+  ],
+  "cleanup": true
+}
