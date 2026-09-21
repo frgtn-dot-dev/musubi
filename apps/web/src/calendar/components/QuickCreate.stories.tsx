@@ -46,6 +46,18 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 export const Timed: Story = {};
 export const AllDay: Story = { args: { allDay: true } };
+export const Expanded: Story = {
+  play: async ({ canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole("button", { name: "New event" }));
+    const editor = within(within(document.body).getByRole("dialog", { name: "Create event" }));
+    await userEvent.type(editor.getByRole("textbox", { name: "Event title" }), "Weekend plans");
+    await userEvent.click(editor.getByRole("button", { name: "Expand event editor" }));
+    await expect(editor.getByRole("button", { name: "Collapse event editor" })).toHaveFocus();
+    await userEvent.click(editor.getByRole("button", { name: "Collapse event editor" }));
+    await expect(editor.getByRole("textbox", { name: "Event title" })).toHaveValue("Weekend plans");
+    await userEvent.click(editor.getByRole("button", { name: "Expand event editor" }));
+  },
+};
 export const ConnectedAccounts: Story = {
   args: { connectedAccounts: true },
   play: async ({ canvasElement }) => {

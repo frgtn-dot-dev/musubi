@@ -3,7 +3,7 @@ import { TaskStatusIcon } from "./TaskStatusIcon";
 import { createContext, useContext, useState, type CSSProperties, type ReactElement, type RefObject } from "react";
 import { can, providerFlavor, type Calendar, type Settings, type Task, type TaskUpdate } from "@musubi/types";
 import { CalendarDays, Clock3, FileText, Flag, X, Pencil, Trash2, Repeat2, Link, GitBranch } from "lucide-react";
-import { Inspector, InspectorContent, InspectorTrigger } from "~/ui/Inspector";
+import { Inspector, InspectorContent, InspectorHeaderActions, InspectorTrigger, useInspectorPresentation } from "~/ui/Inspector";
 import { Button, IconButton } from "~/ui/Button";
 import { ConfirmationDialog } from "~/ui/ConfirmationDialog";
 import { SectionLabel } from "~/ui/SectionLabel";
@@ -30,6 +30,7 @@ export function TaskDetails({ taskId, open, onOpenChange, children, returnFocus:
   taskId: string; open: boolean; onOpenChange: (open: boolean) => void; children?: ReactElement; returnFocus?: RefObject<HTMLElement | null>;
 }) {
   const context = useContext(CalendarTaskContext);
+  const [presentation, onPresentationChange, position] = useInspectorPresentation(open);
   const [returnFocus] = useState(() => typeof document !== "undefined" ? document.activeElement as HTMLElement | null : null);
   const [relatedId, setRelatedId] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -62,12 +63,12 @@ export function TaskDetails({ taskId, open, onOpenChange, children, returnFocus:
     finally { setBusy(false); }
   }
   return <>
-    {!editing ? <Inspector open={open} onOpenChange={onOpenChange} onRequestClose={after => { if (!busy && !editing && !confirmDelete) { onOpenChange(false); after(); } }}>
+    {!editing ? <Inspector position={position} presentation={presentation} onPresentationChange={onPresentationChange} open={open} onOpenChange={onOpenChange} onRequestClose={after => { if (!busy && !editing && !confirmDelete) { onOpenChange(false); after(); } }}>
       {children ? <InspectorTrigger asChild>{children}</InspectorTrigger> : null}
       <InspectorContent accessibleTitle={task?.title ?? "Task"} className={styles.detailPopover} style={{ "--event-accent": calendar?.color } as CSSProperties}
         onCloseAutoFocus={event => { const target = requestedReturnFocus?.current ?? returnFocus; if (!children && target?.isConnected) { event.preventDefault(); target.focus(); } }}
         onFocusOutside={event => event.preventDefault()}>
-        <header className={styles.detailsHeader}>
+        <header data-inspector-header="" className={styles.detailsHeader}>
           <div className={styles.titleBlock}><h2>{task?.status === "completed" ? <s>{task.title}</s> : task?.title ?? "Task"}</h2>
             {calendar ? <ul aria-label="Calendars" className={styles.calendarPills}>
               <li className={styles.calendarPill} data-home="" aria-label={`${calendar.name} · Home calendar`}>
@@ -76,7 +77,7 @@ export function TaskDetails({ taskId, open, onOpenChange, children, returnFocus:
               </li>
             </ul> : null}
           </div>
-          <IconButton label="Close task" disabled={busy || editing || confirmDelete} onClick={() => onOpenChange(false)}><X size={18} /></IconButton>
+          <InspectorHeaderActions><IconButton label="Close task" disabled={busy || editing || confirmDelete} onClick={() => onOpenChange(false)}><X size={18} /></IconButton></InspectorHeaderActions>
         </header>
         <div className={styles.detailsBody}>
           {!task || !calendar ? <p>This task is no longer available.</p> : <>
@@ -106,7 +107,7 @@ export function TaskDetails({ taskId, open, onOpenChange, children, returnFocus:
         </footer> : null}
       </InspectorContent>
     </Inspector> : null}
-    {editing && task && context?.update ? <TaskList key={task.id} editorOnly initialEditTask={task} onEditorClose={() => setEditing(false)}
+    {editing && task && context?.update ? <TaskList inspectorPresentation={{ presentation, onPresentationChange, position }} key={task.id} editorOnly initialEditTask={task} onEditorClose={() => setEditing(false)}
       calendars={context.calendars} sourceCalendars={context.calendars} tasks={context.tasks} sourceTasks={context.tasks} calendarsResolved tasksResolved
       settings={context.settings} editableCalendarIds={editableCalendarIds} offline={context.offline} createRequest={0} onCreateRequestHandled={() => {}}
       onCreate={async () => { throw new Error("Use the new task form to create tasks."); }} onUpdate={context.update}

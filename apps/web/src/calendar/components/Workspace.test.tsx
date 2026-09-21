@@ -996,7 +996,7 @@ describe("Workspace", () => {
     ).toBe("Studio time");
   });
 
-  it("hands the draft to the editor page when one is wired in", async () => {
+  it("expands creation in place even when an editor route is available", async () => {
     const user = userEvent.setup();
     const onOpenFullEditor = vi.fn();
 
@@ -1012,11 +1012,13 @@ describe("Workspace", () => {
     );
     await user.click(screen.getByRole("button", { name: "Expand event editor" }));
 
-    expect(onOpenFullEditor).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Studio time" }),
-    );
-    // The bubble is gone: the page owns the draft now.
-    expect(screen.queryByRole("textbox", { name: "Event title" })).toBeNull();
+    expect(onOpenFullEditor).not.toHaveBeenCalled();
+    const title = screen.getByRole("textbox", { name: "Event title" }) as HTMLInputElement;
+    expect(title.value).toBe("Studio time");
+    expect(title.closest("form")?.dataset.layout).toBe("page");
+    await user.click(screen.getByRole("button", { name: "Collapse event editor" }));
+    expect(title.closest("form")?.dataset.layout).toBe("panel");
+    expect(title.value).toBe("Studio time");
   });
 
   it("does not expose write controls for viewer-only calendars", async () => {

@@ -22,6 +22,7 @@ import {
 	Link2,
 	MapPin,
 	Maximize2,
+	Minimize2,
 	Repeat2,
 	UsersRound,
 } from "lucide-react";
@@ -107,6 +108,8 @@ type EventEditorFormProps = {
 	 * in their header; compact forms can also disclose the remaining fields in place.
 	 */
 	onExpand?: (values: EventFormValues) => void;
+	/** Return an expanded inspector to its previous size, retaining this form. */
+	onCollapse?: () => void;
 	/** Header slot; the form retains the current draft and saving guard. */
 	expandActionContainer?: HTMLElement | null;
 	initialValues: EventFormValues;
@@ -156,6 +159,7 @@ export function EventEditorForm({
 	onCancel,
 	onDraftChange,
 	onExpand,
+	onCollapse,
 	expandActionContainer,
 	onError,
 	onSubmit,
@@ -767,9 +771,9 @@ export function EventEditorForm({
 			</FormBody>
 
 			<div className={styles.actions}>
-                {panel && expanded && onExpand && expandActionContainer ? createPortal(
-                  <IconButton label="Expand event editor" size="compact" disabled={saving} onClick={handleExpand}>
-                    <Maximize2 aria-hidden="true" size={17} strokeWidth={1.6} />
+                {expanded && onExpand && expandActionContainer ? createPortal(
+                  <IconButton label={onCollapse ? "Collapse event editor" : "Expand event editor"} size="compact" disabled={saving} onClick={onCollapse ?? handleExpand}>
+                    {onCollapse ? <Minimize2 aria-hidden="true" size={17} strokeWidth={1.6} /> : <Maximize2 aria-hidden="true" size={17} strokeWidth={1.6} />}
                   </IconButton>,
                   expandActionContainer,
                 ) : null}

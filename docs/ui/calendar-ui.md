@@ -169,12 +169,27 @@ dialog in both anchored and narrow sheet layouts; features do not set z-index.
 Event creation uses the same right Inspector and complete EventEditorForm as
 editing. Desktop panels overlay the right edge of the workspace without reserving width.
 Calendar columns and toolbar typography retain their geometry while the panel is open.
-Clicking outside event details closes the panel without also creating an event underneath. Unsaved edits retain their discard confirmation. Closing reveals the covered controls and days.
+Event and task inspectors share a 540 px desktop width. Their header can detach the
+inspector into a floating window and dock it again without replacing the form or
+its draft. Drag the floating header, or focus its move handle and use arrow keys
+(Shift moves farther). Placement stays within the viewport and is retained when
+switching a task between detail and edit. The Appearance setting “Open details as”
+stores the default in this browser only; a header toggle affects the current
+window. Below 1024 px, either preference uses the existing modal panel.
+Task forms align their grid rows at the top of the body; spare height belongs to
+the scroller, not the spaces between fields.
+Closing reveals the covered controls and days. Calendar gesture handlers ignore
+portaled dialog content; inspectors allow native clicks to bubble so nested
+pickers can dismiss on an outside press within the inspector.
 Narrow screens retain a modal panel. Toolbar, search, keyboard, month cells and time-grid gestures preserve
 their date/time defaults and return focus. The header and actions stay fixed;
 fields share one scroller. The displayed all-day end date is exclusive; the
-form adapts it to Musubi’s inclusive last date for drafts and writes. The header’s expand icon hands the same draft to the full editor page, including
-exact DST-fold instants; the panel footer only contains Cancel and Save/Create.
+form adapts it to Musubi’s inclusive last date for drafts and writes. During creation,
+the header’s expand icon widens the same mounted form over the current calendar:
+no navigation, URL changes or draft handoff. Collapse restores the previous panel
+or floating placement. Draft identity, exact DST-fold instants and failed-save
+feedback survive either direction. Existing-event editing can still open its full
+editor route. The panel footer only contains Cancel and Save/Create.
 
 Only one object inspector is active. Clicking outside event details keeps them
 open; the close button or Escape dismisses them, and another event trigger

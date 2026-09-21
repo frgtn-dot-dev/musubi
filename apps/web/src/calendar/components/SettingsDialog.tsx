@@ -19,6 +19,7 @@ import { InlineError } from "~/ui/InlineError";
 import { Row, RowAction, RowOptions, RowToggle } from "~/ui/Row";
 import { SettingsSection } from "~/ui/SettingsSection";
 import { Select } from "~/ui/Select";
+import { useInspectorPreference } from "~/ui/inspector-preferences";
 import { AdminSettings } from "./AdminSettings";
 import { DiagnosticsSection } from "./DiagnosticsSection";
 import {
@@ -162,6 +163,8 @@ export function SettingsDialog({
   onPatch,
   open,
 }: SettingsDialogProps) {
+  const [inspectorPresentation, setInspectorPresentation] = useInspectorPreference();
+  const [layoutError, setLayoutError] = useState("");
   const [settings, setSettings] = useState<SettingsDocument>();
   const [activePage, setActivePage] = useState<SettingsPageId>("appearance");
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -416,7 +419,18 @@ export function SettingsDialog({
                       options={VIEW_OPTIONS}
                       value={settings.value.defaultCalendarView}
                     />
+                    <RowOptions
+                      label="Open details as"
+                      stacked
+                      options={[{ label: "Side panel", value: "panel" }, { label: "Floating window", value: "floating" }]}
+                      value={inspectorPresentation}
+                      onChange={value => {
+                        try { setInspectorPresentation(value); setLayoutError(""); }
+                        catch { setLayoutError("Your browser could not save the window preference."); }
+                      }}
+                    />
                   </SettingsSection>
+                  {layoutError ? <InlineError>{layoutError}</InlineError> : null}
                   <SettingsSection title="Date & time">
                     <RowOptions
                       disabled={saving}

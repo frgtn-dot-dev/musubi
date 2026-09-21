@@ -1,38 +1,38 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
-import { createEventFromForm, type EventFormValues } from "../event-form";
 import { fixtureCalendars } from "../fixtures";
-import { EventEditorForm } from "./EventEditorForm";
 import { QuickCreate } from "./QuickCreate";
 
 afterEach(cleanup);
 
-it.each(["00", "01"])("carries Prague's %s:30Z fold through quick create and full editor writes", async (hour) => {
+it.each(["00", "01"])("keeps Prague's %s:30Z fold and the mounted draft when expanding in place", async (hour) => {
   const user = userEvent.setup();
   const exactRange = { start: new Date(`2026-10-25T${hour}:30:00Z`), end: new Date(`2026-10-25T${hour}:45:00Z`) };
   const onCreate = vi.fn(async (event) => event);
-  const onMoreOptions = vi.fn();
-  const props = {
-    anchor: { x: 10, y: 10 }, calendars: fixtureCalendars, date: "2026-10-25", email: "alex@example.com",
-    startTime: "02:30", endTime: "02:45", exactRange, onCreate, onCreated: vi.fn(),
-    onOpenChange: vi.fn(), onMoreOptions, open: true, timeFormat: "24h" as const, userId: "alex", weekStartsOn: "monday" as const,
-  };
-  const quick = render(<QuickCreate {...props} />);
-  await user.type(screen.getByRole("textbox", { name: "Event title" }), "Fold meeting");
+  const onOpenChange = vi.fn();
+  render(<QuickCreate
+    anchor={{ x: 10, y: 10 }} calendars={fixtureCalendars} date="2026-10-25" email="alex@example.com"
+    startTime="02:30" endTime="02:45" exactRange={exactRange} onCreate={onCreate} onCreated={vi.fn()}
+    onOpenChange={onOpenChange} open timeFormat="24h" userId="alex" weekStartsOn="monday"
+  />);
+  const title = screen.getByRole("textbox", { name: "Event title" });
+  await user.type(title, "Fold meeting");
+  await user.type(screen.getByPlaceholderText("Add location"), "Studio B");
+  const form = title.closest("form");
+  const originalUrl = window.location.href;
+  await user.click(screen.getByRole("button", { name: "Expand event editor" }));
+  expect(form?.dataset.layout).toBe("page");
+  await user.click(screen.getByRole("button", { name: "Collapse event editor" }));
+  expect(form?.dataset.layout).toBe("panel");
+  await user.click(screen.getByRole("button", { name: "Expand event editor" }));
+  expect(screen.getByRole("textbox", { name: "Event title" })).toBe(title);
+  expect((screen.getByPlaceholderText("Add location") as HTMLInputElement).value).toBe("Studio B");
+  expect(window.location.href).toBe(originalUrl);
+  expect(onOpenChange).not.toHaveBeenCalled();
   await user.click(screen.getByRole("button", { name: "Create" }));
   expect(onCreate).toHaveBeenCalledOnce();
-  expect(onCreate.mock.calls[0]![0]).toMatchObject(exactRange);
-  await user.click(screen.getByRole("button", { name: "Expand event editor" }));
-  const values = onMoreOptions.mock.calls[0]![0] as EventFormValues;
-  quick.unmount();
-  const fullWrite = vi.fn();
-  render(<EventEditorForm calendars={fixtureCalendars} initialValues={values} onCancel={vi.fn()} onError={(error) => ({ message: String(error) })}
-    onSubmit={async (draft) => { fullWrite(createEventFromForm(draft, { email: props.email, userId: props.userId }, "#b3492f")); }}
-    submitLabel="Save" timeFormat="24h" weekStartsOn="monday" />);
-  await user.click(screen.getByRole("button", { name: "Save" }));
-  expect(fullWrite).toHaveBeenCalledOnce();
-  expect(fullWrite.mock.calls[0]![0]).toMatchObject(exactRange);
+  expect(onCreate.mock.calls[0]![0]).toMatchObject({ ...exactRange, title: "Fold meeting", location: "Studio B" });
 });
 
 it("moves a titled draft between identical civil fold fields using the exact range", async () => {
