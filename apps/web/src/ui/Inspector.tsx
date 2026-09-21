@@ -153,7 +153,11 @@ export const InspectorContent = forwardRef<ElementRef<typeof DialogPrimitive.Con
       return () => { cancelAnimationFrame(frame); observer.disconnect(); window.removeEventListener("resize", constrain); };
     }, [attached, floating, inspector?.open, position]);
     return <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay data-dialog-overlay="" className={styles.dialogOverlay} />
+      {/* Keep the desktop form mounted when expanding; changing Radix's modal
+          mode would replace it. Narrow inspectors already have a modal backdrop. */}
+      {expanded && !inspector?.modal ? (
+        <div aria-hidden="true" data-dialog-overlay="" data-state={inspector?.open ? "open" : "closed"} className={styles.dialogOverlay} />
+      ) : <DialogPrimitive.Overlay data-dialog-overlay="" className={styles.dialogOverlay} />}
       <DialogPrimitive.Content aria-modal={inspector?.modal || undefined} data-ui="inspector" data-inspector-persistent={persistent ? "" : undefined} aria-describedby={undefined} {...props}
         data-presentation={expanded ? "expanded" : floating ? "floating" : "panel"}
         onPointerDown={event => {
