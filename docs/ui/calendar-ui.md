@@ -178,7 +178,9 @@ stores the default in this browser only; a header toggle affects the current
 window. Below 1024 px, either preference uses the existing modal panel.
 Task forms align their grid rows at the top of the body; spare height belongs to
 the scroller, not the spaces between fields.
-Clicking outside event details closes the panel without also creating an event underneath. Unsaved edits retain their discard confirmation. Closing reveals the covered controls and days.
+Closing reveals the covered controls and days. Calendar gesture handlers ignore
+portaled dialog content; inspectors allow native clicks to bubble so nested
+pickers can dismiss on an outside press within the inspector.
 Narrow screens retain a modal panel. Toolbar, search, keyboard, month cells and time-grid gestures preserve
 their date/time defaults and return focus. The header and actions stay fixed;
 fields share one scroller. The displayed all-day end date is exclusive; the

@@ -10872,6 +10872,13 @@ test("task inspector keeps compact form spacing at tall heights and retains floa
   const detail = page.getByRole("dialog", { name: "Pack for the weekend", exact: true });
   await detail.getByRole("button", { name: "Float window" }).click();
   await settleLayout(page);
+  for (const name of ["Task status", "Task priority"]) {
+    await detail.getByRole("combobox", { name, exact: true }).click();
+    await expect(page.getByRole("listbox")).toBeVisible();
+    await detail.getByRole("heading", { name: task.title }).click();
+    await expect(page.getByRole("listbox")).toHaveCount(0);
+    await expect(detail).toBeVisible();
+  }
   await detail.getByRole("button", { name: "Move window with arrow keys" }).focus();
   await page.keyboard.press("Shift+ArrowRight");
   const placement = (await detail.boundingBox())!;

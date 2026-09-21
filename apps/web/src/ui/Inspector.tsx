@@ -184,7 +184,6 @@ export const InspectorContent = forwardRef<ElementRef<typeof DialogPrimitive.Con
           event.currentTarget.releasePointerCapture(event.pointerId);
         }}
         onLostPointerCapture={event => { props.onLostPointerCapture?.(event); drag.current = null; delete event.currentTarget.dataset.dragging; }}
-        onClick={event => { props.onClick?.(event); event.stopPropagation(); }}
         onCloseAutoFocus={event => { if (activeInspector && activeInspector.id !== identity) { event.preventDefault(); return; } props.onCloseAutoFocus?.(event); }}
         ref={contentRef}
         className={classNames(styles.dialog, styles.dialog_right, styles.inspector, floating && styles.inspector_floating, expanded && styles.inspector_expanded, className)}>
