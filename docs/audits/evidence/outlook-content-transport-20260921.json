@@ -1,0 +1,41 @@
+{
+  "startedAt": "2026-09-21T14:27:08.338Z",
+  "transport": "updateMicrosoftPersonalContent",
+  "passed": true,
+  "cleanup": true,
+  "observations": [
+    {
+      "method": "GET",
+      "status": 200,
+      "sameID": true,
+      "sameInitialVersion": true
+    },
+    {
+      "method": "PATCH",
+      "status": 200,
+      "sameID": true,
+      "sameInitialVersion": false
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "sameID": true,
+      "sameInitialVersion": false
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "sameID": true,
+      "sameInitialVersion": false
+    },
+    {
+      "method": "PATCH",
+      "status": 200,
+      "sameID": true,
+      "sameInitialVersion": false
+    }
+  ],
+  "titleAndOmission": true,
+  "staleRejected": true,
+  "explicitClear": true
+}

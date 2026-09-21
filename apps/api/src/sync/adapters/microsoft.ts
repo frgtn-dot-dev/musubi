@@ -1,3 +1,4 @@
+import { assertMicrosoftPersonalContent, microsoftPersonalContentPatch, microsoftEventPatchEtag, updateMicrosoftPersonalContent, refuseOutlookEventDelete } from "./microsoft_event_content";
 import { getOrganizerTimeEventIDs } from "@musubi/db";
 import { microsoftOrganizerTransport } from "./microsoft_organizer";
 import { graphRsvpTime } from "./microsoft_rsvp";
@@ -147,7 +148,8 @@ export function toNormalized(item: any): NormalizedEvent {
     ...(typeof item.iCalUId === "string" ? { icalUid: item.iCalUId } : {}),
     ...(reminderTimeEvidence ? { reminderTimeEvidence } : {}),
     externalId: item.id,
-    // Opaque provider metadata only. changeKey is NOT an If-Match guarantee.
+    // Keep the exact provider version. Only personal content PATCH has live
+    // conditional evidence; changeKey is never converted into an ETag.
     etag: typeof item["@odata.etag"] === "string" ? item["@odata.etag"] : null,
     status: "active",
     providerState: microsoftEventState(item),
@@ -201,8 +203,8 @@ export function toGraphEvent(event: Event) {
 }
 
 /** Graph event-update documents omission preservation, not event If-Match CAS.
- * This serializer is deliberately not an enabled remote write path while
- * conditional enforcement is unverified. Do not round-trip rich omitted data.
+ * The personal-content transport below enables only its separately proven field
+ * subset. Do not round-trip rich omitted data or infer safe DELETE from PATCH.
  */
 export function toGraphEventPatch(event: Event, patch: Partial<Event>) {
   const full = toGraphEvent({ ...event, recurrence: null });
@@ -217,14 +219,6 @@ export function toGraphEventPatch(event: Event, patch: Partial<Event>) {
     throw new EventWriteError("recurrence", "unsupported", "Outlook recurrence changes are not supported yet. No changes were saved.");
   }
   return result;
-}
-
-function refuseUnverifiedOutlookEventWrite(): never {
-  // https://learn.microsoft.com/en-us/graph/api/event-update does not establish
-  // event-specific If-Match enforcement. Re-enable only after explicit evidence
-  // and review; neither changeKey nor a fake HTTP server proves this contract.
-  throw new EventWriteError("event-write", "unknown",
-    "Outlook event conflict protection is not yet verified. Updates and deletions are temporarily blocked. No changes were saved.");
 }
 
 function graphTaskDate(value: any) {
@@ -860,8 +854,14 @@ export const microsoftAdapter: CalendarAdapter = {
         "Outlook recurrence creation and changes are not supported yet. No changes were saved.",
       );
     }
+    if (operation.action === "delete" && operation.external) refuseOutlookEventDelete();
+    if (operation.action === "update" && operation.external) microsoftPersonalContentPatch(operation.patch);
     const accessToken = await getAccessToken(userID, accountId);
     await assertOAuthEventWriteGrant(userID, "microsoft", accountId);
+    if (operation.action === "update" && operation.external) {
+      await assertMicrosoftPersonalContent({ token: accessToken, calendarID: externalCalendarId, eventID: operation.external.externalEventId, etag: operation.external.etag, signal: operation.signal });
+      return;
+    }
     const headers = { Authorization: `Bearer ${accessToken}` };
     const response = await fetch(
       `${GRAPH}/me/calendars/${encodeURIComponent(externalCalendarId)}?$select=canEdit`,
@@ -870,16 +870,6 @@ export const microsoftAdapter: CalendarAdapter = {
     assertEventWriteResponse(response);
     const calendar = await response.json();
     assertEventWriteEvidence(calendar.canEdit, "event-write");
-    if (operation.action !== "create" && operation.external) {
-      const response = await fetch(
-        `${GRAPH}${microsoftEventPath(externalCalendarId, operation.external.externalEventId)}?$select=isOrganizer`,
-        { headers, signal: operation.signal },
-      );
-      assertEventWriteResponse(response);
-      const current = await response.json();
-      assertEventWriteEvidence(operation.action === "delete" && current.isOrganizer === false ? true : current.isOrganizer, "organizer");
-      refuseUnverifiedOutlookEventWrite();
-    }
   },
 
   async findCreatedEvent(userID, accountId, externalCalendarId, identity) {
@@ -990,12 +980,29 @@ export const microsoftAdapter: CalendarAdapter = {
     };
   },
 
-  async pushUpdate() {
-    refuseUnverifiedOutlookEventWrite();
+  async readEvent(userID, accountId, externalCalendarId, ref, signal) {
+    const token = await getAccessToken(userID, accountId);
+    const response = await fetch(`${GRAPH}${microsoftEventPath(externalCalendarId, ref.externalEventId)}`, {
+      headers: { Authorization: `Bearer ${token}`, Prefer: PREFER, "Cache-Control": "no-cache" }, redirect: "error", signal,
+    });
+    if (response.status === 404) return null;
+    assertCompleteEventReadResponse(response);
+    const data = await response.json();
+    if (data?.id !== ref.externalEventId) throw new ProviderEventWriteError("provider-conflict");
+    const event = assertCreatedEventEvidence(toNormalized(data));
+    return { event, ref: { externalEventId: data.id, etag: microsoftEventPatchEtag(data["@odata.etag"]) } };
+  },
+
+  async pushUpdate(userID, accountId, externalCalendarId, externalEventId, _event, ref, patch, signal) {
+    microsoftPersonalContentPatch(patch);
+    if (!ref || ref.externalEventId !== externalEventId || !microsoftEventPatchEtag(ref.etag)) throw new ProviderEventWriteError("provider-version-unavailable");
+    const token = await getAccessToken(userID, accountId);
+    await assertOAuthEventWriteGrant(userID, "microsoft", accountId);
+    return updateMicrosoftPersonalContent({ token, calendarID: externalCalendarId, eventID: externalEventId, etag: ref.etag, signal }, patch);
   },
 
   async pushDelete() {
-    refuseUnverifiedOutlookEventWrite();
+    refuseOutlookEventDelete();
   },
 
   async pushTaskCreate(userID, accountId, externalCalendarId, task) {

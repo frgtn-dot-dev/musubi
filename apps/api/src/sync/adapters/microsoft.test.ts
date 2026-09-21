@@ -115,8 +115,8 @@ async function main() {
   assert.throws(() => toGraphEvent({ recurrence: "FREQ=DAILY", isAllDay: false, start: new Date(), end: new Date() } as any));
 
   // Omitted Graph properties preserve their rich provider shape. This proves
-  // payload shape only: existing-event writes stay refused until conditional
-  // enforcement is substantiated, never by converting changeKey to If-Match.
+  // payload shape only. The enabled personal-content path has separate live
+  // conditional evidence; it never converts changeKey to If-Match.
   const rich = {
     subject: "Before", body: { contentType: "HTML", content: "<b>Keep meeting blob</b>" },
     location: { displayName: "Office", address: { city: "Prague" }, coordinates: { latitude: 50 } },
@@ -135,10 +135,10 @@ async function main() {
   globalThis.fetch = (async () => { remoteCalls++; throw new Error("Unexpected remote request"); }) as typeof fetch;
   try {
     await assert.rejects(() => microsoftAdapter.pushUpdate("user", "account", "calendar", "event", timed as any),
-      /conflict protection is not yet verified/);
+      /event-diff-unavailable/);
     await assert.rejects(() => microsoftAdapter.pushDelete("user", "account", "calendar", "event"),
-      /conflict protection is not yet verified/);
-    assert.equal(remoteCalls, 0, "direct adapter paths cannot bypass complete preflight refusal");
+      /Delete this event in Outlook/);
+    assert.equal(remoteCalls, 0, "direct adapter paths cannot bypass missing-diff and delete guards");
   } finally { globalThis.fetch = realFetch; }
 
   // nearestMicrosoftCalendarColor: exact preset, nearby shade, garbage fallback

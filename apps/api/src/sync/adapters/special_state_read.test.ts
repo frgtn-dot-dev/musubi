@@ -37,8 +37,8 @@ async function main() {
   assert.equal(after.data.title, title);
   assert.deepEqual(after.data.providerState, before.data.providerState);
   const count = requests.length;
-  await assert.rejects(microsoftAdapter.pushUpdate!("owner", "account", "calendar", "special", {} as never), /unsupported|not supported|not yet|unverified/i);
-  assert.equal(requests.length, count, "Graph title mutation remains refused without HTTP");
-  console.log("Graph richer-state HTTP read/re-read preserves availability, privacy, reminders and Teams; native writer remains refused: OK");
+  await assert.rejects(microsoftAdapter.pushUpdate!("owner", "account", "calendar", "special", {} as never), /event-diff-unavailable/);
+  assert.equal(requests.length, count, "Graph mutation without a server-computed diff remains refused");
+  console.log("Graph richer-state HTTP read/re-read preserves availability, privacy, reminders and Teams; a write without a diff remains refused: OK");
 }
 main().then(() => process.exit(0), error => { console.error(error); process.exit(1); });

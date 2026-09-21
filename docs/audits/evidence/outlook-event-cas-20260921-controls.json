@@ -1,0 +1,252 @@
+{
+  "schemaVersion": 1,
+  "runID": "246fc37e-f457-4b3c-9852-b4d283bfafe2",
+  "startedAt": "2026-09-21T14:13:08.441Z",
+  "endpoint": "/v1.0/me/calendars/{id}/events/{id}",
+  "calendarName": "Musubi QA event CAS 2026-09-21 246fc37e",
+  "cases": [
+    {
+      "kind": "zoned",
+      "etagFormat": "weak",
+      "checks": {
+        "freshPatchAccepted": true,
+        "omittedFieldsPreserved": true,
+        "versionChanged": true,
+        "freshContentPatchAccepted": false,
+        "stalePatchRejected": true,
+        "invalidPatchRejected": true,
+        "staleDeleteRejected": false,
+        "freshDeleteAccepted": false
+      }
+    },
+    {
+      "kind": "all-day",
+      "etagFormat": "weak",
+      "checks": {
+        "freshPatchAccepted": true,
+        "omittedFieldsPreserved": true,
+        "versionChanged": true,
+        "freshContentPatchAccepted": false,
+        "stalePatchRejected": true,
+        "invalidPatchRejected": true,
+        "staleDeleteRejected": false,
+        "freshDeleteAccepted": false
+      }
+    }
+  ],
+  "requests": [
+    {
+      "label": "create-calendar",
+      "method": "POST",
+      "status": 201,
+      "requestID": "574d5d9f-7881-4851-97b5-6bf01e315bd7"
+    },
+    {
+      "label": "zoned:create",
+      "method": "POST",
+      "status": 201,
+      "requestID": "5df866a9-a0c4-4013-855c-1719b6b62452"
+    },
+    {
+      "label": "zoned:baseline",
+      "method": "GET",
+      "status": 200,
+      "requestID": "afa9cf64-5597-4130-aa99-6dd33cce9a02"
+    },
+    {
+      "label": "zoned:fresh-patch",
+      "method": "PATCH",
+      "status": 200,
+      "requestID": "58f0e59e-617d-4273-a68b-6123cc5caaa3"
+    },
+    {
+      "label": "zoned:after-fresh-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "62b49816-d343-45db-a905-6697d2e56749"
+    },
+    {
+      "label": "zoned:fresh-content-patch",
+      "method": "PATCH",
+      "status": 200,
+      "requestID": "2122a7d7-521c-4836-ab22-da5f519dd0f0"
+    },
+    {
+      "label": "zoned:after-content-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "8c07006a-4e94-4ee6-8490-d2a52df73cb5"
+    },
+    {
+      "label": "zoned:competing-edit",
+      "method": "PATCH",
+      "status": 200,
+      "requestID": "dda2330e-b212-410c-ad26-26ca8f434152"
+    },
+    {
+      "label": "zoned:after-competing-edit",
+      "method": "GET",
+      "status": 200,
+      "requestID": "acbef93c-e6ae-44f4-be24-625cf75998b1"
+    },
+    {
+      "label": "zoned:stale-patch",
+      "method": "PATCH",
+      "status": 412,
+      "requestID": "d949f236-90b3-45cc-a80d-8a1c6f66cc36"
+    },
+    {
+      "label": "zoned:after-stale-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "04e044e1-be11-4f12-bd6d-f098287bc405"
+    },
+    {
+      "label": "zoned:control-create",
+      "method": "POST",
+      "status": 201,
+      "requestID": "70534972-da70-4f9e-b04a-f278c6e7253e"
+    },
+    {
+      "label": "zoned:control-read",
+      "method": "GET",
+      "status": 200,
+      "requestID": "87ee7f5c-f92a-4027-9a4c-f645a7259193"
+    },
+    {
+      "label": "zoned:invalid-etag-patch",
+      "method": "PATCH",
+      "status": 412,
+      "requestID": "5252e8d3-f856-42ce-9c23-83aa2ed42f21"
+    },
+    {
+      "label": "zoned:after-invalid-etag",
+      "method": "GET",
+      "status": 200,
+      "requestID": "9f4c1f93-afb0-4614-a123-30c0bb98f07d"
+    },
+    {
+      "label": "zoned:stale-delete",
+      "method": "DELETE",
+      "status": 204,
+      "requestID": "850ab33b-30ee-4661-990d-a526febc3a8b"
+    },
+    {
+      "label": "zoned:after-stale-delete",
+      "method": "GET",
+      "status": 404,
+      "requestID": "0b44bb1f-d389-4dfe-99f1-267c2611e0b1"
+    },
+    {
+      "label": "all-day:create",
+      "method": "POST",
+      "status": 201,
+      "requestID": "c7dedad2-3c99-47d5-a854-08970a26bafa"
+    },
+    {
+      "label": "all-day:baseline",
+      "method": "GET",
+      "status": 200,
+      "requestID": "25ab5643-17e2-4027-8fbf-d0b4f41613f5"
+    },
+    {
+      "label": "all-day:fresh-patch",
+      "method": "PATCH",
+      "status": 200,
+      "requestID": "65e9e8d4-06da-493f-a9b4-7971d3acedf0"
+    },
+    {
+      "label": "all-day:after-fresh-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "bc2cd1c0-1e2f-4ba3-a86a-a786135b2420"
+    },
+    {
+      "label": "all-day:fresh-content-patch",
+      "method": "PATCH",
+      "status": 200,
+      "requestID": "28de9d48-1e13-4081-ac02-456d05fba492"
+    },
+    {
+      "label": "all-day:after-content-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "c9eb778e-5e7a-4844-a098-dcdb5f45f71c"
+    },
+    {
+      "label": "all-day:competing-edit",
+      "method": "PATCH",
+      "status": 200,
+      "requestID": "4d6478de-3735-402d-a90c-85a25c656088"
+    },
+    {
+      "label": "all-day:after-competing-edit",
+      "method": "GET",
+      "status": 200,
+      "requestID": "07673dfb-0be8-4c39-9e1b-2bb193a9292e"
+    },
+    {
+      "label": "all-day:stale-patch",
+      "method": "PATCH",
+      "status": 412,
+      "requestID": "65b316c3-3a93-44e2-bb48-0d9ec321436b"
+    },
+    {
+      "label": "all-day:after-stale-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "e08937a3-f140-414a-8605-fbf3d33a38d4"
+    },
+    {
+      "label": "all-day:control-create",
+      "method": "POST",
+      "status": 201,
+      "requestID": "eac31388-c4c5-453c-8cc5-93ba5a2e2c26"
+    },
+    {
+      "label": "all-day:control-read",
+      "method": "GET",
+      "status": 200,
+      "requestID": "6e0ed45c-1760-4193-9dca-fec47b683fc7"
+    },
+    {
+      "label": "all-day:invalid-etag-patch",
+      "method": "PATCH",
+      "status": 412,
+      "requestID": "900a14ac-9d7f-4bc1-a488-46f8dfa85a47"
+    },
+    {
+      "label": "all-day:after-invalid-etag",
+      "method": "GET",
+      "status": 200,
+      "requestID": "8db28496-dc91-4eaa-851a-5ed3d1181e48"
+    },
+    {
+      "label": "all-day:stale-delete",
+      "method": "DELETE",
+      "status": 204,
+      "requestID": "183d93e2-a375-494f-9dbc-ec3ad9be4ec2"
+    },
+    {
+      "label": "all-day:after-stale-delete",
+      "method": "GET",
+      "status": 404,
+      "requestID": "518896b2-7152-497e-8b15-523d14a30370"
+    },
+    {
+      "label": "cleanup-calendar",
+      "method": "DELETE",
+      "status": 204,
+      "requestID": "432f9169-c8e6-498e-a3a4-22494ba3d954"
+    },
+    {
+      "label": "verify-cleanup",
+      "method": "GET",
+      "status": 404,
+      "requestID": "10b95062-af58-4201-95d2-228e2a02f5b3"
+    }
+  ],
+  "cleanup": "verified",
+  "verified": false,
+  "patchVerified": false
+}

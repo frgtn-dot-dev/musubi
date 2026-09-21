@@ -1,3 +1,4 @@
+import { microsoftEventPatchEtag } from "./adapters/microsoft_event_content";
 import { caldavAlarmVersion } from "@musubi/db";
 import { prepareCaldavAlarmIntent } from "./caldav_alarms";
 import { sameCaldavAlarmEvent } from "./adapters/caldav_alarms";
@@ -431,7 +432,7 @@ async function prepare(
     (row.action === "create" &&
       !remote &&
       (row.uncertain || row.status === "unconfirmed" || row.remoteSnapshot)) ||
-    (remote && !strongEventEtag(remote.ref.etag)) ||
+    (remote && !(row.provider === "microsoft" && action === "update" ? microsoftEventPatchEtag(remote.ref.etag) : strongEventEtag(remote.ref.etag))) ||
     (action === "delete" && !ref) ||
     (row.provider === "microsoft" && row.action === "create")
   ) {

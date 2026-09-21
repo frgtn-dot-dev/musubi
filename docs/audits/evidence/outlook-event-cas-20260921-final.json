@@ -1,0 +1,264 @@
+{
+  "schemaVersion": 1,
+  "runID": "a2fe1618-33e5-4a1c-8b88-0e19f4e442d2",
+  "startedAt": "2026-09-21T14:14:05.813Z",
+  "endpoint": "/v1.0/me/calendars/{id}/events/{id}",
+  "calendarName": "Musubi QA event CAS 2026-09-21 a2fe1618",
+  "cases": [
+    {
+      "kind": "zoned",
+      "etagFormat": "weak",
+      "checks": {
+        "freshPatchAccepted": true,
+        "omittedFieldsPreserved": true,
+        "versionChanged": true,
+        "freshContentPatchAccepted": true,
+        "stalePatchRejected": true,
+        "invalidPatchRejected": true,
+        "staleDeleteRejected": false,
+        "freshDeleteAccepted": false
+      }
+    },
+    {
+      "kind": "all-day",
+      "etagFormat": "weak",
+      "checks": {
+        "freshPatchAccepted": true,
+        "omittedFieldsPreserved": true,
+        "versionChanged": true,
+        "freshContentPatchAccepted": true,
+        "stalePatchRejected": true,
+        "invalidPatchRejected": true,
+        "staleDeleteRejected": false,
+        "freshDeleteAccepted": false
+      }
+    }
+  ],
+  "requests": [
+    {
+      "label": "create-calendar",
+      "method": "POST",
+      "status": 201,
+      "requestID": "6f99af5e-d7e4-4982-b150-06b96ba77d4a"
+    },
+    {
+      "label": "zoned:create",
+      "method": "POST",
+      "status": 201,
+      "requestID": "ba91ffe9-985d-4fab-937b-f65a350ca2f6"
+    },
+    {
+      "label": "zoned:baseline",
+      "method": "GET",
+      "status": 200,
+      "requestID": "08379054-dca9-4571-934a-67810401a1fb"
+    },
+    {
+      "label": "zoned:fresh-patch",
+      "method": "PATCH",
+      "status": 200,
+      "requestID": "df35328e-3a84-4630-8340-22945d53094a"
+    },
+    {
+      "label": "zoned:after-fresh-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "871f2b68-7fff-493d-9cb4-85fae39c0dff"
+    },
+    {
+      "label": "zoned:fresh-content-patch",
+      "method": "PATCH",
+      "status": 200,
+      "requestID": "66804292-fb88-4ddd-ac81-123d0fdabdc8"
+    },
+    {
+      "label": "zoned:after-content-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "db47b435-75a1-48af-b80c-f5addc3bf903"
+    },
+    {
+      "label": "zoned:plain-content-read",
+      "method": "GET",
+      "status": 200,
+      "requestID": "fd4dc65a-9421-4f30-8565-3f0c4083563a"
+    },
+    {
+      "label": "zoned:competing-edit",
+      "method": "PATCH",
+      "status": 200,
+      "requestID": "5c1a593b-4a1b-4559-9d47-1c4bf6fb0578"
+    },
+    {
+      "label": "zoned:after-competing-edit",
+      "method": "GET",
+      "status": 200,
+      "requestID": "b9e388f5-2fcd-462f-993c-d7daeac390e8"
+    },
+    {
+      "label": "zoned:stale-patch",
+      "method": "PATCH",
+      "status": 412,
+      "requestID": "28e1d429-fda2-4239-9603-079ad16b09dd"
+    },
+    {
+      "label": "zoned:after-stale-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "821ee0a9-ca33-47f2-8132-224c19021dbb"
+    },
+    {
+      "label": "zoned:control-create",
+      "method": "POST",
+      "status": 201,
+      "requestID": "c0770767-a6ef-4af6-b334-fe1691a33bee"
+    },
+    {
+      "label": "zoned:control-read",
+      "method": "GET",
+      "status": 200,
+      "requestID": "492b1200-7bb2-49be-8105-6a4b49af8a14"
+    },
+    {
+      "label": "zoned:invalid-etag-patch",
+      "method": "PATCH",
+      "status": 412,
+      "requestID": "fad6f055-fd4a-49bf-92f3-9c578f9e1b7c"
+    },
+    {
+      "label": "zoned:after-invalid-etag",
+      "method": "GET",
+      "status": 200,
+      "requestID": "00b5869d-4786-465b-809e-9c7b45412596"
+    },
+    {
+      "label": "zoned:stale-delete",
+      "method": "DELETE",
+      "status": 204,
+      "requestID": "bfc42d17-7651-42c6-a908-a4017bef4e56"
+    },
+    {
+      "label": "zoned:after-stale-delete",
+      "method": "GET",
+      "status": 404,
+      "requestID": "a0e66a54-8e6a-4dda-8036-eb6d53d27b53"
+    },
+    {
+      "label": "all-day:create",
+      "method": "POST",
+      "status": 201,
+      "requestID": "2bb9ba72-1716-49f2-9c1d-9f2974cf68d8"
+    },
+    {
+      "label": "all-day:baseline",
+      "method": "GET",
+      "status": 200,
+      "requestID": "96068f3d-498e-445c-942b-fb14afc38590"
+    },
+    {
+      "label": "all-day:fresh-patch",
+      "method": "PATCH",
+      "status": 200,
+      "requestID": "9f17642e-e046-4958-9272-0ff92f791a08"
+    },
+    {
+      "label": "all-day:after-fresh-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "8c1d4259-4b67-491c-b16c-8e329df5deac"
+    },
+    {
+      "label": "all-day:fresh-content-patch",
+      "method": "PATCH",
+      "status": 200,
+      "requestID": "2b016b43-6bcd-48a2-b32c-094a7a8c7818"
+    },
+    {
+      "label": "all-day:after-content-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "223f4fe3-752d-41de-af5f-39419d04706f"
+    },
+    {
+      "label": "all-day:plain-content-read",
+      "method": "GET",
+      "status": 200,
+      "requestID": "5452a1f5-0d18-46e3-abbb-35a58944f0b3"
+    },
+    {
+      "label": "all-day:competing-edit",
+      "method": "PATCH",
+      "status": 200,
+      "requestID": "f493503f-a32a-45c2-b7e2-d9e0056d8584"
+    },
+    {
+      "label": "all-day:after-competing-edit",
+      "method": "GET",
+      "status": 200,
+      "requestID": "847d3d59-b339-4ef3-b87a-48cae7a134e5"
+    },
+    {
+      "label": "all-day:stale-patch",
+      "method": "PATCH",
+      "status": 412,
+      "requestID": "123ded6a-dc5c-4566-b9c0-a1a57f71ff37"
+    },
+    {
+      "label": "all-day:after-stale-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "cc826223-0b4a-4c40-9e0d-27e7a69abf9d"
+    },
+    {
+      "label": "all-day:control-create",
+      "method": "POST",
+      "status": 201,
+      "requestID": "78571cff-08e5-46cd-86d0-42043a471889"
+    },
+    {
+      "label": "all-day:control-read",
+      "method": "GET",
+      "status": 200,
+      "requestID": "ef844f84-980d-49b8-bc03-73e1c60c073f"
+    },
+    {
+      "label": "all-day:invalid-etag-patch",
+      "method": "PATCH",
+      "status": 412,
+      "requestID": "57f921f3-aee7-4590-b937-6760d1e3eaf3"
+    },
+    {
+      "label": "all-day:after-invalid-etag",
+      "method": "GET",
+      "status": 200,
+      "requestID": "8edd20b1-9b6c-4fb7-809a-d2a34255326b"
+    },
+    {
+      "label": "all-day:stale-delete",
+      "method": "DELETE",
+      "status": 204,
+      "requestID": "ccf92120-fb15-49dc-8cbf-fbc5e07b9042"
+    },
+    {
+      "label": "all-day:after-stale-delete",
+      "method": "GET",
+      "status": 404,
+      "requestID": "dcea2fa5-2fcf-416d-a8b5-949a8efb9080"
+    },
+    {
+      "label": "cleanup-calendar",
+      "method": "DELETE",
+      "status": 204,
+      "requestID": "87279767-b0a8-4d4f-9891-71ab15a1968e"
+    },
+    {
+      "label": "verify-cleanup",
+      "method": "GET",
+      "status": 404,
+      "requestID": "6b4b8b54-2791-4e96-accd-d750e1dbbedb"
+    }
+  ],
+  "cleanup": "verified",
+  "verified": false,
+  "patchVerified": true
+}

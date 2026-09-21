@@ -10,6 +10,12 @@ EVENT concurrency evidence and their serializers are not changed by this work.
 
 ## Provider contract and evidence
 
+- Outlook personal-event content PATCH has bounded [live evidence](../audits/outlook-event-cas-20260921.md).
+  Its exact native weak `@odata.etag` is preserved only for title/notes/location
+  PATCH of owned, attendee-free, non-recurring, non-online events. It is not
+  converted to a strong tag. DELETE ignored stale If-Match in the live test and
+  remains refused; this evidence does not enable time or meeting/series edits.
+
 - Google Calendar's [conditional modification guide](https://developers.google.com/workspace/calendar/api/guides/version-resources)
   documents exact resource `etag` in `If-Match` for update/delete and stale-version
   `412`. [Events PATCH](https://developers.google.com/workspace/calendar/api/v3/reference/events/patch)
@@ -40,7 +46,7 @@ EVENT concurrency evidence and their serializers are not changed by this work.
   still requires possible-create permission. Whole-resource DELETE is whole-series
   deletion, not occurrence deletion. Organizer/collection/resource rights are
   still checked before local mutation.
-- Missing/weak/invalid validators are refused, not trimmed, repaired, quoted,
+- For Google and CalDAV, missing/weak/invalid validators are refused, not trimmed, repaired, quoted,
   converted from weak tags, or replaced by `*`. EVENT create/update stores only
   an actual valid response ETag. Missing/weak/malformed update response versions
   become **null**, never the old ETag or a later GET's ETag. CalDAV transformations
