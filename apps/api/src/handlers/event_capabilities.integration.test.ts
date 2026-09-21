@@ -615,10 +615,10 @@ async function main() {
     );
     await refuses(
       () =>
-        request("PUT", { ...recurringOutlook, title: "Protection unverified" }),
-      "unknown",
+        request("PUT", { ...recurringOutlook, title: "Recurring content unsupported" }),
+      "unsupported",
     );
-    await refuses(() => request("DELETE", recurringOutlook), "unknown");
+    await refuses(() => request("DELETE", recurringOutlook), "unsupported");
     await refuses(
       () =>
         request(
@@ -633,7 +633,7 @@ async function main() {
             creates: [],
           }).updates[0],
         ),
-      "unknown",
+      "unsupported",
     );
     // A known Outlook mirror must stop the entire write set before any local
     // mutation, even if the home itself is not an Outlook calendar.
@@ -652,7 +652,7 @@ async function main() {
           calendars: [...source.calendars, outlook.id],
           title: "Mirror refuses",
         }),
-      "unknown",
+      "unsupported",
     );
     // Existing local-only unlink has no remote resource/mutation and remains
     // available; this does not introduce a detach/override operation.

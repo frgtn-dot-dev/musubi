@@ -1,3 +1,4 @@
+import { microsoftEventPatchEtag } from "./adapters/microsoft_event_content";
 import { withProviderOrganizerLease, markProviderOrganizer, completeProviderOrganizer } from "@musubi/db";
 import { confirmCaldavAlarm } from "@musubi/db";
 import { googleReminderInstanceEvidence, googleReminderInstanceProjection } from "./adapters/google_reminder_instance";
@@ -563,7 +564,7 @@ export async function deliverEventOutbox(
             recovered = true;
           } else if (
             evidence &&
-            strongEventEtag(expectedRef.etag) &&
+            (row.provider === "microsoft" && row.action === "update" ? microsoftEventPatchEtag(expectedRef.etag) : strongEventEtag(expectedRef.etag)) &&
             evidence.ref.etag === expectedRef.etag
           ) {
             // A differing accepted version still needs the conditional write.
