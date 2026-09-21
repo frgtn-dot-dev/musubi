@@ -67,8 +67,10 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await page.getByRole("textbox", { name: "Event title" }).fill(`Fold ${fold}`);
     if (fold === 1) {
       await page.getByRole("button", { name: "Expand event editor", exact: true }).press("Enter");
-      await expect(page).toHaveURL(/exactRange=/);
-      await page.reload();
+      await expect(page).toHaveURL(new RegExp(`/day\\?date=2026-10-25$`));
+      await expect(page.getByRole("dialog", { name: "Create event", exact: true })).toHaveAttribute("data-presentation", "expanded");
+      await page.getByRole("button", { name: "Collapse event editor", exact: true }).press("Enter");
+      await page.getByRole("button", { name: "Expand event editor", exact: true }).press("Enter");
     }
     await expect(page.getByRole("textbox", { name: "Event title" })).toHaveValue(`Fold ${fold}`);
     await page.screenshot({ path: info.outputPath("fold-draft.png") });

@@ -4848,13 +4848,15 @@ test("leaves a draft on the grid that can be moved before saving", async ({
 	await expect(draft).toContainText("New event");
 	await expect(draft).toContainText("02:00–03:30");
 	const draftBox = (await draft.boundingBox())!;
+	// The right inspector overlays part of the day; drag its exposed left edge.
+	expect(await page.evaluate(({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest('[data-draft]')), { x: draftBox.x + 20, y: draftBox.y + draftBox.height / 2 })).toBe(true);
 	await page.mouse.move(
-		draftBox.x + draftBox.width / 2,
+		draftBox.x + 20,
 		draftBox.y + draftBox.height / 2,
 	);
 	await page.mouse.down();
 	await page.mouse.move(
-		draftBox.x + draftBox.width / 2,
+		draftBox.x + 20,
 		draftBox.y + draftBox.height / 2 + 64,
 		{ steps: 8 },
 	);
