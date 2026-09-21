@@ -4,16 +4,15 @@ process.env.ENVIRONMENT ??= "dev";
 process.env.BETTER_AUTH_URL ??= "http://localhost:7531";
 
 async function main() {
-  const { microsoftEventPatchEtag, microsoftPersonalContentPatch, updateMicrosoftPersonalContent, refuseOutlookEventDelete } = await import("./microsoft_event_content");
+  const { microsoftEventVersion, microsoftPersonalContentPatch, updateMicrosoftPersonalContent } = await import("./microsoft_event_content");
   const etag = 'W/"native-opaque-version"';
-  assert.equal(microsoftEventPatchEtag(etag), etag);
-  for (const value of [undefined, null, '*', '"strong"', 'changeKey', ' W/"space"', 'W/"newline\n"']) assert.equal(microsoftEventPatchEtag(value), null);
+  assert.equal(microsoftEventVersion(etag), etag);
+  for (const value of [undefined, null, '*', '"strong"', 'changeKey', ' W/"space"', 'W/"newline\n"']) assert.equal(microsoftEventVersion(value), null);
   assert.deepEqual(microsoftPersonalContentPatch({ title: "After" }), { subject: "After" });
   assert.deepEqual(microsoftPersonalContentPatch({ description: null, location: null }), { body: { contentType: "text", content: "" }, location: { displayName: "" } });
   assert.deepEqual(microsoftPersonalContentPatch({ color: "#ffffff" }), {});
   assert.throws(() => microsoftPersonalContentPatch(undefined), /event-diff-unavailable/);
   for (const field of ['start', 'end', 'isAllDay', 'recurrence', 'url', 'organizer', 'hasAttendees', 'isCanceled']) assert.throws(() => microsoftPersonalContentPatch({ [field]: null } as any), /Make other changes in Outlook/);
-  assert.throws(refuseOutlookEventDelete, /Delete this event in Outlook/);
   const native = { id: "event/id", "@odata.etag": etag, type: "singleInstance", isCancelled: false, isOrganizer: true, isDraft: false, recurrence: null, attendees: [], isOnlineMeeting: false, onlineMeeting: null, onlineMeetingUrl: null };
   const session = { token: "fixture", calendarID: "calendar/id", eventID: "event/id", etag };
   let calls: Array<{ path: string; method: string; options: RequestInit }>;

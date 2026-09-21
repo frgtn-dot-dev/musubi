@@ -137,7 +137,7 @@ async function main() {
     await assert.rejects(() => microsoftAdapter.pushUpdate("user", "account", "calendar", "event", timed as any),
       /event-diff-unavailable/);
     await assert.rejects(() => microsoftAdapter.pushDelete("user", "account", "calendar", "event"),
-      /Delete this event in Outlook/);
+      /provider-version-unavailable/);
     assert.equal(remoteCalls, 0, "direct adapter paths cannot bypass missing-diff and delete guards");
   } finally { globalThis.fetch = realFetch; }
 

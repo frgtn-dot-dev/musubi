@@ -55,10 +55,10 @@ async function main() {
     assert.equal((await getExternalEvent('microsoft', initial.id, 'remote-calendar', calendar.id))?.etag, native['@odata.etag']);
     // All preflight refusals must precede any local patch or outbox admission.
     const before = await current();
-    await assert.rejects(() => prepareEventWrites([{ action: 'delete', calendarIDs: [calendar.id], event: before }]), /Delete this event in Outlook/);
     await assert.rejects(() => prepareEventWrites([{ action: 'update', calendarIDs: [calendar.id], event: { ...before, start: new Date() }, previous: before, patch: { start: new Date() } }]), /Make other changes in Outlook/);
     native['@odata.etag'] = 'W/"concurrent-before-save"';
     await assert.rejects(() => prepare('Should not be saved'), /provider-conflict/);
+    await assert.rejects(() => prepareEventWrites([{ action: 'delete', calendarIDs: [calendar.id], event: before }]), /provider-conflict/);
     assert.equal((await getEvent(initial.id)).revision, before.revision);
     native['@odata.etag'] = (await getExternalEvent('microsoft', initial.id, 'remote-calendar', calendar.id))!.etag!;
     const lost = await enqueue('Accepted but response lost'); mode = 'lost';
@@ -73,7 +73,7 @@ async function main() {
     mode = 'normal';
     const resolution = await prepareEventDeliveryResolution(owner, initial.id, race, () => microsoftAdapter);
     assert.equal(resolution.preview.reason, null, 'an explicit conflict preview accepts Graph PATCH versions');
-    console.log('Outlook content DB flow: admission, exact mapping, deletion/time refusals, stale preflight, lost response reconciliation and concurrent-write conflict passed.');
+    console.log('Outlook content DB flow: admission, exact mapping, stale deletion/time refusals, stale preflight, lost response reconciliation and concurrent-write conflict passed.');
   } finally { globalThis.fetch = originalFetch; await db.delete(user).where(eq(user.id, owner)); }
 }
 main().then(() => process.exit(0)).catch(error => { console.error(error); process.exit(1); });

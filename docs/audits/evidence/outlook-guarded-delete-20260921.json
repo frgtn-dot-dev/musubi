@@ -1,0 +1,118 @@
+{
+  "startedAt": "2026-09-21T15:51:52.330Z",
+  "transport": "deleteMicrosoftPersonalEvent",
+  "passed": true,
+  "cleanup": true,
+  "cases": [
+    {
+      "scenario": "zoned",
+      "staleRejected": true,
+      "freshDeleted": true,
+      "observations": [
+        {
+          "method": "GET",
+          "status": 200,
+          "eventRequest": false,
+          "requestID": "3e025e2c-7981-41e1-ac6f-69a39d664d15"
+        },
+        {
+          "method": "GET",
+          "status": 200,
+          "eventRequest": false,
+          "requestID": "03876917-3da6-4ac0-9076-8fbc7eb66180"
+        },
+        {
+          "method": "GET",
+          "status": 200,
+          "eventRequest": true,
+          "requestID": "41a333cc-e92c-4811-b599-215fd1a5b23b"
+        },
+        {
+          "method": "GET",
+          "status": 200,
+          "eventRequest": false,
+          "requestID": "8518f8b8-6edb-4b86-a265-2938aa5f6f6e"
+        },
+        {
+          "method": "GET",
+          "status": 200,
+          "eventRequest": false,
+          "requestID": "bd3463a9-847e-451f-a019-8a420c4d2d7a"
+        },
+        {
+          "method": "GET",
+          "status": 200,
+          "eventRequest": true,
+          "requestID": "bc46f9fd-1fa3-4c34-86eb-79f9ec344028"
+        },
+        {
+          "method": "DELETE",
+          "status": 204,
+          "eventRequest": true,
+          "requestID": "15ad77f4-cb05-4d04-a744-c784f6ecad6e"
+        },
+        {
+          "method": "GET",
+          "status": 404,
+          "eventRequest": true,
+          "requestID": "ee5f3056-7d49-40ae-8a3e-3f1fe7126695"
+        }
+      ]
+    },
+    {
+      "scenario": "all-day",
+      "staleRejected": true,
+      "freshDeleted": true,
+      "observations": [
+        {
+          "method": "GET",
+          "status": 200,
+          "eventRequest": false,
+          "requestID": "dcd22aaa-9d99-4d9a-85ba-3dcab3177230"
+        },
+        {
+          "method": "GET",
+          "status": 200,
+          "eventRequest": false,
+          "requestID": "f777b66a-90a2-4049-903f-6b4830d65b19"
+        },
+        {
+          "method": "GET",
+          "status": 200,
+          "eventRequest": true,
+          "requestID": "0f3f2684-0788-426c-9849-65cbd48371b4"
+        },
+        {
+          "method": "GET",
+          "status": 200,
+          "eventRequest": false,
+          "requestID": "f49aa508-413b-4062-93d7-7317e3515910"
+        },
+        {
+          "method": "GET",
+          "status": 200,
+          "eventRequest": false,
+          "requestID": "5ad257a0-94c2-41e5-9c1a-19947df8fc05"
+        },
+        {
+          "method": "GET",
+          "status": 200,
+          "eventRequest": true,
+          "requestID": "022a726d-1a3c-440d-91f2-106b77dc967c"
+        },
+        {
+          "method": "DELETE",
+          "status": 204,
+          "eventRequest": true,
+          "requestID": "82f8c0e4-4b0b-47e2-88f0-7ee7fdbd4c33"
+        },
+        {
+          "method": "GET",
+          "status": 404,
+          "eventRequest": true,
+          "requestID": "f4575b4e-48bc-4c8d-941c-eeedf015f078"
+        }
+      ]
+    }
+  ]
+}

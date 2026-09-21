@@ -1,5 +1,10 @@
 # Outlook personal event PATCH and unsafe DELETE — 2026-09-21
 
+This records the original PATCH-only decision. The subsequent
+[guarded deletion decision](outlook-guarded-delete-20260921.md) explicitly accepts
+the remaining race for personal events; it does not change the negative DELETE
+concurrency evidence below.
+
 ## Result
 
 A delegated personal Outlook account accepted the exact native `W/"…"`

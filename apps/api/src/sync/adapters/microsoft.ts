@@ -1,4 +1,4 @@
-import { assertMicrosoftPersonalContent, microsoftPersonalContentPatch, microsoftEventPatchEtag, updateMicrosoftPersonalContent, refuseOutlookEventDelete } from "./microsoft_event_content";
+import { assertMicrosoftPersonalContent, microsoftPersonalContentPatch, microsoftEventVersion, updateMicrosoftPersonalContent, deleteMicrosoftPersonalEvent } from "./microsoft_event_content";
 import { getOrganizerTimeEventIDs } from "@musubi/db";
 import { microsoftOrganizerTransport } from "./microsoft_organizer";
 import { graphRsvpTime } from "./microsoft_rsvp";
@@ -845,20 +845,19 @@ export const microsoftAdapter: CalendarAdapter = {
   async assertEventWrite(userID, accountId, externalCalendarId, operation) {
     if (
       (operation.action === "create" && operation.event.recurrence) ||
-      (operation.action === "update" &&
+      (operation.action !== "create" &&
         (operation.event.recurrence || operation.previous?.recurrence))
     ) {
       throw new EventWriteError(
         "recurrence", "unsupported",
-        "Create or edit recurring events in Outlook. No changes were saved.",
+        "Manage recurring events in Outlook. No changes were saved.",
       );
     }
-    if (operation.action === "delete" && operation.external) refuseOutlookEventDelete();
     if (operation.action === "update" && operation.external) microsoftPersonalContentPatch(operation.patch);
     const accessToken = await getAccessToken(userID, accountId);
     await assertOAuthEventWriteGrant(userID, "microsoft", accountId);
-    if (operation.action === "update" && operation.external) {
-      await assertMicrosoftPersonalContent({ token: accessToken, calendarID: externalCalendarId, eventID: operation.external.externalEventId, etag: operation.external.etag, signal: operation.signal });
+    if (operation.action !== "create" && operation.external) {
+      await assertMicrosoftPersonalContent({ token: accessToken, calendarID: externalCalendarId, eventID: operation.external.externalEventId, etag: operation.external.etag, signal: operation.signal }, operation.action);
       return;
     }
     const headers = { Authorization: `Bearer ${accessToken}` };
@@ -989,19 +988,22 @@ export const microsoftAdapter: CalendarAdapter = {
     const data = await response.json();
     if (data?.id !== ref.externalEventId) throw new ProviderEventWriteError("provider-conflict");
     const event = assertCreatedEventEvidence(toNormalized(data));
-    return { event, ref: { externalEventId: data.id, etag: microsoftEventPatchEtag(data["@odata.etag"]) } };
+    return { event, ref: { externalEventId: data.id, etag: microsoftEventVersion(data["@odata.etag"]) } };
   },
 
   async pushUpdate(userID, accountId, externalCalendarId, externalEventId, _event, ref, patch, signal) {
     microsoftPersonalContentPatch(patch);
-    if (!ref || ref.externalEventId !== externalEventId || !microsoftEventPatchEtag(ref.etag)) throw new ProviderEventWriteError("provider-version-unavailable");
+    if (!ref || ref.externalEventId !== externalEventId || !microsoftEventVersion(ref.etag)) throw new ProviderEventWriteError("provider-version-unavailable");
     const token = await getAccessToken(userID, accountId);
     await assertOAuthEventWriteGrant(userID, "microsoft", accountId);
     return updateMicrosoftPersonalContent({ token, calendarID: externalCalendarId, eventID: externalEventId, etag: ref.etag, signal }, patch);
   },
 
-  async pushDelete() {
-    refuseOutlookEventDelete();
+  async pushDelete(userID, accountId, externalCalendarId, externalEventId, ref, signal) {
+    if (!ref || ref.externalEventId !== externalEventId || !microsoftEventVersion(ref.etag)) throw new ProviderEventWriteError("provider-version-unavailable");
+    const token = await getAccessToken(userID, accountId);
+    await assertOAuthEventWriteGrant(userID, "microsoft", accountId);
+    await deleteMicrosoftPersonalEvent({ token, calendarID: externalCalendarId, eventID: externalEventId, etag: ref.etag, signal });
   },
 
   async pushTaskCreate(userID, accountId, externalCalendarId, task) {
