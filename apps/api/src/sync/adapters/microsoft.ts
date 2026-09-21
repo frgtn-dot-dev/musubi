@@ -29,7 +29,7 @@ import type {
 } from "../adapter";
 import { getOAuthAccessToken } from "../oauth";
 import { isOptionalTaskError, TaskScopeMissingError } from "../errors";
-import { assertEventWriteEvidence, assertEventWriteResponse, assertOAuthEventWriteGrant, canonicalEventRecurrence, assertProviderEventMutationResponse, ProviderEventWriteError } from "../event_write";
+import { assertEventWriteEvidence, assertEventWriteResponse, assertOAuthEventWriteGrant, assertProviderEventMutationResponse, ProviderEventWriteError } from "../event_write";
 import { assertCompleteEventReadResponse, assertCreatedEventEvidence, eventCreateOperationID } from "../event_create_identity";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
@@ -846,12 +846,11 @@ export const microsoftAdapter: CalendarAdapter = {
     if (
       (operation.action === "create" && operation.event.recurrence) ||
       (operation.action === "update" &&
-        canonicalEventRecurrence(operation.event.recurrence) !==
-          canonicalEventRecurrence(operation.previous?.recurrence))
+        (operation.event.recurrence || operation.previous?.recurrence))
     ) {
       throw new EventWriteError(
         "recurrence", "unsupported",
-        "Outlook recurrence creation and changes are not supported yet. No changes were saved.",
+        "Create or edit recurring events in Outlook. No changes were saved.",
       );
     }
     if (operation.action === "delete" && operation.external) refuseOutlookEventDelete();

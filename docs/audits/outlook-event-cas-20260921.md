@@ -70,10 +70,10 @@ the synthetic calendar identity for manual cleanup.
 
 Tests cover genuine adapter + Postgres admission/delivery, accepted-version
 storage, no local change on stale preflight, concurrent remote change, ambiguous
-response reconciliation, and direct guards. The existing general CalDAV fixture
-at `provider_event_writes.integration.test.ts:806` returns 403 in this local
-configuration on both unchanged main and this branch; it is not evidence
-against or validation of the new Outlook transport.
+response reconciliation, and direct guards. The authenticated event capability
+and Google/CalDAV provider-write regression suites also pass. Their local HTTP
+fixtures require the same test-only `FEDERATION_ALLOW_PRIVATE_HOSTS=true` setting
+as CI; production networking policy is unchanged.
 
 ## Primary documentation
 
