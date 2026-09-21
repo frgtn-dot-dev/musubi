@@ -2,7 +2,7 @@
 
 K06 was accepted and squash-merged in PR #119. K07 adds durable intent and the
 request's first claimed attempt; independent K07 review remains pending.
-PRODUCT / MIN_CLIENT / MIN_PEER remain 0.2.0. Outlook mapped personal events now
+This change leaves product and compatibility versions unchanged. Outlook mapped personal events now
 support bounded content PATCH and explicitly accepted, preflight-guarded DELETE
 as described below. Other Outlook event edits remain refused. Read/create and
 genuinely local unlink remain available. Tasks are not EVENT concurrency evidence
