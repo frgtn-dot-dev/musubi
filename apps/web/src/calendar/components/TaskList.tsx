@@ -21,7 +21,7 @@ import { Button, IconButton } from "~/ui/Button";
 import { Switch } from "~/ui/Switch";
 import { DatePicker } from "~/ui/DatePicker";
 import type { Dialog } from "~/ui/Dialog";
-import { Inspector, InspectorContent } from "~/ui/Inspector";
+import { Inspector, InspectorContent, InspectorHeaderActions } from "~/ui/Inspector";
 import surfaceStyles from "~/ui/primitives.module.css";
 import { Disclosure } from "~/ui/Disclosure";
 import { Empty } from "~/ui/Empty";
@@ -38,6 +38,7 @@ import { RecurrenceEditor } from "./RecurrenceEditor";
 import styles from "./TaskList.module.css";
 
 type TaskListProps = {
+  inspectorPresentation?: Pick<Parameters<typeof Inspector>[0], "presentation" | "onPresentationChange" | "position">;
   editorOnly?: boolean;
   initialEditTask?: Task;
   onEditorClose?: () => void;
@@ -172,7 +173,7 @@ export function replaceTaskTime(value: Date | null | undefined, time: string) {
 }
 
 export function TaskList({
-  editorOnly = false, initialEditTask, onEditorClose, onOpenTask,
+  inspectorPresentation, editorOnly = false, initialEditTask, onEditorClose, onOpenTask,
   showLayoutControl = true,
   layout: controlledLayout,
   onLayoutChange,
@@ -382,6 +383,7 @@ export function TaskList({
 
   const editor = draft ? (
         <TaskEditor
+          inspectorPresentation={inspectorPresentation}
           busy={busy}
           unavailable={Boolean(editing && removedTaskID === editing.id)}
           calendars={calendars}
@@ -605,21 +607,22 @@ function TaskGroup({
   );
 }
 
-function TaskEditorSurface({ busy, ...props }: Parameters<typeof Dialog>[0] & { busy: boolean }) {
-  return <Inspector open={props.open} onOpenChange={props.onOpenChange} onRequestClose={() => { if (!busy) props.onOpenChange(false); }}>
+function TaskEditorSurface({ busy, inspectorPresentation, ...props }: Parameters<typeof Dialog>[0] & { busy: boolean; inspectorPresentation?: TaskListProps["inspectorPresentation"] }) {
+  return <Inspector {...inspectorPresentation} open={props.open} onOpenChange={props.onOpenChange} onRequestClose={() => { if (!busy) props.onOpenChange(false); }}>
     <InspectorContent accessibleTitle={typeof props.title === "string" ? props.title : "Task editor"} onFocusOutside={event => event.preventDefault()}
       onOpenAutoFocus={event => { event.preventDefault(); props.initialFocus?.current?.focus(); }}>
-      <header className={surfaceStyles.dialogHeader}>
+      <header data-inspector-header="" className={surfaceStyles.dialogHeader}>
         <h2 className={surfaceStyles.dialogTitle}>{props.title}</h2>
-        <IconButton label="Close task editor" disabled={busy} onClick={() => props.onOpenChange(false)}><X size={18} /></IconButton>
+        <InspectorHeaderActions><IconButton label="Close task editor" disabled={busy} onClick={() => props.onOpenChange(false)}><X size={18} /></IconButton></InspectorHeaderActions>
       </header>
-      <div className={`${surfaceStyles.dialogBody} ${surfaceStyles.dialogBody_padded}`}>{props.children}</div>
+      <div className={`${surfaceStyles.dialogBody} ${surfaceStyles.dialogBody_padded} ${surfaceStyles.inspectorFormBody}`}>{props.children}</div>
       <footer className={surfaceStyles.dialogFooter}>{props.footer}</footer>
     </InspectorContent>
   </Inspector>;
 }
 
 function TaskEditor({
+  inspectorPresentation,
   busy,
   unavailable,
   calendars,
@@ -634,6 +637,7 @@ function TaskEditor({
   onOpenChange,
   onSubmit,
 }: {
+  inspectorPresentation?: TaskListProps["inspectorPresentation"];
   busy: boolean;
   unavailable: boolean;
   calendars: Calendar[];
@@ -666,6 +670,7 @@ function TaskEditor({
 
   return (
     <TaskEditorSurface
+      inspectorPresentation={inspectorPresentation}
       busy={busy}
       closeLabel="Close task editor"
       footer={

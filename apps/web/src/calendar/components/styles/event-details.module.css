@@ -407,6 +407,3 @@
 .detailPopover .attendeeAnswer { padding-inline: 0; padding-left: calc(var(--space-5) + var(--space-2)); }
 
 .infoList a { color: var(--text-secondary); text-decoration: underline; overflow-wrap: anywhere; }
-
-.editorHeaderActions { display: flex; align-items: center; gap: var(--space-1); flex: none; }
-.editorHeaderActions > div:empty { display: none; }

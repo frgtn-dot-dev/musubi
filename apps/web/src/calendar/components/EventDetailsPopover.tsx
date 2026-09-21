@@ -71,7 +71,7 @@ import {
 	MenuSeparator,
 	MenuTrigger,
 } from "~/ui/Menu";
-import { Inspector as Popover, InspectorTrigger as PopoverTrigger, InspectorClose as PopoverClose, InspectorContent as PopoverContent } from "~/ui/Inspector";
+import { InspectorHeaderActions, Inspector as Popover, InspectorTrigger as PopoverTrigger, InspectorClose as PopoverClose, InspectorContent as PopoverContent } from "~/ui/Inspector";
 
 import { InlineError } from "~/ui/InlineError";
 import { Row, RowAction } from "~/ui/Row";
@@ -650,19 +650,19 @@ function CalendarEventDetailsPopover({
 				>
 					{editing && !editable ? (
             <>
-              <header className={styles.editorHeader}>
+              <header data-inspector-header="" className={styles.editorHeader}>
                 <h2 id={titleId}>This event is read-only</h2>
-                <IconButton label="Close event editor" size="compact" onClick={() => requestExit(() => {})}>
+                <InspectorHeaderActions><IconButton label="Close event editor" size="compact" onClick={() => requestExit(() => {})}>
                   <X size={17} strokeWidth={1.6} />
-                </IconButton>
+                </IconButton></InspectorHeaderActions>
               </header>
               <Empty title="Your draft is kept" description="Your own changes are kept while this editor is open." />
             </>
           ) : editing ? (
 						<>
-							<header className={styles.editorHeader}>
+							<header data-inspector-header="" className={styles.editorHeader}>
 								<h2 id={titleId}>{master.recurrence ? "Edit series" : "Edit event"}</h2>
-                <div className={styles.editorHeaderActions}>
+                <InspectorHeaderActions>
                   <div ref={setExpandActionContainer} />
 								<IconButton
 									label="Close event editor"
@@ -671,7 +671,7 @@ function CalendarEventDetailsPopover({
 								>
 									<X size={17} strokeWidth={1.6} />
 								</IconButton>
-                </div>
+                </InspectorHeaderActions>
 							</header>
 							<EventEditorForm
                 rdateMaster={homeCalendar?.provider === "caldav" && !liveMaster.seriesID ? liveMaster : undefined}
@@ -719,7 +719,7 @@ function CalendarEventDetailsPopover({
 						</>
 					) : (
 						<>
-							<header className={styles.detailsHeader}>
+							<header data-inspector-header="" className={styles.detailsHeader}>
 								<div className={styles.titleBlock}>
 									<h2 id={titleId}>{event.title}</h2>
 <ul aria-label="Calendars" className={styles.calendarPills}>
@@ -752,11 +752,11 @@ function CalendarEventDetailsPopover({
 										</span>
 									) : null}
 								</div>
-								<PopoverClose asChild>
+								<InspectorHeaderActions><PopoverClose asChild>
 									<IconButton label="Close event details" size="compact">
 										<X size={17} strokeWidth={1.6} />
 									</IconButton>
-								</PopoverClose>
+								</PopoverClose></InspectorHeaderActions>
 							</header>
 
 							<div className={styles.detailsBody}>

@@ -169,6 +169,15 @@ dialog in both anchored and narrow sheet layouts; features do not set z-index.
 Event creation uses the same right Inspector and complete EventEditorForm as
 editing. Desktop panels overlay the right edge of the workspace without reserving width.
 Calendar columns and toolbar typography retain their geometry while the panel is open.
+Event and task inspectors share a 540 px desktop width. Their header can detach the
+inspector into a floating window and dock it again without replacing the form or
+its draft. Drag the floating header, or focus its move handle and use arrow keys
+(Shift moves farther). Placement stays within the viewport and is retained when
+switching a task between detail and edit. The Appearance setting “Open details as”
+stores the default in this browser only; a header toggle affects the current
+window. Below 1024 px, either preference uses the existing modal panel.
+Task forms align their grid rows at the top of the body; spare height belongs to
+the scroller, not the spaces between fields.
 Clicking outside event details closes the panel without also creating an event underneath. Unsaved edits retain their discard confirmation. Closing reveals the covered controls and days.
 Narrow screens retain a modal panel. Toolbar, search, keyboard, month cells and time-grid gestures preserve
 their date/time defaults and return focus. The header and actions stay fixed;

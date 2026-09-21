@@ -1395,7 +1395,7 @@
 	);
 }
 
-/* The right surface and its workspace reservation share one width contract. */
+/* Event and task inspectors share one overlay width contract. */
 .dialog.dialog_right {
 	top: 0;
 	right: 0;
@@ -2566,6 +2566,33 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .dialog.dialog_right[data-state] { animation: none; }
+}
+
+.inspectorHeaderActions { display: flex; flex: none; align-items: center; gap: var(--space-1); }
+.inspectorHeaderActions > div:empty { display: none; }
+
+/* A full-height scroller must not stretch the form's grid rows to fill it. */
+.inspectorFormBody { align-content: start; }
+
+@media (min-width: 1024px) {
+  .dialog.inspector_floating {
+    inset: var(--layer-viewport-gutter) auto auto calc(50vw - var(--inspector-width) / 2);
+    width: var(--inspector-width);
+    /* Match the shared dialog height cap while leaving room around the window. */
+    height: min(760px, calc(100dvh - 2 * var(--layer-viewport-gutter)));
+    max-height: calc(100dvh - 2 * var(--layer-viewport-gutter));
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-sheet);
+  }
+  .dialog.inspector_floating[data-state="open"] { animation: inspector-float-in var(--motion-fast) ease-out; }
+  .dialog.inspector_floating[data-state="closed"] { animation: inspector-float-out var(--motion-fast) ease-in; }
+  .inspector_floating [data-inspector-header], .inspector_floating [data-inspector-move] { cursor: grab; touch-action: none; }
+  .inspector_floating[data-dragging], .inspector_floating[data-dragging] [data-inspector-header] { cursor: grabbing; user-select: none; }
+}
+@keyframes inspector-float-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes inspector-float-out { from { opacity: 1; } to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .dialog.inspector_floating[data-state] { animation: none; }
 }
 
 .selectPopover[data-searchable] {

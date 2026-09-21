@@ -7,7 +7,7 @@ import {
 import { X } from "lucide-react";
 import { useRef, useState } from "react";
 import { IconButton } from "~/ui/Button";
-import { Inspector, InspectorContent } from "~/ui/Inspector";
+import { Inspector, InspectorContent, InspectorHeaderActions } from "~/ui/Inspector";
 import { ConfirmationDialog } from "~/ui/ConfirmationDialog";
 import {
   createEventFromForm,
@@ -163,14 +163,14 @@ export function QuickCreate({
             if (!handoff.current && anchor.returnFocus?.isConnected) anchor.returnFocus.focus();
           }}
         >
-          <header className={styles.editorHeader}>
+          <header data-inspector-header="" className={styles.editorHeader}>
             <h2>New event</h2>
-            <div className={styles.editorHeaderActions}>
-            <div ref={setExpandActionContainer} />
-            <IconButton label="Close new event" size="compact" onClick={() => requestClose(() => {})}>
-              <X aria-hidden="true" size={17} strokeWidth={1.6} />
-            </IconButton>
-            </div>
+            <InspectorHeaderActions>
+              <div ref={setExpandActionContainer} />
+              <IconButton label="Close new event" size="compact" onClick={() => requestClose(() => {})}>
+                <X aria-hidden="true" size={17} strokeWidth={1.6} />
+              </IconButton>
+            </InspectorHeaderActions>
           </header>
           <EventEditorForm
             calendars={calendars}
