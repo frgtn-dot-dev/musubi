@@ -137,6 +137,8 @@ export type CalendarAdapter = {
   writeCaldavAlarm?(intent: CaldavAlarmIntent, signal?: AbortSignal, beforeMutation?: () => Promise<void>): Promise<CaldavAlarmEvidence>;
   createGraphFamily?(userID: string, accountID: string, calendarID: string, event: Event, identity: EventCreateIdentity, state: { uncertain: boolean; beforeWrite: () => Promise<void> }): Promise<GraphSeriesFamily>;
   readGraphCreateAdoption?(user: string, account: string, calendar: string, event: Event, identity: EventCreateIdentity): Promise<GraphSeriesFamily | null>;
+  prepareGraphDeletion?(context: import("@musubi/db").GraphFamilyContext, request: unknown, signal?: AbortSignal): Promise<import("@musubi/db").GraphSeriesDeletionPrepared>;
+  deleteGraphSeries?(saved: import("@musubi/db").GraphSeriesDeletionPrepared, reconciling: boolean, beforeWrite: () => Promise<void>, signal?: AbortSignal): Promise<import("@musubi/db").GraphFamilyObservation | null>;
   readGraphFamily?(userID: string, accountID: string, calendarID: string, template: Event, ref: ExternalEventRef, signal?: AbortSignal): Promise<GraphSeriesFamily | null>;
   readMicrosoftRsvp?(user: string, account: string, calendar: string, ref: ExternalEventRef, response: import("@musubi/types").ProviderRsvpEdit["response"], signal?: AbortSignal): Promise<import("./adapters/microsoft_rsvp").MicrosoftRsvpEvidence>;
   writeMicrosoftRsvp?(user: string, account: string, calendar: string, evidence: import("./adapters/microsoft_rsvp").MicrosoftRsvpEvidence, dispatched: boolean, signal: AbortSignal, beforeDispatch: () => Promise<void>, accepted: () => Promise<void>): Promise<Awaited<ReturnType<Awaited<ReturnType<typeof import("./adapters/microsoft_rsvp_delivery").graphRsvpSession>>["write"]>>>;

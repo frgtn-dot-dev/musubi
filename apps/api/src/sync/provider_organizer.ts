@@ -72,10 +72,13 @@ export async function queueProviderOrganizer(actorID: string, input: unknown) {
   const context = prepared.context;
   if (context.request.provider === "microsoft") {
     const transport = await microsoftAdapter.microsoftOrganizer!(actorID, context.link.accountID, context.link.externalCalendarID, AbortSignal.timeout(10_000));
+    const baseline = context.mapping ? await transport.read(context.mapping.externalEventID) : null;
+    if (context.mapping && (!baseline || baseline.etag !== context.mapping.etag))
+      throw new BadRequestError("The provider meeting changed. Sync and reopen.");
     let desired;
-    try { desired = microsoftOrganizerBody(context.request, transport.email); }
+    try { desired = context.request.action === "delete" ? null : microsoftOrganizerBody(context.request, transport.email); }
     catch { throw new OrganizerAdmissionRejectedError("Choose external guests and explicit UTC or all-day time."); }
-    const saved = await prepareProviderOrganizer(actorID, context.request, { context, baseline: null, desired, graphIdentity: transport.identity });
+    const saved = await prepareProviderOrganizer(actorID, context.request, { context, baseline, desired, graphIdentity: transport.identity });
     if (saved.kind !== "saved") throw new Error("Organizer intent was not committed");
     return saved.receipt;
   }
@@ -176,13 +179,17 @@ export async function observeProviderOrganizer(
   actorID: string,
   eventID: string,
   observation: ProviderEventStateResponse,
+  outlookOrganizer = false,
 ) {
+  // Older clients strictly parse the provider enum. Only advertise the new
+  // capability to clients that explicitly opt into this additive read.
+  if (observation.state?.provider === "microsoft" && !outlookOrganizer) return observation;
   if (
     !(observation.state?.provider === "caldav"
       ? config.api.caldavOrganizerEditsEnabled
-      : observation.state?.provider === "google" &&
+      : ["google", "microsoft"].includes(observation.state?.provider ?? "") &&
         config.api.providerOrganizerEditsEnabled &&
-        observation.state.isOrganizer === true) ||
+        observation.state?.isOrganizer === true) ||
     !observation.version
   )
     return observation;
@@ -200,8 +207,8 @@ export async function observeProviderOrganizer(
       operationID: randomUUID(),
       eventID,
       calendarID: event.originCalendarID,
-      ...(observation.state!.provider === "caldav"
-        ? { provider: "caldav", notificationPolicy: "server-invite" }
+      ...(observation.state!.provider !== "google"
+        ? { provider: observation.state!.provider, notificationPolicy: "server-invite" }
         : { provider: "google", sendUpdates: "all" }),
       action: "delete",
       expectedRevision: event.revision,
@@ -209,6 +216,12 @@ export async function observeProviderOrganizer(
     });
     if (prepared.kind !== "prepared") return observation;
     const ctx = prepared.context;
+    if (ctx.request.provider === "microsoft") {
+      const transport = await microsoftAdapter.microsoftOrganizer!(actorID, ctx.link.accountID, ctx.link.externalCalendarID, AbortSignal.timeout(10_000));
+      const native = await transport.read(ctx.mapping!.externalEventID);
+      if (!native || native.etag !== ctx.mapping!.etag) return observation;
+      return { ...observation, organizerEdit: { provider: "microsoft" as const, calendarID: ctx.request.calendarID, expectedRevision: event.revision, actions: ["delete" as const] } };
+    }
     if (ctx.request.provider === "caldav") {
       const actions: ("update" | "delete")[] = [];
       let timeEdit: true | undefined;

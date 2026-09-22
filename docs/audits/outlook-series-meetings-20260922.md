@@ -1,12 +1,18 @@
-# Outlook recurrence and meeting investigation — 2026-09-22
+# Outlook recurrence deletion and meeting cancellation — 2026-09-22
 
 ## Result
 
-Bounded live tests confirm that personal recurrence and organizer meeting writes
-are feasible, but they need separate scope and notification contracts. Do not
-remove the `singleInstance`/attendee guards from the generic personal-event
-writer. No application capability, feature flag or production behavior is
-enabled by this investigation.
+The first implementation supports deleting one occurrence or an entire tracked
+personal Outlook series, and cancelling an organizer-owned one-off meeting in the
+owned default calendar. The user explicitly approved the guarded preflight model
+for these operations after the probe demonstrated that Graph ignores stale
+`If-Match` on DELETE and `/cancel`. Fresh reads reduce the race; they do not make
+these writes atomic. The generic personal writer remains separate and continues
+to reject meetings and recurrence.
+
+No production deployment or feature-flag change is included. Personal series
+use the existing `EVENT_TIME_EDITS_ENABLED` gate; meeting cancellation uses
+`PROVIDER_ORGANIZER_EDITS_ENABLED`.
 
 The connected personal Microsoft mailbox was used for two new personal daily
 COUNT=3 series (UTC timed and all-day), plus two new organizer meetings (one-off
@@ -42,40 +48,65 @@ preserves exception content. Successful whole-series content changes, recurrence
 rule changes, named-zone time changes, attachments, conferencing and richer
 guest behavior need their own tests.
 
-## Existing implementation and required changes
+## Implementation and limits
 
-1. **Personal single occurrence.** Existing import retains native master IDs and
-   original starts; tracked finite families also have stable canonical child
-   identities. Add a Graph-aware scope operation that proves the mapping,
-   original slot, exact native child and current permissions before admission
-   and dispatch. Keep the accepted version for PATCH, and reconcile native
-   cancellation into the canonical occurrence without regenerating it on sync.
-   Relevant boundaries: `event-scope.ts`, Graph family queries, adapter scope
-   evidence and the durable delivery worker.
-2. **Personal whole series.** Reuse the complete family reader, including moved
-   exceptions and cancellations, rather than treating a calendarView window as
-   the family. Store and recheck the accepted family observation. Deletion must
-   tombstone the root and children coherently and retain delivery/conflict
-   evidence. An unchanged master version alone is not a whole-family guarantee.
-3. **Organizer one-off meeting updates and cancellation.** The current Microsoft
-   organizer request, capability and transport are create-only. Extend that
-   explicit contract, reusing verified account/default-calendar identity, private
-   guest baseline, immutable journal and permanent possible-dispatch marker.
-   Cancellation uses the organizer-only `/cancel` action. Confirmation must say
-   that guests will be notified; a guest's decline/removal is a different action.
-   Current generic personal-event delete must continue rejecting meetings.
-4. **Recurring meetings.** Compose the verified occurrence/family scope with the
-   organizer contract, then test invitation/update/cancellation on the guest's
-   calendar as well. Do not infer these semantics from personal series alone.
-5. **This and following.** Treat truncation and replacement as separately
-   journaled operations with partial-outcome recovery. This probe does not test
-   or authorize a naive split, bulk recreation or duplicate invitations.
+- **Personal series:** the existing complete finite-family reader proves the
+  root, every active occurrence, moved exceptions and cancelled slots. Admission
+  compares this with the accepted local family; dispatch rechecks native versions,
+  exact target binding, ownership and current write permission. One immutable
+  operation records the scope and native baseline. The local family and delivery
+  receipt complete atomically. Pending intent fences generic sync and generic
+  conflict resend. A lost response can only be reconciled by a complete read;
+  it cannot cause another DELETE.
+- **Meetings:** only supported one-off organizer copies with complete guest
+  evidence are advertised. The existing verified account/default-calendar
+  identity, local revision, provider version and private baseline all participate
+  in admission and dispatch. `/cancel` is explicit and has a permanent dispatch
+  marker. Completion requires recorded HTTP 202 acceptance and confirmed absence.
+  Absence alone after a lost response cannot prove notification acceptance and
+  stays unresolved. Guest-side mail delivery is always reported as unknown.
+- **Clients:** web and native reuse their existing confirmation/editor patterns,
+  with Outlook-specific wording and a delete-only capability. New clients request
+  `provider-state?outlookOrganizer=1`; old clients and federated reads never receive
+  the added Microsoft organizer provider enum. Existing strict wire snapshots pass.
+- **Unsupported scope:** personal families must already be tracked canonically
+  and fit the existing complete-reader bounds (at most 366 occurrences and 730
+  days). Legacy expanded-only/unbounded series, recurring meetings, conferencing,
+  delegate/shared organizer copies, recurrence edits and “this and following”
+  remain unsupported. One-off cancellation does not expose meeting content/time
+  editing. Unsupported operations must not fall through to the personal writer.
+- **Recovery:** conflicts and genuinely ambiguous outcomes retain their durable
+  evidence; generic rebase/resend is deliberately unavailable for these private
+  operations. Read-only retries can confirm a matching deleted personal family
+  or a meeting cancellation with previously recorded acceptance. They do not
+  silently turn a changed remote item into a new destructive intent.
 
-First release candidates should be narrowly defined (personal occurrence and
-whole-series deletion, followed by one-off organizer cancellation). The owner
-previously accepted the remaining race **only for personal one-off events**.
-The larger scope and notification side effects need an explicit product decision
-before enabling these new deletion/cancellation paths.
+## Implementation validation
+
+[Redacted implementation evidence](evidence/outlook-deletion-implementation-20260922.json)
+records an actual application DB/outbox/Graph run, separately from the earlier
+raw HTTP probe. Two new personal daily COUNT=3 series (timed and all-day) each
+completed an occurrence deletion followed by deletion of the remaining series.
+The disposable calendar was then removed. A new one-off meeting was created for
+the explicitly authorized test recipient, cancelled through the application
+organizer queue/worker, confirmed absent, and removed from the local QA database.
+
+The provider advanced versions shortly after creation. Initial stale attempts
+were rejected before destructive dispatch. The successful personal run allowed
+creation to settle before importing its baseline. The meeting's first cancellation
+admission was also rejected; a fresh normal projection was imported and a **new**
+explicit intent completed. No validator was relaxed to make the live test pass.
+No guest-side mail-delivery claim follows from these observations.
+
+Offline DB coverage includes exact replay, moved exceptions, all-day series,
+stale admission and dispatch, sibling changes, local commit races, permission
+and identity loss, incomplete guests, forbidden recurring meetings, lost replies,
+crash markers and acceptance recovery without duplicate requests. Regression
+checks cover the existing Graph family, Google/CalDAV scopes, Microsoft creation
+and one-off deletion paths. Targeted web/native component tests, type checks and
+contract checks pass. Browser checks cover desktop/mobile confirmation, safe
+initial focus, keyboard activation and focus return, lost-response retry identity,
+accessibility, and light/dark themes.
 
 ## Reproduction and offline checks
 

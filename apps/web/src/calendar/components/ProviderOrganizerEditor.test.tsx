@@ -387,3 +387,20 @@ it("passes discovered alias choices to the per-calendar editor", async () => {
   await screen.findByRole("status");
   expect(api.save.mock.calls[0][0]).toMatchObject({ provider: "caldav", organizerAddress: "mailto:second@example.test" });
 });
+
+it("offers the proven Outlook cancellation with Outlook wording and frozen request identity", async () => {
+  api.save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "pending" });
+  render(<ProviderOrganizerEditor calendarID={calendarID} color="red" event={event} observation={{ ...observation, organizerEdit: { ...observation.organizerEdit!, provider: "microsoft", actions: ["delete"] } }} onClose={vi.fn()} />);
+  expect(screen.queryByRole("button", { name: "Save and notify guests" })).toBeNull();
+  expect((screen.getByRole("textbox", { name: "Title" }) as HTMLInputElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Cancel meeting and notify guests" }));
+  const dialog = await screen.findByRole("dialog", { name: "Cancel Outlook meeting" });
+  expect(within(dialog).getByText(/Outlook will be asked to cancel/)).toBeTruthy();
+  expect(api.save).not.toHaveBeenCalled();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel meeting and notify guests" }));
+  await screen.findByText("offline");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel meeting and notify guests" }));
+  await screen.findByRole("status");
+  expect(api.save.mock.calls[0][0]).toMatchObject({ provider: "microsoft", action: "delete", notificationPolicy: "server-invite", expectedRevision: 4 });
+  expect(api.save.mock.calls[1]).toEqual(api.save.mock.calls[0]);
+});

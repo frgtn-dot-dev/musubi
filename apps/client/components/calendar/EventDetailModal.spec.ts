@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   choose: vi.fn(),
   confirm: vi.fn(),
   reminders: vi.fn(),
+  provider: undefined as string | undefined,
 }));
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
@@ -59,8 +60,8 @@ vi.mock("@/lib/confirm", () => ({
   confirm: mocks.confirm,
 }));
 vi.mock("@/store/useCalendarsStore", () => ({
-  useCalendarsStore: Object.assign(() => ({ calendars: [{ id: "calendar", creatorID: "owner", role: "owner", name: "Calendar" }] }), {
-    getState: () => ({ calendars: [{ id: "calendar", creatorID: "owner", role: "owner", name: "Calendar" }] }),
+  useCalendarsStore: Object.assign(() => ({ calendars: [{ id: "calendar", creatorID: "owner", role: "owner", name: "Calendar", provider: mocks.provider }] }), {
+    getState: () => ({ calendars: [{ id: "calendar", creatorID: "owner", role: "owner", name: "Calendar", provider: mocks.provider }] }),
   }),
 }));
 vi.mock("@/store/useSettingsStore", () => ({
@@ -134,6 +135,7 @@ function deleteButton(node: ReactNode): (() => void) | undefined {
 }
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.provider = undefined;
   mocks.choose.mockReset();
   mocks.request.mockReset();
   useEventsStore.setState({ events: [master] });
@@ -354,4 +356,14 @@ it("queues only the exact provider reminder intent at the event's federated orig
     expect(mocks.request).not.toHaveBeenCalled();
     expect(mocks.reminders).not.toHaveBeenCalled();
   } finally { vi.mocked(remoteForCalendar).mockReset(); vi.mocked(fedFetch).mockReset(); }
+});
+
+
+it("offers only occurrence and whole-series deletion for Outlook", () => {
+  mocks.provider = "microsoft";
+  const button = deleteButton(EventDetailModal({ visible: true, event: occurrence, onClose: mocks.close, onEdit: vi.fn() }));
+  expect(button).toBeDefined();
+  button!();
+  expect(mocks.choose.mock.calls[0][2].map((option: { label: string }) => option.label)).toEqual(["This event only", "All events"]);
+  expect(mocks.request).not.toHaveBeenCalled();
 });

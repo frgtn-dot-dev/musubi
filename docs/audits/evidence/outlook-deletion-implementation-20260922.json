@@ -1,0 +1,54 @@
+{
+  "date": "2026-09-22",
+  "environment": "local QA database; real Microsoft Graph mailbox",
+  "scope": "only newly created disposable test data",
+  "personal": [
+    {
+      "allDay": false,
+      "results": [
+        {
+          "scope": "occurrence",
+          "status": "completed",
+          "error": null
+        },
+        {
+          "scope": "series",
+          "status": "completed",
+          "error": null
+        }
+      ]
+    },
+    {
+      "allDay": true,
+      "results": [
+        {
+          "scope": "occurrence",
+          "status": "completed",
+          "error": null
+        },
+        {
+          "scope": "series",
+          "status": "completed",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "meeting": {
+    "date": "2026-09-22T08:59:26.957Z",
+    "cancellation": "completed",
+    "error": null,
+    "capability": true,
+    "meetingAbsent": true,
+    "guestNotificationDelivery": "unknown",
+    "refreshedBeforeNewIntent": true
+  },
+  "cleanup": {
+    "personalCalendarDeleted": true,
+    "organizerMeetingAbsent": true,
+    "localTestRowsRemoved": true
+  },
+  "staleAdmissionObserved": true,
+  "validatorsRelaxed": false,
+  "guestNotificationDelivery": "unknown"
+}

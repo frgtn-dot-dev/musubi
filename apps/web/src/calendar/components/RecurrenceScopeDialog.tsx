@@ -30,6 +30,7 @@ const OPTION_LABELS: Record<
  */
 export function RecurrenceScopeDialog({
   action = "change",
+  allowedScopes,
   busyScope,
   consequence,
   error,
@@ -39,6 +40,7 @@ export function RecurrenceScopeDialog({
   title,
 }: {
   action?: "change" | "delete";
+  allowedScopes?: readonly EditScope[];
   busyScope?: EditScope;
   consequence?: string;
   error?: { message: string; requestId?: string };
@@ -87,7 +89,7 @@ export function RecurrenceScopeDialog({
         <InlineError requestId={error.requestId}>{error.message}</InlineError>
       ) : null}
       <div className={styles.scopeOptions}>
-        {OPTION_LABELS[action].map((option) => (
+        {OPTION_LABELS[action].filter(option => !allowedScopes || allowedScopes.includes(option.scope)).map((option) => (
           <Button
             className={styles.scopeOption}
             data-destructive={deleting ? "" : undefined}

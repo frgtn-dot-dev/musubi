@@ -32,11 +32,11 @@ export type GraphFamilyObservation = {
   cancelled: { originalStart: OccurrenceStart; start: Date; end: Date; isAllDay: boolean; timeModel: EventTimeModel }[];
 };
 
-async function lockAddress(tx: DbTransaction, address: Address) {
+export async function lockGraphFamilyAddress(tx: DbTransaction, address: Address) {
   await lockUserLifecycle(tx, [address.userID], "shared");
   await lockCalendarLifecycle(tx, [address.calendarID], "exclusive");
 }
-async function accepted(tx: DbTransaction, address: Address, excludedOperationID?: string) {
+export async function graphFamilyContextInTransaction(tx: DbTransaction, address: Address, excludedOperationID?: string) {
   const [initial] = await tx.select().from(externalEvents).where(and(eq(externalEvents.provider, "microsoft"), eq(externalEvents.calendarID, address.calendarID), eq(externalEvents.externalEventID, address.externalMasterID)));
   if (!initial) refuse();
   const [root] = await tx.select().from(events).where(eq(events.id, initial.eventID)).for("update");
@@ -72,12 +72,12 @@ async function accepted(tx: DbTransaction, address: Address, excludedOperationID
   if (pending.length || new Set(children.map(value => key(value.originalStart!))).size !== children.length) refuse();
   return { address, root, children, memberships, grant, link, connection, mappings };
 }
-export type GraphFamilyContext = Awaited<ReturnType<typeof accepted>>;
+export type GraphFamilyContext = Awaited<ReturnType<typeof graphFamilyContextInTransaction>>;
 
 /** Private tracked-family preparation, not native discovery or create ACK. */
 export async function readGraphFamilyContext(address: Address): Promise<GraphFamilyContext> {
   address = { ...address };
-  return db.transaction(async tx => { await lockAddress(tx, address); return accepted(tx, address); }).catch(() => { throw new Error("Accepted Graph family could not be read."); });
+  return db.transaction(async tx => { await lockGraphFamilyAddress(tx, address); return graphFamilyContextInTransaction(tx, address); }).catch(() => { throw new Error("Accepted Graph family could not be read."); });
 }
 
 /** Atomically replaces a previously accepted, exclusively owned Graph family.
@@ -88,10 +88,10 @@ export async function replaceGraphFamily(context: GraphFamilyContext, observatio
   return db.transaction(tx => replaceGraphFamilyInTransaction(tx, context, observation)).catch(() => { throw new Error("Complete Graph family could not be persisted."); });
 }
 
-async function replaceGraphFamilyInTransaction(tx: DbTransaction, context: GraphFamilyContext, observation: GraphFamilyObservation, excludedOperationID?: string): Promise<{ changed: boolean; seenExternalIDs: string[] }> {
-    await lockAddress(tx, context.address);
+export async function replaceGraphFamilyInTransaction(tx: DbTransaction, context: GraphFamilyContext, observation: GraphFamilyObservation, excludedOperationID?: string): Promise<{ changed: boolean; seenExternalIDs: string[] }> {
+    await lockGraphFamilyAddress(tx, context.address);
     for (const value of [...observation.instances, ...observation.cancelled]) value.originalStart = OccurrenceStartSchema.parse(value.originalStart);
-    const current = await accepted(tx, context.address, excludedOperationID);
+    const current = await graphFamilyContextInTransaction(tx, context.address, excludedOperationID);
     if (!same(context, current)) refuse();
     const { root, children, mappings, address } = current;
     if ((mappings.some(mapping => mapping.readRedactionRevision !== null) || children.some(child => child.providerReadRetiredRevision !== null && !mappings.some(mapping => mapping.eventID === child.id))) && microsoftPrivateAccess(current.link.providerAccessRole) === null) refuse();
@@ -191,8 +191,8 @@ export async function listGraphFamilyContexts(userID: string, accountID: string,
 export async function removeGraphFamily(context: GraphFamilyContext): Promise<{ changed: boolean; seenExternalIDs: string[] }> {
   context = structuredClone(context);
   return db.transaction(async tx => {
-    await lockAddress(tx, context.address);
-    const current = await accepted(tx, context.address);
+    await lockGraphFamilyAddress(tx, context.address);
+    const current = await graphFamilyContextInTransaction(tx, context.address);
     if (!same(context, current)) refuse();
     let changed = false;
     for (const value of [current.root, ...current.children]) if (!value.deletedAt) {
@@ -218,7 +218,7 @@ export async function completeGraphSeriesCreateOutbox(id: string, token: string,
     const collisions = await tx.select({ id: externalEvents.id }).from(externalEvents).where(and(eq(externalEvents.provider, "microsoft"), eq(externalEvents.calendarID, row.calendarID), or(inArray(externalEvents.externalEventID, [...ids]), eq(externalEvents.externalSeriesID, master.externalID)))).limit(1);
     if (deleted.length || collisions.length) refuse();
     await tx.insert(externalEvents).values({ provider: "microsoft", calendarID: row.calendarID, eventID: event.id, externalCalendarID: link.externalCalendarID, externalEventID: master.externalID, icalUid: master.icalUid });
-    const context = await accepted(tx, { userID: row.userID, accountID: row.accountID, calendarID: row.calendarID, externalMasterID: master.externalID }, row.id);
+    const context = await graphFamilyContextInTransaction(tx, { userID: row.userID, accountID: row.accountID, calendarID: row.calendarID, externalMasterID: master.externalID }, row.id);
     await replaceGraphFamilyInTransaction(tx, context, observation, row.id);
     const [completed] = await tx.update(eventOutbox).set({ status: "completed", errorCode: null, resultRef: { externalEventId: master.externalID, icalUid: master.icalUid, etag: master.etag }, uncertain: false, leaseToken: null, leaseUntil: null, updatedAt: new Date() })
       .where(and(eq(eventOutbox.id, id), eq(eventOutbox.status, "attempting"), eq(eventOutbox.leaseToken, token), sql`${eventOutbox.leaseUntil} > clock_timestamp()`)).returning({ id: eventOutbox.id });
@@ -277,7 +277,7 @@ export async function adoptGraphCreatedFamily(context: GraphCreateAdoptionContex
     const collisions = await tx.select({ id: externalEvents.id }).from(externalEvents).where(and(eq(externalEvents.provider, "microsoft"), eq(externalEvents.calendarID, row.calendarID), or(inArray(externalEvents.externalEventID, [...ids]), eq(externalEvents.externalSeriesID, master.externalID)))).limit(1);
     if (deleted.length || collisions.length) refuse();
     await tx.insert(externalEvents).values({ provider: "microsoft", calendarID: row.calendarID, eventID: event.id, externalCalendarID: link.externalCalendarID, externalEventID: master.externalID, icalUid: master.icalUid });
-    const family = await accepted(tx, { userID: row.userID, accountID: row.accountID, calendarID: row.calendarID, externalMasterID: master.externalID }, row.id);
+    const family = await graphFamilyContextInTransaction(tx, { userID: row.userID, accountID: row.accountID, calendarID: row.calendarID, externalMasterID: master.externalID }, row.id);
     await replaceGraphFamilyInTransaction(tx, family, observation, row.id);
     const [adopted] = await tx.select({ revision: events.revision }).from(events).where(eq(events.id, event.id));
     const marker = GraphCreateAdoptionRecordSchema.parse({ kind: "graph-create-adoption", version: 1, request, acceptedRevision: adopted!.revision, externalMasterID: master.externalID });

@@ -141,7 +141,7 @@ export function ProviderOrganizerEditor({
   }
   const canEditTime =
     !event ||
-    provider !== "caldav" ||
+    provider === "google" ||
     observation?.organizerEdit?.timeEdit === true;
   const canUpdate =
     !event ||
@@ -149,8 +149,7 @@ export function ProviderOrganizerEditor({
     observation?.organizerEdit?.actions?.includes("update") === true));
   const canDelete =
     !!event &&
-    (provider !== "microsoft" && (provider !== "caldav" ||
-      observation?.organizerEdit?.actions?.includes("delete") === true));
+    (provider === "google" || observation?.organizerEdit?.actions?.includes("delete") === true);
   const canSubmit = frozenAction === "delete" ? canDelete : canUpdate;
   async function send(action: ProviderOrganizerRequest["action"]) {
     if (
@@ -278,7 +277,7 @@ export function ProviderOrganizerEditor({
           returnFocus={closeButton}
           children={error ? <InlineError>{error}</InlineError> : null}
           title={occurrence ? "Cancel this occurrence" : `Cancel ${provider === "caldav" ? "CalDAV" : provider === "microsoft" ? "Outlook" : "Google"} meeting`}
-          description={`${provider === "caldav" ? "The CalDAV server" : "Google"} will be asked to cancel ${occurrence ? "only this occurrence" : "this meeting"} and notify every guest. Guest notification delivery cannot be verified.`}
+          description={`${provider === "caldav" ? "The CalDAV server" : provider === "microsoft" ? "Outlook" : "Google"} will be asked to cancel ${occurrence ? "only this occurrence" : "this meeting"} and notify every guest. Guest notification delivery cannot be verified.`}
           confirmLabel={occurrence ? "Cancel this occurrence and notify guests" : "Cancel meeting and notify guests"}
           closeLabel="Keep meeting"
           loading={busy}
@@ -340,7 +339,7 @@ export function ProviderOrganizerFields({
                 />
               </Field>
             )}
-            {(provider === "caldav" && event && !canEditTime) || occurrence ? (
+            {(provider !== "google" && event && !canEditTime) || occurrence ? (
               <p>{occurrence ? "Only this occurrence will change. Series timing and guests stay unchanged." : "Meeting time and guests are preserved."}</p>
             ) : (
               <>

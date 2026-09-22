@@ -63,3 +63,5 @@ export * from "./queries/provider-organizer";
 
 
 export * from "./queries/caldav-access";
+
+export * from "./queries/graph-series-delete";

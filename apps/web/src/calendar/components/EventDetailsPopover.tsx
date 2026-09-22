@@ -1182,6 +1182,7 @@ function CalendarEventDetailsPopover({
 			{deletePrompt === "scope" ? (
 				<RecurrenceScopeDialog
 					action="delete"
+                    allowedScopes={removeCalendar?.provider === "microsoft" ? ["occurrence", "series"] : undefined}
 					busyScope={pendingDeleteScope}
 					consequence={deleteConsequence}
 					error={actionError}
