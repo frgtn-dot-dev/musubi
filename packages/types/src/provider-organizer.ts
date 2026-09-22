@@ -174,8 +174,10 @@ export const MicrosoftOrganizerRequestSchema = z.discriminatedUnion("action", [
     expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
   }).strict(),
 ]).superRefine((request, ctx) => {
-  if (request.action === "update" && request.patch.time !== undefined && request.scope !== "occurrence")
-    ctx.addIssue({ code: "custom", message: "Time changes require one bound Outlook occurrence." });
+  if (request.action === "update" && request.patch.time !== undefined && !request.scope)
+    ctx.addIssue({ code: "custom", message: "Time changes require a bound Outlook occurrence or series." });
+  if (request.action === "update" && request.scope === "series" && request.patch.time && (request.patch.time.kind !== "zoned" || request.patch.time.timeZone !== "UTC"))
+    ctx.addIssue({ code: "custom", message: "Whole-series time changes require UTC." });
   if (request.action !== "create" && !!request.scope !== !!request.expectedSeriesVersion)
     ctx.addIssue({ code: "custom", message: "Recurring changes require their exact series observation." });
 });
@@ -194,7 +196,7 @@ export const MicrosoftOccurrenceContentRequestSchema = caldavCommon.extend({
   expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
   patch: microsoftContentPatch,
 }).strict();
-export const MicrosoftRecurringContentRequestSchema = MicrosoftOccurrenceContentRequestSchema.extend({ scope: z.enum(["occurrence", "series"]) }).refine(request => request.scope === "occurrence" || request.patch.time === undefined, "Series time changes are not supported");
+export const MicrosoftRecurringContentRequestSchema = MicrosoftOccurrenceContentRequestSchema.extend({ scope: z.enum(["occurrence", "series"]) }).refine(request => request.scope !== "series" || !request.patch.time || (request.patch.time.kind === "zoned" && request.patch.time.timeZone === "UTC"), "Whole-series time changes require UTC.");
 export type MicrosoftRecurringContentRequest = z.infer<typeof MicrosoftRecurringContentRequestSchema>;
 export type MicrosoftOccurrenceContentRequest = z.infer<typeof MicrosoftOccurrenceContentRequestSchema>;
 export type MicrosoftSeriesCancellationRequest = z.infer<typeof MicrosoftSeriesCancellationRequestSchema>;

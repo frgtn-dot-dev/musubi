@@ -32,7 +32,9 @@ export function organizerDraft(
   const zone = observation?.organizerEdit?.timeZone ?? "UTC";
   const today = new Date(),
     day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`,
-    time = event && _provider === "microsoft" && observation?.organizerEdit?.scope === "occurrence" && observation.organizerEdit.timeEdit && observation.organizerEdit.timeKind !== "all-day"
+    time = observation?.organizerEdit?.scope === "series" && observation.outlookSeriesContent?.time
+      ? observation.outlookSeriesContent.time
+      : event && _provider === "microsoft" && observation?.organizerEdit?.scope === "occurrence" && observation.organizerEdit.timeEdit && observation.organizerEdit.timeKind !== "all-day"
       ? { kind: "zoned" as const, timeZone: zone, startLocal: instantToCivil(event.start, zone), endLocal: instantToCivil(event.end, zone) }
       : event?.timeModel;
   return {
@@ -195,6 +197,7 @@ export function outlookSeriesOrganizerObservation(event: Event | undefined, obse
   if (!event || !series || !observation?.state || observation.state.provider !== "microsoft" || !observation.version) return undefined;
   const result: ProviderEventStateResponse = { ...observation, state: observation.state, organizerEdit: {
     provider: "microsoft", scope: "series", seriesVersion: series.seriesVersion,
+    ...(series.time ? { timeEdit: true, timeZone: "UTC" } : {}),
     calendarID: series.calendarID, expectedRevision: series.expectedRevision, actions: ["update"],
   } };
   return canManageProviderOrganizer(event, result) ? result : undefined;

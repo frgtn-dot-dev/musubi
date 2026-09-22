@@ -1,4 +1,4 @@
-import { graphOccurrenceTimeSupported, findGraphOccurrenceContent, saveGraphOccurrenceContent } from "@musubi/db";
+import { graphSeriesTimeSupported, graphOccurrenceTimeSupported, findGraphOccurrenceContent, saveGraphOccurrenceContent } from "@musubi/db";
 import { MicrosoftRecurringContentRequestSchema, MicrosoftOccurrenceContentRequestSchema } from "@musubi/types";
 import { readGraphMeetingContext, findGraphMeetingCancellation, saveGraphMeetingCancellation } from "@musubi/db";
 import { MicrosoftSeriesCancellationRequestSchema } from "@musubi/types";
@@ -204,7 +204,7 @@ export async function observeProviderOrganizer(
   actorID: string,
   eventID: string,
   observation: ProviderEventStateResponse,
-  outlookOrganizer: boolean | "series" | "content" | "series-content" | "occurrence-time" | "occurrence-zone-time" | "occurrence-all-day-time" = false,
+  outlookOrganizer: boolean | "series" | "content" | "series-content" | "occurrence-time" | "occurrence-zone-time" | "occurrence-all-day-time" | "series-time" = false,
 ): Promise<ProviderEventStateResponse> {
   // Older clients strictly parse the provider enum. Only advertise the new
   // capability to clients that explicitly opt into this additive read.
@@ -222,7 +222,8 @@ export async function observeProviderOrganizer(
     const { getEventSnapshot } = await import("@musubi/db");
     const event = await getEventSnapshot(eventID);
     if (!event?.originCalendarID || !event.revision) return observation;
-    const allDayTime = outlookOrganizer === "occurrence-all-day-time";
+    const seriesTime = outlookOrganizer === "series-time";
+    const allDayTime = seriesTime || outlookOrganizer === "occurrence-all-day-time";
     const zoneTime = allDayTime || outlookOrganizer === "occurrence-zone-time";
     const occurrenceTime = zoneTime || outlookOrganizer === "occurrence-time";
     if (occurrenceTime) outlookOrganizer = "series-content";
@@ -232,8 +233,10 @@ export async function observeProviderOrganizer(
       try {
         const context = await readGraphMeetingContext({ actorID, eventID, calendarID: event.originCalendarID });
         const native = await microsoftAdapter.observeGraphSeriesContent!(context, AbortSignal.timeout(20_000));
-        const { title, description, location } = native.baseline.master.values;
-        observation = { ...observation, outlookSeriesContent: { calendarID: event.originCalendarID, expectedRevision: event.revision, seriesVersion: native.version, content: { title, description, location } } };
+        const { title, description, location, timeModel } = native.baseline.master.values;
+        const time = seriesTime && config.api.eventTimeEditsEnabled && graphSeriesTimeSupported(native) && timeModel.kind === "zoned" && timeModel.timeZone === "UTC"
+          ? { kind: "zoned" as const, timeZone: "UTC" as const, startLocal: timeModel.startLocal, endLocal: timeModel.endLocal } : undefined;
+        observation = { ...observation, outlookSeriesContent: { ...(time ? { time } : {}), calendarID: event.originCalendarID, expectedRevision: event.revision, seriesVersion: native.version, content: { title, description, location } } };
       } catch { /* Individual occurrence editing can still qualify. */ }
     }
     if (observation.state?.provider === "microsoft" && outlookOrganizer === "content") {
