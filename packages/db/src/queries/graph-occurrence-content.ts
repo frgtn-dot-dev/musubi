@@ -206,9 +206,10 @@ export const completeGraphOccurrenceContent = (row: EventOutboxRow, observation:
     const mapping = saved.context.mappings.find(m => m.eventID === previous.id);
     const actual = [observation.master, ...observation.instances].find(n => n.externalID === mapping?.externalEventID);
     if (!actual) refuse();
-    const actualTime = seriesTime ? { start: actual.values.start, end: actual.values.end, isAllDay: actual.values.isAllDay, timeModel: actual.values.timeModel, ...(previous.seriesID && "originalStart" in actual ? { originalStart: actual.originalStart } : {}) } : time;
+    const seriesMaster = seriesTime && actual.externalID === observation.master.externalID;
+    const actualTime = seriesTime ? { start: actual.values.start, end: actual.values.end, isAllDay: actual.values.isAllDay, timeModel: actual.values.timeModel, ...(seriesMaster ? { recurrence: actual.values.recurrence } : {}), ...(previous.seriesID && "originalStart" in actual ? { originalStart: actual.originalStart } : {}) } : time;
     const content = { title: actual.values.title, description: actual.values.description, location: actual.values.location, ...(actualTime ?? {}) };
-    if (!same(content, { title: previous.title, description: previous.description, location: previous.location, ...(actualTime ? { start: previous.start, end: previous.end, isAllDay: previous.isAllDay, timeModel: previous.timeModel, ...(seriesTime && previous.seriesID ? { originalStart: previous.originalStart } : {}) } : {}) }))
+    if (!same(content, { title: previous.title, description: previous.description, location: previous.location, ...(actualTime ? { start: previous.start, end: previous.end, isAllDay: previous.isAllDay, timeModel: previous.timeModel, ...(seriesMaster ? { recurrence: previous.recurrence } : {}), ...(seriesTime && previous.seriesID ? { originalStart: previous.originalStart } : {}) } : {}) }))
       await tx.update(events).set({ ...content, revision: sql`${events.revision} + 1`, updatedAt: now }).where(eq(events.id, previous.id));
   }
   for (const mapping of saved.context.mappings) {

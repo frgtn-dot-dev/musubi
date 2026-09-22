@@ -105,8 +105,11 @@ inboxes. Existing guest identities and roles are preserved.
 
 With `EVENT_TIME_EDITS_ENABLED` also enabled, individual occurrences can change
 their time in verified UTC or Europe/Prague series, or change their all-day dates.
-Whole-series clock times and duration can change for counted, same-day UTC series **without
-changed or cancelled occurrences**. Dates and the recurrence rule stay the same.
+Whole-series clock times and duration can change for finite, same-day UTC series
+ending after a set number of occurrences or on a date, **without changed or
+cancelled occurrences**. Occurrence dates and the native recurrence rule stay the
+same, including the final occurrence. Musubi adjusts its local end-date cutoff to
+match the new clock time.
 Outlook's master time update discards exceptions and restores cancellations, so
 Musubi does not offer that action for those families. Their content-only series
 editor continues to preserve individual changes. A time change can require guests
