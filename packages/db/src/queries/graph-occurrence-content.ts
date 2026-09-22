@@ -25,6 +25,10 @@ export type GraphOccurrenceContent = {
  * Keep the allowlist bounded to native-tested zone contracts. */
 export function graphOccurrenceTimeSupported(saved: Pick<GraphOccurrenceContent, "baseline" | "targetID" | "template" | "native">) {
   const target = saved.baseline.instances.find(n => n.externalID === saved.targetID);
+  if (saved.template.timeModel?.kind === "all-day")
+    return saved.template.isAllDay && saved.native.isAllDay === true &&
+      saved.native.originalStartTimeZone === "UTC" && saved.native.originalEndTimeZone === "UTC" &&
+      !!target && target.values.isAllDay && target.originalStart.kind === "date";
   return saved.template.timeModel?.kind === "zoned" && ["UTC", "Europe/Prague"].includes(saved.template.timeModel.timeZone) &&
     saved.native.originalStartTimeZone === saved.template.timeModel.timeZone && saved.native.originalEndTimeZone === saved.template.timeModel.timeZone &&
     !!target && !target.values.isAllDay && target.originalStart.kind === "instant";
@@ -32,18 +36,25 @@ export function graphOccurrenceTimeSupported(saved: Pick<GraphOccurrenceContent,
 export function graphOccurrenceTimeChange(saved: Pick<GraphOccurrenceContent, "baseline" | "targetID" | "template" | "native" | "request">) {
   const input = saved.request.patch.time;
   if (!input) return undefined;
-  if (saved.request.scope !== "occurrence" || !graphOccurrenceTimeSupported(saved) || input.kind !== "zoned" || input.timeZone !== (saved.template.timeModel?.kind === "zoned" ? saved.template.timeModel.timeZone : null)) refuse();
-  try {
-    unambiguousCivilToInstant(input.startLocal, input.timeZone);
-    unambiguousCivilToInstant(input.endLocal, input.timeZone);
-  } catch { throw new BadRequestError("Choose an unambiguous time outside the daylight-saving clock change."); }
+  if (saved.request.scope !== "occurrence" || !graphOccurrenceTimeSupported(saved) || input.kind !== saved.template.timeModel?.kind) refuse();
+  if (input.kind === "zoned") {
+    if (saved.template.timeModel?.kind !== "zoned" || input.timeZone !== saved.template.timeModel.timeZone) refuse();
+    try {
+      unambiguousCivilToInstant(input.startLocal, input.timeZone);
+      unambiguousCivilToInstant(input.endLocal, input.timeZone);
+    } catch { throw new BadRequestError("Choose an unambiguous time outside the daylight-saving clock change."); }
+  } else if (input.kind !== "all-day") refuse();
   const desired = resolveEventTimeEdit(input);
   const target = saved.baseline.instances.find(n => n.externalID === saved.targetID)!;
   const slots = [...saved.baseline.instances.map(n => ({ ...n.values, originalStart: n.originalStart })), ...saved.baseline.cancelled]
     .sort((a, b) => a.originalStart.value.localeCompare(b.originalStart.value));
   const index = slots.findIndex(n => same(n.originalStart, target.originalStart));
-  if (index < 0 || desired.end <= desired.start || [desired.start, desired.end].some(value => Math.abs(value.getTime() - new Date(target.originalStart.value).getTime()) > 730 * 86_400_000)) refuse();
-  const day = (value: Date | string) => instantToCivil(new Date(value), input.timeZone).slice(0, 10);
+  if (index < 0 || desired.end < desired.start || (!desired.isAllDay && desired.end <= desired.start) ||
+      (desired.isAllDay && !/^\d{4}-/.test(new Date(desired.end.getTime() + 86_400_000).toISOString())) ||
+      [desired.start, desired.end].some(value => Math.abs(value.getTime() - new Date(target.originalStart.value).getTime()) > 730 * 86_400_000)) refuse();
+  // Musubi's all-day end is inclusive; Graph's next midnight is exclusive.
+  // Compare occupied dates so ending the day before a neighbour is allowed.
+  const day = (value: Date | string) => (input.kind === "all-day" ? new Date(value).toISOString() : instantToCivil(new Date(value), input.timeZone)).slice(0, 10);
   const previous = slots[index - 1], next = slots[index + 1];
   // Include cancelled slots and both original and moved neighbours. Outlook
   // forbids crossing their days, not just overlapping their time intervals.

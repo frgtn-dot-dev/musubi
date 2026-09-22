@@ -1,0 +1,250 @@
+{
+  "syntheticOnly": true,
+  "notificationDelivery": "unknown",
+  "rsvpFixture": "Seeded accepted native response; not proof of recipient acceptance or mail delivery",
+  "native": {
+    "personal": {
+      "date": "2026-09-22T20:14:25.511Z",
+      "syntheticOnly": true,
+      "meeting": false,
+      "patchStatus": 200,
+      "isAllDay": true,
+      "nativeRecurrenceZone": "UTC",
+      "originalZones": [
+        "UTC",
+        "UTC"
+      ],
+      "beforeSlots": [
+        {
+          "start": {
+            "dateTime": "2026-10-20T00:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-21T00:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-20T00:00:00Z"
+        },
+        {
+          "start": {
+            "dateTime": "2026-10-23T00:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-24T00:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-23T00:00:00Z"
+        },
+        {
+          "start": {
+            "dateTime": "2026-10-26T00:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-27T00:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-26T00:00:00Z"
+        },
+        {
+          "start": {
+            "dateTime": "2026-10-29T00:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-30T00:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-29T00:00:00Z"
+        }
+      ],
+      "afterStart": {
+        "dateTime": "2026-10-24T00:00:00.0000000",
+        "timeZone": "UTC"
+      },
+      "afterEnd": {
+        "dateTime": "2026-10-26T00:00:00.0000000",
+        "timeZone": "UTC"
+      },
+      "changedFields": [
+        "@odata.etag",
+        "createdDateTime",
+        "lastModifiedDateTime",
+        "changeKey",
+        "type",
+        "start",
+        "end"
+      ],
+      "originalSlotPreserved": true,
+      "attendeesPreserved": true,
+      "htmlPreserved": true,
+      "siblingsPreserved": true,
+      "staleStatus": 412,
+      "crossing": {
+        "status": 400,
+        "code": "ErrorOccurrenceCrossingBoundary"
+      },
+      "restoreStatus": 200,
+      "cleanupStatus": 204,
+      "seriesAbsent": true
+    },
+    "meeting": {
+      "date": "2026-09-22T20:17:08.194Z",
+      "syntheticOnly": true,
+      "meeting": true,
+      "patchStatus": 200,
+      "isAllDay": true,
+      "nativeRecurrenceZone": "UTC",
+      "originalZones": [
+        "UTC",
+        "UTC"
+      ],
+      "beforeSlots": [
+        {
+          "start": {
+            "dateTime": "2026-10-20T00:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-21T00:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-20T00:00:00Z"
+        },
+        {
+          "start": {
+            "dateTime": "2026-10-23T00:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-24T00:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-23T00:00:00Z"
+        },
+        {
+          "start": {
+            "dateTime": "2026-10-26T00:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-27T00:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-26T00:00:00Z"
+        },
+        {
+          "start": {
+            "dateTime": "2026-10-29T00:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-30T00:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-29T00:00:00Z"
+        }
+      ],
+      "afterStart": {
+        "dateTime": "2026-10-24T00:00:00.0000000",
+        "timeZone": "UTC"
+      },
+      "afterEnd": {
+        "dateTime": "2026-10-26T00:00:00.0000000",
+        "timeZone": "UTC"
+      },
+      "changedFields": [
+        "@odata.etag",
+        "createdDateTime",
+        "lastModifiedDateTime",
+        "changeKey",
+        "type",
+        "start",
+        "end",
+        "attendees"
+      ],
+      "originalSlotPreserved": true,
+      "attendeesPreserved": false,
+      "htmlPreserved": true,
+      "siblingsPreserved": true,
+      "staleStatus": 412,
+      "crossing": {
+        "status": 400,
+        "code": "ErrorOccurrenceCrossingBoundary"
+      },
+      "restoreStatus": 200,
+      "cleanupStatus": 202,
+      "seriesAbsent": true
+    }
+  },
+  "musubi": {
+    "personal": {
+      "meeting": false,
+      "date": "2026-09-22T20:19:00.778Z",
+      "syntheticOnly": true,
+      "created": true,
+      "recurrenceCount": 3,
+      "guestNotificationDelivery": "unknown",
+      "results": [
+        {
+          "fields": [
+            "time"
+          ],
+          "status": "completed",
+          "error": null
+        },
+        {
+          "fields": [
+            "time"
+          ],
+          "status": "completed",
+          "error": null
+        }
+      ],
+      "responses": [],
+      "htmlAndGuestListPreserved": true,
+      "originalSlotPreserved": true,
+      "localTimeCommitted": true,
+      "siblingsUnchanged": true,
+      "cleanupStatus": 204,
+      "seriesAbsent": true,
+      "localTestRowsRemoved": 3
+    },
+    "meeting": {
+      "meeting": true,
+      "date": "2026-09-22T20:19:16.570Z",
+      "syntheticOnly": true,
+      "created": true,
+      "recurrenceCount": 3,
+      "guestNotificationDelivery": "unknown",
+      "results": [
+        {
+          "fields": [
+            "time"
+          ],
+          "status": "completed",
+          "error": null
+        },
+        {
+          "fields": [
+            "time"
+          ],
+          "status": "completed",
+          "error": null
+        }
+      ],
+      "responses": [
+        "notResponded"
+      ],
+      "htmlAndGuestListPreserved": true,
+      "originalSlotPreserved": true,
+      "localTimeCommitted": true,
+      "siblingsUnchanged": true,
+      "cleanupStatus": 202,
+      "seriesAbsent": true,
+      "localTestRowsRemoved": 3
+    }
+  }
+}

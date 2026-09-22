@@ -146,7 +146,7 @@ export const CaldavOrganizerRequestSchema = z.discriminatedUnion("action", [
     .strict(),
 ]);
 const microsoftContentPatch = content.partial().extend({
-  time: time.refine(value => value.kind === "zoned" && ["UTC", "Europe/Prague"].includes(value.timeZone), "Outlook occurrence changes require a verified series time zone").optional(),
+  time: time.refine(value => (value.kind === "all-day" || value.kind === "zoned" && ["UTC", "Europe/Prague"].includes(value.timeZone)), "Outlook occurrence changes require verified all-day dates or a series time zone").optional(),
 }).strict().refine(value => Object.keys(value).length > 0, "Choose a change");
 const microsoftCreate = caldavCommon.extend({
   provider: z.literal("microsoft"),

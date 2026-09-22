@@ -439,3 +439,21 @@ it("uses the native time picker for a proven Outlook occurrence and freezes retr
   expect(h.save.mock.calls[0][0]).toMatchObject({ scope: "occurrence", expectedSeriesVersion: "c".repeat(64), patch: { time: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-09-10T08:30:00.000", endLocal: "2026-09-10T12:00:00.000" } } });
   expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
 });
+
+it("keeps inclusive all-day dates in the native picker and frozen retry", async () => {
+  const observed: ProviderEventStateResponse = { ...observation, organizerEdit: { ...observation.organizerEdit!, provider: "microsoft", scope: "occurrence", seriesVersion: "c".repeat(64), actions: ["update"], timeEdit: true, timeKind: "all-day" } };
+  const draw = () => render({ ...event, isAllDay: true, start: new Date("2026-10-24T00:00:00Z"), end: new Date("2026-10-25T00:00:00Z"), timeModel: { kind: "all-day" } }, observed);
+  h.save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "pending" });
+  expect(nodes(draw()).find(node => node.type === "Switch")!.props.disabled).toBe(true);
+  expect(nodes(draw()).some(node => node.props.accessibilityLabel === "start time")).toBe(false);
+  nodes(draw()).find(node => node.props.accessibilityLabel === "end date")!.props.onPress();
+  const picker = nodes(draw()).find(node => node.type === "DateTimePicker")!;
+  expect(picker.props.mode).toBe("date");
+  expect(new Date(picker.props.value).getDate()).toBe(25);
+  const value = new Date(picker.props.value); value.setDate(24);
+  picker.props.onValueChange(undefined, value);
+  button(draw(), "Save").onPress(); await settle();
+  button(draw(), "Retry").onPress(); await settle();
+  expect(h.save.mock.calls[0][0]).toMatchObject({ scope: "occurrence", patch: { time: { kind: "all-day", startDate: "2026-10-24", endDate: "2026-10-24" } } });
+  expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
+});

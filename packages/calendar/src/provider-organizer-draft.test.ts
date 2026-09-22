@@ -134,7 +134,7 @@ assert.equal(canManageProviderOrganizer({ ...child, recurrence: "RRULE:FREQ=DAIL
 assert.equal(canManageProviderOrganizer(child, { organizerEdit: { ...outlookOccurrence.organizerEdit, seriesVersion: undefined } }), false);
 const occurrenceUpdate = organizerRequest("update", { ...draft, title: "Only one occurrence" }, ["title"], identity, outlookOccurrence);
 assert.equal(occurrenceUpdate.provider === "microsoft" && occurrenceUpdate.action === "update" && occurrenceUpdate.expectedSeriesVersion, "c".repeat(64));
-for (const change of [{ scope: undefined }, { expectedSeriesVersion: undefined }, { expectedInstanceVersion: "b".repeat(64) }, { patch: { time: { kind: "all-day", startDate: "2026-09-22", endDate: "2026-09-23" } } }]) assert.equal(ProviderOrganizerRequestSchema.safeParse({ ...occurrenceUpdate, ...change }).success, false);
+for (const change of [{ scope: undefined }, { expectedSeriesVersion: undefined }, { expectedInstanceVersion: "b".repeat(64) }]) assert.equal(ProviderOrganizerRequestSchema.safeParse({ ...occurrenceUpdate, ...change }).success, false);
 
 const seriesSource = { ...outlookOccurrence, state: { ...observation.state!, provider: "microsoft" as const }, outlookSeriesContent: { calendarID: child.originCalendarID!, expectedRevision: child.revision!, seriesVersion: "d".repeat(64), content: { title: "Series title", description: "Series notes", location: "Series room" } } };
 const scopedSeries = outlookSeriesOrganizerObservation(child, seriesSource)!;
@@ -152,7 +152,7 @@ assert.equal(timedDraft.timeZone, "UTC");
 assert.equal(timedDraft.start, child.start.toISOString().slice(0, -1));
 const timeUpdate = organizerRequest("update", { ...timedDraft, start: "2026-10-23T10:00:00", end: "2026-10-23T11:00:00" }, ["start", "end"], identity, outlookTime);
 assert.deepEqual(timeUpdate.action === "update" && timeUpdate.patch, { time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-10-23T10:00:00.000", endLocal: "2026-10-23T11:00:00.000" } });
-for (const change of [{ scope: "series" }, { scope: undefined }, { expectedSeriesVersion: undefined }, { patch: { time: { kind: "zoned", timeZone: "America/New_York", startLocal: "2026-10-23T10:00:00", endLocal: "2026-10-23T11:00:00" } } }, { patch: { time: { kind: "all-day", startDate: "2026-10-23", endDate: "2026-10-23" } } }]) assert.equal(ProviderOrganizerRequestSchema.safeParse({ ...timeUpdate, ...change }).success, false);
+for (const change of [{ scope: "series" }, { scope: undefined }, { expectedSeriesVersion: undefined }, { patch: { time: { kind: "zoned", timeZone: "America/New_York", startLocal: "2026-10-23T10:00:00", endLocal: "2026-10-23T11:00:00" } } }]) assert.equal(ProviderOrganizerRequestSchema.safeParse({ ...timeUpdate, ...change }).success, false);
 
 const pragueTime = { ...outlookTime, organizerEdit: { ...outlookTime.organizerEdit, timeZone: "Europe/Prague" as const } };
 for (const [instant, local] of [["2026-10-23T10:00:00Z", "2026-10-23T12:00:00.000"], ["2026-10-25T11:00:00Z", "2026-10-25T12:00:00.000"]]) {
@@ -163,3 +163,13 @@ for (const [instant, local] of [["2026-10-23T10:00:00Z", "2026-10-23T12:00:00.00
   for (const start of ["2026-10-25T02:30:00", "2026-03-29T02:30:00"]) assert.throws(() => organizerRequest("update", { ...view, start }, ["start"], identity, pragueTime), /unambiguous/);
   assert.throws(() => organizerRequest("update", { ...view, timeZone: "UTC" }, ["timeZone"], identity, pragueTime), /verified series time zone/);
 }
+
+const allDayObservation = { ...outlookTime, organizerEdit: { ...outlookTime.organizerEdit, timeKind: "all-day" as const } };
+const allDayDraft = organizerDraft({ ...child, isAllDay: true, start: new Date("2026-10-24T00:00:00Z"), end: new Date("2026-10-25T00:00:00Z"), timeModel: { kind: "all-day" } }, "microsoft", allDayObservation);
+assert.equal(allDayDraft.start, "2026-10-24"); assert.equal(allDayDraft.end, "2026-10-25"); assert.equal(allDayDraft.timeZone, "");
+const allDayUpdate = organizerRequest("update", { ...allDayDraft, end: "2026-10-24" }, ["end"], identity, allDayObservation);
+assert.deepEqual(allDayUpdate.action === "update" && allDayUpdate.patch, { time: { kind: "all-day", startDate: "2026-10-24", endDate: "2026-10-24" } });
+assert.throws(() => organizerRequest("update", { ...allDayDraft, allDay: false, timeZone: "UTC" }, ["allDay"], identity, allDayObservation), /all-day or timed/);
+assert.throws(() => organizerRequest("update", allDayDraft, ["start"], identity, outlookTime), /all-day or timed/);
+assert.equal(ProviderOrganizerRequestSchema.safeParse({ ...allDayUpdate, scope: "series" }).success, false);
+console.log("Outlook all-day occurrence: inclusive dates and mode preservation: OK");

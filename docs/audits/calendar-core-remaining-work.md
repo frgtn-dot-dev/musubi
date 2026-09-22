@@ -317,3 +317,15 @@ Outlook RSVP resets after a real time change are observed without changing the
 guest list or treating them as unrelated conflicts. Details and redacted live
 results: [occurrence zones](./outlook-occurrence-zones-20260922.md).
 Other zones, all-day moves and series-wide time/recurrence changes remain open.
+
+### 2026-09-22: Outlook all-day occurrence dates
+
+A fully observed UTC-authored all-day series now supports moving/resizing one
+all-day occurrence, including personal events and organizer meetings. Inclusive
+Musubi dates serialize to Graph's exclusive next midnight, preserving original
+slots and moved/cancelled neighbours. Web/native use their existing date controls;
+legacy opt-ins retain their earlier strict response shapes. Native probes and
+actual queue/outbox edits passed with fixture cleanup. Details and redacted
+results: [all-day occurrence contract](./outlook-occurrence-allday-20260922.md).
+Other zones, timed/all-day conversion and whole-series time/recurrence changes
+remain open; this is not a production activation.

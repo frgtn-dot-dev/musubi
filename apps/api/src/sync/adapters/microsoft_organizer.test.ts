@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { config } from "@musubi/config";
 import { MicrosoftOrganizerRequestSchema, ProviderOrganizerRequestSchema, type ProviderOrganizerIntent } from "@musubi/types";
 import { fetchMicrosoftChanges } from "./microsoft";
-import { microsoftOrganizerBody, microsoftOrganizerEvidence, microsoftOrganizerTransport, matchesMeetingContent } from "./microsoft_organizer";
+import { microsoftOrganizerBody, microsoftOrganizerEvidence, microsoftOrganizerTransport, microsoftMeetingContentBody, matchesMeetingContent } from "./microsoft_organizer";
 async function main() {
   const request = MicrosoftOrganizerRequestSchema.parse({ provider: "microsoft", action: "create", notificationPolicy: "server-invite", operationID: randomUUID(), eventID: randomUUID(), calendarID: randomUUID(), color: "#777777", content: { title: "Team meeting", description: "Notes", location: "Room" }, guests: [{ email: "guest@example.test", optional: false }], time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-09-15T09:00:00", endLocal: "2026-09-15T10:00:00" } });
   const desired = microsoftOrganizerBody(request, "self@example.test");
@@ -38,6 +38,15 @@ async function main() {
   const unchangedTime = { ...occurrence, type: "exception", attendees: moved.attendees };
   assert.equal(matchesMeetingContent(occurrence, { start: occurrence.start, end: occurrence.end }, unchangedTime, "self@example.test", "master"), false);
   assert.equal(matchesMeetingContent(occurrence, { subject: "Renamed" }, { ...unchangedTime, subject: "Renamed" }, "self@example.test", "master"), false);
+  const allDayOccurrence = { ...occurrence, isAllDay: true, originalStartTimeZone: "UTC", originalEndTimeZone: "UTC", originalStart: "2026-10-23T00:00:00Z", start: { dateTime: "2026-10-23T00:00:00.0000000", timeZone: "UTC" }, end: { dateTime: "2026-10-24T00:00:00.0000000", timeZone: "UTC" } };
+  const allDayRequest = MicrosoftOrganizerRequestSchema.parse({ provider: "microsoft", action: "update", notificationPolicy: "server-invite", operationID: randomUUID(), eventID: randomUUID(), calendarID: randomUUID(), scope: "occurrence", expectedRevision: 1, expectedStateVersion: "a".repeat(64), expectedSeriesVersion: "b".repeat(64), patch: { time: { kind: "all-day", startDate: "2026-10-24", endDate: "2026-10-25" } } });
+  const datePatch = microsoftMeetingContentBody(allDayRequest);
+  assert.deepEqual(datePatch, { start: { dateTime: "2026-10-24T00:00:00.000", timeZone: "UTC" }, end: { dateTime: "2026-10-26T00:00:00.000", timeZone: "UTC" } });
+  const allDayMoved = { ...allDayOccurrence, ...datePatch, type: "exception", attendees: moved.attendees };
+  assert.equal(matchesMeetingContent(allDayOccurrence, datePatch, allDayMoved, "self@example.test", "master"), true);
+  for (const bad of [{ ...allDayMoved, isAllDay: false }, { ...allDayMoved, originalStart: "2026-10-24T00:00:00Z" }, { ...allDayMoved, end: { dateTime: "2026-10-25T00:00:00.000", timeZone: "UTC" } }])
+    assert.equal(matchesMeetingContent(allDayOccurrence, datePatch, bad, "self@example.test", "master"), false);
+  assert.throws(() => microsoftMeetingContentBody({ ...allDayRequest, patch: { time: { kind: "all-day", startDate: "9999-12-31", endDate: "9999-12-31" } } } as typeof allDayRequest));
   const oldFetch = globalThis.fetch, oldFlag = config.api.providerOrganizerEditsEnabled;
   config.api.providerOrganizerEditsEnabled = true;
   let posts = 0, stored = false, mode = "ok", marked = false;

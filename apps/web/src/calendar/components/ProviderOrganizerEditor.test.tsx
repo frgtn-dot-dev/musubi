@@ -473,3 +473,20 @@ it("reschedules a proven Outlook occurrence in the verified Prague zone and free
   expect(api.save.mock.calls[0][0]).toMatchObject({ scope: "occurrence", expectedSeriesVersion: "c".repeat(64), patch: { time: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-09-10T13:00:00.000", endLocal: "2026-09-10T14:00:00.000" } } });
   expect(api.save.mock.calls[1]).toEqual(api.save.mock.calls[0]);
 });
+
+it("edits inclusive all-day dates without time controls and preserves the saved retry", async () => {
+  api.save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "pending" });
+  render(<ProviderOrganizerEditor calendarID={calendarID} color="red" event={{ ...event, isAllDay: true, start: new Date("2026-10-24T00:00:00Z"), end: new Date("2026-10-25T00:00:00Z"), timeModel: { kind: "all-day" } }} observation={{ ...observation, organizerEdit: { ...observation.organizerEdit!, provider: "microsoft", scope: "occurrence", seriesVersion: "c".repeat(64), actions: ["update"], timeEdit: true, timeKind: "all-day" } }} onClose={vi.fn()} />);
+  expect((screen.getByLabelText("Start") as HTMLInputElement).value).toBe("2026-10-24");
+  expect((screen.getByLabelText("End") as HTMLInputElement).value).toBe("2026-10-25");
+  expect((screen.getByRole("checkbox", { name: "All day" }) as HTMLInputElement).disabled).toBe(true);
+  expect(screen.queryByRole("combobox", { name: "Event time zone" })).toBeNull();
+  fireEvent.change(screen.getByLabelText("End"), { target: { value: "2026-10-24" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save and notify guests" }));
+  await screen.findByText("offline");
+  expect((screen.getByLabelText("End") as HTMLInputElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Retry saved meeting action" }));
+  await screen.findByRole("status");
+  expect(api.save.mock.calls[0][0]).toMatchObject({ scope: "occurrence", patch: { time: { kind: "all-day", startDate: "2026-10-24", endDate: "2026-10-24" } } });
+  expect(api.save.mock.calls[1]).toEqual(api.save.mock.calls[0]);
+});
