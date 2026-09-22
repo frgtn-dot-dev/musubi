@@ -1,0 +1,22 @@
+{
+  "date": "2026-09-22T09:53:36.314Z",
+  "syntheticOnly": true,
+  "created": true,
+  "recurrenceCount": 3,
+  "guestNotificationDelivery": "unknown",
+  "results": [
+    {
+      "scope": "occurrence",
+      "status": "completed",
+      "error": null
+    },
+    {
+      "scope": "series",
+      "status": "completed",
+      "error": null
+    }
+  ],
+  "survivorsAfterOccurrence": 2,
+  "seriesAbsent": true,
+  "localTestRowsRemoved": 3
+}

@@ -130,6 +130,9 @@ export type FetchChangesResult = {
 // never talks to Google/Graph/CalDAV directly — only through an adapter.
 export type CalendarAdapter = {
   caldavOrganizer?: ReturnType<typeof import("./adapters/caldav_organizer_delivery").caldavOrganizerTransport>;
+  observeGraphMeetingCancellation?: (context: import("@musubi/db").GraphMeetingContext, signal?: AbortSignal) => ReturnType<typeof import("./adapters/microsoft_meeting_cancel").observeGraphMeetingCancellation>;
+  prepareGraphMeetingCancellation?: (context: import("@musubi/db").GraphMeetingContext, request: import("@musubi/types").MicrosoftSeriesCancellationRequest, signal?: AbortSignal) => Promise<import("@musubi/db").GraphMeetingCancellation>;
+  cancelGraphMeeting?: (saved: import("@musubi/db").GraphMeetingCancellation, mark: () => Promise<void>, accepted: () => Promise<void>, signal?: AbortSignal) => Promise<import("@musubi/db").GraphFamilyObservation | null>;
   microsoftOrganizer?: ReturnType<typeof import("./adapters/microsoft_organizer").microsoftOrganizerTransport>;
   organizer?: ReturnType<typeof import("./adapters/google_organizer_delivery").googleOrganizerTransport>;
   provider: string;

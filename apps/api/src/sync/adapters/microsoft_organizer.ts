@@ -59,12 +59,19 @@ export function microsoftOrganizerEvidence(raw: unknown, request: MicrosoftOrgan
 }
 /** Cancellation observes the complete organizer copy, including guests. It
  * never rewrites its time, invitation list, attachments or meeting content. */
-export function microsoftCancellationEvidence(raw: unknown, self: string) {
-  const item = nativeSchema.extend({
+export function microsoftCancellationEvidence(raw: unknown, self: string, masterID?: string) {
+  const schema = masterID ? nativeSchema.extend({
+    type: z.enum(["seriesMaster", "occurrence", "exception"]),
+    recurrence: z.record(z.string(), z.unknown()).nullable(), seriesMasterId: z.string().nullish(),
+  }) : nativeSchema;
+  const item = schema.extend({
     transactionId: z.string().nullish(),
     originalStartTimeZone: z.string(), originalEndTimeZone: z.string(),
     hasAttachments: z.boolean(),
   }).parse(raw);
+  if (masterID && (item.id === masterID
+    ? item.type !== "seriesMaster" || !item.recurrence || item.seriesMasterId != null
+    : !["occurrence", "exception"].includes(item.type) || item.seriesMasterId !== masterID || item.recurrence !== null)) fail();
   const etag = microsoftEventVersion(item["@odata.etag"]);
   if (!etag || item.organizer.emailAddress.address.toLowerCase() !== self.toLowerCase()
     || item["attendees@odata.count"] !== undefined && item["attendees@odata.count"] !== item.attendees.length

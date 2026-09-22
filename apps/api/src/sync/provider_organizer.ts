@@ -1,3 +1,5 @@
+import { readGraphMeetingContext, findGraphMeetingCancellation, saveGraphMeetingCancellation } from "@musubi/db";
+import { MicrosoftSeriesCancellationRequestSchema } from "@musubi/types";
 import { caldavOrganizerTimeEvidence } from "./adapters/caldav_organizer_time";
 import { microsoftAdapter } from "./adapters/microsoft";
 import { microsoftOrganizerBody } from "./adapters/microsoft_organizer";
@@ -67,6 +69,13 @@ export async function queueProviderOrganizer(actorID: string, input: unknown) {
     throw new OrganizerAdmissionRejectedError(
       "Check the meeting fields and use a positive duration.",
     );
+  if (parsed.data.provider === "microsoft" && parsed.data.action === "delete" && (parsed.data.scope || parsed.data.expectedSeriesVersion)) {
+    const request = MicrosoftSeriesCancellationRequestSchema.parse(parsed.data);
+    const replay = await findGraphMeetingCancellation(actorID, request);
+    if (replay) return replay;
+    const context = await readGraphMeetingContext({ actorID, calendarID: request.calendarID, eventID: request.eventID });
+    return saveGraphMeetingCancellation(await microsoftAdapter.prepareGraphMeetingCancellation!(context, request, AbortSignal.timeout(20_000)));
+  }
   const prepared = await prepareProviderOrganizer(actorID, parsed.data);
   if (prepared.kind === "saved") return prepared.receipt;
   const context = prepared.context;
@@ -179,7 +188,7 @@ export async function observeProviderOrganizer(
   actorID: string,
   eventID: string,
   observation: ProviderEventStateResponse,
-  outlookOrganizer = false,
+  outlookOrganizer: boolean | "series" = false,
 ) {
   // Older clients strictly parse the provider enum. Only advertise the new
   // capability to clients that explicitly opt into this additive read.
@@ -197,6 +206,13 @@ export async function observeProviderOrganizer(
     const { getEventSnapshot } = await import("@musubi/db");
     const event = await getEventSnapshot(eventID);
     if (!event?.originCalendarID || !event.revision) return observation;
+    if (observation.state?.provider === "microsoft" && outlookOrganizer === "series") {
+      try {
+        const context = await readGraphMeetingContext({ actorID, eventID, calendarID: event.originCalendarID });
+        const native = await microsoftAdapter.observeGraphMeetingCancellation!(context, AbortSignal.timeout(20_000));
+        return { ...observation, outlookCancellation: { calendarID: event.originCalendarID, expectedRevision: event.revision, seriesVersion: native.version, scopes: native.scopes } };
+      } catch { /* A one-off may still qualify for the existing cancellation. */ }
+    }
     const instanceVersion = event.seriesID
       ? await readProviderOrganizerInstanceVersion(actorID, eventID)
       : undefined;

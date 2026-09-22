@@ -107,8 +107,9 @@ export async function requestEventDeliveryRetry(
     // A dispatched Graph response can only be observed again. Keep its original
     // conflict snapshot and permanent marker; this never authorizes another POST.
     const graphCreateCheck = row.provider === "microsoft" && row.action === "create" && row.actorID === userID && row.uncertain && row.payload.graphSeriesCreate?.version === 1;
+    const graphMeetingCheck = row.provider === "microsoft" && row.action === "delete" && row.actorID === userID && !!row.payload.graphMeetingCancellation?.dispatch?.startedAt;
     const organizerCheck = ["google", "caldav", "microsoft"].includes(row.provider) && row.payload.organizer?.request.provider === row.provider && row.payload.organizer?.dispatch?.kind === `${row.provider}-organizer-dispatch` && row.actorID === userID && ProviderOrganizerRequestSchema.safeParse(row.payload.organizer?.request).success && OrganizerDispatchSchema.safeParse(row.payload.organizer?.dispatch).success;
-    if (!caldavCheck && !graphCheck && !organizerCheck && !graphCreateCheck && (
+    if (!caldavCheck && !graphCheck && !organizerCheck && !graphMeetingCheck && !graphCreateCheck && (
       row.status === "conflict" ||
       (row.remoteSnapshot && !row.remoteSnapshot.isEcho)
     ))
@@ -127,10 +128,10 @@ export async function requestEventDeliveryRetry(
       .update(eventOutbox)
       .set({
         status:
-          caldavCheck || graphCheck || organizerCheck || graphCreateCheck || row.uncertain || row.status === "unconfirmed"
+          caldavCheck || graphCheck || organizerCheck || graphMeetingCheck || graphCreateCheck || row.uncertain || row.status === "unconfirmed"
             ? "unconfirmed"
             : "retry",
-        uncertain: caldavCheck || graphCheck || organizerCheck || graphCreateCheck || row.uncertain || row.status === "unconfirmed",
+        uncertain: caldavCheck || graphCheck || organizerCheck || graphMeetingCheck || graphCreateCheck || row.uncertain || row.status === "unconfirmed",
         updatedAt: new Date(),
         // A manual click must not shorten a provider's persisted Retry-After.
         nextAttemptAt: sql`greatest(${eventOutbox.nextAttemptAt}, clock_timestamp())`,

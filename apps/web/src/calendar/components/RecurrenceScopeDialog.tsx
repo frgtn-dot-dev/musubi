@@ -5,13 +5,17 @@ import { InlineError } from "~/ui/InlineError";
 import styles from "./styles/recurrence-scope.module.css";
 
 const OPTION_LABELS: Record<
-  "change" | "delete",
+  "change" | "delete" | "cancel",
   Array<{ label: string; scope: EditScope }>
 > = {
   change: [
     { label: "This event", scope: "occurrence" },
     { label: "This and following events", scope: "following" },
     { label: "All events", scope: "series" },
+  ],
+  cancel: [
+    { label: "This occurrence", scope: "occurrence" },
+    { label: "Entire series", scope: "series" },
   ],
   delete: [
     { label: "This event", scope: "occurrence" },
@@ -39,7 +43,7 @@ export function RecurrenceScopeDialog({
   timeLabel,
   title,
 }: {
-  action?: "change" | "delete";
+  action?: "change" | "delete" | "cancel";
   allowedScopes?: readonly EditScope[];
   busyScope?: EditScope;
   consequence?: string;
@@ -54,16 +58,17 @@ export function RecurrenceScopeDialog({
   timeLabel?: string;
   title: string;
 }) {
-  const deleting = action === "delete";
+  const deleting = action !== "change";
+  const cancelling = action === "cancel";
 
   return (
     <Dialog
-      closeLabel={`Close ${deleting ? "delete" : "change"} recurring event dialog`}
+      closeLabel={`Close ${cancelling ? "cancel" : deleting ? "delete" : "change"} recurring event dialog`}
       /* Always raised from an event's own layer — the preview popover or a drag
          over the grid — so it has to clear the surface that asked. */
       elevated
       description={
-        deleting
+        cancelling ? `Which meetings in “${title}” should Outlook cancel?` : deleting
           ? `Choose which events to remove from “${title}”.`
           : timeLabel
             ? // The calendar behind the dialog still shows the old time, so the
@@ -80,7 +85,7 @@ export function RecurrenceScopeDialog({
       open
       returnFocus={returnFocus}
       size="compact"
-      title={deleting ? "Delete recurring event" : "Change recurring event"}
+      title={cancelling ? "Cancel recurring meeting" : deleting ? "Delete recurring event" : "Change recurring event"}
     >
       {consequence ? (
         <p className={styles.consequence}>{consequence}</p>

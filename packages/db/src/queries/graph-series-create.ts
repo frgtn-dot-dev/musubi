@@ -95,8 +95,8 @@ export async function assertNoPendingGraphSeriesCreate(tx: Pick<DbTransaction, "
     .innerJoin(externalCalendars, eq(externalCalendars.id, eventOutbox.externalCalendarLinkID))
     .where(and(eq(externalCalendars.calendarID, calendarID), eq(externalCalendars.provider, "microsoft"), eq(eventOutbox.provider, "microsoft"),
       eq(eventOutbox.calendarID, calendarID), eq(eventOutbox.userID, externalCalendars.userID), eq(eventOutbox.accountID, externalCalendars.accountID), eq(eventOutbox.externalCalendarID, externalCalendars.externalCalendarID),
-      sql`${eventOutbox.payload}->'graphSeriesCreate' is not null and ${eventOutbox.status} not in ('completed', 'not-needed')`)).limit(1);
-  if (pending) throw new Error("Outlook series creation awaits complete family reconciliation.");
+      sql`(${eventOutbox.payload}->'graphSeriesCreate' is not null or ${eventOutbox.payload}->'graphMeetingCancellation' is not null) and ${eventOutbox.status} not in ('completed', 'not-needed') and not (${eventOutbox.payload}->'graphMeetingCancellation' is not null and ${eventOutbox.payload}->'graphMeetingCancellation'->'dispatch' is null and ${eventOutbox.status} in ('conflict', 'blocked', 'cancelled'))`)).limit(1);
+  if (pending) throw new Error("Outlook series operation awaits complete family reconciliation.");
 }
 
 /** Short before-POST lease/authority check. Native delivery and atomic full-family

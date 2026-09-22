@@ -65,7 +65,7 @@ function receipt(row: EventOutboxRow, replayed: boolean) {
     notificationDelivery: "unknown" as const,
   };
 }
-async function source(
+export async function readOrganizerSourceInTransaction(
   tx: DbTransaction,
   actorID: string,
   calendarID: string,
@@ -154,7 +154,7 @@ export async function readProviderOrganizerInstanceVersion(
       .from(events)
       .where(eq(events.id, eventID));
     if (!event?.originCalendarID) return undefined;
-    await source(tx, actorID, event.originCalendarID);
+    await readOrganizerSourceInTransaction(tx, actorID, event.originCalendarID);
     const maps = await tx
       .select()
       .from(externalEvents)
@@ -223,13 +223,15 @@ export async function prepareProviderOrganizer(
 > {
   const request = ProviderOrganizerRequestSchema.parse(input);
   enabled(request.provider);
+  if (request.provider === "microsoft" && request.action === "delete" && (request.scope || request.expectedSeriesVersion))
+    throw new BadRequestError("Recurring cancellation requires full family verification.");
   return db.transaction(async (tx) => {
     await lockUserLifecycle(tx, [actorID], "shared");
     await lockCalendarLifecycle(tx, [request.calendarID], "shared");
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${JSON.stringify(["musubi:event-mutation", actorID, request.operationID])}, 0))`,
     );
-    const link = await source(
+    const link = await readOrganizerSourceInTransaction(
       tx,
       actorID,
       request.calendarID,
@@ -467,7 +469,7 @@ async function activeSource(tx: DbTransaction, row: EventOutboxRow) {
     intent.request.action !== row.action
   )
     throw new EventWriteError("organizer", "unsupported");
-  const link = await source(tx, row.userID, row.calendarID, row.provider);
+  const link = await readOrganizerSourceInTransaction(tx, row.userID, row.calendarID, row.provider);
   if (
     (row.provider === "microsoft" && intent.sourceAccessRevision !== link.providerAccessRevision) ||
     link.id !== row.externalCalendarLinkID ||
@@ -737,7 +739,7 @@ export async function readProviderOrganizerCalendar(
   return db.transaction(async (tx) => {
     await lockUserLifecycle(tx, [actorID], "shared");
     await lockCalendarLifecycle(tx, [calendarID], "shared");
-    return source(tx, actorID, calendarID);
+    return readOrganizerSourceInTransaction(tx, actorID, calendarID);
   });
 }
 

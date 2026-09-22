@@ -1,3 +1,4 @@
+import { stopUndispatchedGraphMeetingCancellation, confirmGraphMeetingCancellation, markGraphMeetingCancellation, completeGraphMeetingCancellation } from "@musubi/db";
 import { confirmGraphSeriesDeletionOutbox, completeGraphSeriesDeletionOutbox } from "@musubi/db";
 import { microsoftEventVersion } from "./adapters/microsoft_event_content";
 import { withProviderOrganizerLease, markProviderOrganizer, completeProviderOrganizer } from "@musubi/db";
@@ -159,6 +160,17 @@ export async function deliverEventOutbox(
         }
         return true;
       };
+      if (row.payload.graphMeetingCancellation) {
+        if (!config.api.providerOrganizerEditsEnabled || row.provider !== "microsoft" || row.action !== "delete" || !adapter?.cancelGraphMeeting) throw new EventWriteError("organizer", "unsupported");
+        const confirmSource = async () => {
+          try { await confirmGraphMeetingCancellation(row); }
+          catch { throw new ProviderEventWriteError("provider-conflict", row.payload.graphMeetingCancellation?.dispatch || mutationStarted ? "unconfirmed" : "not-written"); }
+        };
+        await confirmSource();
+        const observation = await adapter.cancelGraphMeeting(row.payload.graphMeetingCancellation, async () => { await confirmSource(); await markGraphMeetingCancellation(row); mutationStarted = true; }, async () => { await markGraphMeetingCancellation(row, true); }, signal);
+        await completeGraphMeetingCancellation(row, observation);
+        return;
+      }
       if (row.payload.organizer) {
         const caldav = row.provider === "caldav";
         if (caldav ? !config.api.caldavOrganizerEditsEnabled || !adapter?.caldavOrganizer : !config.api.providerOrganizerEditsEnabled || (row.provider === "microsoft" ? !adapter?.microsoftOrganizer : !adapter?.organizer)) throw new EventWriteError("organizer", "unsupported");
@@ -724,6 +736,7 @@ export async function deliverEventOutbox(
         !conflict &&
         !retryableStatus &&
         providerError.outcome !== "unconfirmed");
+    if (row.payload.graphMeetingCancellation && (conflict || blocked) && await stopUndispatchedGraphMeetingCancellation(row)) return getEventOutboxRow(row.id);
     const delay = Math.max(
       providerError?.retryAfterMs ?? 0,
       Math.min(3_600_000, 1_000 * 2 ** Math.min(row.attempts, 12)) *

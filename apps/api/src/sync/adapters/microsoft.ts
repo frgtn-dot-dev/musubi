@@ -1,6 +1,7 @@
 import { prepareGraphSeriesDeletion, deleteGraphSeries } from "./microsoft_series_delete";
 import { assertMicrosoftPersonalContent, microsoftPersonalContentPatch, microsoftEventVersion, updateMicrosoftPersonalContent, deleteMicrosoftPersonalEvent } from "./microsoft_event_content";
 import { getOrganizerTimeEventIDs } from "@musubi/db";
+import { observeGraphMeetingCancellation, prepareGraphMeetingCancellation, cancelGraphMeeting } from "./microsoft_meeting_cancel";
 import { microsoftOrganizerTransport } from "./microsoft_organizer";
 import { graphRsvpTime } from "./microsoft_rsvp";
 import { isDeepStrictEqual } from "node:util";
@@ -695,6 +696,9 @@ export function toExternalCalendar(c: GraphCalendar): ExternalCalendarInfo {
 
 export const microsoftAdapter: CalendarAdapter = {
   microsoftOrganizer: microsoftOrganizerTransport(getAccessToken),
+  async observeGraphMeetingCancellation(context, signal) { return observeGraphMeetingCancellation(await getAccessToken(context.address.actorID, context.link.accountID), context, signal); },
+  async prepareGraphMeetingCancellation(context, request, signal) { return prepareGraphMeetingCancellation(await getAccessToken(context.address.actorID, context.link.accountID), context, request, signal); },
+  async cancelGraphMeeting(saved, mark, accepted, signal) { return cancelGraphMeeting(await getAccessToken(saved.context.address.actorID, saved.context.link.accountID), saved, mark, accepted, signal); },
   provider: "microsoft",
   projectEvent(event) { return toNormalized({ ...toGraphEvent(event), id: event.id }); },
 

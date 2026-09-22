@@ -1,3 +1,4 @@
+import { isCancelledGraphMeeting } from "./graph-meeting-cancel";
 import { hasFullProviderReadAccess, microsoftPrivateAccess } from "./microsoft-access";
 import { createHash } from "node:crypto";
 import { config } from "@musubi/config";
@@ -58,7 +59,7 @@ export async function graphFamilyContextInTransaction(tx: DbTransaction, address
       mappings.some(value => !ids.includes(value.eventID) || value.provider !== "microsoft" || value.calendarID !== address.calendarID || value.externalCalendarID !== link.externalCalendarID ||
         (value.eventID !== root.id && (value.externalSeriesID !== address.externalMasterID || !value.originalStart || !children.find(child => child.id === value.eventID)?.originalStart || key(value.originalStart) !== key(children.find(child => child.id === value.eventID)!.originalStart!)))) ||
       new Set(mappings.map(value => value.eventID)).size !== mappings.length || children.some(value => !value.originalStart || value.recurrence || (!value.deletedAt && !value.isCanceled && !mappings.some(mapping => mapping.eventID === value.id)))) refuse();
-  const pending = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(inArray(eventOutbox.eventID, ids), excludedOperationID ? ne(eventOutbox.id, excludedOperationID) : undefined, sql`(${eventOutbox.status} not in ('completed', 'not-needed') and not (
+  const pending = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(inArray(eventOutbox.eventID, ids), excludedOperationID ? ne(eventOutbox.id, excludedOperationID) : undefined, sql`(${eventOutbox.status} not in ('completed', 'not-needed') and not (${eventOutbox.status} = 'cancelled' and coalesce(${eventOutbox.errorCode} = 'organizer-not-dispatched', false) and ${eventOutbox.payload}->'graphMeetingCancellation' is not null and ${eventOutbox.payload}->'graphMeetingCancellation'->'dispatch' is null) and not (
     ${eventOutbox.status} = 'cancelled' and ${eventOutbox.errorCode} = 'superseded-by-resolution'
     and exists (select 1 from event_outbox replacement
       where replacement.event_id = ${eventOutbox.eventID}
@@ -176,13 +177,13 @@ export async function replaceGraphFamilyInTransaction(tx: DbTransaction, context
  * provider-expanded rows into a canonical family. */
 export async function listGraphFamilyContexts(userID: string, accountID: string, calendarID: string): Promise<GraphFamilyContext[]> {
   await db.transaction(async tx => { await lockUserLifecycle(tx, [userID], "shared"); await lockCalendarLifecycle(tx, [calendarID], "shared"); await assertNoPendingGraphSeriesCreate(tx, calendarID); });
-  const roots = await db.select({ externalMasterID: externalEvents.externalEventID }).from(externalEvents)
+  const roots = await db.select({ externalMasterID: externalEvents.externalEventID, linkID: externalCalendars.id }).from(externalEvents)
     .innerJoin(events, eq(events.id, externalEvents.eventID))
     .innerJoin(externalCalendars, eq(externalCalendars.calendarID, externalEvents.calendarID))
     .where(and(eq(externalEvents.provider, "microsoft"), eq(externalEvents.calendarID, calendarID), eq(externalCalendars.provider, "microsoft"), eq(externalCalendars.userID, userID), eq(externalCalendars.accountID, accountID),
       sql`${events.seriesID} is null and ${events.recurrence} is not null and ${events.recurrence} <> '' and ${events.timeModel}->>'kind' in ('zoned', 'all-day')`)).orderBy(externalEvents.externalEventID);
   const result: GraphFamilyContext[] = [];
-  for (const root of roots) result.push(await readGraphFamilyContext({ userID, accountID, calendarID, externalMasterID: root.externalMasterID }));
+  for (const root of roots) if (!await isCancelledGraphMeeting(db, root.linkID, root.externalMasterID)) result.push(await readGraphFamilyContext({ userID, accountID, calendarID, externalMasterID: root.externalMasterID }));
   return result;
 }
 
