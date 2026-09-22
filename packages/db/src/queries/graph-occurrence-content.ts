@@ -1,4 +1,4 @@
-import { resolveEventTimeEdit } from "@musubi/calendar";
+import { resolveEventTimeEdit, instantToCivil, unambiguousCivilToInstant } from "@musubi/calendar";
 import { and, eq, sql } from "drizzle-orm";
 import { BadRequestError, EventSchema, MicrosoftRecurringContentRequestSchema, type MicrosoftRecurringContentRequest, type Event } from "@musubi/types";
 import { db } from "..";
@@ -21,25 +21,29 @@ export type GraphOccurrenceContent = {
   dispatch?: { startedAt: string; acceptedAt?: string };
 };
 
-/** This first rescheduling contract is timed UTC only. Never infer an exception's
- * authoring zone from historical original*TimeZone labels. */
+/** Render/edit in the proven series zone, never an inferred exception zone.
+ * Keep the allowlist bounded to native-tested zone contracts. */
 export function graphOccurrenceTimeSupported(saved: Pick<GraphOccurrenceContent, "baseline" | "targetID" | "template" | "native">) {
   const target = saved.baseline.instances.find(n => n.externalID === saved.targetID);
-  return saved.template.timeModel?.kind === "zoned" && saved.template.timeModel.timeZone === "UTC" &&
-    saved.native.originalStartTimeZone === "UTC" && saved.native.originalEndTimeZone === "UTC" &&
+  return saved.template.timeModel?.kind === "zoned" && ["UTC", "Europe/Prague"].includes(saved.template.timeModel.timeZone) &&
+    saved.native.originalStartTimeZone === saved.template.timeModel.timeZone && saved.native.originalEndTimeZone === saved.template.timeModel.timeZone &&
     !!target && !target.values.isAllDay && target.originalStart.kind === "instant";
 }
 export function graphOccurrenceTimeChange(saved: Pick<GraphOccurrenceContent, "baseline" | "targetID" | "template" | "native" | "request">) {
   const input = saved.request.patch.time;
   if (!input) return undefined;
-  if (saved.request.scope !== "occurrence" || !graphOccurrenceTimeSupported(saved) || input.kind !== "zoned" || input.timeZone !== "UTC") refuse();
+  if (saved.request.scope !== "occurrence" || !graphOccurrenceTimeSupported(saved) || input.kind !== "zoned" || input.timeZone !== (saved.template.timeModel?.kind === "zoned" ? saved.template.timeModel.timeZone : null)) refuse();
+  try {
+    unambiguousCivilToInstant(input.startLocal, input.timeZone);
+    unambiguousCivilToInstant(input.endLocal, input.timeZone);
+  } catch { throw new BadRequestError("Choose an unambiguous time outside the daylight-saving clock change."); }
   const desired = resolveEventTimeEdit(input);
   const target = saved.baseline.instances.find(n => n.externalID === saved.targetID)!;
   const slots = [...saved.baseline.instances.map(n => ({ ...n.values, originalStart: n.originalStart })), ...saved.baseline.cancelled]
     .sort((a, b) => a.originalStart.value.localeCompare(b.originalStart.value));
   const index = slots.findIndex(n => same(n.originalStart, target.originalStart));
   if (index < 0 || desired.end <= desired.start || [desired.start, desired.end].some(value => Math.abs(value.getTime() - new Date(target.originalStart.value).getTime()) > 730 * 86_400_000)) refuse();
-  const day = (value: Date | string) => new Date(value).toISOString().slice(0, 10);
+  const day = (value: Date | string) => instantToCivil(new Date(value), input.timeZone).slice(0, 10);
   const previous = slots[index - 1], next = slots[index + 1];
   // Include cancelled slots and both original and moved neighbours. Outlook
   // forbids crossing their days, not just overlapping their time intervals.
@@ -68,13 +72,21 @@ export function graphOccurrenceContentObserved(saved: Pick<GraphOccurrenceConten
   // The reader deliberately marks exception time as legacy-unknown instead of
   // inferring its authoring zone from the master's rule. Native UTC instants and
   // original slot must still match. Content-only edits preserve stored time; an
-  // explicit time edit commits the verified UTC intent instead.
+  // explicit time edit commits the verified series-zone intent instead.
   if ((desiredTime || before.providerState.eventType === "occurrence") && target.providerState.eventType === "exception" && target.values.timeModel.kind === "legacy-unknown") values.timeModel = target.values.timeModel;
   const eventType = before.providerState.eventType === "occurrence" && target.providerState.eventType === "exception" ? "exception" : before.providerState.eventType;
+  // A real time change is a full meeting update: Outlook may reset only the
+  // edited occurrence's RSVP responses. Full native verification also checks
+  // each attendee's identity, role, extra fields and response timestamp.
+  const timeChanged = desiredTime && (desiredTime.start.getTime() !== new Date(before.values.start).getTime() || desiredTime.end.getTime() !== new Date(before.values.end).getTime());
+  const attendees = before.providerState.attendees.map((guest, index) => {
+    const response = target.providerState.attendees[index]?.response;
+    return timeChanged && (response === "none" || response === "notResponded") ? { ...guest, response } : guest;
+  });
   return same(content(after.master), content(saved.baseline.master)) &&
     same(after.instances.filter(n => n.externalID !== saved.targetID).map(content), saved.baseline.instances.filter(n => n.externalID !== saved.targetID).map(content)) &&
     same(after.cancelled, saved.baseline.cancelled) &&
-    same(content(target), content({ ...before, values, providerState: { ...before.providerState, eventType } }));
+    same(content(target), content({ ...before, values, providerState: { ...before.providerState, eventType, attendees } }));
 }
 /** Outlook retains per-field exception overrides. When an exception equals the
  * old master, its override bit is not exposed: either inheritance or retention

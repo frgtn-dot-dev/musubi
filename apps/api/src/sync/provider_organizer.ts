@@ -204,7 +204,7 @@ export async function observeProviderOrganizer(
   actorID: string,
   eventID: string,
   observation: ProviderEventStateResponse,
-  outlookOrganizer: boolean | "series" | "content" | "series-content" | "occurrence-time" = false,
+  outlookOrganizer: boolean | "series" | "content" | "series-content" | "occurrence-time" | "occurrence-zone-time" = false,
 ) {
   // Older clients strictly parse the provider enum. Only advertise the new
   // capability to clients that explicitly opt into this additive read.
@@ -222,7 +222,8 @@ export async function observeProviderOrganizer(
     const { getEventSnapshot } = await import("@musubi/db");
     const event = await getEventSnapshot(eventID);
     if (!event?.originCalendarID || !event.revision) return observation;
-    const occurrenceTime = outlookOrganizer === "occurrence-time";
+    const zoneTime = outlookOrganizer === "occurrence-zone-time";
+    const occurrenceTime = zoneTime || outlookOrganizer === "occurrence-time";
     if (occurrenceTime) outlookOrganizer = "series-content";
     if (observation.state?.provider === "microsoft" && outlookOrganizer === "series-content") {
       // v4 is additive; never send new strict fields to v1–v3 clients.
@@ -240,9 +241,13 @@ export async function observeProviderOrganizer(
         const native = await microsoftAdapter.observeGraphOccurrenceContent!(context, AbortSignal.timeout(20_000));
         // v3 alone advertises the new occurrence proof. Older strict readers keep v2.
         const cancellation = native.baseline.master.providerState.attendees.length ? await microsoftAdapter.observeGraphMeetingCancellation!(context, AbortSignal.timeout(20_000)).catch(() => undefined) : undefined;
+        const model = native.template.timeModel;
+        const timeZone = model?.kind === "zoned" && (model.timeZone === "UTC" || model.timeZone === "Europe/Prague") ? model.timeZone : undefined;
+        const timeEditing = occurrenceTime && config.api.eventTimeEditsEnabled && timeZone && (zoneTime || timeZone === "UTC") &&
+          graphOccurrenceTimeSupported({ ...native, targetID: native.native.id });
         return { ...observation,
           ...(cancellation ? { outlookCancellation: { calendarID: event.originCalendarID, expectedRevision: event.revision, seriesVersion: cancellation.version, scopes: cancellation.scopes } } : {}),
-          organizerEdit: { ...(occurrenceTime && config.api.eventTimeEditsEnabled && graphOccurrenceTimeSupported({ ...native, targetID: native.native.id }) ? { timeEdit: true as const } : {}), provider: "microsoft" as const, scope: "occurrence" as const, seriesVersion: native.version, calendarID: event.originCalendarID, expectedRevision: event.revision, actions: ["update" as const] },
+          organizerEdit: { ...(timeEditing ? { timeEdit: true as const, ...(zoneTime ? { timeZone } : {}) } : {}), provider: "microsoft" as const, scope: "occurrence" as const, seriesVersion: native.version, calendarID: event.originCalendarID, expectedRevision: event.revision, actions: ["update" as const] },
         };
       } catch { /* Cancellation or one-off content editing can still qualify. */ }
     }

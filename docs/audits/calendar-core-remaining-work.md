@@ -306,3 +306,14 @@ kontrolovanou fixture](calendar-outlook-adoption-browser-acceptance-20260911.md)
 ## Outlook změny existující série — aktualizace 2026-09-22
 
 Novější ověřené kroky doplňují historický stav výše: [obsah jednoho výskytu](outlook-occurrence-content-20260922.md), [obsah celé série](outlook-series-content-20260922.md) a [čas jednoho výskytu UTC série](outlook-occurrence-time-20260922.md) pro osobní události i schůzky organizátora. Zůstávají vázané na úplnou nativní evidenci, přesnou identitu a příslušné feature flagy. Změny času celé série, další časové zóny/celodenní přesuny, recurrence pravidla a „tento a následující“ tím nejsou převzaté. Nejde o produkční aktivaci ani garanci doručení pozvánek.
+
+
+### 2026-09-22: Outlook occurrence time in Europe/Prague
+
+The latest bounded extension adds single-occurrence rescheduling in the proven
+Europe/Prague series zone, alongside UTC. Web/native drafts use that zone;
+gaps/folds and local neighbouring-day crossings are refused. Native-tested
+Outlook RSVP resets after a real time change are observed without changing the
+guest list or treating them as unrelated conflicts. Details and redacted live
+results: [occurrence zones](./outlook-occurrence-zones-20260922.md).
+Other zones, all-day moves and series-wide time/recurrence changes remain open.

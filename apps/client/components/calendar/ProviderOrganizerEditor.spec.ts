@@ -426,7 +426,7 @@ it("edits master content through the separate series action and preserves its re
 });
 
 it("uses the native time picker for a proven Outlook occurrence and freezes retries", async () => {
-  const observed: ProviderEventStateResponse = { ...observation, organizerEdit: { ...observation.organizerEdit!, provider: "microsoft", scope: "occurrence", seriesVersion: "c".repeat(64), actions: ["update"], timeEdit: true } };
+  const observed: ProviderEventStateResponse = { ...observation, organizerEdit: { ...observation.organizerEdit!, provider: "microsoft", scope: "occurrence", seriesVersion: "c".repeat(64), actions: ["update"], timeEdit: true, timeZone: "Europe/Prague" } };
   const draw = () => render(event, observed);
   h.save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "pending" });
   expect(nodes(draw()).find(node => node.type === "Switch")!.props.disabled).toBe(true);
@@ -436,6 +436,6 @@ it("uses the native time picker for a proven Outlook occurrence and freezes retr
   picker.props.onValueChange(undefined, value);
   button(draw(), "Save").onPress(); await settle();
   button(draw(), "Retry").onPress(); await settle();
-  expect(h.save.mock.calls[0][0]).toMatchObject({ scope: "occurrence", expectedSeriesVersion: "c".repeat(64), patch: { time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-09-10T08:30:00.000", endLocal: "2026-09-10T10:00:00.000" } } });
+  expect(h.save.mock.calls[0][0]).toMatchObject({ scope: "occurrence", expectedSeriesVersion: "c".repeat(64), patch: { time: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-09-10T08:30:00.000", endLocal: "2026-09-10T12:00:00.000" } } });
   expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
 });

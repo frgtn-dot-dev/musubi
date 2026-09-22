@@ -117,3 +117,15 @@ export function graphMasterTimeFromUtc(native: unknown): Time {
     return result;
   } catch { return refuse(); }
 }
+
+/** Organizer-only candidate for provider-expanded rows. Require explicit IANA
+ * authoring labels as well as the known Windows alias; the caller must still
+ * prove every slot against the full native family. This never adopts/imports
+ * a rule or changes the strict unbound creation-recovery parser above. */
+export function graphOrganizerMasterTimeFromUtc(native: unknown): Time {
+  const item = masterTime.parse(native);
+  if (!item.isAllDay && item.recurrence.range.recurrenceTimeZone === "Central Europe Standard Time" &&
+      item.originalStartTimeZone === "Europe/Prague" && item.originalEndTimeZone === "Europe/Prague")
+    return graphMasterTimeFromUtc({ ...item, recurrence: { ...item.recurrence, range: { ...item.recurrence.range, recurrenceTimeZone: "Europe/Prague" } } });
+  return graphMasterTimeFromUtc(native);
+}

@@ -152,4 +152,14 @@ assert.equal(timedDraft.timeZone, "UTC");
 assert.equal(timedDraft.start, child.start.toISOString().slice(0, -1));
 const timeUpdate = organizerRequest("update", { ...timedDraft, start: "2026-10-23T10:00:00", end: "2026-10-23T11:00:00" }, ["start", "end"], identity, outlookTime);
 assert.deepEqual(timeUpdate.action === "update" && timeUpdate.patch, { time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-10-23T10:00:00.000", endLocal: "2026-10-23T11:00:00.000" } });
-for (const change of [{ scope: "series" }, { scope: undefined }, { expectedSeriesVersion: undefined }, { patch: { time: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-10-23T10:00:00", endLocal: "2026-10-23T11:00:00" } } }, { patch: { time: { kind: "all-day", startDate: "2026-10-23", endDate: "2026-10-23" } } }]) assert.equal(ProviderOrganizerRequestSchema.safeParse({ ...timeUpdate, ...change }).success, false);
+for (const change of [{ scope: "series" }, { scope: undefined }, { expectedSeriesVersion: undefined }, { patch: { time: { kind: "zoned", timeZone: "America/New_York", startLocal: "2026-10-23T10:00:00", endLocal: "2026-10-23T11:00:00" } } }, { patch: { time: { kind: "all-day", startDate: "2026-10-23", endDate: "2026-10-23" } } }]) assert.equal(ProviderOrganizerRequestSchema.safeParse({ ...timeUpdate, ...change }).success, false);
+
+const pragueTime = { ...outlookTime, organizerEdit: { ...outlookTime.organizerEdit, timeZone: "Europe/Prague" as const } };
+for (const [instant, local] of [["2026-10-23T10:00:00Z", "2026-10-23T12:00:00.000"], ["2026-10-25T11:00:00Z", "2026-10-25T12:00:00.000"]]) {
+  const view = organizerDraft({ ...child, start: new Date(instant!), end: new Date(Date.parse(instant!) + 3600000), timeModel: { kind: "legacy-unknown" } }, "microsoft", pragueTime);
+  assert.equal(view.start, local); assert.equal(view.timeZone, "Europe/Prague");
+  const request = organizerRequest("update", { ...view, start: "2026-10-25T14:00", end: "2026-10-25T15:00" }, ["start", "end"], identity, pragueTime);
+  assert.deepEqual(request.action === "update" && request.patch, { time: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-10-25T14:00:00.000", endLocal: "2026-10-25T15:00:00.000" } });
+  for (const start of ["2026-10-25T02:30:00", "2026-03-29T02:30:00"]) assert.throws(() => organizerRequest("update", { ...view, start }, ["start"], identity, pragueTime), /unambiguous/);
+  assert.throws(() => organizerRequest("update", { ...view, timeZone: "UTC" }, ["timeZone"], identity, pragueTime), /verified series time zone/);
+}

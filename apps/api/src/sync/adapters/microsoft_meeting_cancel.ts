@@ -4,7 +4,7 @@ import { ProviderEventWriteError } from "../event_write";
 import { assertCompleteEventReadResponse } from "../event_create_identity";
 import { graphFamilyObservation } from "./microsoft_series_delete";
 import { readGraphSeriesFamilyOrMissing } from "./microsoft_series_family";
-import { graphMasterTimeFromUtc, graphOriginalStartFromUtc } from "./microsoft_time";
+import { graphOrganizerMasterTimeFromUtc, graphOriginalStartFromUtc } from "./microsoft_time";
 import { microsoftCancellationEvidence } from "./microsoft_organizer";
 import { verifiedGraphIdentity } from "./microsoft_identity";
 
@@ -61,7 +61,7 @@ export async function observeGraphOrganizerFamily(token: string, context: GraphM
   const transport = await graphOrganizerFamilySession(token, context, signal, allowPersonal);
   const raw = await transport.readTarget(context.masterID);
   const existing = context.family.find(e => e.id === context.rootID);
-  const template = EventSchema.parse({ ...context.family.find(e => e.id === context.address.eventID), ...(existing ?? graphMasterTimeFromUtc(raw)), seriesID: null, originalStart: null, isCanceled: false, deletedAt: null, calendars: [context.address.calendarID] });
+  const template = EventSchema.parse({ ...context.family.find(e => e.id === context.address.eventID), ...(existing ?? graphOrganizerMasterTimeFromUtc(raw)), seriesID: null, originalStart: null, isCanceled: false, deletedAt: null, calendars: [context.address.calendarID] });
   const baseline = await transport.read(template, raw.iCalUId);
   if (!baseline || baseline.master.etag !== raw.etag) fail();
   verifyLocal(context, baseline);

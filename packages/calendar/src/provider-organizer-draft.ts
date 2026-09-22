@@ -18,20 +18,22 @@ export type OrganizerDraft = {
 };
 export const organizerNotice =
   "Google will be asked to notify all guests. Guest notification delivery cannot be verified. These guests do not become Musubi calendar members or receive a second Musubi invitation.";
-export function organizerNotificationNotice(provider: "google" | "caldav" | "microsoft") {
-  return provider === "google"
+export function organizerNotificationNotice(provider: "google" | "caldav" | "microsoft", timeEdit = false) {
+  const notice = provider === "google"
     ? organizerNotice
     : organizerNotice.replace("Google", provider === "microsoft" ? "Outlook" : "The CalDAV server");
+  return notice + (provider === "microsoft" && timeEdit ? " Changing the time may require guests to respond again." : "");
 }
 export function organizerDraft(
   event?: Event,
   _provider: "google" | "caldav" | "microsoft" = "google",
   observation?: ProviderEventStateResponse,
 ): OrganizerDraft {
+  const zone = observation?.organizerEdit?.timeZone ?? "UTC";
   const today = new Date(),
     day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`,
     time = event && _provider === "microsoft" && observation?.organizerEdit?.scope === "occurrence" && observation.organizerEdit.timeEdit
-      ? { kind: "zoned" as const, timeZone: "UTC", startLocal: event.start.toISOString().slice(0, -1), endLocal: event.end.toISOString().slice(0, -1) }
+      ? { kind: "zoned" as const, timeZone: zone, startLocal: instantToCivil(event.start, zone), endLocal: instantToCivil(event.end, zone) }
       : event?.timeModel;
   return {
     title: (observation?.organizerEdit?.scope === "series" ? observation.outlookSeriesContent?.content.title : event?.title) ?? "",
@@ -145,6 +147,13 @@ export function organizerRequest(
   ) {
     if (provider !== "google" && !observation?.organizerEdit?.timeEdit)
       throw new Error("Time editing is not available for this meeting.");
+    if (provider === "microsoft" && time.kind === "zoned") {
+      if (time.timeZone !== (observation?.organizerEdit?.timeZone ?? "UTC")) throw new Error("Keep the verified series time zone.");
+      try {
+        unambiguousCivilToInstant(time.startLocal, time.timeZone);
+        unambiguousCivilToInstant(time.endLocal, time.timeZone);
+      } catch { throw new Error("Choose an unambiguous time outside the daylight-saving clock change."); }
+    }
     patch.time = time;
   }
   return ProviderOrganizerRequestSchema.parse({

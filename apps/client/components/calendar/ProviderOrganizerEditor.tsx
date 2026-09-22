@@ -282,7 +282,7 @@ export function ProviderOrganizerEditor({
             <Text accessibilityRole="header" style={[styles.modalTitle, { flex: 1 }]}>
               {wholeSeries ? "Edit series" : occurrence ? "Edit occurrence" : event ? "Edit meeting" : "New meeting"}
             </Text>
-            {!personalOccurrence && info("Guest invitations", organizerNotificationNotice(provider))}
+            {!personalOccurrence && info("Guest invitations", organizerNotificationNotice(provider, observation?.organizerEdit?.timeEdit))}
             <Tap accessibilityLabel="Close meeting editor" disabled={busy} onPress={close}
               style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
               <Feather name="x" size={20} color={colors.fg3} />

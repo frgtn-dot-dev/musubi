@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { EventSchema } from "@musubi/types";
 import { resolveEventTimeEdit, expandRecurringEvents, unambiguousCivilToInstant } from "@musubi/calendar";
-import { graphTimeForEvent, graphMasterTimeFromUtc, graphMasterForSavedZone } from "./microsoft_time";
+import { graphTimeForEvent, graphMasterTimeFromUtc, graphMasterForSavedZone, graphOrganizerMasterTimeFromUtc } from "./microsoft_time";
 import { graphRecurrenceForEvent, recurrenceFromGraph } from "./microsoft_recurrence";
 
 const base = EventSchema.parse({ id: "00000000-0000-4000-8000-000000000181", revision: 1, creatorID: "owner", organizer: "", title: "Pattern", color: "red", calendars: [], isCanceled: false, recurrence: "RRULE:FREQ=DAILY;COUNT=4", ...resolveEventTimeEdit({ kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-03-27T09:00:00", endLocal: "2026-03-27T10:00:00" }) });
@@ -58,6 +58,9 @@ for (const [startLocal, utcStart] of [["2026-03-27T09:00:00", "2026-03-27T08:00:
   const saved = { ...base, ...resolveEventTimeEdit({ kind: "zoned", timeZone: "Europe/Prague", startLocal: startLocal!, endLocal: startLocal!.replace("09:", "10:") }) };
   const raw = { ...native, start: { dateTime: utcStart, timeZone: "UTC" }, end: { dateTime: utcStart!.replace(/T(\d{2}):/, (_, h) => `T${String(Number(h) + 1).padStart(2, "0")}:`), timeZone: "UTC" }, recurrence: { pattern: { type: "daily", interval: 1 }, range: { type: "numbered", startDate: startLocal!.slice(0, 10), numberOfOccurrences: 4, recurrenceTimeZone: "Central Europe Standard Time" } } };
   const before = structuredClone(raw); assert.throws(() => graphMasterTimeFromUtc(raw), "Unbound parser stays strict");
+  assert.deepEqual(graphOrganizerMasterTimeFromUtc(raw), { start: saved.start, end: saved.end, isAllDay: false, timeModel: saved.timeModel });
+  for (const labels of [{ originalStartTimeZone: undefined }, { originalEndTimeZone: undefined }, { originalStartTimeZone: "Europe/Budapest" }, { originalEndTimeZone: "Central Europe Standard Time" }])
+    assert.throws(() => graphOrganizerMasterTimeFromUtc({ ...raw, ...labels }));
   const projected = graphMasterForSavedZone(raw, saved) as typeof raw;
   const time = graphMasterTimeFromUtc(projected), recurrence = recurrenceFromGraph({ ...saved, ...time }, projected.recurrence);
   const starts = expandRecurringEvents([{ ...saved, ...time, recurrence }], new Date(saved.start.getTime() - 86400000), new Date(saved.start.getTime() + 5 * 86400000), { consumerTimeZone: "UTC" }).map(e => e.start.toISOString());
