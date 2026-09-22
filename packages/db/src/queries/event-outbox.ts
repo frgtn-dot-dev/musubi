@@ -99,6 +99,9 @@ export async function appendEventOutbox(
           eq(eventOutbox.eventID, event.id),
           eq(eventOutbox.calendarID, intent.calendarID),
           eq(eventOutbox.externalCalendarLinkID, intent.externalCalendarLinkID),
+          // A request stopped before its permanent dispatch marker has no
+          // remote dependency for a newly observed replacement.
+          sql`not (${eventOutbox.status} = 'cancelled' and coalesce(${eventOutbox.errorCode} = 'organizer-not-dispatched', false) and ${eventOutbox.payload}->'graphMeetingCancellation' is not null and ${eventOutbox.payload}->'graphMeetingCancellation'->'dispatch' is null)`,
         ),
       )
       .orderBy(

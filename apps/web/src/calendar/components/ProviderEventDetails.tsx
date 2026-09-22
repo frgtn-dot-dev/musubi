@@ -1,3 +1,4 @@
+import { OutlookCancellationDialog } from "./OutlookCancellationDialog";
 import { HelpTooltip } from "~/ui/HelpTooltip";
 import { UsersRound } from "lucide-react";
 import { Avatar } from "~/ui/Avatar";
@@ -67,7 +68,7 @@ function ProviderEventDetailsBody({ providerFlavor, presentation = "default", ev
   const titleId = useId();
   const key = JSON.stringify([eventId, userId, connectionId]);
   const [result, setResult] = useState<({ key: string; failed?: boolean } & Partial<ProviderEventStateResponse>)>();
-  const [editor, setEditor] = useState<{ kind: "reminders" | "rsvp" | "organizer"; trigger: HTMLElement; observation: ProviderEventStateResponse }>();
+  const [editor, setEditor] = useState<{ kind: "reminders" | "rsvp" | "organizer" | "outlook-cancel"; trigger: HTMLElement; observation: ProviderEventStateResponse }>();
   const readSequence = useRef(0);
   const [opening, setOpening] = useState(false);
   const [openError, setOpenError] = useState("");
@@ -75,7 +76,7 @@ function ProviderEventDetailsBody({ providerFlavor, presentation = "default", ev
   const refreshing = useRef(false);
   const editorRead = useRef<AbortController | null>(null);
   useEffect(() => { active.current = true; return () => { active.current = false; editorRead.current?.abort(); }; }, []);
-  async function openEditor(trigger: HTMLElement, kind: "reminders" | "rsvp" | "organizer" = "reminders", seriesAction = false) {
+  async function openEditor(trigger: HTMLElement, kind: "reminders" | "rsvp" | "organizer" | "outlook-cancel" = "reminders", seriesAction = false) {
     if (refreshing.current) return;
     refreshing.current = true; setOpening(true); setOpenError("");
     ++readSequence.current;
@@ -89,8 +90,8 @@ function ProviderEventDetailsBody({ providerFlavor, presentation = "default", ev
       } else if (kind === "reminders" && observation.reminderEdit?.provider === "caldav" && observation.reminderEdit.scope === "series") throw new Error("Choose Series alarm settings explicitly.");
       if (kind === "organizer" && (sourceEvent?.id !== eventId || !canManageProviderOrganizer(sourceEvent, observation))) throw new Error("The stored meeting observation changed.");
       setResult({ key, ...observation });
-      if ((kind === "organizer" ? observation.organizerEdit : kind === "reminders" ? observation.reminderEdit : observation.rsvpEdit) && observation.state && observation.version) {
-        const handoff = kind === "organizer" ? undefined : kind === "reminders" ? onEditReminders : onRespond;
+      if ((kind === "outlook-cancel" ? observation.outlookCancellation : kind === "organizer" ? observation.organizerEdit : kind === "reminders" ? observation.reminderEdit : observation.rsvpEdit) && observation.state && observation.version) {
+        const handoff = kind === "organizer" || kind === "outlook-cancel" ? undefined : kind === "reminders" ? onEditReminders : onRespond;
         if (handoff) handoff(observation); else setEditor({ kind, trigger, observation });
       } else setOpenError("This provider action is unavailable in the refreshed state.");
     } catch { if (active.current) setOpenError("Could not refresh provider details. Retry to load the current state."); }
@@ -137,6 +138,7 @@ function ProviderEventDetailsBody({ providerFlavor, presentation = "default", ev
     {details.rows.filter(row => presentation !== "panel" || row.label !== "Provider participants").map(row => <span key={row.label}><strong>{row.label}: </strong>{metadataValue(row)}{"\n"}</span>)}
   </p> : null;
   const actions = <>
+    {current?.outlookCancellation && sourceEvent?.id === eventId && !connectionId ? <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget, "outlook-cancel")}>Cancel Outlook meeting</Button> : null}
     {current?.reminderEdit && current.state && current.version && !series && !(current.reminderEdit.provider === "caldav" && current.reminderEdit.scope === "series") ? <>
       <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget)}>{current?.reminderEdit?.provider === "caldav" ? "Edit CalDAV event alarms" : occurrence ? "Edit reminders for this occurrence" : "Edit Google reminders"}</Button>
     </> : null}
@@ -172,6 +174,7 @@ function ProviderEventDetailsBody({ providerFlavor, presentation = "default", ev
     </Disclosure> : null}
     {openError ? <InlineError>{openError}</InlineError> : null}
     {presentation === "panel" ? <div className={panelStyles.actions}>{actions}</div> : actions}
+    {editor?.kind === "outlook-cancel" && sourceEvent ? <OutlookCancellationDialog event={sourceEvent} observation={editor.observation} returnFocus={editor.trigger} onClose={() => setEditor(undefined)} /> : null}
     {editor?.kind === "organizer" && sourceEvent && editor.observation.organizerEdit ? <ProviderOrganizerEditor event={sourceEvent} color={sourceEvent.color} calendarID={editor.observation.organizerEdit.calendarID} observation={editor.observation} returnFocus={editor.trigger} onClose={() => setEditor(undefined)} /> : null}
     {editor?.kind === "reminders" ? <ProviderReminderEditor occurrence={occurrence} eventId={eventId} connectionId={connectionId} observation={editor.observation} returnFocus={editor.trigger} onClose={() => setEditor(undefined)} /> : null}
     {editor?.kind === "rsvp" ? <ProviderRsvpEditor occurrence={occurrence} eventId={eventId} connectionId={connectionId} observation={editor.observation} returnFocus={editor.trigger} onClose={() => setEditor(undefined)} /> : null}

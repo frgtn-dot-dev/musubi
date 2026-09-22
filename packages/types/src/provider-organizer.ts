@@ -157,10 +157,23 @@ export const MicrosoftOrganizerRequestSchema = z.discriminatedUnion("action", [
   microsoftCreate,
   caldavCommon.extend({
     provider: z.literal("microsoft"), action: z.literal("delete"),
+    scope: z.enum(["occurrence", "series"]).optional(),
+    expectedSeriesVersion: z.string().regex(/^[0-9a-f]{64}$/).optional(),
     expectedRevision: z.number().int().positive(),
     expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
   }).strict(),
-]);
+]).superRefine((request, ctx) => {
+  if (request.action === "delete" && !!request.scope !== !!request.expectedSeriesVersion)
+    ctx.addIssue({ code: "custom", message: "Recurring cancellation requires its exact series observation." });
+});
+export const MicrosoftSeriesCancellationRequestSchema = caldavCommon.extend({
+  provider: z.literal("microsoft"), action: z.literal("delete"),
+  scope: z.enum(["occurrence", "series"]),
+  expectedSeriesVersion: z.string().regex(/^[0-9a-f]{64}$/),
+  expectedRevision: z.number().int().positive(),
+  expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
+}).strict();
+export type MicrosoftSeriesCancellationRequest = z.infer<typeof MicrosoftSeriesCancellationRequestSchema>;
 export type MicrosoftOrganizerRequest = z.infer<typeof MicrosoftOrganizerRequestSchema>;
 export type GoogleOrganizerRequest = z.infer<
   typeof GoogleOrganizerRequestSchema

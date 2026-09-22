@@ -10909,7 +10909,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     const calendarID = "00000000-0000-4000-8000-000000000361", eventID = "00000000-0000-4000-8000-000000000362";
     const saved = { ...event(eventID, "Outlook review meeting", calendarID, "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z"), revision: 4, timeModel: { kind: "zoned", timeZone: "UTC", startLocal: "2026-07-26T09:00:00.000", endLocal: "2026-07-26T10:00:00.000" } };
     await mockAuthenticatedReads(page, { ...events, events: [saved] }, [{ ...calendars[0]!, id: calendarID, provider: "microsoft", accountID: "fixture", accountLabel: "Fixture" }]);
-    await page.route(`**/api/v1/events/${eventID}/provider-state?outlookOrganizer=1`, route => respond(route, { state: { provider: "microsoft", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "accepted" }], attendeesComplete: true, ownResponse: "organizer", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "busy", privacy: "normal", status: "active", eventType: "singleInstance", conferenceURLs: [] }, version: "a".repeat(64), organizerEdit: { provider: "microsoft", calendarID, expectedRevision: 4, actions: ["delete"] } }));
+    await page.route(`**/api/v1/events/${eventID}/provider-state?outlookOrganizer=2`, route => respond(route, { state: { provider: "microsoft", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "accepted" }], attendeesComplete: true, ownResponse: "organizer", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "busy", privacy: "normal", status: "active", eventType: "singleInstance", conferenceURLs: [] }, version: "a".repeat(64), organizerEdit: { provider: "microsoft", calendarID, expectedRevision: 4, actions: ["delete"] } }));
     const writes: any[] = [], errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.route("**/api/v1/provider-organizer", route => {
@@ -10940,6 +10940,47 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     expect(writes).toHaveLength(2); expect(writes[1]).toEqual(writes[0]);
     expect(writes[0]).toMatchObject({ provider: "microsoft", action: "delete", notificationPolicy: "server-invite", expectedRevision: 4 });
     await editor.getByRole("button", { name: "Close", exact: true }).press("Space");
+    await expect(trigger).toBeFocused(); expect(errors).toEqual([]);
+  });
+}
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`Outlook recurring cancellation keeps scope and request identity: ${theme} ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ colorScheme: theme });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const calendarID = "00000000-0000-4000-8000-000000000371", eventID = "00000000-0000-4000-8000-000000000372";
+    const saved = { ...event(eventID, "Weekly Outlook meeting", calendarID, "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z"), revision: 4 };
+    await mockAuthenticatedReads(page, { ...events, events: [saved] }, [{ ...calendars[0]!, id: calendarID, provider: "microsoft", accountID: "fixture", accountLabel: "Fixture" }]);
+    await page.route(`**/api/v1/events/${eventID}/provider-state?outlookOrganizer=2`, route => respond(route, { state: { provider: "microsoft", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "accepted" }], attendeesComplete: true, ownResponse: "organizer", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "busy", privacy: "normal", status: "active", eventType: "occurrence", conferenceURLs: [] }, version: "a".repeat(64), outlookCancellation: { calendarID, expectedRevision: 4, seriesVersion: "b".repeat(64), scopes: ["occurrence", "series"] } }));
+    const writes: any[] = [], errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await page.route("**/api/v1/provider-organizer", route => {
+      const body = route.request().postDataJSON(); writes.push(body);
+      return writes.length === 1 ? respond(route, { error: "Response lost" }, 503) : respond(route, { operationID: body.operationID, eventID, replayed: true, status: "pending", localCommitted: true, notificationDelivery: "unknown" }, 202);
+    });
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    await page.getByRole("button", { name: /Weekly Outlook meeting/ }).first().click();
+    const trigger = page.getByRole("button", { name: "Cancel Outlook meeting", exact: true });
+    await trigger.click();
+    const dialog = page.getByRole("dialog", { name: "Cancel recurring meeting", exact: true });
+    await expect(dialog).toContainText("notify their guests");
+    await expect(dialog.getByRole("button", { name: "This and following events" })).toHaveCount(0);
+    await expect(dialog.getByRole("button", { name: "Entire series", exact: true })).toBeVisible();
+    expect(writes).toHaveLength(0);
+    await expectOrganizerPaintedAbovePopover(dialog);
+    await expectNoAccessibilityViolations(page);
+    expect(await dialog.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: `/tmp/outlook-recurring-cancel-${theme}.png` });
+    await dialog.getByRole("button", { name: "This occurrence", exact: true }).press("Enter");
+    await expect(dialog.getByRole("alert")).toContainText("Response lost");
+    await expect(dialog.getByRole("button", { name: "Entire series", exact: true })).toHaveCount(0);
+    await dialog.getByRole("button", { name: "This occurrence", exact: true }).press("Enter");
+    const queued = page.getByRole("dialog", { name: "Cancellation queued", exact: true });
+    await expect(queued).toContainText("Check Delivery details");
+    expect(writes).toHaveLength(2); expect(writes[1]).toEqual(writes[0]);
+    expect(writes[0]).toMatchObject({ provider: "microsoft", action: "delete", scope: "occurrence", notificationPolicy: "server-invite", expectedRevision: 4, expectedSeriesVersion: "b".repeat(64) });
+    await queued.getByRole("button", { name: "Done", exact: true }).press("Space");
     await expect(trigger).toBeFocused(); expect(errors).toEqual([]);
   });
 }

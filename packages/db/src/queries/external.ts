@@ -1,3 +1,4 @@
+import { isCancelledGraphMeeting } from "./graph-meeting-cancel";
 import { hasFullProviderReadAccess, microsoftPrivateAccess } from "./microsoft-access";
 import { googlePersonalReadRecovery, finishGooglePersonalReadRecovery } from "./google-personal-read-recovery";
 import { assertExternalCalendarAccess, type ExternalCalendarAccessContext } from "./external-access";
@@ -810,6 +811,10 @@ async function upsertExternalEventInTransaction(
     const access = await assertExternalCalendarAccess(tx, provider, calendarID, accessContext);
     if (provider === "microsoft") await assertNoPendingGraphSeriesCreate(tx, calendarID);
     await lockExternalEventAddress(tx, provider, calendarID, externalEventID);
+    if (provider === "microsoft") {
+      const [link] = await tx.select({ id: externalCalendars.id }).from(externalCalendars).where(eq(externalCalendars.calendarID, calendarID));
+      if (link && await isCancelledGraphMeeting(tx, link.id, externalEventID, sourceSeriesID ?? providerOccurrence?.externalSeriesID ?? time?.externalSeriesID ?? undefined)) return false;
+    }
     // Google retains cancelled exceptions as active-shaped projections. Their
     // reconstructed master content is not an edit of the stored exception.
     // Retain only an exact cancellation observation for the immutable intent;
