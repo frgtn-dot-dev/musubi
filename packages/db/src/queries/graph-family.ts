@@ -1,3 +1,4 @@
+import { stoppedGraphOccurrenceContent } from "./event-outbox";
 import { isCancelledGraphMeeting } from "./graph-meeting-cancel";
 import { hasFullProviderReadAccess, microsoftPrivateAccess } from "./microsoft-access";
 import { createHash } from "node:crypto";
@@ -59,7 +60,7 @@ export async function graphFamilyContextInTransaction(tx: DbTransaction, address
       mappings.some(value => !ids.includes(value.eventID) || value.provider !== "microsoft" || value.calendarID !== address.calendarID || value.externalCalendarID !== link.externalCalendarID ||
         (value.eventID !== root.id && (value.externalSeriesID !== address.externalMasterID || !value.originalStart || !children.find(child => child.id === value.eventID)?.originalStart || key(value.originalStart) !== key(children.find(child => child.id === value.eventID)!.originalStart!)))) ||
       new Set(mappings.map(value => value.eventID)).size !== mappings.length || children.some(value => !value.originalStart || value.recurrence || (!value.deletedAt && !value.isCanceled && !mappings.some(mapping => mapping.eventID === value.id)))) refuse();
-  const pending = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(inArray(eventOutbox.eventID, ids), excludedOperationID ? ne(eventOutbox.id, excludedOperationID) : undefined, sql`(${eventOutbox.status} not in ('completed', 'not-needed') and not (${eventOutbox.status} = 'cancelled' and coalesce(${eventOutbox.errorCode} = 'organizer-not-dispatched', false) and ${eventOutbox.payload}->'graphMeetingCancellation' is not null and ${eventOutbox.payload}->'graphMeetingCancellation'->'dispatch' is null) and not (
+  const pending = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(inArray(eventOutbox.eventID, ids), excludedOperationID ? ne(eventOutbox.id, excludedOperationID) : undefined, sql`not ${stoppedGraphOccurrenceContent()}`, sql`(${eventOutbox.status} not in ('completed', 'not-needed') and not (${eventOutbox.status} = 'cancelled' and coalesce(${eventOutbox.errorCode} = 'organizer-not-dispatched', false) and ${eventOutbox.payload}->'graphMeetingCancellation' is not null and ${eventOutbox.payload}->'graphMeetingCancellation'->'dispatch' is null) and not (
     ${eventOutbox.status} = 'cancelled' and ${eventOutbox.errorCode} = 'superseded-by-resolution'
     and exists (select 1 from event_outbox replacement
       where replacement.event_id = ${eventOutbox.eventID}

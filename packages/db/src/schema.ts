@@ -902,6 +902,7 @@ export const eventOutbox = pgTable(
         caldavSeriesDeletion?: CaldavSeriesDeletionPrepared;
         graphSeriesCreate?: GraphSeriesCreateJournal;
         graphSeriesDeletion?: GraphSeriesDeletionPrepared;
+        graphOccurrenceContent?: import("./queries/graph-occurrence-content").GraphOccurrenceContent;
         graphMeetingCancellation?: import("./queries/graph-meeting-cancel").GraphMeetingCancellation;
         graphCreateAdoption?: import("@musubi/types").GraphCreateAdoptionRecord;
         createIdentityVersion?: 1;

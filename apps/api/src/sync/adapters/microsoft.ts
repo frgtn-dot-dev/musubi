@@ -1,3 +1,4 @@
+import { observeGraphOccurrenceContent, prepareGraphOccurrenceContent, updateGraphOccurrenceContent } from "./microsoft_occurrence_content";
 import { prepareGraphSeriesDeletion, deleteGraphSeries } from "./microsoft_series_delete";
 import { assertMicrosoftPersonalContent, microsoftPersonalContentPatch, microsoftEventVersion, updateMicrosoftPersonalContent, deleteMicrosoftPersonalEvent } from "./microsoft_event_content";
 import { getOrganizerTimeEventIDs } from "@musubi/db";
@@ -696,6 +697,9 @@ export function toExternalCalendar(c: GraphCalendar): ExternalCalendarInfo {
 
 export const microsoftAdapter: CalendarAdapter = {
   microsoftOrganizer: microsoftOrganizerTransport(getAccessToken),
+  async observeGraphOccurrenceContent(context, signal) { return observeGraphOccurrenceContent(await getAccessToken(context.address.actorID, context.link.accountID), context, signal); },
+  async prepareGraphOccurrenceContent(context, request, signal) { return prepareGraphOccurrenceContent(await getAccessToken(context.address.actorID, context.link.accountID), context, request, signal); },
+  async updateGraphOccurrenceContent(saved, mark, accepted, signal) { return updateGraphOccurrenceContent(await getAccessToken(saved.context.address.actorID, saved.context.link.accountID), saved, mark, accepted, signal); },
   async observeGraphMeetingCancellation(context, signal) { return observeGraphMeetingCancellation(await getAccessToken(context.address.actorID, context.link.accountID), context, signal); },
   async prepareGraphMeetingCancellation(context, request, signal) { return prepareGraphMeetingCancellation(await getAccessToken(context.address.actorID, context.link.accountID), context, request, signal); },
   async cancelGraphMeeting(saved, mark, accepted, signal) { return cancelGraphMeeting(await getAccessToken(saved.context.address.actorID, saved.context.link.accountID), saved, mark, accepted, signal); },

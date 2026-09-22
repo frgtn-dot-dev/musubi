@@ -1,3 +1,5 @@
+import { findGraphOccurrenceContent, saveGraphOccurrenceContent } from "@musubi/db";
+import { MicrosoftOccurrenceContentRequestSchema } from "@musubi/types";
 import { readGraphMeetingContext, findGraphMeetingCancellation, saveGraphMeetingCancellation } from "@musubi/db";
 import { MicrosoftSeriesCancellationRequestSchema } from "@musubi/types";
 import { caldavOrganizerTimeEvidence } from "./adapters/caldav_organizer_time";
@@ -69,6 +71,13 @@ export async function queueProviderOrganizer(actorID: string, input: unknown) {
     throw new OrganizerAdmissionRejectedError(
       "Check the meeting fields and use a positive duration.",
     );
+  if (parsed.data.provider === "microsoft" && parsed.data.action === "update" && parsed.data.scope === "occurrence") {
+    const request = MicrosoftOccurrenceContentRequestSchema.parse(parsed.data);
+    const replay = await findGraphOccurrenceContent(actorID, request);
+    if (replay) return replay;
+    const context = await readGraphMeetingContext({ actorID, calendarID: request.calendarID, eventID: request.eventID });
+    return saveGraphOccurrenceContent(await microsoftAdapter.prepareGraphOccurrenceContent!(context, request, AbortSignal.timeout(20_000)));
+  }
   if (parsed.data.provider === "microsoft" && parsed.data.action === "delete" && (parsed.data.scope || parsed.data.expectedSeriesVersion)) {
     const request = MicrosoftSeriesCancellationRequestSchema.parse(parsed.data);
     const replay = await findGraphMeetingCancellation(actorID, request);
@@ -188,7 +197,7 @@ export async function observeProviderOrganizer(
   actorID: string,
   eventID: string,
   observation: ProviderEventStateResponse,
-  outlookOrganizer: boolean | "series" = false,
+  outlookOrganizer: boolean | "series" | "content" = false,
 ) {
   // Older clients strictly parse the provider enum. Only advertise the new
   // capability to clients that explicitly opt into this additive read.
@@ -206,7 +215,19 @@ export async function observeProviderOrganizer(
     const { getEventSnapshot } = await import("@musubi/db");
     const event = await getEventSnapshot(eventID);
     if (!event?.originCalendarID || !event.revision) return observation;
-    if (observation.state?.provider === "microsoft" && outlookOrganizer === "series") {
+    if (observation.state?.provider === "microsoft" && outlookOrganizer === "content") {
+      try {
+        const context = await readGraphMeetingContext({ actorID, eventID, calendarID: event.originCalendarID });
+        const native = await microsoftAdapter.observeGraphOccurrenceContent!(context, AbortSignal.timeout(20_000));
+        // v3 alone advertises the new occurrence proof. Older strict readers keep v2.
+        const cancellation = native.baseline.master.providerState.attendees.length ? await microsoftAdapter.observeGraphMeetingCancellation!(context, AbortSignal.timeout(20_000)).catch(() => undefined) : undefined;
+        return { ...observation,
+          ...(cancellation ? { outlookCancellation: { calendarID: event.originCalendarID, expectedRevision: event.revision, seriesVersion: cancellation.version, scopes: cancellation.scopes } } : {}),
+          organizerEdit: { provider: "microsoft" as const, scope: "occurrence" as const, seriesVersion: native.version, calendarID: event.originCalendarID, expectedRevision: event.revision, actions: ["update" as const] },
+        };
+      } catch { /* Cancellation or one-off content editing can still qualify. */ }
+    }
+    if (observation.state?.provider === "microsoft" && (outlookOrganizer === "series" || outlookOrganizer === "content")) {
       try {
         const context = await readGraphMeetingContext({ actorID, eventID, calendarID: event.originCalendarID });
         const native = await microsoftAdapter.observeGraphMeetingCancellation!(context, AbortSignal.timeout(20_000));
@@ -237,7 +258,7 @@ export async function observeProviderOrganizer(
       const native = await transport.read(ctx.mapping!.externalEventID);
       if (!native || native.etag !== ctx.mapping!.etag) return observation;
       const actions: ("update" | "delete")[] = ["delete"];
-      if (outlookOrganizer === "series") {
+      if (outlookOrganizer === "series" || outlookOrganizer === "content") {
         try {
           const content = await transport.read(ctx.mapping!.externalEventID, true);
           if (content?.etag === ctx.mapping!.etag && matchesRsvpEventProjection("microsoft", event, microsoftMeetingContentProjection(content, transport.email))) actions.unshift("update");

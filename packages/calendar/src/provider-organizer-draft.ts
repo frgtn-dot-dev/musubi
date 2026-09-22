@@ -122,7 +122,7 @@ export function organizerRequest(
     ...(observation?.organizerEdit?.scope === "occurrence"
       ? {
           scope: "occurrence",
-          expectedInstanceVersion: observation.organizerEdit.instanceVersion,
+          ...(provider === "microsoft" ? { expectedSeriesVersion: observation.organizerEdit.seriesVersion } : { expectedInstanceVersion: observation.organizerEdit.instanceVersion }),
         }
       : {}),
   };
@@ -152,8 +152,8 @@ export function organizerRequest(
   });
 }
 
-/** Only a stored child with an explicit current occurrence observation can open
- * organizer controls. Generated occurrences never supply their master's proof. */
+/** A current native occurrence observation binds a stored child or an Outlook
+ * expanded row. Generated occurrences never supply their master's proof. */
 export function canManageProviderOrganizer(
   event: Event | undefined,
   observation: Pick<ProviderEventStateResponse, "organizerEdit"> | undefined,
@@ -169,6 +169,6 @@ export function canManageProviderOrganizer(
   )
     return false;
   return edit.scope === "occurrence"
-    ? !!(edit.provider === "google" && event.seriesID && event.originalStart && edit.instanceVersion)
+    ? !!(edit.provider === "microsoft" ? edit.seriesVersion && (!!event.seriesID === !!event.originalStart) : edit.provider === "google" && event.seriesID && event.originalStart && edit.instanceVersion)
     : !event.seriesID && !event.originalStart;
 }

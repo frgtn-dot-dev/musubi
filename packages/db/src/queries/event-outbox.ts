@@ -87,6 +87,12 @@ export function stoppedMicrosoftMeetingUpdate() {
     (coalesce(${eventOutbox.errorCode} = 'organizer-not-dispatched', false) and ${eventOutbox.payload}->'organizer'->'dispatch' is null) or
     (coalesce(${eventOutbox.errorCode} = 'outlook-update-rejected', false) and ${eventOutbox.payload}->'organizer'->'dispatch'->>'startedAt' is not null and ${eventOutbox.payload}->'organizer'->'dispatch'->>'acceptedAt' is null)))`;
 }
+/** A family content intent may release its fence only with explicit no-write evidence. */
+export function stoppedGraphOccurrenceContent() {
+  return sql`(${eventOutbox.status} = 'cancelled' and ${eventOutbox.provider} = 'microsoft' and ${eventOutbox.action} = 'update' and ${eventOutbox.payload}->'graphOccurrenceContent' is not null and (
+    (coalesce(${eventOutbox.errorCode} = 'organizer-not-dispatched', false) and ${eventOutbox.payload}->'graphOccurrenceContent'->'dispatch' is null) or
+    (coalesce(${eventOutbox.errorCode} = 'outlook-update-rejected', false) and ${eventOutbox.payload}->'graphOccurrenceContent'->'dispatch'->>'startedAt' is not null and ${eventOutbox.payload}->'graphOccurrenceContent'->'dispatch'->>'acceptedAt' is null)))`;
+}
 /** Must be called inside the event's local transaction, after its CAS and before
  * COMMIT. No FK to events/maps: delete delivery must survive their removal. */
 export async function appendEventOutbox(
@@ -109,6 +115,7 @@ export async function appendEventOutbox(
           // remote dependency for a newly observed replacement.
           sql`not (${eventOutbox.status} = 'cancelled' and coalesce(${eventOutbox.errorCode} = 'organizer-not-dispatched', false) and ${eventOutbox.payload}->'graphMeetingCancellation' is not null and ${eventOutbox.payload}->'graphMeetingCancellation'->'dispatch' is null)`,
           sql`not ${stoppedMicrosoftMeetingUpdate()}`,
+          sql`not ${stoppedGraphOccurrenceContent()}`,
         ),
       )
       .orderBy(

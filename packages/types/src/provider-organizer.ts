@@ -157,6 +157,8 @@ export const MicrosoftOrganizerRequestSchema = z.discriminatedUnion("action", [
   microsoftCreate,
   caldavCommon.extend({
     provider: z.literal("microsoft"), action: z.literal("update"),
+    scope: z.literal("occurrence").optional(),
+    expectedSeriesVersion: z.string().regex(/^[0-9a-f]{64}$/).optional(),
     expectedRevision: z.number().int().positive(),
     expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
     patch: content.partial().strict().refine(value => Object.keys(value).length > 0, "Choose a content change"),
@@ -169,8 +171,8 @@ export const MicrosoftOrganizerRequestSchema = z.discriminatedUnion("action", [
     expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
   }).strict(),
 ]).superRefine((request, ctx) => {
-  if (request.action === "delete" && !!request.scope !== !!request.expectedSeriesVersion)
-    ctx.addIssue({ code: "custom", message: "Recurring cancellation requires its exact series observation." });
+  if (request.action !== "create" && !!request.scope !== !!request.expectedSeriesVersion)
+    ctx.addIssue({ code: "custom", message: "Recurring changes require their exact series observation." });
 });
 export const MicrosoftSeriesCancellationRequestSchema = caldavCommon.extend({
   provider: z.literal("microsoft"), action: z.literal("delete"),
@@ -179,6 +181,15 @@ export const MicrosoftSeriesCancellationRequestSchema = caldavCommon.extend({
   expectedRevision: z.number().int().positive(),
   expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
 }).strict();
+export const MicrosoftOccurrenceContentRequestSchema = caldavCommon.extend({
+  provider: z.literal("microsoft"), action: z.literal("update"),
+  scope: z.literal("occurrence"),
+  expectedSeriesVersion: z.string().regex(/^[0-9a-f]{64}$/),
+  expectedRevision: z.number().int().positive(),
+  expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
+  patch: content.partial().strict().refine(value => Object.keys(value).length > 0, "Choose a content change"),
+}).strict();
+export type MicrosoftOccurrenceContentRequest = z.infer<typeof MicrosoftOccurrenceContentRequestSchema>;
 export type MicrosoftSeriesCancellationRequest = z.infer<typeof MicrosoftSeriesCancellationRequestSchema>;
 export type MicrosoftOrganizerRequest = z.infer<typeof MicrosoftOrganizerRequestSchema>;
 export type GoogleOrganizerRequest = z.infer<

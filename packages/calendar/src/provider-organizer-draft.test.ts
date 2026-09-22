@@ -125,3 +125,12 @@ assert.equal(outlookContent.provider, "microsoft");
 assert.deepEqual(outlookContent.action === "update" && outlookContent.patch, { title: "Meeting", location: null });
 assert.throws(() => organizerRequest("update", draft, ["start"], identity, outlookObservation), /Time editing is not available/);
 for (const change of [{ guests: [] }, { time: { kind: "all-day", startDate: "2026-09-22", endDate: "2026-09-23" } }]) assert.equal(ProviderOrganizerRequestSchema.safeParse({ ...outlookContent, patch: change }).success, false);
+
+const outlookOccurrence = { ...outlookObservation, organizerEdit: { ...outlookObservation.organizerEdit, scope: "occurrence" as const, seriesVersion: "c".repeat(64), actions: ["update" as const] } };
+assert.equal(canManageProviderOrganizer(child, outlookOccurrence), true);
+assert.equal(canManageProviderOrganizer({ ...child, seriesID: null, originalStart: null }, outlookOccurrence), true);
+assert.equal(canManageProviderOrganizer({ ...child, recurrence: "RRULE:FREQ=DAILY;COUNT=3" }, outlookOccurrence), false);
+assert.equal(canManageProviderOrganizer(child, { organizerEdit: { ...outlookOccurrence.organizerEdit, seriesVersion: undefined } }), false);
+const occurrenceUpdate = organizerRequest("update", { ...draft, title: "Only one occurrence" }, ["title"], identity, outlookOccurrence);
+assert.equal(occurrenceUpdate.provider === "microsoft" && occurrenceUpdate.action === "update" && occurrenceUpdate.expectedSeriesVersion, "c".repeat(64));
+for (const change of [{ scope: "series" }, { scope: undefined }, { expectedSeriesVersion: undefined }, { expectedInstanceVersion: "b".repeat(64) }, { patch: { time: { kind: "all-day", startDate: "2026-09-22", endDate: "2026-09-23" } } }]) assert.equal(ProviderOrganizerRequestSchema.safeParse({ ...occurrenceUpdate, ...change }).success, false);

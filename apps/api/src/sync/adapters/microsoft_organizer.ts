@@ -60,12 +60,13 @@ export function microsoftOrganizerEvidence(raw: unknown, request: MicrosoftOrgan
 }
 /** Cancellation observes the complete organizer copy, including guests. It
  * never rewrites its time, invitation list, attachments or meeting content. */
-export function microsoftCancellationEvidence(raw: unknown, self: string, masterID?: string) {
+export function microsoftCancellationEvidence(raw: unknown, self: string, masterID?: string, allowPersonal = false) {
   const schema = masterID ? nativeSchema.extend({
     type: z.enum(["seriesMaster", "occurrence", "exception"]),
     recurrence: z.record(z.string(), z.unknown()).nullable(), seriesMasterId: z.string().nullish(),
   }) : nativeSchema;
   const item = schema.extend({
+    attendees: z.array(nativeSchema.shape.attendees.element).min(allowPersonal ? 0 : 1).max(100),
     transactionId: z.string().nullish(),
     originalStartTimeZone: z.string(), originalEndTimeZone: z.string(),
     hasAttachments: z.boolean(),
@@ -83,13 +84,15 @@ export function microsoftCancellationEvidence(raw: unknown, self: string, master
 
 /** Content writes retain the full native baseline, including fields not shown
  * in Musubi. Only explicitly changed fields are sent to Graph. */
-export function microsoftMeetingContentEvidence(raw: unknown, self: string) {
+export function microsoftMeetingContentEvidence(raw: unknown, self: string, masterID?: string) {
   try {
-    const proof = microsoftCancellationEvidence(raw, self);
+    const proof = microsoftCancellationEvidence(raw, self, masterID, !!masterID);
     const item = z.record(z.string(), z.unknown()).parse(structuredClone(raw));
-    if (proof.hasAttachments || proof.body.contentType.toLowerCase() !== "text" || item["@odata.nextLink"] || item.originalStart != null
+    if (proof.hasAttachments || proof.body.contentType.toLowerCase() !== "text" || item["@odata.nextLink"] || (!masterID && item.originalStart != null)
       || proof.attendees.some(guest => guest.emailAddress.address.toLowerCase() === self.toLowerCase())) fail();
-    graphRsvpTime(item);
+    // The occurrence identity was checked above; reuse the UTC endpoint validator.
+    graphRsvpTime(masterID ? { ...item, type: "singleInstance" } : item);
+    if (masterID && (proof.id === masterID || !z.iso.datetime().safeParse(item.originalStart).success)) fail();
     return { ...proof, ...item, etag: proof.etag } as typeof proof & Record<string, unknown>;
   } catch { return fail(); }
 }
@@ -107,9 +110,9 @@ export function microsoftMeetingContentBody(request: MicrosoftOrganizerRequest) 
   if (request.patch.location !== undefined) payload.location = { displayName: request.patch.location ?? "" };
   return payload;
 }
-function matchesMeetingContent(baseline: Record<string, unknown>, patch: Record<string, unknown>, actual: unknown, self: string) {
+export function matchesMeetingContent(baseline: Record<string, unknown>, patch: Record<string, unknown>, actual: unknown, self: string, masterID?: string) {
   try {
-    const next = microsoftMeetingContentEvidence(actual, self);
+    const next = microsoftMeetingContentEvidence(actual, self, masterID);
     const expected = { ...baseline, ...patch };
     if ("location" in patch && next.locations != null) {
       const locations = z.array(z.object({ displayName: z.string() })).max(1).parse(next.locations);
@@ -118,6 +121,12 @@ function matchesMeetingContent(baseline: Record<string, unknown>, patch: Record<
     }
     const normalize = (input: Record<string, unknown>) => {
       const item = structuredClone(input);
+      // A native occurrence becomes an exception on its first content edit.
+      if (masterID && baseline.type === "occurrence" && next.type === "exception") {
+        item.type = "exception";
+        // Graph materializes a new exception object for this same ID/slot.
+        delete item.createdDateTime;
+      }
       for (const key of ["@odata.etag", "etag", "changeKey", "lastModifiedDateTime", "bodyPreview"]) delete item[key];
       // Graph updates locations together with location. The requested simple
       // location replaces the old collection; other changes retain it exactly.

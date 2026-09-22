@@ -43,7 +43,7 @@ function content(native: unknown): NormalizedEvent {
   if (item.body.contentType.toLowerCase() !== "text" || (item["attendees@odata.count"] !== undefined && item["attendees@odata.count"] !== item.attendees.length)) refuse();
   const providerState = microsoftEventState(item);
   return { externalId: item.id, icalUid: item.iCalUId, etag: item["@odata.etag"] ?? null,
-    status: "active", title: item.subject, description: item.body.content || null, location: item.location.displayName || null,
+    status: "active", title: item.subject, description: item.body.content.trim() || null, location: item.location.displayName.trim() || null,
     organizer: item.organizer?.emailAddress.address ?? null, url: providerState.conferenceURLs[0] ?? null, providerState,
     start: new Date(0), end: new Date(0), isAllDay: false, recurrence: null };
 }

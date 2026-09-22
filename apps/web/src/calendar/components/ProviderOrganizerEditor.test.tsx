@@ -422,3 +422,18 @@ it("edits Outlook content without exposing time or guests and preserves a lost r
   expect(api.save.mock.calls[1]).toEqual(api.save.mock.calls[0]);
   expect(api.save.mock.calls[0][0].patch).not.toHaveProperty("time");
 });
+
+it("binds an Outlook occurrence to its family observation without series or time controls", async () => {
+  api.save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "pending" });
+  render(<ProviderOrganizerEditor calendarID={calendarID} color="red" event={event} observation={{ ...observation, organizerEdit: { ...observation.organizerEdit!, provider: "microsoft", scope: "occurrence", seriesVersion: "c".repeat(64), actions: ["update"] } }} onClose={vi.fn()} />);
+  expect(screen.getByRole("dialog", { name: "Manage this occurrence" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /Cancel.*notify/ })).toBeNull();
+  expect(screen.queryByRole("combobox", { name: "Event time zone" })).toBeNull();
+  fireEvent.change(screen.getByRole("textbox", { name: "Location" }), { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save and notify guests" }));
+  await screen.findByText("offline");
+  fireEvent.click(screen.getByRole("button", { name: "Retry saved meeting action" }));
+  await screen.findByRole("status");
+  expect(api.save.mock.calls[0][0]).toMatchObject({ provider: "microsoft", action: "update", scope: "occurrence", expectedSeriesVersion: "c".repeat(64), patch: { location: null } });
+  expect(api.save.mock.calls[1]).toEqual(api.save.mock.calls[0]);
+});

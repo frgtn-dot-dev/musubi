@@ -129,9 +129,9 @@ export async function getEventDeliveryStatus(
         graphRsvp: sql<boolean>`${eventOutbox.payload}->'rsvp'->'request'->>'provider' = 'microsoft'`,
         graphDispatched: sql<boolean>`${eventOutbox.payload}->'rsvp'->'graphDispatch' is not null`,
         graphAccepted: sql<boolean>`${eventOutbox.payload}->'rsvp'->'graphDispatch'->>'acceptedAt' is not null`,
-        organizer: sql<boolean>`(${eventOutbox.payload}->'organizer' is not null or ${eventOutbox.payload}->'graphMeetingCancellation' is not null)`,
-        organizerDispatched: sql<boolean>`(${eventOutbox.payload}->'organizer'->'dispatch' is not null or ${eventOutbox.payload}->'graphMeetingCancellation'->'dispatch' is not null)`,
-        organizerAccepted: sql<boolean>`${eventOutbox.payload}->'organizer'->'dispatch'->'acceptedAt' is not null`,
+        organizer: sql<boolean>`(${eventOutbox.payload}->'organizer' is not null or ${eventOutbox.payload}->'graphMeetingCancellation' is not null or ${eventOutbox.payload}->'graphOccurrenceContent' is not null)`,
+        organizerDispatched: sql<boolean>`(${eventOutbox.payload}->'organizer'->'dispatch' is not null or ${eventOutbox.payload}->'graphMeetingCancellation'->'dispatch' is not null or ${eventOutbox.payload}->'graphOccurrenceContent'->'dispatch' is not null)`,
+        organizerAccepted: sql<boolean>`(${eventOutbox.payload}->'organizer'->'dispatch'->'acceptedAt' is not null or ${eventOutbox.payload}->'graphMeetingCancellation'->'dispatch'->'acceptedAt' is not null or ${eventOutbox.payload}->'graphOccurrenceContent'->'dispatch'->'acceptedAt' is not null)`,
         alarm: sql<boolean>`${eventOutbox.payload}->'caldavAlarm' is not null`,
       };
       const receipts = (unresolved: boolean) =>

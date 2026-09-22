@@ -394,3 +394,16 @@ it("allows proven Outlook content changes without editing time and freezes offli
   expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
   expect(h.save.mock.calls[0][0].patch).not.toHaveProperty("time");
 });
+
+it("binds Outlook occurrence updates to the exact family and keeps retry identity", async () => {
+  const observed: ProviderEventStateResponse = { ...observation, organizerEdit: { ...observation.organizerEdit!, provider: "microsoft", scope: "occurrence", seriesVersion: "c".repeat(64), actions: ["update"] } };
+  const draw = () => render(event, observed);
+  h.save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "pending" });
+  expect(nodes(draw()).some(node => node.props.accessibilityLabel === "Start date")).toBe(false);
+  expect(nodes(draw()).some(node => node.props.accessibilityLabel === "Guest email addresses")).toBe(false);
+  nodes(draw()).find(node => node.type === "TextInput" && node.props.accessibilityLabel === "Title")!.props.onChangeText("One occurrence");
+  button(draw(), "Save").onPress(); await settle();
+  button(draw(), "Retry").onPress(); await settle();
+  expect(h.save.mock.calls[0][0]).toMatchObject({ provider: "microsoft", action: "update", scope: "occurrence", expectedSeriesVersion: "c".repeat(64), patch: { title: "One occurrence" } });
+  expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
+});

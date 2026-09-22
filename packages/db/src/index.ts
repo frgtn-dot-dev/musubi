@@ -66,3 +66,5 @@ export * from "./queries/caldav-access";
 
 export * from "./queries/graph-series-delete";
 export * from "./queries/graph-meeting-cancel";
+
+export * from "./queries/graph-occurrence-content";
