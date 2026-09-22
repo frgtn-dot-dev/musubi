@@ -1,4 +1,5 @@
 import { microsoftEventVersion } from "./microsoft_event_content";
+import { graphRsvpTime } from "./microsoft_rsvp";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import { config } from "@musubi/config";
@@ -79,6 +80,58 @@ export function microsoftCancellationEvidence(raw: unknown, self: string, master
     || instant(item.end.dateTime) <= instant(item.start.dateTime)) fail();
   return { ...item, etag };
 }
+
+/** Content writes retain the full native baseline, including fields not shown
+ * in Musubi. Only explicitly changed fields are sent to Graph. */
+export function microsoftMeetingContentEvidence(raw: unknown, self: string) {
+  try {
+    const proof = microsoftCancellationEvidence(raw, self);
+    const item = z.record(z.string(), z.unknown()).parse(structuredClone(raw));
+    if (proof.hasAttachments || proof.body.contentType.toLowerCase() !== "text" || item["@odata.nextLink"] || item.originalStart != null
+      || proof.attendees.some(guest => guest.emailAddress.address.toLowerCase() === self.toLowerCase())) fail();
+    graphRsvpTime(item);
+    return { ...proof, ...item, etag: proof.etag } as typeof proof & Record<string, unknown>;
+  } catch { return fail(); }
+}
+export function microsoftMeetingContentProjection(raw: unknown, self: string) {
+  const item = microsoftMeetingContentEvidence(raw, self);
+  return { title: item.subject, description: item.body.content.trim() || null, location: item.location.displayName.trim() || null,
+    recurrence: null, ...graphRsvpTime(item) };
+}
+export function microsoftMeetingContentBody(request: MicrosoftOrganizerRequest) {
+  request = MicrosoftOrganizerRequestSchema.parse(request);
+  if (request.action !== "update") fail();
+  const payload: Record<string, unknown> = {};
+  if (request.patch.title !== undefined) payload.subject = request.patch.title;
+  if (request.patch.description !== undefined) payload.body = { contentType: "text", content: request.patch.description ?? "" };
+  if (request.patch.location !== undefined) payload.location = { displayName: request.patch.location ?? "" };
+  return payload;
+}
+function matchesMeetingContent(baseline: Record<string, unknown>, patch: Record<string, unknown>, actual: unknown, self: string) {
+  try {
+    const next = microsoftMeetingContentEvidence(actual, self);
+    const expected = { ...baseline, ...patch };
+    if ("location" in patch && next.locations != null) {
+      const locations = z.array(z.object({ displayName: z.string() })).max(1).parse(next.locations);
+      const name = (patch.location as { displayName: string }).displayName;
+      if (locations.some(location => location.displayName !== name) || name && locations.length !== 1) return false;
+    }
+    const normalize = (input: Record<string, unknown>) => {
+      const item = structuredClone(input);
+      for (const key of ["@odata.etag", "etag", "changeKey", "lastModifiedDateTime", "bodyPreview"]) delete item[key];
+      // Graph updates locations together with location. The requested simple
+      // location replaces the old collection; other changes retain it exactly.
+      if ("location" in patch) {
+        delete item.locations;
+        item.location = { displayName: (item.location as { displayName: string }).displayName };
+      }
+      const body = item.body as { contentType: string; content: string };
+      item.body = { ...body, contentType: body.contentType.toLowerCase(), content: body.content.trim() };
+      return item;
+    };
+    return isDeepStrictEqual(normalize(expected), normalize(next));
+  } catch { return false; }
+}
 export function microsoftOrganizerTransport(token: (user: string, account: string) => Promise<string>) {
   return async (userID: string, accountID: string, calendarID: string, signal?: AbortSignal) => {
     if (!config.api.providerOrganizerEditsEnabled) throw new EventWriteError("organizer", "unsupported");
@@ -101,20 +154,54 @@ export function microsoftOrganizerTransport(token: (user: string, account: strin
       }
       return found ? microsoftOrganizerEvidence(found, request, email) : null;
     }
-    async function read(eventID: string) {
+    async function read(eventID: string, content = false) {
       const response = await fetch(`${base}/${encodeURIComponent(id.parse(eventID))}`, { headers, redirect: "error", signal });
       if (response.status === 404 && !response.headers.has("content-range")) {
         z.object({ error: z.object({ code: z.string().min(1) }) }).parse(await response.json());
         return null;
       }
       assertCompleteEventReadResponse(response);
-      const native = microsoftCancellationEvidence(await response.json(), email);
+      const raw = await response.json();
+      const native = content ? microsoftMeetingContentEvidence(raw, email) : microsoftCancellationEvidence(raw, email);
       if (native.id !== eventID) fail();
       return native;
     }
     return { email, identity, read, deliver: async (intent: ProviderOrganizerIntent, beforeDispatch: () => Promise<void>, accepted: () => Promise<void>) => {
       const saved = structuredClone(intent), request = MicrosoftOrganizerRequestSchema.parse(saved.request);
       if (!isDeepStrictEqual(saved.graphIdentity, identity)) fail();
+      if (request.action === "update") {
+        const baseline = microsoftMeetingContentEvidence(saved.baseline, email);
+        const patch = microsoftMeetingContentBody(request);
+        if (!saved.mappingID || !isDeepStrictEqual(saved.desired, patch) || saved.baseline?.etag !== baseline.etag) fail();
+        if (saved.dispatch && OrganizerDispatchSchema.parse(saved.dispatch).kind !== "microsoft-organizer-dispatch") fail();
+        const observed = (current: Awaited<ReturnType<typeof read>>) => {
+          if (!current || !matchesMeetingContent(baseline, patch, current, email)) return { kind: "unconfirmed" as const };
+          return { kind: "observed" as const, native: { id: current.id, etag: current.etag, iCalUID: current.iCalUId }, state: microsoftEventState(current) };
+        };
+        const current = saved.dispatch ? await read(baseline.id, true).catch(() => null) : await read(baseline.id, true);
+        // A possible notification dispatch is never repeated, even if Graph
+        // still shows the old content. Acceptance and readback are independent.
+        if (saved.dispatch) return saved.dispatch.acceptedAt ? observed(current) : { kind: "unconfirmed" as const };
+        if (!current || !isDeepStrictEqual(current, baseline)) fail();
+        if (matchesMeetingContent(baseline, patch, current, email)) return observed(current);
+        await beforeDispatch();
+        let acknowledged = false;
+        try {
+          const response = await fetch(`${base}/${encodeURIComponent(baseline.id)}`, {
+            method: "PATCH", headers: { ...headers, "Content-Type": "application/json", "If-Match": baseline.etag },
+            body: JSON.stringify(patch), redirect: "error", signal,
+          });
+          if (response.status === 412) return { kind: "rejected" as const };
+          if (response.status === 200) {
+            const updated = microsoftMeetingContentEvidence(await response.json(), email);
+            if (updated.id === baseline.id && updated.iCalUId === baseline.iCalUId) {
+              await accepted(); acknowledged = true;
+            }
+          }
+        } catch (error) { if (signal?.aborted) throw error; }
+        const remaining = await read(baseline.id, true).catch(() => null);
+        return acknowledged ? observed(remaining) : { kind: "unconfirmed" as const };
+      }
       if (request.action === "delete") {
         const baseline = microsoftCancellationEvidence(saved.baseline, email);
         if (!saved.mappingID || saved.desired !== null || saved.baseline?.etag !== baseline.etag) fail();

@@ -1,7 +1,7 @@
 import { stopUndispatchedGraphMeetingCancellation, confirmGraphMeetingCancellation, markGraphMeetingCancellation, completeGraphMeetingCancellation } from "@musubi/db";
 import { confirmGraphSeriesDeletionOutbox, completeGraphSeriesDeletionOutbox } from "@musubi/db";
 import { microsoftEventVersion } from "./adapters/microsoft_event_content";
-import { withProviderOrganizerLease, markProviderOrganizer, completeProviderOrganizer } from "@musubi/db";
+import { withProviderOrganizerLease, markProviderOrganizer, completeProviderOrganizer, stopMicrosoftMeetingUpdate } from "@musubi/db";
 import { confirmCaldavAlarm } from "@musubi/db";
 import { googleReminderInstanceEvidence, googleReminderInstanceProjection } from "./adapters/google_reminder_instance";
 import { hasProviderReminderInstanceSource, completeProviderReminderInstanceOutbox, matchesProviderReminderInstanceState } from "@musubi/db";
@@ -12,7 +12,7 @@ import { googleEventState } from "./adapters/provider_event_state";
 import { isDeepStrictEqual } from "node:util";
 import { matchesGoogleOccurrence } from "./adapters/google_occurrence";
 import { config } from "@musubi/config";
-import { ProviderRsvpEditSchema, providerRsvpDesiredState, ProviderReminderEditSchema, type GoogleReminderWrite, type ProviderEventState, hasKnownEventTime, EventSchema, EventWriteError, type Event } from "@musubi/types";
+import { BadRequestError, ProviderRsvpEditSchema, providerRsvpDesiredState, ProviderReminderEditSchema, type GoogleReminderWrite, type ProviderEventState, hasKnownEventTime, EventSchema, EventWriteError, type Event } from "@musubi/types";
 import {
   confirmCaldavSplitOutbox,
   confirmCaldavSeriesOutbox,
@@ -178,11 +178,14 @@ export async function deliverEventOutbox(
         const mark = async () => { await markProviderOrganizer(row); mutationStarted = true; };
         const accepted = async () => { await markProviderOrganizer(row, true); };
         if (row.provider === "microsoft") {
-          if (row.action !== "create" && row.action !== "delete") throw new EventWriteError("organizer", "unsupported");
+          if (!["create", "update", "delete"].includes(row.action)) throw new EventWriteError("organizer", "unsupported");
           const transport = await adapter!.microsoftOrganizer!(row.userID, row.accountID, row.externalCalendarID, signal);
           const outcome = await transport.deliver(row.payload.organizer, mark, accepted);
           if (outcome.kind === "observed") await completeProviderOrganizer(row, { ...outcome.native, state: outcome.state });
           else if (outcome.kind === "deleted") await completeProviderOrganizer(row, null);
+          else if (outcome.kind === "rejected") {
+            if (!(await stopMicrosoftMeetingUpdate(row, true))) throw new ProviderEventWriteError("provider-conflict", "unconfirmed");
+          }
           else await finishEventOutbox(row.id, token, "unconfirmed", "organizer-outcome-unknown", { uncertain: !!row.payload.organizer.dispatch || mutationStarted, nextAttemptAt: new Date(Date.now() + Math.min(3_600_000, 30_000 * 2 ** Math.min(row.attempts, 7))) });
         } else if (caldav) {
           const transport = await adapter!.caldavOrganizer!(row.userID, row.accountID, row.externalCalendarID, row.action, row.externalEventID ?? undefined, signal);
@@ -737,6 +740,7 @@ export async function deliverEventOutbox(
         !retryableStatus &&
         providerError.outcome !== "unconfirmed");
     if (row.payload.graphMeetingCancellation && (conflict || blocked) && await stopUndispatchedGraphMeetingCancellation(row)) return getEventOutboxRow(row.id);
+    if (row.payload.organizer && (conflict || blocked || error instanceof BadRequestError) && await stopMicrosoftMeetingUpdate(row)) return getEventOutboxRow(row.id);
     const delay = Math.max(
       providerError?.retryAfterMs ?? 0,
       Math.min(3_600_000, 1_000 * 2 ** Math.min(row.attempts, 12)) *

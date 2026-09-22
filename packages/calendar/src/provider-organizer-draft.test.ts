@@ -118,3 +118,10 @@ const caldavAlias = organizerRequest("create", { ...draft, organizerAddress: "ma
 assert.equal(caldavAlias.provider === "caldav" && caldavAlias.action === "create" && caldavAlias.organizerAddress, "mailto:alias@example.test");
 assert.equal("organizerAddress" in organizerRequest("create", { ...draft, organizerAddress: "mailto:alias@example.test" }, [], identity), false);
 assert.equal("organizerAddress" in organizerRequest("update", { ...draft, organizerAddress: "mailto:alias@example.test", title: "Renamed" }, ["title"], identity, observation), false);
+
+const outlookObservation = { ...observation, organizerEdit: { ...observation.organizerEdit, provider: "microsoft" as const, actions: ["update", "delete"] as ("update" | "delete")[] } };
+const outlookContent = organizerRequest("update", { ...draft, location: "" }, ["title", "location"], identity, outlookObservation);
+assert.equal(outlookContent.provider, "microsoft");
+assert.deepEqual(outlookContent.action === "update" && outlookContent.patch, { title: "Meeting", location: null });
+assert.throws(() => organizerRequest("update", draft, ["start"], identity, outlookObservation), /Time editing is not available/);
+for (const change of [{ guests: [] }, { time: { kind: "all-day", startDate: "2026-09-22", endDate: "2026-09-23" } }]) assert.equal(ProviderOrganizerRequestSchema.safeParse({ ...outlookContent, patch: change }).success, false);

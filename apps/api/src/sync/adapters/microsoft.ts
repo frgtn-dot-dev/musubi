@@ -150,8 +150,8 @@ export function toNormalized(item: any): NormalizedEvent {
     ...(typeof item.iCalUId === "string" ? { icalUid: item.iCalUId } : {}),
     ...(reminderTimeEvidence ? { reminderTimeEvidence } : {}),
     externalId: item.id,
-    // Keep the exact provider version. Only personal content PATCH has live
-    // conditional evidence; changeKey is never converted into an ETag.
+    // Keep the exact provider version for the verified personal and organizer
+    // content PATCH paths; changeKey is never converted into an ETag.
     etag: typeof item["@odata.etag"] === "string" ? item["@odata.etag"] : null,
     status: "active",
     providerState: microsoftEventState(item),

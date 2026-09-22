@@ -81,6 +81,12 @@ export function eventOutboxCreatedAt(eventID: string, linkID: string) {
   return sql<Date>`greatest(clock_timestamp(), coalesce((select max(created_at) + interval '1 microsecond' from event_outbox where event_id = ${eventID} and external_calendar_link_id = ${linkID}), clock_timestamp()))`;
 }
 
+/** Terminal evidence that a private Outlook update had no remote side effect. */
+export function stoppedMicrosoftMeetingUpdate() {
+  return sql`(${eventOutbox.status} = 'cancelled' and ${eventOutbox.provider} = 'microsoft' and ${eventOutbox.action} = 'update' and ${eventOutbox.payload}->'organizer' is not null and (
+    (coalesce(${eventOutbox.errorCode} = 'organizer-not-dispatched', false) and ${eventOutbox.payload}->'organizer'->'dispatch' is null) or
+    (coalesce(${eventOutbox.errorCode} = 'outlook-update-rejected', false) and ${eventOutbox.payload}->'organizer'->'dispatch'->>'startedAt' is not null and ${eventOutbox.payload}->'organizer'->'dispatch'->>'acceptedAt' is null)))`;
+}
 /** Must be called inside the event's local transaction, after its CAS and before
  * COMMIT. No FK to events/maps: delete delivery must survive their removal. */
 export async function appendEventOutbox(
@@ -102,6 +108,7 @@ export async function appendEventOutbox(
           // A request stopped before its permanent dispatch marker has no
           // remote dependency for a newly observed replacement.
           sql`not (${eventOutbox.status} = 'cancelled' and coalesce(${eventOutbox.errorCode} = 'organizer-not-dispatched', false) and ${eventOutbox.payload}->'graphMeetingCancellation' is not null and ${eventOutbox.payload}->'graphMeetingCancellation'->'dispatch' is null)`,
+          sql`not ${stoppedMicrosoftMeetingUpdate()}`,
         ),
       )
       .orderBy(
