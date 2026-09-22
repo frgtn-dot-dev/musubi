@@ -105,6 +105,11 @@ export function microsoftMeetingContentBody(request: MicrosoftOrganizerRequest) 
   request = MicrosoftOrganizerRequestSchema.parse(request);
   if (request.action !== "update") fail();
   const payload: Record<string, unknown> = {};
+  if (request.patch.time) {
+    if (request.scope !== "occurrence" || request.patch.time.kind !== "zoned" || request.patch.time.timeZone !== "UTC") fail();
+    payload.start = { dateTime: request.patch.time.startLocal, timeZone: "UTC" };
+    payload.end = { dateTime: request.patch.time.endLocal, timeZone: "UTC" };
+  }
   if (request.patch.title !== undefined) payload.subject = request.patch.title;
   if (request.patch.description !== undefined) payload.body = { contentType: "text", content: request.patch.description ?? "" };
   if (request.patch.location !== undefined) payload.location = { displayName: request.patch.location ?? "" };
@@ -133,6 +138,11 @@ export function matchesMeetingContent(baseline: Record<string, unknown>, patch: 
       if ("location" in patch) {
         delete item.locations;
         item.location = { displayName: (item.location as { displayName: string }).displayName };
+      }
+      if ("start" in patch || "end" in patch) {
+        // Graph pads UTC fractional seconds to seven digits; compare instants.
+        const time = graphRsvpTime({ ...item, type: "singleInstance" });
+        item.start = time.start.toISOString(); item.end = time.end.toISOString();
       }
       const body = item.body as { contentType: string; content: string };
       item.body = { ...body, contentType: body.contentType.toLowerCase(), content: body.content.trim() };

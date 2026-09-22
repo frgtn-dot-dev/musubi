@@ -311,12 +311,13 @@ export function ProviderOrganizerEditor({
                   {addressPickerOpen ? <OptionPicker visible title="Organizer address" options={organizerAddresses.map(value => ({value, label:value.slice(7)}))} value={draft.organizerAddress} onSelect={value => patch("organizerAddress", value)} onClose={() => setAddressPickerOpen(false)} /> : null}
                 </View> : null}
                 {fields.filter(([key]) => (!occurrence || key !== "guests") && !["description", "location"].includes(key)).map(renderField)}
-                {(provider !== "google" && event && !canEditTime) || occurrence ? (
+                {(provider !== "google" && event && !canEditTime) || (occurrence && (provider !== "microsoft" || !canEditTime)) ? (
                   <View style={{ alignItems: "flex-end", paddingHorizontal: spacing[4] }}>
                     {info("Meeting editing", wholeSeries ? "Changes apply to the series. Individual occurrence changes are preserved." : occurrence ? "Only this occurrence will change." : "Meeting time and guests are preserved.")}
                   </View>
                 ) : (
                   <>
+                    {provider === "microsoft" && occurrence ? info("Occurrence editing", "Only this occurrence will change.") : null}
                     {provider === "caldav" && event ? (
                       info("Changing meeting time", "Changing time asks guests to respond again. Their existing responses will reset.")
                     ) : null}
@@ -330,7 +331,7 @@ export function ProviderOrganizerEditor({
                       </View>)}
                       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 56, paddingVertical: 6 }}>
                         <Text style={[styles.fieldValueText, { color: colors.fg2 }]}>All-day</Text>
-                        <Switch accessibilityLabel="All day" value={draft.allDay} disabled={locked || (provider === "caldav" && !!event)} thumbColor={draft.allDay ? colors.accent : colors.bg3} trackColor={{ false: colors.line, true: colors.line3 }} onValueChange={value => {
+                        <Switch accessibilityLabel="All day" value={draft.allDay} disabled={locked || (provider !== "google" && !!event)} thumbColor={draft.allDay ? colors.accent : colors.bg3} trackColor={{ false: colors.line, true: colors.line3 }} onValueChange={value => {
                           for (const key of ["start", "end"] as const) if (draft[key]) patch(key, value ? draft[key].slice(0, 10) : draft[key].includes("T") ? draft[key] : `${draft[key]}T${key === "start" ? "09" : "10"}:00:00`);
                           patch("allDay", value);
                         }} />

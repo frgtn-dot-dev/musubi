@@ -1,3 +1,4 @@
+import { resolveEventTimeEdit } from "@musubi/calendar";
 import { and, eq, sql } from "drizzle-orm";
 import { BadRequestError, EventSchema, MicrosoftRecurringContentRequestSchema, type MicrosoftRecurringContentRequest, type Event } from "@musubi/types";
 import { db } from "..";
@@ -20,9 +21,37 @@ export type GraphOccurrenceContent = {
   dispatch?: { startedAt: string; acceptedAt?: string };
 };
 
+/** This first rescheduling contract is timed UTC only. Never infer an exception's
+ * authoring zone from historical original*TimeZone labels. */
+export function graphOccurrenceTimeSupported(saved: Pick<GraphOccurrenceContent, "baseline" | "targetID" | "template" | "native">) {
+  const target = saved.baseline.instances.find(n => n.externalID === saved.targetID);
+  return saved.template.timeModel?.kind === "zoned" && saved.template.timeModel.timeZone === "UTC" &&
+    saved.native.originalStartTimeZone === "UTC" && saved.native.originalEndTimeZone === "UTC" &&
+    !!target && !target.values.isAllDay && target.originalStart.kind === "instant";
+}
+export function graphOccurrenceTimeChange(saved: Pick<GraphOccurrenceContent, "baseline" | "targetID" | "template" | "native" | "request">) {
+  const input = saved.request.patch.time;
+  if (!input) return undefined;
+  if (saved.request.scope !== "occurrence" || !graphOccurrenceTimeSupported(saved) || input.kind !== "zoned" || input.timeZone !== "UTC") refuse();
+  const desired = resolveEventTimeEdit(input);
+  const target = saved.baseline.instances.find(n => n.externalID === saved.targetID)!;
+  const slots = [...saved.baseline.instances.map(n => ({ ...n.values, originalStart: n.originalStart })), ...saved.baseline.cancelled]
+    .sort((a, b) => a.originalStart.value.localeCompare(b.originalStart.value));
+  const index = slots.findIndex(n => same(n.originalStart, target.originalStart));
+  if (index < 0 || desired.end <= desired.start || [desired.start, desired.end].some(value => Math.abs(value.getTime() - new Date(target.originalStart.value).getTime()) > 730 * 86_400_000)) refuse();
+  const day = (value: Date | string) => new Date(value).toISOString().slice(0, 10);
+  const previous = slots[index - 1], next = slots[index + 1];
+  // Include cancelled slots and both original and moved neighbours. Outlook
+  // forbids crossing their days, not just overlapping their time intervals.
+  if ((previous && (day(desired.start) <= day(previous.originalStart.value) || day(desired.start) <= day(previous.end))) ||
+      (next && (day(desired.end) >= day(next.originalStart.value) || day(desired.end) >= day(next.start))))
+    throw new BadRequestError("Keep this occurrence between the days of its previous and next occurrences.");
+  return desired;
+}
+
 /** The whole bounded family must survive, including moved and cancelled slots.
- * Ignore change tokens, but never ignore guests, time or unrelated content. */
-export function graphOccurrenceContentObserved(saved: Pick<GraphOccurrenceContent, "baseline" | "targetID" | "request">, after: GraphFamilyObservation | null) {
+ * Ignore change tokens, but never ignore guests, unrequested time or other content. */
+export function graphOccurrenceContentObserved(saved: Pick<GraphOccurrenceContent, "baseline" | "targetID" | "request" | "template" | "native">, after: GraphFamilyObservation | null) {
   if (saved.request.scope === "series") return graphSeriesContentObserved(saved, after);
   if (!after) return false;
   const before = saved.baseline.instances.find(n => n.externalID === saved.targetID);
@@ -30,15 +59,17 @@ export function graphOccurrenceContentObserved(saved: Pick<GraphOccurrenceConten
   if (!before || !target || !target.etag || after.instances.length !== saved.baseline.instances.length || after.instances.filter(n => n.externalID === saved.targetID).length !== 1) return false;
   const content = ({ etag: _etag, ...value }: GraphFamilyObservation["master"]) => value;
   const patch = saved.request.patch;
-  const values = { ...before.values,
+  const desiredTime = graphOccurrenceTimeChange(saved);
+  const values = { ...before.values, ...(desiredTime ?? {}),
     ...(patch.title !== undefined ? { title: patch.title } : {}),
     ...(patch.description !== undefined ? { description: patch.description?.trim() || null } : {}),
     ...(patch.location !== undefined ? { location: patch.location?.trim() || null } : {}),
   };
   // The reader deliberately marks exception time as legacy-unknown instead of
   // inferring its authoring zone from the master's rule. Native UTC instants and
-  // original slot still match; the stored local time model is never overwritten.
-  if (before.providerState.eventType === "occurrence" && target.providerState.eventType === "exception" && target.values.timeModel.kind === "legacy-unknown") values.timeModel = target.values.timeModel;
+  // original slot must still match. Content-only edits preserve stored time; an
+  // explicit time edit commits the verified UTC intent instead.
+  if ((desiredTime || before.providerState.eventType === "occurrence") && target.providerState.eventType === "exception" && target.values.timeModel.kind === "legacy-unknown") values.timeModel = target.values.timeModel;
   const eventType = before.providerState.eventType === "occurrence" && target.providerState.eventType === "exception" ? "exception" : before.providerState.eventType;
   return same(content(after.master), content(saved.baseline.master)) &&
     same(after.instances.filter(n => n.externalID !== saved.targetID).map(content), saved.baseline.instances.filter(n => n.externalID !== saved.targetID).map(content)) &&
@@ -75,6 +106,7 @@ export function graphContentVersion(saved: Pick<GraphOccurrenceContent, "context
 function assertBoundContent(saved: GraphOccurrenceContent) {
   MicrosoftRecurringContentRequestSchema.parse(saved.request);
   assertGraphMeetingRequest(saved.context, saved.request);
+  graphOccurrenceTimeChange(saved);
   const mapping = saved.context.mappings.find(m => m.eventID === saved.request.eventID)!;
   const series = saved.request.scope === "series";
   const target = series ? saved.baseline.master : saved.baseline.instances.find(n => n.externalID === saved.targetID);
@@ -140,14 +172,15 @@ export const markGraphOccurrenceContent = (row: EventOutboxRow, accepted = false
 export const completeGraphOccurrenceContent = (row: EventOutboxRow, observation: GraphFamilyObservation) => withLease(row, async (tx, saved) => {
   if ((!saved.dispatch?.acceptedAt && (saved.dispatch || !same(saved.baseline, observation))) || !graphOccurrenceContentObserved(saved, observation)) refuse();
   const now = new Date();
+  const time = graphOccurrenceTimeChange(saved);
   const native = [observation.master, ...observation.instances].find(n => n.externalID === saved.targetID)!;
   for (const previous of saved.context.family) {
     if (previous.deletedAt || previous.isCanceled || (saved.request.scope !== "series" && previous.id !== row.eventID)) continue;
     const mapping = saved.context.mappings.find(m => m.eventID === previous.id);
     const actual = [observation.master, ...observation.instances].find(n => n.externalID === mapping?.externalEventID);
     if (!actual) refuse();
-    const content = { title: actual.values.title, description: actual.values.description, location: actual.values.location };
-    if (!same(content, { title: previous.title, description: previous.description, location: previous.location }))
+    const content = { title: actual.values.title, description: actual.values.description, location: actual.values.location, ...(time ?? {}) };
+    if (!same(content, { title: previous.title, description: previous.description, location: previous.location, ...(time ? { start: previous.start, end: previous.end, isAllDay: previous.isAllDay, timeModel: previous.timeModel } : {}) }))
       await tx.update(events).set({ ...content, revision: sql`${events.revision} + 1`, updatedAt: now }).where(eq(events.id, previous.id));
   }
   for (const mapping of saved.context.mappings) {

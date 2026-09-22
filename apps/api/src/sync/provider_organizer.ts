@@ -1,4 +1,4 @@
-import { findGraphOccurrenceContent, saveGraphOccurrenceContent } from "@musubi/db";
+import { graphOccurrenceTimeSupported, findGraphOccurrenceContent, saveGraphOccurrenceContent } from "@musubi/db";
 import { MicrosoftRecurringContentRequestSchema, MicrosoftOccurrenceContentRequestSchema } from "@musubi/types";
 import { readGraphMeetingContext, findGraphMeetingCancellation, saveGraphMeetingCancellation } from "@musubi/db";
 import { MicrosoftSeriesCancellationRequestSchema } from "@musubi/types";
@@ -204,7 +204,7 @@ export async function observeProviderOrganizer(
   actorID: string,
   eventID: string,
   observation: ProviderEventStateResponse,
-  outlookOrganizer: boolean | "series" | "content" | "series-content" = false,
+  outlookOrganizer: boolean | "series" | "content" | "series-content" | "occurrence-time" = false,
 ) {
   // Older clients strictly parse the provider enum. Only advertise the new
   // capability to clients that explicitly opt into this additive read.
@@ -222,6 +222,8 @@ export async function observeProviderOrganizer(
     const { getEventSnapshot } = await import("@musubi/db");
     const event = await getEventSnapshot(eventID);
     if (!event?.originCalendarID || !event.revision) return observation;
+    const occurrenceTime = outlookOrganizer === "occurrence-time";
+    if (occurrenceTime) outlookOrganizer = "series-content";
     if (observation.state?.provider === "microsoft" && outlookOrganizer === "series-content") {
       // v4 is additive; never send new strict fields to v1–v3 clients.
       outlookOrganizer = "content";
@@ -240,7 +242,7 @@ export async function observeProviderOrganizer(
         const cancellation = native.baseline.master.providerState.attendees.length ? await microsoftAdapter.observeGraphMeetingCancellation!(context, AbortSignal.timeout(20_000)).catch(() => undefined) : undefined;
         return { ...observation,
           ...(cancellation ? { outlookCancellation: { calendarID: event.originCalendarID, expectedRevision: event.revision, seriesVersion: cancellation.version, scopes: cancellation.scopes } } : {}),
-          organizerEdit: { provider: "microsoft" as const, scope: "occurrence" as const, seriesVersion: native.version, calendarID: event.originCalendarID, expectedRevision: event.revision, actions: ["update" as const] },
+          organizerEdit: { ...(occurrenceTime && config.api.eventTimeEditsEnabled && graphOccurrenceTimeSupported({ ...native, targetID: native.native.id }) ? { timeEdit: true as const } : {}), provider: "microsoft" as const, scope: "occurrence" as const, seriesVersion: native.version, calendarID: event.originCalendarID, expectedRevision: event.revision, actions: ["update" as const] },
         };
       } catch { /* Cancellation or one-off content editing can still qualify. */ }
     }

@@ -302,3 +302,7 @@ děti, čtyři mapování, zachovaný záměr a stabilní sync. Úklid je dokon�
 aktivních fixture řádků nula. Nejde o rozšíření přísného Graph parseru nebo
 produkční writer; [evidence přesně odděluje odmítnutou UI variantu a pozitivní
 kontrolovanou fixture](calendar-outlook-adoption-browser-acceptance-20260911.md).
+
+## Outlook změny existující série — aktualizace 2026-09-22
+
+Novější ověřené kroky doplňují historický stav výše: [obsah jednoho výskytu](outlook-occurrence-content-20260922.md), [obsah celé série](outlook-series-content-20260922.md) a [čas jednoho výskytu UTC série](outlook-occurrence-time-20260922.md) pro osobní události i schůzky organizátora. Zůstávají vázané na úplnou nativní evidenci, přesnou identitu a příslušné feature flagy. Změny času celé série, další časové zóny/celodenní přesuny, recurrence pravidla a „tento a následující“ tím nejsou převzaté. Nejde o produkční aktivaci ani garanci doručení pozvánek.

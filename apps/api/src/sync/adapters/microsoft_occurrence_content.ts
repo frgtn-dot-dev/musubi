@@ -1,3 +1,7 @@
+import { setTimeout as delay } from "node:timers/promises";
+import { config } from "@musubi/config";
+import { OrganizerAdmissionRejectedError } from "@musubi/types";
+import { graphOccurrenceTimeChange } from "@musubi/db";
 import { updateGraphSeriesContent } from "./microsoft_series_content";
 import { graphOriginalStartFromUtc } from "./microsoft_time";
 import { type MicrosoftOccurrenceContentRequest } from "@musubi/types";
@@ -25,7 +29,13 @@ export async function prepareGraphOccurrenceContent(token: string, context: Grap
   assertGraphMeetingRequest(context, request);
   const observed = await observeGraphOccurrenceContent(token, context, signal);
   if (observed.version !== request.expectedSeriesVersion) fail();
-  return { version: 1, context, request, baseline: observed.baseline, native: observed.native, identity: observed.identity, template: observed.template, targetID: observed.native.id };
+  const saved: GraphOccurrenceContent = { version: 1, context, request, baseline: observed.baseline, native: observed.native, identity: observed.identity, template: observed.template, targetID: observed.native.id };
+  if (request.patch.time) {
+    if (!config.api.eventTimeEditsEnabled) throw new OrganizerAdmissionRejectedError("Time editing is not available.");
+    try { graphOccurrenceTimeChange(saved); }
+    catch (error) { throw new OrganizerAdmissionRejectedError(error instanceof Error ? error.message : "Choose a time between neighbouring occurrences."); }
+  }
+  return saved;
 }
 
 /** Conditional PATCH only targets one native occurrence. Never re-send after a
@@ -37,6 +47,8 @@ export async function updateGraphOccurrenceContent(token: string, saved: GraphOc
   const baseline = microsoftMeetingContentEvidence(saved.native, saved.identity.selfAddress, saved.context.masterID);
   const target = saved.baseline.instances.find(n => n.externalID === saved.targetID);
   if (!target || target.etag !== baseline.etag || target.icalUid !== baseline.iCalUId || saved.targetID !== baseline.id) fail();
+  graphOccurrenceTimeChange(saved);
+  if (saved.request.patch.time && !config.api.eventTimeEditsEnabled && !saved.dispatch) fail();
   const patch = microsoftMeetingContentBody(saved.request);
   const read = async () => {
     const family = await transport.read(saved.template, saved.baseline.master.icalUid);
@@ -46,8 +58,16 @@ export async function updateGraphOccurrenceContent(token: string, saved: GraphOc
   const matches = (value: Awaited<ReturnType<typeof read>>) => value.family && graphOccurrenceContentObserved(saved, value.family) &&
     matchesMeetingContent(baseline, patch, value.native, saved.identity.selfAddress, saved.context.masterID) &&
     value.family.instances.find(n => n.externalID === saved.targetID)?.etag === microsoftMeetingContentEvidence(value.native, saved.identity.selfAddress, saved.context.masterID).etag;
+  const verify = async () => {
+    for (const wait of [0, 200, 400, 800]) {
+      if (wait) await delay(wait, undefined, { signal });
+      const value = await read().catch(() => null);
+      if (value && matches(value)) return value;
+    }
+    return null;
+  };
   if (saved.dispatch) {
-    const after = await read().catch(() => null);
+    const after = await verify();
     if (!saved.dispatch.acceptedAt || !after || !matches(after)) return unknown();
     return { kind: "observed" as const, observation: after.family! };
   }
@@ -58,14 +78,18 @@ export async function updateGraphOccurrenceContent(token: string, saved: GraphOc
   try {
     const response = await fetch(transport.path(saved.targetID), { method: "PATCH", headers: { ...transport.headers, "Content-Type": "application/json", "If-Match": baseline.etag }, body: JSON.stringify(patch), signal, redirect: "error" });
     if (response.status === 412) return { kind: "rejected" as const };
+    if (response.status === 400 && saved.request.patch.time) {
+      const error = await response.json().catch(() => null);
+      if (error?.error?.code === "ErrorOccurrenceCrossingBoundary") return { kind: "rejected" as const };
+    }
     if (response.status !== 200) return unknown();
     // Graph omits originalStart from ordinary PATCH responses. Identity here
     // acknowledges acceptance; the selected full GET below proves the result.
     const native = await response.json();
     if (native?.id !== baseline.id || native.iCalUId !== baseline.iCalUId || native.seriesMasterId !== saved.context.masterID || !["occurrence", "exception"].includes(native.type)) return unknown();
     await accepted();
-    const after = await read();
-    if (!matches(after)) return unknown();
+    const after = await verify();
+    if (!after) return unknown();
     return { kind: "observed" as const, observation: after.family! };
   } catch { return unknown(); }
 }
