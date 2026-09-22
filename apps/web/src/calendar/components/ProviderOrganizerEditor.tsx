@@ -175,7 +175,7 @@ export function ProviderOrganizerEditor({
       await editProviderOrganizer(frozen.current, connectionId);
       setConfirm(false);
       setNotice(
-        `Meeting change saved. Check Delivery details for ${provider === "caldav" ? "the CalDAV server’s" : provider === "microsoft" ? "Outlook's" : "Google's"} result. Guest notification delivery remains unknown.`,
+        `${personalOccurrence ? "Event" : "Meeting"} change saved. Check Delivery details for ${provider === "caldav" ? "the CalDAV server’s" : provider === "microsoft" ? "Outlook's" : "Google's"} result.${personalOccurrence ? "" : " Guest notification delivery remains unknown."}`,
       );
     } catch (cause) {
       if (
@@ -199,7 +199,8 @@ export function ProviderOrganizerEditor({
     }
   }
   const closeButton = useRef<HTMLButtonElement | null>(null);
-  const occurrence = provider === "google" && observation?.organizerEdit?.scope === "occurrence";
+  const occurrence = observation?.organizerEdit?.scope === "occurrence";
+  const personalOccurrence = provider === "microsoft" && occurrence && observation?.state?.attendeesComplete && observation.state.attendees.length === 0;
   const locked = busy || submitted || !canUpdate;
   return (
     <div
@@ -213,7 +214,7 @@ export function ProviderOrganizerEditor({
         open
         closeLabel="Close meeting editor"
         title={occurrence ? "Manage this occurrence" : `${event ? "Manage" : "Create"} ${provider === "caldav" ? "CalDAV" : provider === "microsoft" ? "Outlook" : "Google"} meeting`}
-        headerActions={<DialogInfo label="Meeting invitation information" title="Invitations">{organizerNotificationNotice(provider)}</DialogInfo>}
+        headerActions={personalOccurrence ? undefined : <DialogInfo label="Meeting invitation information" title="Invitations">{organizerNotificationNotice(provider)}</DialogInfo>}
         returnFocus={returnFocus}
         onOpenChange={(open) => {
           if (!open && !pending.current) onClose();
@@ -240,7 +241,7 @@ export function ProviderOrganizerEditor({
                 {submitted
                   ? "Retry saved meeting action"
                   : event
-                    ? "Save and notify guests"
+                    ? (personalOccurrence ? "Save" : "Save and notify guests")
                     : "Create and send invitations"}
               </Button>
             )}
@@ -340,7 +341,7 @@ export function ProviderOrganizerFields({
               </Field>
             )}
             {(provider !== "google" && event && !canEditTime) || occurrence ? (
-              <p>{occurrence ? "Only this occurrence will change. Series timing and guests stay unchanged." : "Meeting time and guests are preserved."}</p>
+              <p>{occurrence ? "Only this occurrence will change." : "Meeting time and guests are preserved."}</p>
             ) : (
               <>
                 {provider === "caldav" && event ? (

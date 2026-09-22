@@ -130,6 +130,9 @@ export type FetchChangesResult = {
 // never talks to Google/Graph/CalDAV directly — only through an adapter.
 export type CalendarAdapter = {
   caldavOrganizer?: ReturnType<typeof import("./adapters/caldav_organizer_delivery").caldavOrganizerTransport>;
+  observeGraphOccurrenceContent?: (context: import("@musubi/db").GraphMeetingContext, signal?: AbortSignal) => ReturnType<typeof import("./adapters/microsoft_occurrence_content").observeGraphOccurrenceContent>;
+  prepareGraphOccurrenceContent?: (context: import("@musubi/db").GraphMeetingContext, request: import("@musubi/types").MicrosoftOccurrenceContentRequest, signal?: AbortSignal) => Promise<import("@musubi/db").GraphOccurrenceContent>;
+  updateGraphOccurrenceContent?: (saved: import("@musubi/db").GraphOccurrenceContent, mark: () => Promise<void>, accepted: () => Promise<void>, signal?: AbortSignal) => ReturnType<typeof import("./adapters/microsoft_occurrence_content").updateGraphOccurrenceContent>;
   observeGraphMeetingCancellation?: (context: import("@musubi/db").GraphMeetingContext, signal?: AbortSignal) => ReturnType<typeof import("./adapters/microsoft_meeting_cancel").observeGraphMeetingCancellation>;
   prepareGraphMeetingCancellation?: (context: import("@musubi/db").GraphMeetingContext, request: import("@musubi/types").MicrosoftSeriesCancellationRequest, signal?: AbortSignal) => Promise<import("@musubi/db").GraphMeetingCancellation>;
   cancelGraphMeeting?: (saved: import("@musubi/db").GraphMeetingCancellation, mark: () => Promise<void>, accepted: () => Promise<void>, signal?: AbortSignal) => Promise<import("@musubi/db").GraphFamilyObservation | null>;

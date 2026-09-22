@@ -1,27 +1,27 @@
 import { createHash } from "node:crypto";
 import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
-import { BadRequestError, EventSchema, MicrosoftSeriesCancellationRequestSchema, type Event, type MicrosoftSeriesCancellationRequest } from "@musubi/types";
+import { BadRequestError, EventSchema, MicrosoftSeriesCancellationRequestSchema, type Event, type MicrosoftSeriesCancellationRequest, type MicrosoftOccurrenceContentRequest } from "@musubi/types";
 import { db } from "..";
 import { events, externalEvents, calendarEvents, eventOutbox } from "../schema";
 import type { DbTransaction } from "./calendars";
 import { lockCalendarLifecycle, lockUserLifecycle } from "./calendar-lifecycle";
 import { readOrganizerSourceInTransaction } from "./provider-organizer";
-import { appendEventOutbox, type EventOutboxRow } from "./event-outbox";
+import { appendEventOutbox, stoppedGraphOccurrenceContent, type EventOutboxRow } from "./event-outbox";
 import { providerStateVersion } from "./provider-reminders";
 import { sameCaldavScopeContext as same } from "./caldav-series-scope";
 import type { GraphFamilyObservation } from "./graph-family";
 
-function refuse(): never { throw new BadRequestError("The Outlook meeting series changed. Sync and reopen it before cancelling."); }
+function refuse(): never { throw new BadRequestError("The Outlook meeting series changed. Sync and reopen it before making changes."); }
 const canonical = (v: unknown): unknown => v instanceof Date ? v.toISOString() : Array.isArray(v) ? v.map(canonical) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).filter(([, value]) => value !== undefined).sort(([a], [b]) => a.localeCompare(b)).map(([k, value]) => [k, canonical(value)])) : v;
 export const graphMeetingVersion = (value: unknown) => createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex");
 type Address = { actorID: string; calendarID: string; eventID: string };
-async function lock(tx: DbTransaction, address: Address) {
+export async function lockGraphMeetingContext(tx: DbTransaction, address: Address) {
   await lockUserLifecycle(tx, [address.actorID], "shared");
   await lockCalendarLifecycle(tx, [address.calendarID], "exclusive");
 }
 /** Both canonical families and provider-expanded rows retain their own model.
  * Calendar admission prevents sync from introducing a new sibling mid-commit. */
-async function contextInTransaction(tx: DbTransaction, address: Address, excludedOperationID?: string) {
+export async function graphMeetingContextInTransaction(tx: DbTransaction, address: Address, excludedOperationID?: string) {
   const link = await readOrganizerSourceInTransaction(tx, address.actorID, address.calendarID, "microsoft");
   const [selected] = await tx.select().from(externalEvents).where(and(eq(externalEvents.eventID, address.eventID), eq(externalEvents.calendarID, address.calendarID)));
   if (!selected || selected.provider !== "microsoft") refuse();
@@ -48,8 +48,9 @@ async function contextInTransaction(tx: DbTransaction, address: Address, exclude
   }
   const pending = await tx.select({ id: eventOutbox.id }).from(eventOutbox).where(and(
     excludedOperationID ? ne(eventOutbox.id, excludedOperationID) : undefined,
+    sql`not ${stoppedGraphOccurrenceContent()}`,
     sql`${eventOutbox.status} not in ('completed', 'not-needed') and not (${eventOutbox.payload}->'graphMeetingCancellation' is not null and ${eventOutbox.payload}->'graphMeetingCancellation'->'dispatch' is null and ${eventOutbox.status} in ('conflict', 'blocked', 'cancelled'))`,
-    or(inArray(eventOutbox.eventID, ids), and(eq(eventOutbox.externalCalendarLinkID, link.id), sql`(${eventOutbox.payload}->'graphSeriesCreate' is not null or ${eventOutbox.payload}->'graphMeetingCancellation' is not null)`)),
+    or(inArray(eventOutbox.eventID, ids), and(eq(eventOutbox.externalCalendarLinkID, link.id), sql`(${eventOutbox.payload}->'graphSeriesCreate' is not null or ${eventOutbox.payload}->'graphMeetingCancellation' is not null or ${eventOutbox.payload}->'graphOccurrenceContent' is not null)`)),
   )).limit(1);
   if (pending.length) refuse();
   // Refresh timestamps and sync cursors are not authority or content changes.
@@ -58,7 +59,7 @@ async function contextInTransaction(tx: DbTransaction, address: Address, exclude
     link: { id: link.id, accountID: link.accountID, externalCalendarID: link.externalCalendarID, providerAccessRevision: link.providerAccessRevision, providerAccessRole: link.providerAccessRole },
   };
 }
-export type GraphMeetingContext = Awaited<ReturnType<typeof contextInTransaction>>;
+export type GraphMeetingContext = Awaited<ReturnType<typeof graphMeetingContextInTransaction>>;
 export type GraphMeetingCancellation = {
   version: 1; context: GraphMeetingContext; request: MicrosoftSeriesCancellationRequest;
   baseline: GraphFamilyObservation; targetID: string; template: Event;
@@ -66,9 +67,9 @@ export type GraphMeetingCancellation = {
   dispatch?: { startedAt: string; acceptedAt?: string };
 };
 export async function readGraphMeetingContext(address: Address) {
-  return db.transaction(async tx => { await lock(tx, address); return contextInTransaction(tx, address); });
+  return db.transaction(async tx => { await lockGraphMeetingContext(tx, address); return graphMeetingContextInTransaction(tx, address); });
 }
-export function assertGraphMeetingRequest(context: GraphMeetingContext, request: MicrosoftSeriesCancellationRequest) {
+export function assertGraphMeetingRequest(context: GraphMeetingContext, request: MicrosoftSeriesCancellationRequest | MicrosoftOccurrenceContentRequest) {
   const event = context.family.find(e => e.id === request.eventID);
   const mapping = context.mappings.find(m => m.eventID === request.eventID);
   if (!event || !mapping || event.deletedAt || event.isCanceled || event.revision !== request.expectedRevision || providerStateVersion(mapping) !== request.expectedStateVersion || request.calendarID !== context.address.calendarID || request.eventID !== context.address.eventID || request.scope === "occurrence" && !mapping.externalSeriesID) refuse();
@@ -76,7 +77,7 @@ export function assertGraphMeetingRequest(context: GraphMeetingContext, request:
 const receipt = (row: EventOutboxRow, replayed: boolean) => ({ operationID: row.id, eventID: row.eventID, replayed, status: row.status, localCommitted: true as const, notificationDelivery: "unknown" as const });
 export async function findGraphMeetingCancellation(actorID: string, request: MicrosoftSeriesCancellationRequest) {
   return db.transaction(async tx => {
-    await lock(tx, { actorID, ...request });
+    await lockGraphMeetingContext(tx, { actorID, ...request });
     const link = await readOrganizerSourceInTransaction(tx, actorID, request.calendarID, "microsoft");
     const [row] = await tx.select().from(eventOutbox).where(eq(eventOutbox.id, request.operationID));
     if (!row) return undefined;
@@ -86,14 +87,14 @@ export async function findGraphMeetingCancellation(actorID: string, request: Mic
 }
 export async function saveGraphMeetingCancellation(saved: GraphMeetingCancellation) {
   return db.transaction(async tx => {
-    await lock(tx, saved.context.address);
+    await lockGraphMeetingContext(tx, saved.context.address);
     const link = await readOrganizerSourceInTransaction(tx, saved.context.address.actorID, saved.context.address.calendarID, "microsoft");
     const [previous] = await tx.select().from(eventOutbox).where(eq(eventOutbox.id, saved.request.operationID));
     if (previous) {
       if (previous.actorID !== saved.context.address.actorID || previous.externalCalendarLinkID !== link.id || !same(previous.payload.graphMeetingCancellation?.request, saved.request)) refuse();
       return receipt(previous, true);
     }
-    const current = await contextInTransaction(tx, saved.context.address);
+    const current = await graphMeetingContextInTransaction(tx, saved.context.address);
     if (!same(current, saved.context)) refuse();
     assertGraphMeetingRequest(current, saved.request);
     const event = EventSchema.parse({ ...current.family.find(e => e.id === saved.request.eventID), calendars: [current.address.calendarID] });
@@ -111,8 +112,8 @@ async function withLease<T>(row: EventOutboxRow, action: (tx: DbTransaction, sav
     const initial = row.payload.graphMeetingCancellation;
     if (!initial || initial.version !== 1 || row.provider !== "microsoft" || row.action !== "delete" || row.actorID !== initial.context.address.actorID || row.userID !== row.actorID) refuse();
     MicrosoftSeriesCancellationRequestSchema.parse(initial.request);
-    await lock(tx, initial.context.address);
-    const context = await contextInTransaction(tx, initial.context.address, row.id);
+    await lockGraphMeetingContext(tx, initial.context.address);
+    const context = await graphMeetingContextInTransaction(tx, initial.context.address, row.id);
     if (!same(context, initial.context)) refuse();
     const [current] = await tx.select().from(eventOutbox).where(and(eq(eventOutbox.id, row.id), eq(eventOutbox.status, "attempting"), eq(eventOutbox.leaseToken, row.leaseToken!), sql`${eventOutbox.leaseUntil} > clock_timestamp()`)).for("update");
     const saved = current?.payload.graphMeetingCancellation;

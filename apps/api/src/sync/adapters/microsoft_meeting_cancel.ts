@@ -11,13 +11,13 @@ import { verifiedGraphIdentity } from "./microsoft_identity";
 function fail(): never { throw new ProviderEventWriteError("provider-conflict"); }
 const unknown = (): never => { throw new ProviderEventWriteError("provider-write-failed", "unconfirmed"); };
 const root = "https://graph.microsoft.com/v1.0";
-async function session(token: string, context: GraphMeetingContext, signal?: AbortSignal) {
+export async function graphOrganizerFamilySession(token: string, context: GraphMeetingContext, signal?: AbortSignal, allowPersonal = false) {
   const headers = { Authorization: `Bearer ${token}`, Prefer: 'outlook.timezone="UTC", outlook.body-content-type="text"', "Cache-Control": "no-cache" };
   const get = async (url: string) => { const response = await fetch(url, { headers, signal, redirect: "error" }); assertCompleteEventReadResponse(response); return response.json(); };
   const identity = await verifiedGraphIdentity(get, context.link.accountID, context.link.externalCalendarID);
   const path = (id: string) => `${root}/me/calendars/${encodeURIComponent(identity.calendarID)}/events/${encodeURIComponent(id)}`;
   const readTarget = async (id: string) => {
-    const native = microsoftCancellationEvidence(await get(path(id)), identity.selfAddress, context.masterID);
+    const native = microsoftCancellationEvidence(await get(path(id)), identity.selfAddress, context.masterID, allowPersonal);
     if (native.id !== id) fail();
     return native;
   };
@@ -27,11 +27,11 @@ async function session(token: string, context: GraphMeetingContext, signal?: Abo
     const observation = graphFamilyObservation(family);
     for (const value of [observation.master, ...observation.instances]) {
       const state = value.providerState;
-      if (!value.etag || !state.attendeesComplete || !state.attendees.length || state.attendees.length > 100 || state.isOrganizer !== true || state.status !== "active" || state.organizer?.address?.toLowerCase() !== identity.selfAddress || state.conferenceURLs.length || new Set(state.attendees.map(p => p.address?.toLowerCase())).size !== state.attendees.length || state.attendees.some(p => !p.address)) fail();
+      if (!value.etag || !state.attendeesComplete || (!allowPersonal && !state.attendees.length) || state.attendees.length > 100 || state.isOrganizer !== true || state.status !== "active" || state.organizer?.address?.toLowerCase() !== identity.selfAddress || state.conferenceURLs.length || new Set(state.attendees.map(p => p.address?.toLowerCase())).size !== state.attendees.length || state.attendees.some(p => !p.address)) fail();
     }
     return observation;
   };
-  return { identity, read, readTarget, cancel: (id: string, etag: string) => fetch(path(id) + "/cancel", { method: "POST", headers: { ...headers, "Content-Type": "application/json", "If-Match": etag }, body: "{}", signal, redirect: "error" }) };
+  return { identity, read, readTarget, get, path, headers, cancel: (id: string, etag: string) => fetch(path(id) + "/cancel", { method: "POST", headers: { ...headers, "Content-Type": "application/json", "If-Match": etag }, body: "{}", signal, redirect: "error" }) };
 }
 function verifyLocal(context: GraphMeetingContext, baseline: GraphFamilyObservation) {
   for (const event of context.family) {
@@ -57,8 +57,8 @@ function verifyLocal(context: GraphMeetingContext, baseline: GraphFamilyObservat
     } else if (event.id !== context.rootID || event.recurrence !== native.values.recurrence) fail();
   }
 }
-export async function observeGraphMeetingCancellation(token: string, context: GraphMeetingContext, signal?: AbortSignal) {
-  const transport = await session(token, context, signal);
+export async function observeGraphOrganizerFamily(token: string, context: GraphMeetingContext, signal?: AbortSignal, allowPersonal = false) {
+  const transport = await graphOrganizerFamilySession(token, context, signal, allowPersonal);
   const raw = await transport.readTarget(context.masterID);
   const existing = context.family.find(e => e.id === context.rootID);
   const template = EventSchema.parse({ ...context.family.find(e => e.id === context.address.eventID), ...(existing ?? graphMasterTimeFromUtc(raw)), seriesID: null, originalStart: null, isCanceled: false, deletedAt: null, calendars: [context.address.calendarID] });
@@ -70,6 +70,7 @@ export async function observeGraphMeetingCancellation(token: string, context: Gr
   return { context, template, baseline, identity: transport.identity, scopes,
     version: graphMeetingVersion({ context, baseline, identity: transport.identity }) };
 }
+export const observeGraphMeetingCancellation = (token: string, context: GraphMeetingContext, signal?: AbortSignal) => observeGraphOrganizerFamily(token, context, signal);
 export async function prepareGraphMeetingCancellation(token: string, context: GraphMeetingContext, request: MicrosoftSeriesCancellationRequest, signal?: AbortSignal): Promise<GraphMeetingCancellation> {
   assertGraphMeetingRequest(context, request);
   const observed = await observeGraphMeetingCancellation(token, context, signal);
@@ -91,7 +92,7 @@ export function graphMeetingCancellationObserved(saved: GraphMeetingCancellation
 /** One permanent dispatch marker, one POST. Durable 202 + full native outcome
  * is acceptance, never proof of delivery to the guest's mailbox. */
 export async function cancelGraphMeeting(token: string, saved: GraphMeetingCancellation, mark: () => Promise<void>, accepted: () => Promise<void>, signal?: AbortSignal) {
-  const transport = await session(token, saved.context, signal);
+  const transport = await graphOrganizerFamilySession(token, saved.context, signal);
   if (!same(transport.identity, saved.identity)) fail();
   const current = await transport.read(saved.template, saved.baseline.master.icalUid);
   if (saved.dispatch) {

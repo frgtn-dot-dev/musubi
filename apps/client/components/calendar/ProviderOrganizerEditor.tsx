@@ -199,7 +199,7 @@ export function ProviderOrganizerEditor({
       setSubmitted(true);
       await api.editProviderOrganizer(frozen.current);
       setNotice(
-        `Meeting change saved. Check Settings → Delivery status for ${provider === "caldav" ? "the CalDAV server’s" : provider === "microsoft" ? "Outlook's" : "Google's"} result. Guest notification delivery remains unknown.`,
+        `${personalOccurrence ? "Event" : "Meeting"} change saved. Check Settings → Delivery status for ${provider === "caldav" ? "the CalDAV server’s" : provider === "microsoft" ? "Outlook's" : "Google's"} result.${personalOccurrence ? "" : " Guest notification delivery remains unknown."}`,
       );
     } catch (cause) {
       if (
@@ -222,7 +222,8 @@ export function ProviderOrganizerEditor({
       setBusy(false);
     }
   }
-  const occurrence = provider === "google" && observation?.organizerEdit?.scope === "occurrence";
+  const occurrence = observation?.organizerEdit?.scope === "occurrence";
+  const personalOccurrence = provider === "microsoft" && occurrence && observation?.state?.attendeesComplete && observation.state.attendees.length === 0;
   const locked = busy || submitted || !canUpdate,
     copy = { fontFamily: fonts.sans, color: colors.fg2 };
   const fields: [keyof OrganizerDraft, string][] = [
@@ -280,7 +281,7 @@ export function ProviderOrganizerEditor({
             <Text accessibilityRole="header" style={[styles.modalTitle, { flex: 1 }]}>
               {occurrence ? "Edit occurrence" : event ? "Edit meeting" : "New meeting"}
             </Text>
-            {info("Guest invitations", organizerNotificationNotice(provider))}
+            {!personalOccurrence && info("Guest invitations", organizerNotificationNotice(provider))}
             <Tap accessibilityLabel="Close meeting editor" disabled={busy} onPress={close}
               style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
               <Feather name="x" size={20} color={colors.fg3} />
@@ -311,7 +312,7 @@ export function ProviderOrganizerEditor({
                 {fields.filter(([key]) => (!occurrence || key !== "guests") && !["description", "location"].includes(key)).map(renderField)}
                 {(provider !== "google" && event && !canEditTime) || occurrence ? (
                   <View style={{ alignItems: "flex-end", paddingHorizontal: spacing[4] }}>
-                    {info("Meeting editing", occurrence ? "Only this occurrence will change. Series timing and guests stay unchanged." : "Meeting time and guests are preserved.")}
+                    {info("Meeting editing", occurrence ? "Only this occurrence will change." : "Meeting time and guests are preserved.")}
                   </View>
                 ) : (
                   <>
@@ -378,7 +379,7 @@ export function ProviderOrganizerEditor({
                       submitted
                         ? "Retry"
                         : event
-                          ? "Save & notify"
+                          ? (personalOccurrence ? "Save" : "Save & notify")
                           : "Send invitations"
                     }
                     loading={busy}

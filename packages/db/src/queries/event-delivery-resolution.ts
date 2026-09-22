@@ -146,7 +146,7 @@ async function resolutionContext(
   const [mapping] = mappings;
   if (!row.payload.reminderInstance && (latest.payload.reminderInstance || pending.some(item => item.payload.reminderInstance))) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   if (row.payload.organizer || latest.payload.organizer || pending.some(item => item.payload.organizer)) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
-  if (row.payload.graphMeetingCancellation || latest.payload.graphMeetingCancellation || pending.some(item => item.payload.graphMeetingCancellation)) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
+  if (row.payload.graphMeetingCancellation || latest.payload.graphMeetingCancellation || pending.some(item => item.payload.graphMeetingCancellation) || row.payload.graphOccurrenceContent || latest.payload.graphOccurrenceContent || pending.some(item => item.payload.graphOccurrenceContent)) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   if (row.payload.graphSeriesDeletion || latest.payload.graphSeriesDeletion || pending.some(item => item.payload.graphSeriesDeletion)) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   if (row.payload.graphSeriesCreate || latest.payload.graphSeriesCreate || pending.some(item => item.payload.graphSeriesCreate)) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");
   if (!row.payload.rsvp && (latest.payload.rsvp || pending.some(item => item.payload.rsvp))) throw new EventDeliveryResolutionError("delivery-resolution-unavailable");

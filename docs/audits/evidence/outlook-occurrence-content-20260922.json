@@ -1,0 +1,84 @@
+{
+  "personal": {
+    "meeting": false,
+    "date": "2026-09-22T16:57:05.841Z",
+    "syntheticOnly": true,
+    "created": true,
+    "recurrenceCount": 3,
+    "guestNotificationDelivery": "unknown",
+    "results": [
+      {
+        "fields": [
+          "title"
+        ],
+        "status": "completed",
+        "error": null
+      },
+      {
+        "fields": [
+          "description",
+          "location"
+        ],
+        "status": "completed",
+        "error": null
+      },
+      {
+        "fields": [
+          "description",
+          "location"
+        ],
+        "status": "completed",
+        "error": null
+      }
+    ],
+    "stalePatchStatus": 412,
+    "htmlPreserved": true,
+    "timeAndGuestsPreserved": true,
+    "cleared": true,
+    "siblingsUnchanged": true,
+    "cleanupStatus": 204,
+    "seriesAbsent": true,
+    "localTestRowsRemoved": 3
+  },
+  "meeting": {
+    "meeting": true,
+    "date": "2026-09-22T16:57:21.255Z",
+    "syntheticOnly": true,
+    "created": true,
+    "recurrenceCount": 3,
+    "guestNotificationDelivery": "unknown",
+    "results": [
+      {
+        "fields": [
+          "title"
+        ],
+        "status": "completed",
+        "error": null
+      },
+      {
+        "fields": [
+          "description",
+          "location"
+        ],
+        "status": "completed",
+        "error": null
+      },
+      {
+        "fields": [
+          "description",
+          "location"
+        ],
+        "status": "completed",
+        "error": null
+      }
+    ],
+    "stalePatchStatus": 412,
+    "htmlPreserved": true,
+    "timeAndGuestsPreserved": true,
+    "cleared": true,
+    "siblingsUnchanged": true,
+    "cleanupStatus": 202,
+    "seriesAbsent": true,
+    "localTestRowsRemoved": 3
+  }
+}

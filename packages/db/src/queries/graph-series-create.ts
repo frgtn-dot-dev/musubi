@@ -1,3 +1,4 @@
+import { stoppedGraphOccurrenceContent } from "./event-outbox";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
@@ -95,7 +96,8 @@ export async function assertNoPendingGraphSeriesCreate(tx: Pick<DbTransaction, "
     .innerJoin(externalCalendars, eq(externalCalendars.id, eventOutbox.externalCalendarLinkID))
     .where(and(eq(externalCalendars.calendarID, calendarID), eq(externalCalendars.provider, "microsoft"), eq(eventOutbox.provider, "microsoft"),
       eq(eventOutbox.calendarID, calendarID), eq(eventOutbox.userID, externalCalendars.userID), eq(eventOutbox.accountID, externalCalendars.accountID), eq(eventOutbox.externalCalendarID, externalCalendars.externalCalendarID),
-      sql`(${eventOutbox.payload}->'graphSeriesCreate' is not null or ${eventOutbox.payload}->'graphMeetingCancellation' is not null) and ${eventOutbox.status} not in ('completed', 'not-needed') and not (${eventOutbox.payload}->'graphMeetingCancellation' is not null and ${eventOutbox.payload}->'graphMeetingCancellation'->'dispatch' is null and ${eventOutbox.status} in ('conflict', 'blocked', 'cancelled'))`)).limit(1);
+      sql`not ${stoppedGraphOccurrenceContent()}`,
+      sql`(${eventOutbox.payload}->'graphSeriesCreate' is not null or ${eventOutbox.payload}->'graphMeetingCancellation' is not null or ${eventOutbox.payload}->'graphOccurrenceContent' is not null) and ${eventOutbox.status} not in ('completed', 'not-needed') and not (${eventOutbox.payload}->'graphMeetingCancellation' is not null and ${eventOutbox.payload}->'graphMeetingCancellation'->'dispatch' is null and ${eventOutbox.status} in ('conflict', 'blocked', 'cancelled'))`)).limit(1);
   if (pending) throw new Error("Outlook series operation awaits complete family reconciliation.");
 }
 

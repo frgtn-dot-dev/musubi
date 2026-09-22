@@ -1,3 +1,4 @@
+import { stopGraphOccurrenceContent, confirmGraphOccurrenceContent, markGraphOccurrenceContent, completeGraphOccurrenceContent } from "@musubi/db";
 import { stopUndispatchedGraphMeetingCancellation, confirmGraphMeetingCancellation, markGraphMeetingCancellation, completeGraphMeetingCancellation } from "@musubi/db";
 import { confirmGraphSeriesDeletionOutbox, completeGraphSeriesDeletionOutbox } from "@musubi/db";
 import { microsoftEventVersion } from "./adapters/microsoft_event_content";
@@ -160,6 +161,19 @@ export async function deliverEventOutbox(
         }
         return true;
       };
+      if (row.payload.graphOccurrenceContent) {
+        if (!config.api.providerOrganizerEditsEnabled || row.provider !== "microsoft" || row.action !== "update" || !adapter?.updateGraphOccurrenceContent) throw new EventWriteError("organizer", "unsupported");
+        const confirmSource = async () => {
+          try { await confirmGraphOccurrenceContent(row); }
+          catch { throw new ProviderEventWriteError("provider-conflict", row.payload.graphOccurrenceContent?.dispatch || mutationStarted ? "unconfirmed" : "not-written"); }
+        };
+        await confirmSource();
+        const result = await adapter.updateGraphOccurrenceContent(row.payload.graphOccurrenceContent, async () => { await confirmSource(); await markGraphOccurrenceContent(row); mutationStarted = true; }, async () => { await markGraphOccurrenceContent(row, true); }, signal);
+        if (result.kind === "rejected") {
+          if (!await stopGraphOccurrenceContent(row, true)) throw new ProviderEventWriteError("provider-conflict", "unconfirmed");
+        } else await completeGraphOccurrenceContent(row, result.observation);
+        return;
+      }
       if (row.payload.graphMeetingCancellation) {
         if (!config.api.providerOrganizerEditsEnabled || row.provider !== "microsoft" || row.action !== "delete" || !adapter?.cancelGraphMeeting) throw new EventWriteError("organizer", "unsupported");
         const confirmSource = async () => {
@@ -739,6 +753,7 @@ export async function deliverEventOutbox(
         !conflict &&
         !retryableStatus &&
         providerError.outcome !== "unconfirmed");
+    if (row.payload.graphOccurrenceContent && (conflict || blocked || error instanceof BadRequestError) && await stopGraphOccurrenceContent(row)) return getEventOutboxRow(row.id);
     if (row.payload.graphMeetingCancellation && (conflict || blocked) && await stopUndispatchedGraphMeetingCancellation(row)) return getEventOutboxRow(row.id);
     if (row.payload.organizer && (conflict || blocked || error instanceof BadRequestError) && await stopMicrosoftMeetingUpdate(row)) return getEventOutboxRow(row.id);
     const delay = Math.max(
