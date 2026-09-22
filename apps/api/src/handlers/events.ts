@@ -695,7 +695,7 @@ export async function handlerGetProviderEventState(req: Request, res: Response) 
   await assertCanViewEvent(req.user!.id, id);
   res.setHeader("Cache-Control", "private, no-store");
   const observation = await getOwnProviderEventObservation(req.user!.id, id, config.api.providerReminderEditsEnabled, config.api.providerRsvpEditsEnabled);
-  res.json(await observeProviderOrganizer(req.user!.id, id, await observeMicrosoftRsvp(req.user!.id, id, await observeCaldavRsvp(req.user!.id, id, await caldavAlarmObservation(req.user!.id, id, observation))), req.query.outlookOrganizer === "6" ? "occurrence-zone-time" : req.query.outlookOrganizer === "5" ? "occurrence-time" : req.query.outlookOrganizer === "4" ? "series-content" : req.query.outlookOrganizer === "3" ? "content" : req.query.outlookOrganizer === "2" ? "series" : req.query.outlookOrganizer === "1"));
+  res.json(await observeProviderOrganizer(req.user!.id, id, await observeMicrosoftRsvp(req.user!.id, id, await observeCaldavRsvp(req.user!.id, id, await caldavAlarmObservation(req.user!.id, id, observation))), req.query.outlookOrganizer === "7" ? "occurrence-all-day-time" : req.query.outlookOrganizer === "6" ? "occurrence-zone-time" : req.query.outlookOrganizer === "5" ? "occurrence-time" : req.query.outlookOrganizer === "4" ? "series-content" : req.query.outlookOrganizer === "3" ? "content" : req.query.outlookOrganizer === "2" ? "series" : req.query.outlookOrganizer === "1"));
 }
 
 export async function handlerProviderReminderEdit(req: Request, res: Response) {

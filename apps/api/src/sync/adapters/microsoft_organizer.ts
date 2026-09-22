@@ -1,5 +1,6 @@
-import { unambiguousCivilToInstant } from "@musubi/calendar";
+import { resolveEventTimeEdit, unambiguousCivilToInstant } from "@musubi/calendar";
 import { microsoftEventVersion } from "./microsoft_event_content";
+import { graphTimeForEvent } from "./microsoft_time";
 import { graphRsvpTime } from "./microsoft_rsvp";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
@@ -107,9 +108,11 @@ export function microsoftMeetingContentBody(request: MicrosoftOrganizerRequest) 
   if (request.action !== "update") fail();
   const payload: Record<string, unknown> = {};
   if (request.patch.time) {
-    if (request.scope !== "occurrence" || request.patch.time.kind !== "zoned") fail();
-    payload.start = { dateTime: request.patch.time.startLocal, timeZone: request.patch.time.timeZone };
-    payload.end = { dateTime: request.patch.time.endLocal, timeZone: request.patch.time.timeZone };
+    if (request.scope !== "occurrence") fail();
+    const time = graphTimeForEvent(resolveEventTimeEdit(request.patch.time));
+    // Preserve all-day mode and every attendee field; only write endpoints.
+    payload.start = time.start;
+    payload.end = time.end;
   }
   if (request.patch.title !== undefined) payload.subject = request.patch.title;
   if (request.patch.description !== undefined) payload.body = { contentType: "text", content: request.patch.description ?? "" };

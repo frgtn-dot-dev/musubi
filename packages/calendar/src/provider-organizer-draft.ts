@@ -32,7 +32,7 @@ export function organizerDraft(
   const zone = observation?.organizerEdit?.timeZone ?? "UTC";
   const today = new Date(),
     day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`,
-    time = event && _provider === "microsoft" && observation?.organizerEdit?.scope === "occurrence" && observation.organizerEdit.timeEdit
+    time = event && _provider === "microsoft" && observation?.organizerEdit?.scope === "occurrence" && observation.organizerEdit.timeEdit && observation.organizerEdit.timeKind !== "all-day"
       ? { kind: "zoned" as const, timeZone: zone, startLocal: instantToCivil(event.start, zone), endLocal: instantToCivil(event.end, zone) }
       : event?.timeModel;
   return {
@@ -147,6 +147,8 @@ export function organizerRequest(
   ) {
     if (provider !== "google" && !observation?.organizerEdit?.timeEdit)
       throw new Error("Time editing is not available for this meeting.");
+    if (provider === "microsoft" && (time.kind === "all-day") !== (observation?.organizerEdit?.timeKind === "all-day"))
+      throw new Error("Keep the occurrence’s all-day or timed format.");
     if (provider === "microsoft" && time.kind === "zoned") {
       if (time.timeZone !== (observation?.organizerEdit?.timeZone ?? "UTC")) throw new Error("Keep the verified series time zone.");
       try {
