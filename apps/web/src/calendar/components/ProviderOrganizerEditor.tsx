@@ -348,7 +348,7 @@ export function ProviderOrganizerFields({
               <p>{wholeSeries ? "Changes apply to the series. Individual occurrence changes are preserved." : occurrence ? "Only this occurrence will change." : "Meeting time and guests are preserved."}</p>
             ) : (
               <>
-                {provider === "microsoft" && occurrence ? <p>Only this occurrence will change.</p> : null}
+                {provider === "microsoft" && (occurrence || wholeSeries) ? <p>{wholeSeries ? "Changes apply to every occurrence. Dates stay the same." : "Only this occurrence will change."}</p> : null}
                 {provider === "caldav" && event ? (
                   <p>
                     Changing time asks guests to respond again. Their existing
@@ -366,20 +366,20 @@ export function ProviderOrganizerFields({
                 />
                 <Field label="Start">
                   <input
-                    type={draft.allDay ? "date" : "datetime-local"}
+                    type={wholeSeries ? "time" : draft.allDay ? "date" : "datetime-local"}
                     value={
-                      draft.allDay ? draft.start.slice(0, 10) : draft.start
+                      wholeSeries ? draft.start.slice(11) : draft.allDay ? draft.start.slice(0, 10) : draft.start
                     }
                     disabled={locked}
-                    onChange={(event) => onChange("start", event.target.value)}
+                    onChange={(event) => onChange("start", wholeSeries ? `${draft.start.slice(0, 10)}T${event.target.value}` : event.target.value)}
                   />
                 </Field>
                 <Field label="End">
                   <input
-                    type={draft.allDay ? "date" : "datetime-local"}
-                    value={draft.allDay ? draft.end.slice(0, 10) : draft.end}
+                    type={wholeSeries ? "time" : draft.allDay ? "date" : "datetime-local"}
+                    value={wholeSeries ? draft.end.slice(11) : draft.allDay ? draft.end.slice(0, 10) : draft.end}
                     disabled={locked}
-                    onChange={(event) => onChange("end", event.target.value)}
+                    onChange={(event) => onChange("end", wholeSeries ? `${draft.end.slice(0, 10)}T${event.target.value}` : event.target.value)}
                   />
                 </Field>
                 {!draft.allDay && (

@@ -457,3 +457,24 @@ it("keeps inclusive all-day dates in the native picker and frozen retry", async 
   expect(h.save.mock.calls[0][0]).toMatchObject({ scope: "occurrence", patch: { time: { kind: "all-day", startDate: "2026-10-24", endDate: "2026-10-24" } } });
   expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
 });
+
+it("uses time pickers with the master date for series edits and freezes retries", async () => {
+  const observed: ProviderEventStateResponse = { ...observation,
+    outlookSeriesContent: { calendarID: observation.organizerEdit!.calendarID, expectedRevision: event.revision!, seriesVersion: "d".repeat(64), content: { title: "Series title", description: null, location: null }, time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-09-08T09:00:00", endLocal: "2026-09-08T10:00:00" } },
+    organizerEdit: { ...observation.organizerEdit!, provider: "microsoft", scope: "series", seriesVersion: "d".repeat(64), actions: ["update"], timeEdit: true, timeZone: "UTC" },
+  };
+  const draw = () => render(event, observed);
+  h.save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "pending" });
+  expect(nodes(draw()).some(node => node.props.accessibilityLabel === "start date")).toBe(false);
+  expect(nodes(draw()).find(node => node.type === "Switch")!.props.disabled).toBe(true);
+  nodes(draw()).find(node => node.props.accessibilityLabel === "end time")!.props.onPress();
+  const picker = nodes(draw()).find(node => node.type === "DateTimePicker")!;
+  expect(picker.props.mode).toBe("time");
+  const value = new Date(picker.props.value); value.setHours(11, 30, 0, 0);
+  picker.props.onValueChange(undefined, value);
+  button(draw(), "Save").onPress(); await settle();
+  expect(nodes(draw()).find(node => node.props.accessibilityLabel === "end time")!.props.disabled).toBe(true);
+  button(draw(), "Retry").onPress(); await settle();
+  expect(h.save.mock.calls[0][0]).toMatchObject({ scope: "series", expectedSeriesVersion: "d".repeat(64), patch: { time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-09-08T09:00:00.000", endLocal: "2026-09-08T11:30:00.000" } } });
+  expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
+});

@@ -1,0 +1,676 @@
+{
+  "native": [
+    {
+      "date": "2026-09-22T20:33:08.642Z",
+      "syntheticOnly": true,
+      "meeting": false,
+      "exceptions": false,
+      "patchStatus": 200,
+      "masterChangedFields": [
+        "@odata.etag",
+        "lastModifiedDateTime",
+        "changeKey",
+        "start",
+        "end"
+      ],
+      "masterResponses": [],
+      "sameIDs": true,
+      "cancelledBefore": 0,
+      "cancelledAfter": 0,
+      "exceptionsBefore": 0,
+      "exceptionsAfter": 0,
+      "slots": [
+        {
+          "type": "occurrence",
+          "start": {
+            "dateTime": "2026-10-20T13:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-20T14:30:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-20T13:00:00Z",
+          "subjectPreserved": true,
+          "responses": [],
+          "changedFields": [
+            "@odata.etag",
+            "lastModifiedDateTime",
+            "changeKey",
+            "originalStart",
+            "start",
+            "end"
+          ]
+        },
+        {
+          "type": "occurrence",
+          "start": {
+            "dateTime": "2026-10-23T13:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-23T14:30:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-23T13:00:00Z",
+          "subjectPreserved": true,
+          "responses": [],
+          "changedFields": [
+            "@odata.etag",
+            "lastModifiedDateTime",
+            "changeKey",
+            "originalStart",
+            "start",
+            "end"
+          ]
+        },
+        {
+          "type": "occurrence",
+          "start": {
+            "dateTime": "2026-10-26T13:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-26T14:30:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-26T13:00:00Z",
+          "subjectPreserved": true,
+          "responses": [],
+          "changedFields": [
+            "@odata.etag",
+            "lastModifiedDateTime",
+            "changeKey",
+            "originalStart",
+            "start",
+            "end"
+          ]
+        },
+        {
+          "type": "occurrence",
+          "start": {
+            "dateTime": "2026-10-29T13:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-29T14:30:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-29T13:00:00Z",
+          "subjectPreserved": true,
+          "responses": [],
+          "changedFields": [
+            "@odata.etag",
+            "lastModifiedDateTime",
+            "changeKey",
+            "originalStart",
+            "start",
+            "end"
+          ]
+        }
+      ],
+      "staleStatus": 412,
+      "restoreStatus": 200,
+      "cleanupStatus": 204,
+      "seriesAbsent": true
+    },
+    {
+      "date": "2026-09-22T20:33:15.767Z",
+      "syntheticOnly": true,
+      "meeting": false,
+      "exceptions": true,
+      "exceptionPatch": 200,
+      "cancelOccurrence": 204,
+      "patchStatus": 200,
+      "masterChangedFields": [
+        "@odata.etag",
+        "lastModifiedDateTime",
+        "changeKey",
+        "cancelledOccurrences",
+        "start",
+        "end",
+        "exceptionOccurrences"
+      ],
+      "masterResponses": [],
+      "sameIDs": false,
+      "cancelledBefore": 1,
+      "cancelledAfter": 0,
+      "exceptionsBefore": 1,
+      "exceptionsAfter": 0,
+      "slots": [
+        {
+          "type": "occurrence",
+          "start": {
+            "dateTime": "2026-10-20T13:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-20T14:30:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-20T13:00:00Z",
+          "subjectPreserved": true,
+          "responses": [],
+          "changedFields": [
+            "@odata.etag",
+            "lastModifiedDateTime",
+            "changeKey",
+            "originalStart",
+            "start",
+            "end"
+          ]
+        },
+        {
+          "type": "occurrence",
+          "start": {
+            "dateTime": "2026-10-23T13:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-23T14:30:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-23T13:00:00Z",
+          "subjectPreserved": false,
+          "responses": [],
+          "changedFields": [
+            "@odata.etag",
+            "createdDateTime",
+            "lastModifiedDateTime",
+            "changeKey",
+            "subject",
+            "originalStart",
+            "type",
+            "start",
+            "end"
+          ]
+        },
+        {
+          "type": "occurrence",
+          "start": {
+            "dateTime": "2026-10-26T13:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-26T14:30:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-26T13:00:00Z",
+          "subjectPreserved": false,
+          "responses": [],
+          "changedFields": [
+            "@odata.etag",
+            "id",
+            "createdDateTime",
+            "lastModifiedDateTime",
+            "changeKey",
+            "categories",
+            "transactionId",
+            "originalStartTimeZone",
+            "originalEndTimeZone",
+            "iCalUId",
+            "uid",
+            "reminderMinutesBeforeStart",
+            "isReminderOn",
+            "hasAttachments",
+            "subject",
+            "bodyPreview",
+            "importance",
+            "sensitivity",
+            "originalStart",
+            "isAllDay",
+            "isCancelled",
+            "isOrganizer",
+            "responseRequested",
+            "seriesMasterId",
+            "showAs",
+            "type",
+            "webLink",
+            "onlineMeetingUrl",
+            "isOnlineMeeting",
+            "onlineMeetingProvider",
+            "allowNewTimeProposals",
+            "occurrenceId",
+            "isDraft",
+            "hideAttendees",
+            "responseStatus",
+            "body",
+            "start",
+            "end",
+            "location",
+            "locations",
+            "recurrence",
+            "attendees",
+            "organizer",
+            "onlineMeeting"
+          ]
+        },
+        {
+          "type": "occurrence",
+          "start": {
+            "dateTime": "2026-10-29T13:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-29T14:30:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-29T13:00:00Z",
+          "subjectPreserved": true,
+          "responses": [],
+          "changedFields": [
+            "@odata.etag",
+            "lastModifiedDateTime",
+            "changeKey",
+            "originalStart",
+            "start",
+            "end"
+          ]
+        }
+      ],
+      "staleStatus": 412,
+      "restoreStatus": 200,
+      "cleanupStatus": 204,
+      "seriesAbsent": true
+    },
+    {
+      "date": "2026-09-22T20:33:26.918Z",
+      "syntheticOnly": true,
+      "meeting": true,
+      "exceptions": false,
+      "patchStatus": 200,
+      "masterChangedFields": [
+        "@odata.etag",
+        "lastModifiedDateTime",
+        "changeKey",
+        "start",
+        "end",
+        "attendees"
+      ],
+      "masterResponses": [
+        {
+          "response": "notResponded",
+          "time": "4501-01-01T00:00:00Z"
+        }
+      ],
+      "sameIDs": true,
+      "cancelledBefore": 0,
+      "cancelledAfter": 0,
+      "exceptionsBefore": 0,
+      "exceptionsAfter": 0,
+      "slots": [
+        {
+          "type": "occurrence",
+          "start": {
+            "dateTime": "2026-10-20T13:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-20T14:30:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-20T13:00:00Z",
+          "subjectPreserved": true,
+          "responses": [
+            {
+              "response": "notResponded",
+              "time": "4501-01-01T00:00:00Z"
+            }
+          ],
+          "changedFields": [
+            "@odata.etag",
+            "lastModifiedDateTime",
+            "changeKey",
+            "originalStart",
+            "start",
+            "end",
+            "attendees"
+          ]
+        },
+        {
+          "type": "occurrence",
+          "start": {
+            "dateTime": "2026-10-23T13:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-23T14:30:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-23T13:00:00Z",
+          "subjectPreserved": true,
+          "responses": [
+            {
+              "response": "notResponded",
+              "time": "4501-01-01T00:00:00Z"
+            }
+          ],
+          "changedFields": [
+            "@odata.etag",
+            "lastModifiedDateTime",
+            "changeKey",
+            "originalStart",
+            "start",
+            "end",
+            "attendees"
+          ]
+        },
+        {
+          "type": "occurrence",
+          "start": {
+            "dateTime": "2026-10-26T13:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-26T14:30:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-26T13:00:00Z",
+          "subjectPreserved": true,
+          "responses": [
+            {
+              "response": "notResponded",
+              "time": "4501-01-01T00:00:00Z"
+            }
+          ],
+          "changedFields": [
+            "@odata.etag",
+            "lastModifiedDateTime",
+            "changeKey",
+            "originalStart",
+            "start",
+            "end",
+            "attendees"
+          ]
+        },
+        {
+          "type": "occurrence",
+          "start": {
+            "dateTime": "2026-10-29T13:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-29T14:30:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-29T13:00:00Z",
+          "subjectPreserved": true,
+          "responses": [
+            {
+              "response": "notResponded",
+              "time": "4501-01-01T00:00:00Z"
+            }
+          ],
+          "changedFields": [
+            "@odata.etag",
+            "lastModifiedDateTime",
+            "changeKey",
+            "originalStart",
+            "start",
+            "end",
+            "attendees"
+          ]
+        }
+      ],
+      "staleStatus": 412,
+      "restoreStatus": 200,
+      "cleanupStatus": 202,
+      "seriesAbsent": true
+    },
+    {
+      "date": "2026-09-22T20:33:35.455Z",
+      "syntheticOnly": true,
+      "meeting": true,
+      "exceptions": true,
+      "exceptionPatch": 200,
+      "cancelOccurrence": 202,
+      "patchStatus": 200,
+      "masterChangedFields": [
+        "@odata.etag",
+        "lastModifiedDateTime",
+        "changeKey",
+        "cancelledOccurrences",
+        "start",
+        "end",
+        "attendees",
+        "exceptionOccurrences"
+      ],
+      "masterResponses": [
+        {
+          "response": "notResponded",
+          "time": "4501-01-01T00:00:00Z"
+        }
+      ],
+      "sameIDs": false,
+      "cancelledBefore": 1,
+      "cancelledAfter": 0,
+      "exceptionsBefore": 1,
+      "exceptionsAfter": 0,
+      "slots": [
+        {
+          "type": "occurrence",
+          "start": {
+            "dateTime": "2026-10-20T13:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-20T14:30:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-20T13:00:00Z",
+          "subjectPreserved": true,
+          "responses": [
+            {
+              "response": "notResponded",
+              "time": "4501-01-01T00:00:00Z"
+            }
+          ],
+          "changedFields": [
+            "@odata.etag",
+            "lastModifiedDateTime",
+            "changeKey",
+            "originalStart",
+            "start",
+            "end",
+            "attendees"
+          ]
+        },
+        {
+          "type": "occurrence",
+          "start": {
+            "dateTime": "2026-10-23T13:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-23T14:30:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-23T13:00:00Z",
+          "subjectPreserved": false,
+          "responses": [
+            {
+              "response": "notResponded",
+              "time": "4501-01-01T00:00:00Z"
+            }
+          ],
+          "changedFields": [
+            "@odata.etag",
+            "createdDateTime",
+            "lastModifiedDateTime",
+            "changeKey",
+            "subject",
+            "originalStart",
+            "type",
+            "start",
+            "end"
+          ]
+        },
+        {
+          "type": "occurrence",
+          "start": {
+            "dateTime": "2026-10-26T13:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-26T14:30:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-26T13:00:00Z",
+          "subjectPreserved": false,
+          "responses": [
+            {
+              "response": "notResponded",
+              "time": "4501-01-01T00:00:00Z"
+            }
+          ],
+          "changedFields": [
+            "@odata.etag",
+            "id",
+            "createdDateTime",
+            "lastModifiedDateTime",
+            "changeKey",
+            "categories",
+            "transactionId",
+            "originalStartTimeZone",
+            "originalEndTimeZone",
+            "iCalUId",
+            "uid",
+            "reminderMinutesBeforeStart",
+            "isReminderOn",
+            "hasAttachments",
+            "subject",
+            "bodyPreview",
+            "importance",
+            "sensitivity",
+            "originalStart",
+            "isAllDay",
+            "isCancelled",
+            "isOrganizer",
+            "responseRequested",
+            "seriesMasterId",
+            "showAs",
+            "type",
+            "webLink",
+            "onlineMeetingUrl",
+            "isOnlineMeeting",
+            "onlineMeetingProvider",
+            "allowNewTimeProposals",
+            "occurrenceId",
+            "isDraft",
+            "hideAttendees",
+            "responseStatus",
+            "body",
+            "start",
+            "end",
+            "location",
+            "locations",
+            "recurrence",
+            "attendees",
+            "organizer",
+            "onlineMeeting"
+          ]
+        },
+        {
+          "type": "occurrence",
+          "start": {
+            "dateTime": "2026-10-29T13:00:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-10-29T14:30:00.0000000",
+            "timeZone": "UTC"
+          },
+          "originalStart": "2026-10-29T13:00:00Z",
+          "subjectPreserved": true,
+          "responses": [
+            {
+              "response": "notResponded",
+              "time": "4501-01-01T00:00:00Z"
+            }
+          ],
+          "changedFields": [
+            "@odata.etag",
+            "lastModifiedDateTime",
+            "changeKey",
+            "originalStart",
+            "start",
+            "end",
+            "attendees"
+          ]
+        }
+      ],
+      "staleStatus": 412,
+      "restoreStatus": 200,
+      "cleanupStatus": 202,
+      "seriesAbsent": true
+    }
+  ],
+  "application": [
+    {
+      "meeting": false,
+      "date": "2026-09-22T20:42:56.467Z",
+      "syntheticOnly": true,
+      "created": true,
+      "recurrenceCount": 3,
+      "guestNotificationDelivery": "unknown",
+      "results": [
+        {
+          "fields": [
+            "time"
+          ],
+          "status": "completed",
+          "error": null
+        },
+        {
+          "fields": [
+            "time"
+          ],
+          "status": "completed",
+          "error": null
+        }
+      ],
+      "responses": [],
+      "htmlAndGuestListPreserved": true,
+      "nativeIDsAndDatesPreserved": true,
+      "slotBindingsUpdated": true,
+      "allLocalTimesCommitted": true,
+      "cleanupStatus": 204,
+      "seriesAbsent": true,
+      "localTestRowsRemoved": 3
+    },
+    {
+      "meeting": true,
+      "date": "2026-09-22T20:43:12.672Z",
+      "syntheticOnly": true,
+      "created": true,
+      "recurrenceCount": 3,
+      "guestNotificationDelivery": "unknown",
+      "results": [
+        {
+          "fields": [
+            "time"
+          ],
+          "status": "completed",
+          "error": null
+        },
+        {
+          "fields": [
+            "time"
+          ],
+          "status": "completed",
+          "error": null
+        }
+      ],
+      "responses": [
+        "notResponded"
+      ],
+      "htmlAndGuestListPreserved": true,
+      "nativeIDsAndDatesPreserved": true,
+      "slotBindingsUpdated": true,
+      "allLocalTimesCommitted": true,
+      "cleanupStatus": 202,
+      "seriesAbsent": true,
+      "localTestRowsRemoved": 3
+    }
+  ]
+}

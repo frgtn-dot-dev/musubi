@@ -490,3 +490,25 @@ it("edits inclusive all-day dates without time controls and preserves the saved 
   expect(api.save.mock.calls[0][0]).toMatchObject({ scope: "occurrence", patch: { time: { kind: "all-day", startDate: "2026-10-24", endDate: "2026-10-24" } } });
   expect(api.save.mock.calls[1]).toEqual(api.save.mock.calls[0]);
 });
+
+it("changes only the clock time of the whole series using its first date and freezes retries", async () => {
+  api.save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "pending" });
+  render(<ProviderOrganizerEditor calendarID={calendarID} color="red" event={event} observation={{ ...observation,
+    outlookSeriesContent: { calendarID, expectedRevision: 4, seriesVersion: "d".repeat(64), content: { title: "Series title", description: null, location: null }, time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-10-20T09:00:00", endLocal: "2026-10-20T10:00:00" } },
+    organizerEdit: { ...observation.organizerEdit!, provider: "microsoft", scope: "series", seriesVersion: "d".repeat(64), actions: ["update"], timeEdit: true, timeZone: "UTC" },
+  }} onClose={vi.fn()} />);
+  expect(screen.getByRole("dialog", { name: "Edit series" })).toBeTruthy();
+  expect(screen.getByText(/Dates stay the same/)).toBeTruthy();
+  expect((screen.getByLabelText("Start") as HTMLInputElement).type).toBe("time");
+  expect((screen.getByLabelText("Start") as HTMLInputElement).value).toBe("09:00:00");
+  expect((screen.getByRole("checkbox", { name: "All day" }) as HTMLInputElement).disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText("Start"), { target: { value: "13:00" } });
+  fireEvent.change(screen.getByLabelText("End"), { target: { value: "14:30" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save and notify guests" }));
+  await screen.findByText("offline");
+  expect((screen.getByLabelText("Start") as HTMLInputElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Retry saved meeting action" }));
+  await screen.findByRole("status");
+  expect(api.save.mock.calls[0][0]).toMatchObject({ scope: "series", expectedSeriesVersion: "d".repeat(64), patch: { time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-10-20T13:00:00.000", endLocal: "2026-10-20T14:30:00.000" } } });
+  expect(api.save.mock.calls[1]).toEqual(api.save.mock.calls[0]);
+});

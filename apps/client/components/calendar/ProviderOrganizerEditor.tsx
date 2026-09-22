@@ -317,7 +317,7 @@ export function ProviderOrganizerEditor({
                   </View>
                 ) : (
                   <>
-                    {provider === "microsoft" && occurrence ? info("Occurrence editing", "Only this occurrence will change.") : null}
+                    {provider === "microsoft" && (occurrence || wholeSeries) ? info(wholeSeries ? "Series editing" : "Occurrence editing", wholeSeries ? "Changes apply to every occurrence. Dates stay the same." : "Only this occurrence will change.") : null}
                     {provider === "caldav" && event ? (
                       info("Changing meeting time", "Changing time asks guests to respond again. Their existing responses will reset.")
                     ) : null}
@@ -325,7 +325,7 @@ export function ProviderOrganizerEditor({
                       {(["start", "end"] as const).map(key => <View key={key} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 56, paddingVertical: 6 }}>
                         <Text style={[styles.fieldValueText, { color: colors.fg2 }]}>{key === "start" ? "Starts" : "Ends"}</Text>
                         <View style={{ flexDirection: "row", gap: 8 }}>
-                          <Tap disabled={locked} accessibilityLabel={`${key} date`} onPress={() => setPicker({ key, mode: "date" })} style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: colors.bg3 }}><Text style={styles.fieldValueText}>{draft[key] ? formatDateMedium(dateValue(draft[key]), dateFormat) : "Add date"}</Text></Tap>
+                          {!wholeSeries && <Tap disabled={locked} accessibilityLabel={`${key} date`} onPress={() => setPicker({ key, mode: "date" })} style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: colors.bg3 }}><Text style={styles.fieldValueText}>{draft[key] ? formatDateMedium(dateValue(draft[key]), dateFormat) : "Add date"}</Text></Tap>}
                           {!draft.allDay && draft[key] ? <Tap disabled={locked} accessibilityLabel={`${key} time`} onPress={() => setPicker({ key, mode: "time" })} style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: colors.bg3 }}><Text style={styles.fieldValueText}>{formatTime(clockValue(draft[key]), timeFormat)}</Text></Tap> : null}
                         </View>
                       </View>)}

@@ -1,3 +1,4 @@
+import { graphSeriesTimeChange, graphSeriesTimeObserved } from "./graph-series-time";
 import { resolveEventTimeEdit, instantToCivil, unambiguousCivilToInstant } from "@musubi/calendar";
 import { and, eq, sql } from "drizzle-orm";
 import { BadRequestError, EventSchema, MicrosoftRecurringContentRequestSchema, type MicrosoftRecurringContentRequest, type Event } from "@musubi/types";
@@ -35,7 +36,7 @@ export function graphOccurrenceTimeSupported(saved: Pick<GraphOccurrenceContent,
 }
 export function graphOccurrenceTimeChange(saved: Pick<GraphOccurrenceContent, "baseline" | "targetID" | "template" | "native" | "request">) {
   const input = saved.request.patch.time;
-  if (!input) return undefined;
+  if (!input || saved.request.scope === "series") return undefined;
   if (saved.request.scope !== "occurrence" || !graphOccurrenceTimeSupported(saved) || input.kind !== saved.template.timeModel?.kind) refuse();
   if (input.kind === "zoned") {
     if (saved.template.timeModel?.kind !== "zoned" || input.timeZone !== saved.template.timeModel.timeZone) refuse();
@@ -66,7 +67,7 @@ export function graphOccurrenceTimeChange(saved: Pick<GraphOccurrenceContent, "b
 
 /** The whole bounded family must survive, including moved and cancelled slots.
  * Ignore change tokens, but never ignore guests, unrequested time or other content. */
-export function graphOccurrenceContentObserved(saved: Pick<GraphOccurrenceContent, "baseline" | "targetID" | "request" | "template" | "native">, after: GraphFamilyObservation | null) {
+export function graphOccurrenceContentObserved(saved: Pick<GraphOccurrenceContent, "baseline" | "targetID" | "request" | "template" | "native" | "nativeExceptions">, after: GraphFamilyObservation | null) {
   if (saved.request.scope === "series") return graphSeriesContentObserved(saved, after);
   if (!after) return false;
   const before = saved.baseline.instances.find(n => n.externalID === saved.targetID);
@@ -102,7 +103,8 @@ export function graphOccurrenceContentObserved(saved: Pick<GraphOccurrenceConten
 /** Outlook retains per-field exception overrides. When an exception equals the
  * old master, its override bit is not exposed: either inheritance or retention
  * is valid. Different overrides and every unrelated field must survive exactly. */
-export function graphSeriesContentObserved(saved: Pick<GraphOccurrenceContent, "baseline" | "targetID" | "request">, after: GraphFamilyObservation | null) {
+export function graphSeriesContentObserved(saved: Pick<GraphOccurrenceContent, "baseline" | "targetID" | "request" | "native" | "nativeExceptions" | "template">, after: GraphFamilyObservation | null) {
+  if (saved.request.patch.time) return graphSeriesTimeObserved(saved, after);
   if (!after || saved.targetID !== saved.baseline.master.externalID || !same(after.cancelled, saved.baseline.cancelled) || after.instances.length !== saved.baseline.instances.length) return false;
   const compare = (before: GraphFamilyObservation["master"], next: GraphFamilyObservation["master"]) => {
     if (!next.etag) return false;
@@ -130,6 +132,7 @@ function assertBoundContent(saved: GraphOccurrenceContent) {
   MicrosoftRecurringContentRequestSchema.parse(saved.request);
   assertGraphMeetingRequest(saved.context, saved.request);
   graphOccurrenceTimeChange(saved);
+  graphSeriesTimeChange(saved);
   const mapping = saved.context.mappings.find(m => m.eventID === saved.request.eventID)!;
   const series = saved.request.scope === "series";
   const target = series ? saved.baseline.master : saved.baseline.instances.find(n => n.externalID === saved.targetID);
@@ -196,19 +199,21 @@ export const completeGraphOccurrenceContent = (row: EventOutboxRow, observation:
   if ((!saved.dispatch?.acceptedAt && (saved.dispatch || !same(saved.baseline, observation))) || !graphOccurrenceContentObserved(saved, observation)) refuse();
   const now = new Date();
   const time = graphOccurrenceTimeChange(saved);
+  const seriesTime = graphSeriesTimeChange(saved);
   const native = [observation.master, ...observation.instances].find(n => n.externalID === saved.targetID)!;
   for (const previous of saved.context.family) {
     if (previous.deletedAt || previous.isCanceled || (saved.request.scope !== "series" && previous.id !== row.eventID)) continue;
     const mapping = saved.context.mappings.find(m => m.eventID === previous.id);
     const actual = [observation.master, ...observation.instances].find(n => n.externalID === mapping?.externalEventID);
     if (!actual) refuse();
-    const content = { title: actual.values.title, description: actual.values.description, location: actual.values.location, ...(time ?? {}) };
-    if (!same(content, { title: previous.title, description: previous.description, location: previous.location, ...(time ? { start: previous.start, end: previous.end, isAllDay: previous.isAllDay, timeModel: previous.timeModel } : {}) }))
+    const actualTime = seriesTime ? { start: actual.values.start, end: actual.values.end, isAllDay: actual.values.isAllDay, timeModel: actual.values.timeModel, ...(previous.seriesID && "originalStart" in actual ? { originalStart: actual.originalStart } : {}) } : time;
+    const content = { title: actual.values.title, description: actual.values.description, location: actual.values.location, ...(actualTime ?? {}) };
+    if (!same(content, { title: previous.title, description: previous.description, location: previous.location, ...(actualTime ? { start: previous.start, end: previous.end, isAllDay: previous.isAllDay, timeModel: previous.timeModel, ...(seriesTime && previous.seriesID ? { originalStart: previous.originalStart } : {}) } : {}) }))
       await tx.update(events).set({ ...content, revision: sql`${events.revision} + 1`, updatedAt: now }).where(eq(events.id, previous.id));
   }
   for (const mapping of saved.context.mappings) {
     const current = [observation.master, ...observation.instances].find(n => n.externalID === mapping.externalEventID);
-    if (current) await tx.update(externalEvents).set({ etag: current.etag, providerState: current.providerState, providerStateObservedAt: now }).where(eq(externalEvents.id, mapping.id));
+    if (current) await tx.update(externalEvents).set({ ...(seriesTime && "originalStart" in current ? { originalStart: current.originalStart } : {}), etag: current.etag, providerState: current.providerState, providerStateObservedAt: now }).where(eq(externalEvents.id, mapping.id));
   }
   await tx.update(eventOutbox).set({ status: "completed", errorCode: null, resultRef: { externalEventId: native.externalID, icalUid: native.icalUid, etag: native.etag }, uncertain: false, leaseToken: null, leaseUntil: null, remoteSnapshot: null, updatedAt: now }).where(eq(eventOutbox.id, row.id));
 });

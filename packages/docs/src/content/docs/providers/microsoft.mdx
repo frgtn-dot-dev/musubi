@@ -96,15 +96,26 @@ push a Musubi-native recurring event instead of silently losing recurrence.
 
 ## Editing organizer meetings
 
-With `PROVIDER_ORGANIZER_EDITS_ENABLED` enabled, the web and mobile meeting editor
-can update the title, notes and location of supported one-off meetings in the
-connected owner's default Outlook calendar. Saving requests an update to guests;
-Musubi cannot verify delivery to their inboxes. Time and guests are preserved.
+With `PROVIDER_ORGANIZER_EDITS_ENABLED` enabled, the web and mobile editor can
+update the title, notes and location of supported one-off meetings, individual
+occurrences and complete finite series in the connected owner's default calendar.
+Personal recurring events use the same occurrence and series actions. Saving a
+meeting requests an update to guests; Musubi cannot verify delivery to their
+inboxes. Existing guest identities and roles are preserved.
 
-The edit capability is offered only after current source, ownership and native
-version checks. Recurring meetings, online meetings, attachments and
-shared/delegate copies are outside this content-editing path. Cancellation has
-its own separately verified capability and can also support finite series.
+With `EVENT_TIME_EDITS_ENABLED` also enabled, individual occurrences can change
+their time in verified UTC or Europe/Prague series, or change their all-day dates.
+Whole-series clock times and duration can change for counted, same-day UTC series **without
+changed or cancelled occurrences**. Dates and the recurrence rule stay the same.
+Outlook's master time update discards exceptions and restores cancellations, so
+Musubi does not offer that action for those families. Their content-only series
+editor continues to preserve individual changes. A time change can require guests
+to respond again.
+
+These capabilities require current ownership, version and complete native-family
+checks. Online meetings, attachments, shared/delegate copies, recurrence-rule
+changes and “this and following” edits remain outside these editing paths.
+Cancellation has its own separately verified capability.
 
 If Outlook rejects a stale version, sync and reopen the meeting before creating
 a new edit. If the response is lost, Delivery details can check the result without

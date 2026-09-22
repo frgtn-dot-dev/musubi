@@ -1,3 +1,6 @@
+import { config } from "@musubi/config";
+import { OrganizerAdmissionRejectedError } from "@musubi/types";
+import { graphSeriesTimeChange } from "@musubi/db";
 import { setTimeout as delay } from "node:timers/promises";
 import { type MicrosoftRecurringContentRequest } from "@musubi/types";
 import { assertGraphMeetingRequest, graphContentVersion, graphSeriesContentObserved, sameCaldavScopeContext as same, type GraphMeetingContext, type GraphOccurrenceContent, type GraphFamilyObservation } from "@musubi/db";
@@ -46,7 +49,13 @@ export async function prepareGraphSeriesContent(token: string, context: GraphMee
   assertGraphMeetingRequest(context, request);
   const observed = await observeGraphSeriesContent(token, context, signal);
   if (observed.version !== request.expectedSeriesVersion) fail();
-  return { version: 1, context, request, baseline: observed.baseline, native: observed.native, nativeExceptions: observed.nativeExceptions, identity: observed.identity, template: observed.template, targetID: context.masterID };
+  const saved: GraphOccurrenceContent = { version: 1, context, request, baseline: observed.baseline, native: observed.native, nativeExceptions: observed.nativeExceptions, identity: observed.identity, template: observed.template, targetID: context.masterID };
+  if (request.patch.time) {
+    if (!config.api.eventTimeEditsEnabled) throw new OrganizerAdmissionRejectedError("Time editing is not available.");
+    try { graphSeriesTimeChange(saved); }
+    catch (error) { throw new OrganizerAdmissionRejectedError(error instanceof Error ? error.message : "Choose a supported series time."); }
+  }
+  return saved;
 }
 function content(raw: Record<string, unknown>, field: string) {
   if (field === "subject") return raw.subject;
@@ -61,8 +70,10 @@ export async function updateGraphSeriesContent(token: string, saved: GraphOccurr
   if (!same(transport.identity, saved.identity)) fail();
   const baseline = microsoftMeetingContentEvidence(saved.native, saved.identity.selfAddress, saved.context.masterID, true);
   const patch = microsoftMeetingContentBody(saved.request);
-  const read = async () => {
-    const family = await transport.read(saved.template, saved.baseline.master.icalUid);
+  const time = graphSeriesTimeChange(saved);
+  if (time && !config.api.eventTimeEditsEnabled && !saved.dispatch) fail();
+  const read = async (after = false) => {
+    const family = await transport.read(after && time ? time.template : saved.template, saved.baseline.master.icalUid);
     if (!family) fail();
     return { family, ...await readNative(transport, family, saved.context.masterID) };
   };
@@ -84,7 +95,7 @@ export async function updateGraphSeriesContent(token: string, saved: GraphOccurr
     for (const pause of [0, 200, 400, 800]) {
       if (signal?.aborted) return unknown();
       if (pause) await delay(pause, undefined, { signal });
-      const after = await read().catch(() => null);
+      const after = await read(true).catch(() => null);
       if (after && matches(after)) return { kind: "observed" as const, observation: after.family };
     }
     return unknown();

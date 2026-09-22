@@ -108,7 +108,7 @@ export function microsoftMeetingContentBody(request: MicrosoftOrganizerRequest) 
   if (request.action !== "update") fail();
   const payload: Record<string, unknown> = {};
   if (request.patch.time) {
-    if (request.scope !== "occurrence") fail();
+    if (!request.scope) fail();
     const time = graphTimeForEvent(resolveEventTimeEdit(request.patch.time));
     // Preserve all-day mode and every attendee field; only write endpoints.
     payload.start = time.start;
@@ -130,7 +130,7 @@ export function matchesMeetingContent(baseline: Record<string, unknown>, patch: 
       const before = baseline[key] as { dateTime: string; timeZone: string };
       return endpointInstant(desired) !== endpointInstant(before);
     });
-    if (masterID && !allowMaster && changedTime) {
+    if (masterID && changedTime) {
       expected.attendees = (baseline.attendees as Record<string, unknown>[]).map((guest, index) => {
         const status = next.attendees[index]?.status;
         // A full meeting update can reset RSVP. Accept only the observed empty
