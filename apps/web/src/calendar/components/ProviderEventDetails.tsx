@@ -7,7 +7,7 @@ import { Row } from "~/ui/Row";
 import { ProviderOrganizerEditor } from "./ProviderOrganizerEditor";
 import { ProviderRsvpEditor } from "./ProviderRsvpEditor";
 import type { Event, ProviderEventStateResponse } from "@musubi/types";
-import { assertCaldavSeriesAlarmObservation, canManageProviderOrganizer, providerEventDetails } from "@musubi/calendar";
+import { assertCaldavSeriesAlarmObservation, canManageProviderOrganizer, outlookSeriesOrganizerObservation, providerEventDetails } from "@musubi/calendar";
 import { useEffect, useId, useRef, useState } from "react";
 import { getProviderEventState } from "~/api/resources";
 import { getServerOrigin } from "~/api/query-keys";
@@ -68,7 +68,7 @@ function ProviderEventDetailsBody({ providerFlavor, presentation = "default", ev
   const titleId = useId();
   const key = JSON.stringify([eventId, userId, connectionId]);
   const [result, setResult] = useState<({ key: string; failed?: boolean } & Partial<ProviderEventStateResponse>)>();
-  const [editor, setEditor] = useState<{ kind: "reminders" | "rsvp" | "organizer" | "outlook-cancel"; trigger: HTMLElement; observation: ProviderEventStateResponse }>();
+  const [editor, setEditor] = useState<{ kind: "reminders" | "rsvp" | "organizer" | "outlook-series" | "outlook-cancel"; trigger: HTMLElement; observation: ProviderEventStateResponse }>();
   const readSequence = useRef(0);
   const [opening, setOpening] = useState(false);
   const [openError, setOpenError] = useState("");
@@ -76,13 +76,13 @@ function ProviderEventDetailsBody({ providerFlavor, presentation = "default", ev
   const refreshing = useRef(false);
   const editorRead = useRef<AbortController | null>(null);
   useEffect(() => { active.current = true; return () => { active.current = false; editorRead.current?.abort(); }; }, []);
-  async function openEditor(trigger: HTMLElement, kind: "reminders" | "rsvp" | "organizer" | "outlook-cancel" = "reminders", seriesAction = false) {
+  async function openEditor(trigger: HTMLElement, kind: "reminders" | "rsvp" | "organizer" | "outlook-series" | "outlook-cancel" = "reminders", seriesAction = false) {
     if (refreshing.current) return;
     refreshing.current = true; setOpening(true); setOpenError("");
     ++readSequence.current;
     editorRead.current = new AbortController();
     try {
-      const observation = await getProviderEventState(seriesAction && seriesMaster ? seriesMaster.id : eventId, editorRead.current.signal, connectionId);
+      let observation = await getProviderEventState(seriesAction && seriesMaster ? seriesMaster.id : eventId, editorRead.current.signal, connectionId);
       if (!active.current) return;
       if (seriesAction) {
         if (!seriesMaster) throw new Error("Missing stored series master.");
@@ -90,6 +90,11 @@ function ProviderEventDetailsBody({ providerFlavor, presentation = "default", ev
       } else if (kind === "reminders" && observation.reminderEdit?.provider === "caldav" && observation.reminderEdit.scope === "series") throw new Error("Choose Series alarm settings explicitly.");
       if (kind === "organizer" && (sourceEvent?.id !== eventId || !canManageProviderOrganizer(sourceEvent, observation))) throw new Error("The stored meeting observation changed.");
       setResult({ key, ...observation });
+      if (kind === "outlook-series") {
+        const scoped = sourceEvent?.id === eventId ? outlookSeriesOrganizerObservation(sourceEvent, observation) : undefined;
+        if (!scoped) throw new Error("The stored series observation changed.");
+        observation = scoped; kind = "organizer";
+      }
       if ((kind === "outlook-cancel" ? observation.outlookCancellation : kind === "organizer" ? observation.organizerEdit : kind === "reminders" ? observation.reminderEdit : observation.rsvpEdit) && observation.state && observation.version) {
         const handoff = kind === "organizer" || kind === "outlook-cancel" ? undefined : kind === "reminders" ? onEditReminders : onRespond;
         if (handoff) handoff(observation); else setEditor({ kind, trigger, observation });
@@ -144,6 +149,7 @@ function ProviderEventDetailsBody({ providerFlavor, presentation = "default", ev
     </> : null}
     {seriesMaster && current?.reminderEdit?.provider === "caldav" && current.reminderEdit.scope === "series" && current.state && current.version ? <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget, "reminders", true)}>Series alarm settings</Button> : null}
     {current?.rsvpEdit && current.state && current.version && !series ? <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget, "rsvp")}>{occurrence ? "Respond to this occurrence" : current.rsvpEdit.provider === "microsoft" ? "Respond in Outlook" : current.rsvpEdit.provider === "caldav" ? "Respond in calendar" : "Respond in Google"}</Button> : null}
+    {outlookSeriesOrganizerObservation(sourceEvent, current) && sourceEvent?.id === eventId && !connectionId ? <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget, "outlook-series")}>Edit series</Button> : null}
     {canManageProviderOrganizer(sourceEvent, current) && sourceEvent?.id === eventId && !connectionId && !series ? <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget, "organizer")}>{current?.organizerEdit?.scope === "occurrence" ? "Manage this occurrence" : `Manage ${current?.organizerEdit?.provider === "caldav" ? "CalDAV" : current?.organizerEdit?.provider === "microsoft" ? "Outlook" : "Google"} meeting`}</Button> : null}
   </>;
   return <section aria-labelledby={titleId} className={classNames(styles.notes, presentation === "panel" && panelStyles.panel)}>

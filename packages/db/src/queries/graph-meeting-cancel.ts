@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
-import { BadRequestError, EventSchema, MicrosoftSeriesCancellationRequestSchema, type Event, type MicrosoftSeriesCancellationRequest, type MicrosoftOccurrenceContentRequest } from "@musubi/types";
+import { BadRequestError, EventSchema, MicrosoftSeriesCancellationRequestSchema, type Event, type MicrosoftSeriesCancellationRequest, type MicrosoftRecurringContentRequest } from "@musubi/types";
 import { db } from "..";
 import { events, externalEvents, calendarEvents, eventOutbox } from "../schema";
 import type { DbTransaction } from "./calendars";
@@ -69,7 +69,7 @@ export type GraphMeetingCancellation = {
 export async function readGraphMeetingContext(address: Address) {
   return db.transaction(async tx => { await lockGraphMeetingContext(tx, address); return graphMeetingContextInTransaction(tx, address); });
 }
-export function assertGraphMeetingRequest(context: GraphMeetingContext, request: MicrosoftSeriesCancellationRequest | MicrosoftOccurrenceContentRequest) {
+export function assertGraphMeetingRequest(context: GraphMeetingContext, request: MicrosoftSeriesCancellationRequest | MicrosoftRecurringContentRequest) {
   const event = context.family.find(e => e.id === request.eventID);
   const mapping = context.mappings.find(m => m.eventID === request.eventID);
   if (!event || !mapping || event.deletedAt || event.isCanceled || event.revision !== request.expectedRevision || providerStateVersion(mapping) !== request.expectedStateVersion || request.calendarID !== context.address.calendarID || request.eventID !== context.address.eventID || request.scope === "occurrence" && !mapping.externalSeriesID) refuse();

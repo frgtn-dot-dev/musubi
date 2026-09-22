@@ -110,7 +110,7 @@ export function ProviderOrganizerEditor({
 }) {
   const api = useApi(),
     insets = useSafeAreaInsets();
-  const [draft, setDraft] = useState(() => organizerDraft(event, provider)),
+  const [draft, setDraft] = useState(() => organizerDraft(event, provider, observation)),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
@@ -222,8 +222,9 @@ export function ProviderOrganizerEditor({
       setBusy(false);
     }
   }
+  const wholeSeries = observation?.organizerEdit?.scope === "series";
   const occurrence = observation?.organizerEdit?.scope === "occurrence";
-  const personalOccurrence = provider === "microsoft" && occurrence && observation?.state?.attendeesComplete && observation.state.attendees.length === 0;
+  const personalOccurrence = provider === "microsoft" && (occurrence || wholeSeries) && observation?.state?.attendeesComplete && observation.state.attendees.length === 0;
   const locked = busy || submitted || !canUpdate,
     copy = { fontFamily: fonts.sans, color: colors.fg2 };
   const fields: [keyof OrganizerDraft, string][] = [
@@ -279,7 +280,7 @@ export function ProviderOrganizerEditor({
     <ModalPortal visible onRequestClose={close}>
       <BottomSheetFrame motion={motion} onClose={close} dismissible={!busy} header={<View style={styles.modalTitleRow}>
             <Text accessibilityRole="header" style={[styles.modalTitle, { flex: 1 }]}>
-              {occurrence ? "Edit occurrence" : event ? "Edit meeting" : "New meeting"}
+              {wholeSeries ? "Edit series" : occurrence ? "Edit occurrence" : event ? "Edit meeting" : "New meeting"}
             </Text>
             {!personalOccurrence && info("Guest invitations", organizerNotificationNotice(provider))}
             <Tap accessibilityLabel="Close meeting editor" disabled={busy} onPress={close}
@@ -312,7 +313,7 @@ export function ProviderOrganizerEditor({
                 {fields.filter(([key]) => (!occurrence || key !== "guests") && !["description", "location"].includes(key)).map(renderField)}
                 {(provider !== "google" && event && !canEditTime) || occurrence ? (
                   <View style={{ alignItems: "flex-end", paddingHorizontal: spacing[4] }}>
-                    {info("Meeting editing", occurrence ? "Only this occurrence will change." : "Meeting time and guests are preserved.")}
+                    {info("Meeting editing", wholeSeries ? "Changes apply to the series. Individual occurrence changes are preserved." : occurrence ? "Only this occurrence will change." : "Meeting time and guests are preserved.")}
                   </View>
                 ) : (
                   <>

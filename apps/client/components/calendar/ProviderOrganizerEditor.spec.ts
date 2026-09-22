@@ -407,3 +407,20 @@ it("binds Outlook occurrence updates to the exact family and keeps retry identit
   expect(h.save.mock.calls[0][0]).toMatchObject({ provider: "microsoft", action: "update", scope: "occurrence", expectedSeriesVersion: "c".repeat(64), patch: { title: "One occurrence" } });
   expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
 });
+
+it("edits master content through the separate series action and preserves its retry", async () => {
+  const observed: ProviderEventStateResponse = { ...observation,
+    outlookSeriesContent: { calendarID: observation.organizerEdit!.calendarID, expectedRevision: event.revision!, seriesVersion: "d".repeat(64), content: { title: "Series title", description: "Series notes", location: "Series room" } },
+    organizerEdit: { ...observation.organizerEdit!, provider: "microsoft", scope: "series", seriesVersion: "d".repeat(64), actions: ["update"] },
+  };
+  const draw = () => render({ ...event, title: "Individual title" }, observed);
+  h.save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "pending" });
+  const title = nodes(draw()).find(node => node.type === "TextInput" && node.props.accessibilityLabel === "Title")!;
+  expect(title.props.value).toBe("Series title");
+  expect(nodes(draw()).some(node => node.props.accessibilityLabel === "Start date")).toBe(false);
+  title.props.onChangeText("New series title");
+  button(draw(), "Save").onPress(); await settle();
+  button(draw(), "Retry").onPress(); await settle();
+  expect(h.save.mock.calls[0][0]).toMatchObject({ provider: "microsoft", action: "update", scope: "series", expectedSeriesVersion: "d".repeat(64), patch: { title: "New series title" } });
+  expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
+});

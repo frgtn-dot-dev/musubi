@@ -1,3 +1,4 @@
+import { updateGraphSeriesContent } from "./microsoft_series_content";
 import { graphOriginalStartFromUtc } from "./microsoft_time";
 import { type MicrosoftOccurrenceContentRequest } from "@musubi/types";
 import { assertGraphMeetingRequest, graphMeetingVersion, graphOccurrenceContentObserved, sameCaldavScopeContext as same, type GraphMeetingContext, type GraphOccurrenceContent } from "@musubi/db";
@@ -30,6 +31,7 @@ export async function prepareGraphOccurrenceContent(token: string, context: Grap
 /** Conditional PATCH only targets one native occurrence. Never re-send after a
  * possible dispatch: meeting updates may notify guests on every successful write. */
 export async function updateGraphOccurrenceContent(token: string, saved: GraphOccurrenceContent, mark: () => Promise<void>, accepted: () => Promise<void>, signal?: AbortSignal) {
+  if (saved.request.scope === "series") return updateGraphSeriesContent(token, saved, mark, accepted, signal);
   const transport = await graphOrganizerFamilySession(token, saved.context, signal, true);
   if (!same(transport.identity, saved.identity)) fail();
   const baseline = microsoftMeetingContentEvidence(saved.native, saved.identity.selfAddress, saved.context.masterID);

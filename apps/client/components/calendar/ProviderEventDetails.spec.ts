@@ -113,3 +113,17 @@ it("never promotes a generated occurrence ID into organizer scope", async () => 
   render(generated); await settle();
   expect(nodes(render(generated)).some(node => node.type === "Btn" && node.props.label === "Manage this occurrence")).toBe(false);
 });
+
+it("opens series editing only from a fresh series proof and clears revoked access", async () => {
+  const stored = { ...event, originCalendarID: "source" };
+  const observed = { ...observation, reminderEdit: undefined, state: { ...observation.state, provider: "microsoft" }, outlookSeriesContent: { calendarID: "source", expectedRevision: 7, seriesVersion: "b".repeat(64), content: { title: "Series title", description: null, location: null } } };
+  h.fetch.mockResolvedValueOnce(observed).mockResolvedValueOnce({ ...observed, outlookSeriesContent: { ...observed.outlookSeriesContent, seriesVersion: "c".repeat(64) } }).mockResolvedValueOnce({ ...observed, outlookSeriesContent: undefined });
+  render(stored); await settle();
+  nodes(render(stored)).find(n => n.type === "Btn" && n.props.label === "Edit series")!.props.onPress(); await settle();
+  const editor = nodes(render(stored)).find(n => n.type === "ProviderOrganizerEditor")!;
+  expect(editor.props.observation.organizerEdit.scope).toBe("series");
+  expect(editor.props.observation.organizerEdit.seriesVersion).toBe("c".repeat(64));
+  editor.props.onClose();
+  nodes(render(stored)).find(n => n.type === "Btn" && n.props.label === "Edit series")!.props.onPress(); await settle();
+  expect(nodes(render(stored)).some(n => n.type === "ProviderOrganizerEditor")).toBe(false);
+});

@@ -157,7 +157,7 @@ export const MicrosoftOrganizerRequestSchema = z.discriminatedUnion("action", [
   microsoftCreate,
   caldavCommon.extend({
     provider: z.literal("microsoft"), action: z.literal("update"),
-    scope: z.literal("occurrence").optional(),
+    scope: z.enum(["occurrence", "series"]).optional(),
     expectedSeriesVersion: z.string().regex(/^[0-9a-f]{64}$/).optional(),
     expectedRevision: z.number().int().positive(),
     expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
@@ -189,6 +189,8 @@ export const MicrosoftOccurrenceContentRequestSchema = caldavCommon.extend({
   expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
   patch: content.partial().strict().refine(value => Object.keys(value).length > 0, "Choose a content change"),
 }).strict();
+export const MicrosoftRecurringContentRequestSchema = MicrosoftOccurrenceContentRequestSchema.extend({ scope: z.enum(["occurrence", "series"]) });
+export type MicrosoftRecurringContentRequest = z.infer<typeof MicrosoftRecurringContentRequestSchema>;
 export type MicrosoftOccurrenceContentRequest = z.infer<typeof MicrosoftOccurrenceContentRequestSchema>;
 export type MicrosoftSeriesCancellationRequest = z.infer<typeof MicrosoftSeriesCancellationRequestSchema>;
 export type MicrosoftOrganizerRequest = z.infer<typeof MicrosoftOrganizerRequestSchema>;

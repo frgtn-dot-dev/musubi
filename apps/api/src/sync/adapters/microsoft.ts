@@ -1,3 +1,4 @@
+import { observeGraphSeriesContent, prepareGraphSeriesContent } from "./microsoft_series_content";
 import { observeGraphOccurrenceContent, prepareGraphOccurrenceContent, updateGraphOccurrenceContent } from "./microsoft_occurrence_content";
 import { prepareGraphSeriesDeletion, deleteGraphSeries } from "./microsoft_series_delete";
 import { assertMicrosoftPersonalContent, microsoftPersonalContentPatch, microsoftEventVersion, updateMicrosoftPersonalContent, deleteMicrosoftPersonalEvent } from "./microsoft_event_content";
@@ -697,6 +698,8 @@ export function toExternalCalendar(c: GraphCalendar): ExternalCalendarInfo {
 
 export const microsoftAdapter: CalendarAdapter = {
   microsoftOrganizer: microsoftOrganizerTransport(getAccessToken),
+  async observeGraphSeriesContent(context, signal) { return observeGraphSeriesContent(await getAccessToken(context.address.actorID, context.link.accountID), context, signal); },
+  async prepareGraphSeriesContent(context, request, signal) { return prepareGraphSeriesContent(await getAccessToken(context.address.actorID, context.link.accountID), context, request, signal); },
   async observeGraphOccurrenceContent(context, signal) { return observeGraphOccurrenceContent(await getAccessToken(context.address.actorID, context.link.accountID), context, signal); },
   async prepareGraphOccurrenceContent(context, request, signal) { return prepareGraphOccurrenceContent(await getAccessToken(context.address.actorID, context.link.accountID), context, request, signal); },
   async updateGraphOccurrenceContent(saved, mark, accepted, signal) { return updateGraphOccurrenceContent(await getAccessToken(saved.context.address.actorID, saved.context.link.accountID), saved, mark, accepted, signal); },

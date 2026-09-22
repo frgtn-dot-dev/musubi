@@ -437,3 +437,23 @@ it("binds an Outlook occurrence to its family observation without series or time
   expect(api.save.mock.calls[0][0]).toMatchObject({ provider: "microsoft", action: "update", scope: "occurrence", expectedSeriesVersion: "c".repeat(64), patch: { location: null } });
   expect(api.save.mock.calls[1]).toEqual(api.save.mock.calls[0]);
 });
+
+it("edits the series content rather than overwriting it with a selected exception", async () => {
+  api.save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "pending" });
+  render(<ProviderOrganizerEditor calendarID={calendarID} color="red" event={{ ...event, title: "Individual title" }} observation={{ ...observation,
+    outlookSeriesContent: { calendarID, expectedRevision: 4, seriesVersion: "d".repeat(64), content: { title: "Series title", description: "Series notes", location: "Series room" } },
+    organizerEdit: { ...observation.organizerEdit!, provider: "microsoft", scope: "series", seriesVersion: "d".repeat(64), actions: ["update"] },
+  }} onClose={vi.fn()} />);
+  expect(screen.getByRole("dialog", { name: "Edit series" })).toBeTruthy();
+  expect((screen.getByRole("textbox", { name: "Title" }) as HTMLInputElement).value).toBe("Series title");
+  expect(screen.getByText(/Individual occurrence changes are preserved/)).toBeTruthy();
+  expect(screen.queryByRole("combobox", { name: "Event time zone" })).toBeNull();
+  expect(screen.queryByRole("button", { name: /Cancel.*notify/ })).toBeNull();
+  fireEvent.change(screen.getByRole("textbox", { name: "Notes" }), { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save and notify guests" }));
+  await screen.findByText("offline");
+  fireEvent.click(screen.getByRole("button", { name: "Retry saved meeting action" }));
+  await screen.findByRole("status");
+  expect(api.save.mock.calls[0][0]).toMatchObject({ provider: "microsoft", action: "update", scope: "series", expectedSeriesVersion: "d".repeat(64), patch: { description: null } });
+  expect(api.save.mock.calls[1]).toEqual(api.save.mock.calls[0]);
+});

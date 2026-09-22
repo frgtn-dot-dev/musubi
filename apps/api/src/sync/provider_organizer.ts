@@ -1,5 +1,5 @@
 import { findGraphOccurrenceContent, saveGraphOccurrenceContent } from "@musubi/db";
-import { MicrosoftOccurrenceContentRequestSchema } from "@musubi/types";
+import { MicrosoftRecurringContentRequestSchema, MicrosoftOccurrenceContentRequestSchema } from "@musubi/types";
 import { readGraphMeetingContext, findGraphMeetingCancellation, saveGraphMeetingCancellation } from "@musubi/db";
 import { MicrosoftSeriesCancellationRequestSchema } from "@musubi/types";
 import { caldavOrganizerTimeEvidence } from "./adapters/caldav_organizer_time";
@@ -71,6 +71,13 @@ export async function queueProviderOrganizer(actorID: string, input: unknown) {
     throw new OrganizerAdmissionRejectedError(
       "Check the meeting fields and use a positive duration.",
     );
+  if (parsed.data.provider === "microsoft" && parsed.data.action === "update" && parsed.data.scope === "series") {
+    const request = MicrosoftRecurringContentRequestSchema.parse(parsed.data);
+    const replay = await findGraphOccurrenceContent(actorID, request);
+    if (replay) return replay;
+    const context = await readGraphMeetingContext({ actorID, calendarID: request.calendarID, eventID: request.eventID });
+    return saveGraphOccurrenceContent(await microsoftAdapter.prepareGraphSeriesContent!(context, request, AbortSignal.timeout(20_000)));
+  }
   if (parsed.data.provider === "microsoft" && parsed.data.action === "update" && parsed.data.scope === "occurrence") {
     const request = MicrosoftOccurrenceContentRequestSchema.parse(parsed.data);
     const replay = await findGraphOccurrenceContent(actorID, request);
@@ -197,7 +204,7 @@ export async function observeProviderOrganizer(
   actorID: string,
   eventID: string,
   observation: ProviderEventStateResponse,
-  outlookOrganizer: boolean | "series" | "content" = false,
+  outlookOrganizer: boolean | "series" | "content" | "series-content" = false,
 ) {
   // Older clients strictly parse the provider enum. Only advertise the new
   // capability to clients that explicitly opt into this additive read.
@@ -215,6 +222,16 @@ export async function observeProviderOrganizer(
     const { getEventSnapshot } = await import("@musubi/db");
     const event = await getEventSnapshot(eventID);
     if (!event?.originCalendarID || !event.revision) return observation;
+    if (observation.state?.provider === "microsoft" && outlookOrganizer === "series-content") {
+      // v4 is additive; never send new strict fields to v1–v3 clients.
+      outlookOrganizer = "content";
+      try {
+        const context = await readGraphMeetingContext({ actorID, eventID, calendarID: event.originCalendarID });
+        const native = await microsoftAdapter.observeGraphSeriesContent!(context, AbortSignal.timeout(20_000));
+        const { title, description, location } = native.baseline.master.values;
+        observation = { ...observation, outlookSeriesContent: { calendarID: event.originCalendarID, expectedRevision: event.revision, seriesVersion: native.version, content: { title, description, location } } };
+      } catch { /* Individual occurrence editing can still qualify. */ }
+    }
     if (observation.state?.provider === "microsoft" && outlookOrganizer === "content") {
       try {
         const context = await readGraphMeetingContext({ actorID, eventID, calendarID: event.originCalendarID });

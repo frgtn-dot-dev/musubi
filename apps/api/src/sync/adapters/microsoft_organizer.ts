@@ -84,7 +84,7 @@ export function microsoftCancellationEvidence(raw: unknown, self: string, master
 
 /** Content writes retain the full native baseline, including fields not shown
  * in Musubi. Only explicitly changed fields are sent to Graph. */
-export function microsoftMeetingContentEvidence(raw: unknown, self: string, masterID?: string) {
+export function microsoftMeetingContentEvidence(raw: unknown, self: string, masterID?: string, allowMaster = false) {
   try {
     const proof = microsoftCancellationEvidence(raw, self, masterID, !!masterID);
     const item = z.record(z.string(), z.unknown()).parse(structuredClone(raw));
@@ -92,7 +92,7 @@ export function microsoftMeetingContentEvidence(raw: unknown, self: string, mast
       || proof.attendees.some(guest => guest.emailAddress.address.toLowerCase() === self.toLowerCase())) fail();
     // The occurrence identity was checked above; reuse the UTC endpoint validator.
     graphRsvpTime(masterID ? { ...item, type: "singleInstance" } : item);
-    if (masterID && (proof.id === masterID || !z.iso.datetime().safeParse(item.originalStart).success)) fail();
+    if (masterID && (proof.id === masterID ? !allowMaster : !z.iso.datetime().safeParse(item.originalStart).success)) fail();
     return { ...proof, ...item, etag: proof.etag } as typeof proof & Record<string, unknown>;
   } catch { return fail(); }
 }
@@ -110,9 +110,9 @@ export function microsoftMeetingContentBody(request: MicrosoftOrganizerRequest) 
   if (request.patch.location !== undefined) payload.location = { displayName: request.patch.location ?? "" };
   return payload;
 }
-export function matchesMeetingContent(baseline: Record<string, unknown>, patch: Record<string, unknown>, actual: unknown, self: string, masterID?: string) {
+export function matchesMeetingContent(baseline: Record<string, unknown>, patch: Record<string, unknown>, actual: unknown, self: string, masterID?: string, allowMaster = false) {
   try {
-    const next = microsoftMeetingContentEvidence(actual, self, masterID);
+    const next = microsoftMeetingContentEvidence(actual, self, masterID, allowMaster);
     const expected = { ...baseline, ...patch };
     if ("location" in patch && next.locations != null) {
       const locations = z.array(z.object({ displayName: z.string() })).max(1).parse(next.locations);

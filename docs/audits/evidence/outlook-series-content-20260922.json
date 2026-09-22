@@ -1,0 +1,90 @@
+{
+  "personal": {
+    "meeting": false,
+    "date": "2026-09-22T18:43:12.504Z",
+    "syntheticOnly": true,
+    "created": true,
+    "recurrenceCount": 4,
+    "guestNotificationDelivery": "unknown",
+    "results": [
+      {
+        "fields": [
+          "title"
+        ],
+        "status": "completed",
+        "error": null
+      },
+      {
+        "fields": [
+          "description",
+          "location"
+        ],
+        "status": "completed",
+        "error": null
+      },
+      {
+        "fields": [
+          "description",
+          "location"
+        ],
+        "status": "completed",
+        "error": null
+      }
+    ],
+    "stalePatchStatus": 412,
+    "htmlPreserved": true,
+    "timeAndGuestsPreserved": true,
+    "cleared": true,
+    "exceptionContentPreserved": true,
+    "inheritedContentUpdated": true,
+    "movedTimePreserved": true,
+    "cancelledPreserved": true,
+    "cleanupStatus": 204,
+    "seriesAbsent": true,
+    "localTestRowsRemoved": 3
+  },
+  "meeting": {
+    "meeting": true,
+    "date": "2026-09-22T18:45:13.816Z",
+    "syntheticOnly": true,
+    "created": true,
+    "recurrenceCount": 4,
+    "guestNotificationDelivery": "unknown",
+    "results": [
+      {
+        "fields": [
+          "title"
+        ],
+        "status": "completed",
+        "error": null
+      },
+      {
+        "fields": [
+          "description",
+          "location"
+        ],
+        "status": "completed",
+        "error": null
+      },
+      {
+        "fields": [
+          "description",
+          "location"
+        ],
+        "status": "completed",
+        "error": null
+      }
+    ],
+    "stalePatchStatus": 412,
+    "htmlPreserved": true,
+    "timeAndGuestsPreserved": true,
+    "cleared": true,
+    "exceptionContentPreserved": true,
+    "inheritedContentUpdated": true,
+    "movedTimePreserved": true,
+    "cancelledPreserved": true,
+    "cleanupStatus": 202,
+    "seriesAbsent": true,
+    "localTestRowsRemoved": 3
+  }
+}

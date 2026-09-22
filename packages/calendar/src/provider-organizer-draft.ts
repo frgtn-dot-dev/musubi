@@ -26,14 +26,15 @@ export function organizerNotificationNotice(provider: "google" | "caldav" | "mic
 export function organizerDraft(
   event?: Event,
   _provider: "google" | "caldav" | "microsoft" = "google",
+  observation?: ProviderEventStateResponse,
 ): OrganizerDraft {
   const today = new Date(),
     day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`,
     time = event?.timeModel;
   return {
-    title: event?.title ?? "",
-    description: event?.description ?? "",
-    location: event?.location ?? "",
+    title: (observation?.organizerEdit?.scope === "series" ? observation.outlookSeriesContent?.content.title : event?.title) ?? "",
+    description: (observation?.organizerEdit?.scope === "series" ? observation.outlookSeriesContent?.content.description : event?.description) ?? "",
+    location: (observation?.organizerEdit?.scope === "series" ? observation.outlookSeriesContent?.content.location : event?.location) ?? "",
     guests: "",
     start:
       time?.kind === "zoned"
@@ -119,9 +120,9 @@ export function organizerRequest(
   const expected = {
     expectedRevision: observation?.organizerEdit?.expectedRevision,
     expectedStateVersion: observation?.version,
-    ...(observation?.organizerEdit?.scope === "occurrence"
+    ...(observation?.organizerEdit?.scope
       ? {
-          scope: "occurrence",
+          scope: observation.organizerEdit.scope,
           ...(provider === "microsoft" ? { expectedSeriesVersion: observation.organizerEdit.seriesVersion } : { expectedInstanceVersion: observation.organizerEdit.instanceVersion }),
         }
       : {}),
@@ -162,13 +163,26 @@ export function canManageProviderOrganizer(
   if (
     !event ||
     !edit ||
-    event.recurrence ||
+    (event.recurrence && edit.scope !== "series") ||
     event.isCanceled ||
     event.revision !== edit.expectedRevision ||
     event.originCalendarID !== edit.calendarID
   )
     return false;
+  if (edit.scope === "series") return edit.provider === "microsoft" && !!edit.seriesVersion && (!!event.seriesID === !!event.originalStart);
   return edit.scope === "occurrence"
     ? !!(edit.provider === "microsoft" ? edit.seriesVersion && (!!event.seriesID === !!event.originalStart) : edit.provider === "google" && event.seriesID && event.originalStart && edit.instanceVersion)
     : !event.seriesID && !event.originalStart;
+}
+
+/** A separately selected series action uses the master's content, while its
+ * proof remains bound to the actual stored row the user opened. */
+export function outlookSeriesOrganizerObservation(event: Event | undefined, observation: Partial<ProviderEventStateResponse> | undefined): ProviderEventStateResponse | undefined {
+  const series = observation?.outlookSeriesContent;
+  if (!event || !series || !observation?.state || observation.state.provider !== "microsoft" || !observation.version) return undefined;
+  const result: ProviderEventStateResponse = { ...observation, state: observation.state, organizerEdit: {
+    provider: "microsoft", scope: "series", seriesVersion: series.seriesVersion,
+    calendarID: series.calendarID, expectedRevision: series.expectedRevision, actions: ["update"],
+  } };
+  return canManageProviderOrganizer(event, result) ? result : undefined;
 }
