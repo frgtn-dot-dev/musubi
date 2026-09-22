@@ -1,3 +1,4 @@
+import { outlookSeriesOrganizerObservation } from "./provider-organizer-draft";
 import { eventDeliveryExplanation } from "./event-delivery";
 import type { EventDeliveryTarget } from "@musubi/types";
 import assert from "node:assert/strict";
@@ -133,4 +134,14 @@ assert.equal(canManageProviderOrganizer({ ...child, recurrence: "RRULE:FREQ=DAIL
 assert.equal(canManageProviderOrganizer(child, { organizerEdit: { ...outlookOccurrence.organizerEdit, seriesVersion: undefined } }), false);
 const occurrenceUpdate = organizerRequest("update", { ...draft, title: "Only one occurrence" }, ["title"], identity, outlookOccurrence);
 assert.equal(occurrenceUpdate.provider === "microsoft" && occurrenceUpdate.action === "update" && occurrenceUpdate.expectedSeriesVersion, "c".repeat(64));
-for (const change of [{ scope: "series" }, { scope: undefined }, { expectedSeriesVersion: undefined }, { expectedInstanceVersion: "b".repeat(64) }, { patch: { time: { kind: "all-day", startDate: "2026-09-22", endDate: "2026-09-23" } } }]) assert.equal(ProviderOrganizerRequestSchema.safeParse({ ...occurrenceUpdate, ...change }).success, false);
+for (const change of [{ scope: undefined }, { expectedSeriesVersion: undefined }, { expectedInstanceVersion: "b".repeat(64) }, { patch: { time: { kind: "all-day", startDate: "2026-09-22", endDate: "2026-09-23" } } }]) assert.equal(ProviderOrganizerRequestSchema.safeParse({ ...occurrenceUpdate, ...change }).success, false);
+
+const seriesSource = { ...outlookOccurrence, state: { ...observation.state!, provider: "microsoft" as const }, outlookSeriesContent: { calendarID: child.originCalendarID!, expectedRevision: child.revision!, seriesVersion: "d".repeat(64), content: { title: "Series title", description: "Series notes", location: "Series room" } } };
+const scopedSeries = outlookSeriesOrganizerObservation(child, seriesSource)!;
+assert.equal(scopedSeries.organizerEdit?.scope, "series");
+assert.equal(organizerDraft(child, "microsoft", scopedSeries).title, "Series title");
+assert.equal(outlookSeriesOrganizerObservation({ ...child, revision: child.revision! + 1 }, seriesSource), undefined);
+assert.equal(outlookSeriesOrganizerObservation(child, { ...seriesSource, version: undefined }), undefined);
+const seriesUpdate = organizerRequest("update", { ...draft, title: "New series" }, ["title"], identity, scopedSeries);
+assert.equal(seriesUpdate.action === "update" && seriesUpdate.provider === "microsoft" && seriesUpdate.scope, "series");
+assert.equal(seriesUpdate.action === "update" && seriesUpdate.provider === "microsoft" && seriesUpdate.expectedSeriesVersion, "d".repeat(64));

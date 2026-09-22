@@ -276,3 +276,16 @@ it("labels only known panel metadata enums and leaves unknown values verbatim", 
   await screen.findByText("X-CUSTOM-AVAILABILITY");
   for (const value of ["X-CUSTOM-PRIVACY", "X-CUSTOM-STATUS", "X-CUSTOM-TYPE"]) expect(screen.getByText(value)).toBeTruthy();
 });
+
+it("refreshes the series proof before editing and refuses a revoked capability", async () => {
+  const calendarID = "00000000-0000-4000-8000-000000000004";
+  const stored = EventSchema.parse({ id: "00000000-0000-4000-8000-000000000001", revision: 7, title: "Individual title", isCanceled: false, start: new Date("2026-09-10T09:00:00Z"), end: new Date("2026-09-10T10:00:00Z"), isAllDay: false, creatorID: "owner", organizer: "owner", color: "red", calendars: [calendarID], originCalendarID: calendarID });
+  fetchState.mockResolvedValueOnce({ state, version: "a".repeat(64), outlookSeriesContent: { calendarID, expectedRevision: 7, seriesVersion: "b".repeat(64), content: { title: "Series title", description: null, location: null } } }).mockResolvedValueOnce({ state, version: "c".repeat(64) });
+  render(<ProviderEventDetails event={stored} eventId={stored.id} userId="owner" />);
+  const trigger = await screen.findByRole("button", { name: "Edit series" });
+  await act(async () => trigger.click());
+  expect(await screen.findByText(/Could not refresh provider details/)).toBeTruthy();
+  expect(screen.queryByRole("dialog", { name: "Edit series" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Edit series" })).toBeNull();
+  expect(fetchState).toHaveBeenCalledTimes(2);
+});

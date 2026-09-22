@@ -112,7 +112,7 @@ export function ProviderOrganizerEditor({
   returnFocus?: HTMLElement | null;
   onClose: () => void;
 }) {
-  const [draft, setDraft] = useState(() => organizerDraft(event, provider));
+  const [draft, setDraft] = useState(() => organizerDraft(event, provider, observation));
   const changed = useRef<(keyof OrganizerDraft)[]>([]),
     identity = useRef({
       eventID: event?.id ?? crypto.randomUUID(),
@@ -199,8 +199,9 @@ export function ProviderOrganizerEditor({
     }
   }
   const closeButton = useRef<HTMLButtonElement | null>(null);
+  const wholeSeries = observation?.organizerEdit?.scope === "series";
   const occurrence = observation?.organizerEdit?.scope === "occurrence";
-  const personalOccurrence = provider === "microsoft" && occurrence && observation?.state?.attendeesComplete && observation.state.attendees.length === 0;
+  const personalOccurrence = provider === "microsoft" && (occurrence || wholeSeries) && observation?.state?.attendeesComplete && observation.state.attendees.length === 0;
   const locked = busy || submitted || !canUpdate;
   return (
     <div
@@ -213,7 +214,7 @@ export function ProviderOrganizerEditor({
         elevated
         open
         closeLabel="Close meeting editor"
-        title={occurrence ? "Manage this occurrence" : `${event ? "Manage" : "Create"} ${provider === "caldav" ? "CalDAV" : provider === "microsoft" ? "Outlook" : "Google"} meeting`}
+        title={wholeSeries ? "Edit series" : occurrence ? "Manage this occurrence" : `${event ? "Manage" : "Create"} ${provider === "caldav" ? "CalDAV" : provider === "microsoft" ? "Outlook" : "Google"} meeting`}
         headerActions={personalOccurrence ? undefined : <DialogInfo label="Meeting invitation information" title="Invitations">{organizerNotificationNotice(provider)}</DialogInfo>}
         returnFocus={returnFocus}
         onOpenChange={(open) => {
@@ -260,6 +261,7 @@ export function ProviderOrganizerEditor({
               locked={locked}
               canEditTime={canEditTime}
               occurrence={occurrence}
+              wholeSeries={wholeSeries}
               onChange={patch}
             />
             {canDelete && !submitted && (
@@ -299,6 +301,7 @@ export function ProviderOrganizerFields({
   locked,
   canEditTime = true,
   occurrence = false,
+  wholeSeries = false,
   onChange,
 }: {
   organizerAddresses?: string[];
@@ -308,6 +311,7 @@ export function ProviderOrganizerFields({
   locked: boolean;
   canEditTime?: boolean;
   occurrence?: boolean;
+  wholeSeries?: boolean;
   onChange: <Key extends keyof OrganizerDraft>(key: Key, value: OrganizerDraft[Key]) => void;
 }) {
   return <>
@@ -341,7 +345,7 @@ export function ProviderOrganizerFields({
               </Field>
             )}
             {(provider !== "google" && event && !canEditTime) || occurrence ? (
-              <p>{occurrence ? "Only this occurrence will change." : "Meeting time and guests are preserved."}</p>
+              <p>{wholeSeries ? "Changes apply to the series. Individual occurrence changes are preserved." : occurrence ? "Only this occurrence will change." : "Meeting time and guests are preserved."}</p>
             ) : (
               <>
                 {provider === "caldav" && event ? (

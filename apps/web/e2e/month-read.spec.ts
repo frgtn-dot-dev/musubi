@@ -10909,7 +10909,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     const calendarID = "00000000-0000-4000-8000-000000000361", eventID = "00000000-0000-4000-8000-000000000362";
     const saved = { ...event(eventID, "Outlook review meeting", calendarID, "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z"), revision: 4, timeModel: { kind: "zoned", timeZone: "UTC", startLocal: "2026-07-26T09:00:00.000", endLocal: "2026-07-26T10:00:00.000" } };
     await mockAuthenticatedReads(page, { ...events, events: [saved] }, [{ ...calendars[0]!, id: calendarID, provider: "microsoft", accountID: "fixture", accountLabel: "Fixture" }]);
-    await page.route(`**/api/v1/events/${eventID}/provider-state?outlookOrganizer=3`, route => respond(route, { state: { provider: "microsoft", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "accepted" }], attendeesComplete: true, ownResponse: "organizer", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "busy", privacy: "normal", status: "active", eventType: "singleInstance", conferenceURLs: [] }, version: "a".repeat(64), organizerEdit: { provider: "microsoft", calendarID, expectedRevision: 4, actions: ["delete"] } }));
+    await page.route(`**/api/v1/events/${eventID}/provider-state?outlookOrganizer=4`, route => respond(route, { state: { provider: "microsoft", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "accepted" }], attendeesComplete: true, ownResponse: "organizer", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "busy", privacy: "normal", status: "active", eventType: "singleInstance", conferenceURLs: [] }, version: "a".repeat(64), organizerEdit: { provider: "microsoft", calendarID, expectedRevision: 4, actions: ["delete"] } }));
     const writes: any[] = [], errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.route("**/api/v1/provider-organizer", route => {
@@ -10952,7 +10952,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     const calendarID = "00000000-0000-4000-8000-000000000371", eventID = "00000000-0000-4000-8000-000000000372";
     const saved = { ...event(eventID, "Weekly Outlook meeting", calendarID, "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z"), revision: 4 };
     await mockAuthenticatedReads(page, { ...events, events: [saved] }, [{ ...calendars[0]!, id: calendarID, provider: "microsoft", accountID: "fixture", accountLabel: "Fixture" }]);
-    await page.route(`**/api/v1/events/${eventID}/provider-state?outlookOrganizer=3`, route => respond(route, { state: { provider: "microsoft", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "accepted" }], attendeesComplete: true, ownResponse: "organizer", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "busy", privacy: "normal", status: "active", eventType: "occurrence", conferenceURLs: [] }, version: "a".repeat(64), outlookCancellation: { calendarID, expectedRevision: 4, seriesVersion: "b".repeat(64), scopes: ["occurrence", "series"] } }));
+    await page.route(`**/api/v1/events/${eventID}/provider-state?outlookOrganizer=4`, route => respond(route, { state: { provider: "microsoft", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "accepted" }], attendeesComplete: true, ownResponse: "organizer", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "busy", privacy: "normal", status: "active", eventType: "occurrence", conferenceURLs: [] }, version: "a".repeat(64), outlookCancellation: { calendarID, expectedRevision: 4, seriesVersion: "b".repeat(64), scopes: ["occurrence", "series"] } }));
     const writes: any[] = [], errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.route("**/api/v1/provider-organizer", route => {
@@ -10993,7 +10993,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     const calendarID = "00000000-0000-4000-8000-000000000361", eventID = "00000000-0000-4000-8000-000000000362";
     const saved = { ...event(eventID, "Outlook review meeting", calendarID, "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z"), revision: 4, timeModel: { kind: "zoned", timeZone: "UTC", startLocal: "2026-07-26T09:00:00.000", endLocal: "2026-07-26T10:00:00.000" } };
     await mockAuthenticatedReads(page, { ...events, events: [saved] }, [{ ...calendars[0]!, id: calendarID, provider: "microsoft", accountID: "fixture", accountLabel: "Fixture" }]);
-    await page.route(`**/api/v1/events/${eventID}/provider-state?outlookOrganizer=3`, route => respond(route, { state: { provider: "microsoft", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "accepted" }], attendeesComplete: true, ownResponse: "organizer", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "busy", privacy: "normal", status: "active", eventType: "singleInstance", conferenceURLs: [] }, version: "a".repeat(64), organizerEdit: { provider: "microsoft", calendarID, expectedRevision: 4, actions: ["update", "delete"] } }));
+    await page.route(`**/api/v1/events/${eventID}/provider-state?outlookOrganizer=4`, route => respond(route, { state: { provider: "microsoft", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "accepted" }], attendeesComplete: true, ownResponse: "organizer", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "busy", privacy: "normal", status: "active", eventType: "singleInstance", conferenceURLs: [] }, version: "a".repeat(64), organizerEdit: { provider: "microsoft", calendarID, expectedRevision: 4, actions: ["update", "delete"] } }));
     const writes: any[] = [], errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.route("**/api/v1/provider-organizer", route => {
@@ -11038,7 +11038,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     const calendarID = "00000000-0000-4000-8000-000000000361", eventID = "00000000-0000-4000-8000-000000000362";
     const saved = { ...event(eventID, "Outlook recurring appointment", calendarID, "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z"), revision: 4, ...(width === 390 ? { seriesID: "00000000-0000-4000-8000-000000000369", originalStart: { kind: "instant", value: "2026-07-25T09:00:00.000Z" } } : {}), timeModel: { kind: "zoned", timeZone: "UTC", startLocal: "2026-07-26T09:00:00.000", endLocal: "2026-07-26T10:00:00.000" } };
     await mockAuthenticatedReads(page, { ...events, events: [saved] }, [{ ...calendars[0]!, id: calendarID, provider: "microsoft", accountID: "fixture", accountLabel: "Fixture" }]);
-    await page.route(`**/api/v1/events/${eventID}/provider-state?outlookOrganizer=3`, route => respond(route, { state: { provider: "microsoft", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: width === 1280 ? [] : [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "accepted" }], attendeesComplete: true, ownResponse: "organizer", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "busy", privacy: "normal", status: "active", eventType: "occurrence", conferenceURLs: [] }, version: "a".repeat(64), organizerEdit: { provider: "microsoft", calendarID, expectedRevision: 4, scope: "occurrence", seriesVersion: "c".repeat(64), actions: ["update"] } }));
+    await page.route(`**/api/v1/events/${eventID}/provider-state?outlookOrganizer=4`, route => respond(route, { state: { provider: "microsoft", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: width === 1280 ? [] : [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "accepted" }], attendeesComplete: true, ownResponse: "organizer", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "busy", privacy: "normal", status: "active", eventType: "occurrence", conferenceURLs: [] }, version: "a".repeat(64), organizerEdit: { provider: "microsoft", calendarID, expectedRevision: 4, scope: "occurrence", seriesVersion: "c".repeat(64), actions: ["update"] } }));
     const writes: any[] = [], errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.route("**/api/v1/provider-organizer", route => {
@@ -11070,6 +11070,53 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     await expect(editor.getByRole("status")).toContainText(width === 1280 ? "Event change saved" : "Guest notification delivery remains unknown");
     expect(writes).toHaveLength(2); expect(writes[1]).toEqual(writes[0]);
     expect(writes[0]).toMatchObject({ provider: "microsoft", action: "update", notificationPolicy: "server-invite", expectedRevision: 4, scope: "occurrence", expectedSeriesVersion: "c".repeat(64) });
+    expect(writes[0].patch).toEqual({ title: "Updated Outlook meeting", description: "Bring the agenda" });
+    await editor.getByRole("button", { name: "Close", exact: true }).press("Space");
+    await expect(trigger).toBeFocused(); expect(errors).toEqual([]);
+  });
+}
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`Outlook series content update: ${theme} ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ colorScheme: theme });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const calendarID = "00000000-0000-4000-8000-000000000361", eventID = "00000000-0000-4000-8000-000000000362";
+    const saved = { ...event(eventID, "Outlook recurring appointment", calendarID, "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z"), revision: 4, ...(width === 390 ? { seriesID: "00000000-0000-4000-8000-000000000369", originalStart: { kind: "instant", value: "2026-07-25T09:00:00.000Z" } } : {}), timeModel: { kind: "zoned", timeZone: "UTC", startLocal: "2026-07-26T09:00:00.000", endLocal: "2026-07-26T10:00:00.000" } };
+    await mockAuthenticatedReads(page, { ...events, events: [saved] }, [{ ...calendars[0]!, id: calendarID, provider: "microsoft", accountID: "fixture", accountLabel: "Fixture" }]);
+    await page.route(`**/api/v1/events/${eventID}/provider-state?outlookOrganizer=4`, route => respond(route, { state: { provider: "microsoft", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: width === 1280 ? [] : [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "accepted" }], attendeesComplete: true, ownResponse: "organizer", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "busy", privacy: "normal", status: "active", eventType: "occurrence", conferenceURLs: [] }, version: "a".repeat(64), outlookSeriesContent: { calendarID, expectedRevision: 4, seriesVersion: "d".repeat(64), content: { title: "Whole series title", description: "Series notes", location: "Series room" } }, organizerEdit: { provider: "microsoft", calendarID, expectedRevision: 4, scope: "occurrence", seriesVersion: "c".repeat(64), actions: ["update"] } }));
+    const writes: any[] = [], errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await page.route("**/api/v1/provider-organizer", route => {
+      const body = route.request().postDataJSON(); writes.push(body);
+      return writes.length === 1 ? respond(route, { error: "Response lost" }, 503) : respond(route, { operationID: body.operationID, eventID, replayed: true, status: "pending", localCommitted: true, notificationDelivery: "unknown" }, 202);
+    });
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    await expect(page).toHaveTitle(/Musubi/);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    await page.getByRole("button", { name: /Outlook recurring appointment/ }).first().click();
+    const trigger = page.getByRole("button", { name: "Edit series", exact: true }); await trigger.click();
+    const editor = page.getByRole("dialog", { name: "Edit series", exact: true });
+    await expect(editor.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Whole series title");
+    await expect(editor).toContainText("Individual occurrence changes are preserved");
+    await expect(editor.getByRole("textbox", { name: "Guest email addresses", exact: true })).toHaveCount(0);
+    await expect(editor.getByRole("button", { name: "Start time", exact: true })).toHaveCount(0);
+    await editor.getByRole("textbox", { name: "Title", exact: true }).fill("Updated Outlook meeting");
+    await editor.getByRole("textbox", { name: "Notes", exact: true }).fill("Bring the agenda");
+    if (width === 1280) await expect(editor.getByRole("button", { name: "Meeting invitation information" })).toHaveCount(0);
+    await expectOrganizerPaintedAbovePopover(editor);
+    await expectNoAccessibilityViolations(page);
+    expect(await editor.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+    await page.screenshot({ path: `/tmp/outlook-series-${theme}.png` });
+    await editor.getByRole("button", { name: width === 1280 ? "Save" : "Save and notify guests", exact: true }).press("Enter");
+    await expect(editor.getByRole("alert")).toContainText("Response lost");
+    await expect(editor.getByRole("textbox", { name: "Title", exact: true })).toBeDisabled();
+    await expect(editor.getByRole("button", { name: "Cancel meeting and notify guests" })).toHaveCount(0);
+    await editor.getByRole("button", { name: "Retry saved meeting action", exact: true }).press("Enter");
+    await expect(editor.getByRole("status")).toContainText(width === 1280 ? "Event change saved" : "Guest notification delivery remains unknown");
+    expect(writes).toHaveLength(2); expect(writes[1]).toEqual(writes[0]);
+    expect(writes[0]).toMatchObject({ provider: "microsoft", action: "update", notificationPolicy: "server-invite", expectedRevision: 4, scope: "series", expectedSeriesVersion: "d".repeat(64) });
     expect(writes[0].patch).toEqual({ title: "Updated Outlook meeting", description: "Bring the agenda" });
     await editor.getByRole("button", { name: "Close", exact: true }).press("Space");
     await expect(trigger).toBeFocused(); expect(errors).toEqual([]);

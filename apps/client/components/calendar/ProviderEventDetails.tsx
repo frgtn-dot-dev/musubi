@@ -5,7 +5,7 @@ import { ProviderReminderEditor } from "./ProviderReminderEditor";
 import { Btn } from "@/components/ui/Btn";
 import { remoteForCalendar } from "@/services/federation";
 import type { Event, ProviderEventStateResponse } from "@musubi/types";
-import { assertCaldavSeriesAlarmObservation, canManageProviderOrganizer, providerEventDetails } from "@musubi/calendar";
+import { assertCaldavSeriesAlarmObservation, canManageProviderOrganizer, outlookSeriesOrganizerObservation, providerEventDetails } from "@musubi/calendar";
 import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { Feather } from "@expo/vector-icons";
 import { ProviderIcon } from "./ProviderIcon";
@@ -34,19 +34,19 @@ export function ProviderEventDetailsBody({ event, userId, seriesMaster }: { seri
   const targetID = event.id.replace(/_-?\d+$/, "");
   const key = JSON.stringify([targetID, userId, event.seriesID, event.originalStart]);
   const [result, setResult] = useState<({ key: string; failed?: boolean } & Partial<ProviderEventStateResponse>)>();
-  const [editor, setEditor] = useState<{ kind: "reminders" | "rsvp" | "organizer"; master?: Event; observation: ProviderEventStateResponse }>();
+  const [editor, setEditor] = useState<{ kind: "reminders" | "rsvp" | "organizer" | "outlook-series"; master?: Event; observation: ProviderEventStateResponse }>();
   const readSequence = useRef(0);
   const [opening, setOpening] = useState(false);
   const [openError, setOpenError] = useState("");
   const active = useRef(true);
   const refreshing = useRef(false);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
-  async function openEditor(kind: "reminders" | "rsvp" | "organizer" = "reminders", seriesAction = false) {
+  async function openEditor(kind: "reminders" | "rsvp" | "organizer" | "outlook-series" = "reminders", seriesAction = false) {
     if (refreshing.current) return;
     ++readSequence.current;
     refreshing.current = true; setOpening(true); setOpenError("");
     try {
-      const observation = await api.getProviderEventState(seriesAction && seriesMaster ? seriesMaster : { ...event, id: targetID });
+      let observation = await api.getProviderEventState(seriesAction && seriesMaster ? seriesMaster : { ...event, id: targetID });
       if (!active.current) return;
       if (seriesAction) {
         if (!seriesMaster) throw new Error("Missing stored series master.");
@@ -54,6 +54,11 @@ export function ProviderEventDetailsBody({ event, userId, seriesMaster }: { seri
       } else if (kind === "reminders" && observation.reminderEdit?.provider === "caldav" && observation.reminderEdit.scope === "series") throw new Error("Choose Series alarm settings explicitly.");
       if (kind === "organizer" && (event.id !== targetID || !canManageProviderOrganizer(event, observation))) throw new Error("The stored meeting observation changed.");
       setResult({ key, ...observation });
+      if (kind === "outlook-series") {
+        const scoped = event.id === targetID ? outlookSeriesOrganizerObservation(event, observation) : undefined;
+        if (!scoped) throw new Error("The stored series observation changed.");
+        observation = scoped; kind = "organizer";
+      }
       if ((kind === "organizer" ? observation.organizerEdit : kind === "reminders" ? observation.reminderEdit : observation.rsvpEdit) && observation.state && observation.version) setEditor({ kind, observation, ...(seriesAction ? { master: seriesMaster } : {}) });
       else setOpenError("This provider action is unavailable in the refreshed state.");
     } catch { if (active.current) setOpenError("Could not refresh provider details. Retry to load the current state."); }
@@ -97,6 +102,7 @@ export function ProviderEventDetailsBody({ event, userId, seriesMaster }: { seri
     {editor?.kind === "reminders" ? <ProviderReminderEditor event={editor.master ?? { ...event, id: targetID }} observation={editor.observation} onClose={() => setEditor(undefined)} /> : null}
     {editor?.kind === "rsvp" ? <ProviderRsvpEditor event={editor.master ?? { ...event, id: targetID }} observation={editor.observation} onClose={() => setEditor(undefined)} /> : null}
     {current?.outlookCancellation && event.id === targetID && !remoteForCalendar(event.originCalendarID ?? event.calendars[0]) ? <OutlookCancellationAction event={event} /> : null}
+    {outlookSeriesOrganizerObservation(event, current) && event.id === targetID && !remoteForCalendar(event.originCalendarID ?? event.calendars[0]) ? <Btn label="Edit series" variant="secondary" loading={opening} onPress={() => void openEditor("outlook-series")} /> : null}
     {canManageProviderOrganizer(event, current) && event.id === targetID && !remoteForCalendar(event.originCalendarID ?? event.calendars[0]) ? <Btn label={current?.organizerEdit?.scope === "occurrence" ? "Manage this occurrence" : `Manage ${current?.organizerEdit?.provider === "caldav" ? "CalDAV" : current?.organizerEdit?.provider === "microsoft" ? "Outlook" : "Google"} meeting`} variant="secondary" loading={opening} onPress={() => void openEditor("organizer")} /> : null}
     {editor?.kind === "organizer" && editor.observation.organizerEdit ? <ProviderOrganizerEditor event={event} calendarID={editor.observation.organizerEdit.calendarID} color={event.color} observation={editor.observation} onClose={() => setEditor(undefined)} /> : null}
   </View>;
