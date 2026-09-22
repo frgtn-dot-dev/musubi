@@ -686,7 +686,7 @@ export function applyEventScope(event: Event, request: EventScopeRequest, connec
 }
 
 export function getProviderEventState(eventId: string, signal?: AbortSignal, connectionId?: string) {
-  return apiRequest(route(connectionId, `/api/v1/events/${encodeURIComponent(eventId)}/provider-state${connectionId ? "" : "?outlookOrganizer=4"}`), { responseSchema: ProviderEventStateResponseSchema, signal });
+  return apiRequest(route(connectionId, `/api/v1/events/${encodeURIComponent(eventId)}/provider-state${connectionId ? "" : "?outlookOrganizer=5"}`), { responseSchema: ProviderEventStateResponseSchema, signal });
 }
 
 

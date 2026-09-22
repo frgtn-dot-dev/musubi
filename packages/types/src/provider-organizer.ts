@@ -145,6 +145,9 @@ export const CaldavOrganizerRequestSchema = z.discriminatedUnion("action", [
     })
     .strict(),
 ]);
+const microsoftContentPatch = content.partial().extend({
+  time: time.refine(value => value.kind === "zoned" && value.timeZone === "UTC", "Outlook occurrence changes require explicit UTC time").optional(),
+}).strict().refine(value => Object.keys(value).length > 0, "Choose a change");
 const microsoftCreate = caldavCommon.extend({
   provider: z.literal("microsoft"),
   action: z.literal("create"),
@@ -161,7 +164,7 @@ export const MicrosoftOrganizerRequestSchema = z.discriminatedUnion("action", [
     expectedSeriesVersion: z.string().regex(/^[0-9a-f]{64}$/).optional(),
     expectedRevision: z.number().int().positive(),
     expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
-    patch: content.partial().strict().refine(value => Object.keys(value).length > 0, "Choose a content change"),
+    patch: microsoftContentPatch,
   }).strict(),
   caldavCommon.extend({
     provider: z.literal("microsoft"), action: z.literal("delete"),
@@ -171,6 +174,8 @@ export const MicrosoftOrganizerRequestSchema = z.discriminatedUnion("action", [
     expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
   }).strict(),
 ]).superRefine((request, ctx) => {
+  if (request.action === "update" && request.patch.time !== undefined && request.scope !== "occurrence")
+    ctx.addIssue({ code: "custom", message: "Time changes require one bound Outlook occurrence." });
   if (request.action !== "create" && !!request.scope !== !!request.expectedSeriesVersion)
     ctx.addIssue({ code: "custom", message: "Recurring changes require their exact series observation." });
 });
@@ -187,9 +192,9 @@ export const MicrosoftOccurrenceContentRequestSchema = caldavCommon.extend({
   expectedSeriesVersion: z.string().regex(/^[0-9a-f]{64}$/),
   expectedRevision: z.number().int().positive(),
   expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
-  patch: content.partial().strict().refine(value => Object.keys(value).length > 0, "Choose a content change"),
+  patch: microsoftContentPatch,
 }).strict();
-export const MicrosoftRecurringContentRequestSchema = MicrosoftOccurrenceContentRequestSchema.extend({ scope: z.enum(["occurrence", "series"]) });
+export const MicrosoftRecurringContentRequestSchema = MicrosoftOccurrenceContentRequestSchema.extend({ scope: z.enum(["occurrence", "series"]) }).refine(request => request.scope === "occurrence" || request.patch.time === undefined, "Series time changes are not supported");
 export type MicrosoftRecurringContentRequest = z.infer<typeof MicrosoftRecurringContentRequestSchema>;
 export type MicrosoftOccurrenceContentRequest = z.infer<typeof MicrosoftOccurrenceContentRequestSchema>;
 export type MicrosoftSeriesCancellationRequest = z.infer<typeof MicrosoftSeriesCancellationRequestSchema>;

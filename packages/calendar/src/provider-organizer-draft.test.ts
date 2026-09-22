@@ -145,3 +145,11 @@ assert.equal(outlookSeriesOrganizerObservation(child, { ...seriesSource, version
 const seriesUpdate = organizerRequest("update", { ...draft, title: "New series" }, ["title"], identity, scopedSeries);
 assert.equal(seriesUpdate.action === "update" && seriesUpdate.provider === "microsoft" && seriesUpdate.scope, "series");
 assert.equal(seriesUpdate.action === "update" && seriesUpdate.provider === "microsoft" && seriesUpdate.expectedSeriesVersion, "d".repeat(64));
+
+const outlookTime = { ...outlookOccurrence, organizerEdit: { ...outlookOccurrence.organizerEdit, timeEdit: true as const } };
+const timedDraft = organizerDraft(child, "microsoft", outlookTime);
+assert.equal(timedDraft.timeZone, "UTC");
+assert.equal(timedDraft.start, child.start.toISOString().slice(0, -1));
+const timeUpdate = organizerRequest("update", { ...timedDraft, start: "2026-10-23T10:00:00", end: "2026-10-23T11:00:00" }, ["start", "end"], identity, outlookTime);
+assert.deepEqual(timeUpdate.action === "update" && timeUpdate.patch, { time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-10-23T10:00:00.000", endLocal: "2026-10-23T11:00:00.000" } });
+for (const change of [{ scope: "series" }, { scope: undefined }, { expectedSeriesVersion: undefined }, { patch: { time: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-10-23T10:00:00", endLocal: "2026-10-23T11:00:00" } } }, { patch: { time: { kind: "all-day", startDate: "2026-10-23", endDate: "2026-10-23" } } }]) assert.equal(ProviderOrganizerRequestSchema.safeParse({ ...timeUpdate, ...change }).success, false);

@@ -30,7 +30,9 @@ export function organizerDraft(
 ): OrganizerDraft {
   const today = new Date(),
     day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`,
-    time = event?.timeModel;
+    time = event && _provider === "microsoft" && observation?.organizerEdit?.scope === "occurrence" && observation.organizerEdit.timeEdit
+      ? { kind: "zoned" as const, timeZone: "UTC", startLocal: event.start.toISOString().slice(0, -1), endLocal: event.end.toISOString().slice(0, -1) }
+      : event?.timeModel;
   return {
     title: (observation?.organizerEdit?.scope === "series" ? observation.outlookSeriesContent?.content.title : event?.title) ?? "",
     description: (observation?.organizerEdit?.scope === "series" ? observation.outlookSeriesContent?.content.description : event?.description) ?? "",
@@ -138,7 +140,7 @@ export function organizerRequest(
     if (changed.includes(key))
       patch[key] = draft[key] || (key === "title" ? "" : null);
   if (
-    observation?.organizerEdit?.scope !== "occurrence" &&
+    (observation?.organizerEdit?.scope !== "occurrence" || provider === "microsoft" && observation.organizerEdit.timeEdit) &&
     changed.some((key) => ["start", "end", "timeZone", "allDay"].includes(key))
   ) {
     if (provider !== "google" && !observation?.organizerEdit?.timeEdit)

@@ -344,10 +344,11 @@ export function ProviderOrganizerFields({
                 />
               </Field>
             )}
-            {(provider !== "google" && event && !canEditTime) || occurrence ? (
+            {(provider !== "google" && event && !canEditTime) || (occurrence && (provider !== "microsoft" || !canEditTime)) ? (
               <p>{wholeSeries ? "Changes apply to the series. Individual occurrence changes are preserved." : occurrence ? "Only this occurrence will change." : "Meeting time and guests are preserved."}</p>
             ) : (
               <>
+                {provider === "microsoft" && occurrence ? <p>Only this occurrence will change.</p> : null}
                 {provider === "caldav" && event ? (
                   <p>
                     Changing time asks guests to respond again. Their existing
@@ -360,7 +361,7 @@ export function ProviderOrganizerFields({
                 <Checkbox
                   label="All day"
                   checked={draft.allDay}
-                  disabled={locked || (provider === "caldav" && !!event)}
+                  disabled={locked || (provider !== "google" && !!event)}
                   onChange={(event) => onChange("allDay", event.target.checked)}
                 />
                 <Field label="Start">

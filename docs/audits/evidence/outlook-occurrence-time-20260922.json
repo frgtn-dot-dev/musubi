@@ -1,0 +1,164 @@
+{
+  "date": "2026-09-22",
+  "scope": "timed UTC occurrence rescheduling",
+  "syntheticOnly": true,
+  "nativeProbes": [
+    {
+      "date": "2026-09-22T19:12:07.995Z",
+      "syntheticOnly": true,
+      "meeting": false,
+      "patchStatus": 200,
+      "changedFields": [
+        "@odata.etag",
+        "createdDateTime",
+        "lastModifiedDateTime",
+        "changeKey",
+        "type",
+        "start",
+        "end"
+      ],
+      "originalSlotPreserved": true,
+      "attendeesPreserved": true,
+      "htmlPreserved": true,
+      "siblingsPreserved": true,
+      "staleStatus": 412,
+      "crossing": {
+        "status": 400,
+        "code": "ErrorOccurrenceCrossingBoundary"
+      },
+      "restoreStatus": 200,
+      "cleanupStatus": 204,
+      "seriesAbsent": true
+    },
+    {
+      "date": "2026-09-22T19:12:10.468Z",
+      "syntheticOnly": true,
+      "meeting": true,
+      "patchStatus": 200,
+      "changedFields": [
+        "@odata.etag",
+        "createdDateTime",
+        "lastModifiedDateTime",
+        "changeKey",
+        "type",
+        "start",
+        "end"
+      ],
+      "originalSlotPreserved": true,
+      "attendeesPreserved": true,
+      "htmlPreserved": true,
+      "siblingsPreserved": true,
+      "staleStatus": 412,
+      "crossing": {
+        "status": 400,
+        "code": "ErrorOccurrenceCrossingBoundary"
+      },
+      "restoreStatus": 200,
+      "cleanupStatus": 202,
+      "seriesAbsent": true
+    }
+  ],
+  "seededAcceptedStatusProbe": {
+    "date": "2026-09-22T19:15:06.738Z",
+    "syntheticOnly": true,
+    "meeting": true,
+    "patchStatus": 200,
+    "changedFields": [
+      "@odata.etag",
+      "createdDateTime",
+      "lastModifiedDateTime",
+      "changeKey",
+      "type",
+      "start",
+      "end"
+    ],
+    "originalSlotPreserved": true,
+    "beforeResponses": [
+      {
+        "response": "accepted",
+        "time": "2026-09-22T12:00:00Z"
+      }
+    ],
+    "afterResponses": [
+      {
+        "response": "accepted",
+        "time": "2026-09-22T12:00:00Z"
+      }
+    ],
+    "attendeesPreserved": true,
+    "htmlPreserved": true,
+    "siblingsPreserved": true,
+    "staleStatus": 412,
+    "crossing": {
+      "status": 400,
+      "code": "ErrorOccurrenceCrossingBoundary"
+    },
+    "restoreStatus": 200,
+    "cleanupStatus": 202,
+    "seriesAbsent": true
+  },
+  "applicationDelivery": [
+    {
+      "meeting": false,
+      "date": "2026-09-22T19:15:36.476Z",
+      "syntheticOnly": true,
+      "created": true,
+      "recurrenceCount": 3,
+      "guestNotificationDelivery": "unknown",
+      "results": [
+        {
+          "fields": [
+            "time"
+          ],
+          "status": "completed",
+          "error": null
+        },
+        {
+          "fields": [
+            "time"
+          ],
+          "status": "completed",
+          "error": null
+        }
+      ],
+      "htmlAndGuestsPreserved": true,
+      "originalSlotPreserved": true,
+      "localTimeCommitted": true,
+      "siblingsUnchanged": true,
+      "cleanupStatus": 204,
+      "seriesAbsent": true,
+      "localTestRowsRemoved": 3
+    },
+    {
+      "meeting": true,
+      "date": "2026-09-22T19:15:52.811Z",
+      "syntheticOnly": true,
+      "created": true,
+      "recurrenceCount": 3,
+      "guestNotificationDelivery": "unknown",
+      "results": [
+        {
+          "fields": [
+            "time"
+          ],
+          "status": "completed",
+          "error": null
+        },
+        {
+          "fields": [
+            "time"
+          ],
+          "status": "completed",
+          "error": null
+        }
+      ],
+      "htmlAndGuestsPreserved": true,
+      "originalSlotPreserved": true,
+      "localTimeCommitted": true,
+      "siblingsUnchanged": true,
+      "cleanupStatus": 202,
+      "seriesAbsent": true,
+      "localTestRowsRemoved": 3
+    }
+  ]
+}
