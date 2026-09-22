@@ -1,3 +1,4 @@
+import { microsoftEventVersion } from "./microsoft_event_content";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import { config } from "@musubi/config";
@@ -8,9 +9,10 @@ import { microsoftEventState } from "./provider_event_state";
 import { verifiedGraphIdentity } from "./microsoft_identity";
 const root = "https://graph.microsoft.com/v1.0";
 const id = z.string().min(1).refine(value => value.trim() === value && value !== "." && value !== "..");
-const fail = (): never => { throw new ProviderEventWriteError("provider-conflict"); };
+function fail(): never { throw new ProviderEventWriteError("provider-conflict"); }
 export function microsoftOrganizerBody(request: MicrosoftOrganizerRequest, self: string) {
   request = MicrosoftOrganizerRequestSchema.parse(request);
+  if (request.action !== "create") fail();
   if (request.guests.some(guest => guest.email.toLowerCase() === self.toLowerCase())) fail();
   const time = request.time;
   if (time.kind === "floating") fail();
@@ -55,6 +57,21 @@ export function microsoftOrganizerEvidence(raw: unknown, request: MicrosoftOrgan
     || !isDeepStrictEqual(guests(native.attendees), guests(desired.attendees))) fail();
   return { native: { id: native.id, etag: native["@odata.etag"], iCalUID: native.iCalUId }, state: microsoftEventState(raw as Record<string, unknown>) };
 }
+/** Cancellation observes the complete organizer copy, including guests. It
+ * never rewrites its time, invitation list, attachments or meeting content. */
+export function microsoftCancellationEvidence(raw: unknown, self: string) {
+  const item = nativeSchema.extend({
+    transactionId: z.string().nullish(),
+    originalStartTimeZone: z.string(), originalEndTimeZone: z.string(),
+    hasAttachments: z.boolean(),
+  }).parse(raw);
+  const etag = microsoftEventVersion(item["@odata.etag"]);
+  if (!etag || item.organizer.emailAddress.address.toLowerCase() !== self.toLowerCase()
+    || item["attendees@odata.count"] !== undefined && item["attendees@odata.count"] !== item.attendees.length
+    || new Set(item.attendees.map(value => value.emailAddress.address.toLowerCase())).size !== item.attendees.length
+    || instant(item.end.dateTime) <= instant(item.start.dateTime)) fail();
+  return { ...item, etag };
+}
 export function microsoftOrganizerTransport(token: (user: string, account: string) => Promise<string>) {
   return async (userID: string, accountID: string, calendarID: string, signal?: AbortSignal) => {
     if (!config.api.providerOrganizerEditsEnabled) throw new EventWriteError("organizer", "unsupported");
@@ -77,9 +94,42 @@ export function microsoftOrganizerTransport(token: (user: string, account: strin
       }
       return found ? microsoftOrganizerEvidence(found, request, email) : null;
     }
-    return { email, identity, deliver: async (intent: ProviderOrganizerIntent, beforeDispatch: () => Promise<void>, accepted: () => Promise<void>) => {
+    async function read(eventID: string) {
+      const response = await fetch(`${base}/${encodeURIComponent(id.parse(eventID))}`, { headers, redirect: "error", signal });
+      if (response.status === 404 && !response.headers.has("content-range")) {
+        z.object({ error: z.object({ code: z.string().min(1) }) }).parse(await response.json());
+        return null;
+      }
+      assertCompleteEventReadResponse(response);
+      const native = microsoftCancellationEvidence(await response.json(), email);
+      if (native.id !== eventID) fail();
+      return native;
+    }
+    return { email, identity, read, deliver: async (intent: ProviderOrganizerIntent, beforeDispatch: () => Promise<void>, accepted: () => Promise<void>) => {
       const saved = structuredClone(intent), request = MicrosoftOrganizerRequestSchema.parse(saved.request);
-      if (!isDeepStrictEqual(saved.graphIdentity, identity) || saved.baseline || saved.mappingID || !isDeepStrictEqual(saved.desired, microsoftOrganizerBody(request, email))) fail();
+      if (!isDeepStrictEqual(saved.graphIdentity, identity)) fail();
+      if (request.action === "delete") {
+        const baseline = microsoftCancellationEvidence(saved.baseline, email);
+        if (!saved.mappingID || saved.desired !== null || saved.baseline?.etag !== baseline.etag) fail();
+        if (saved.dispatch && OrganizerDispatchSchema.parse(saved.dispatch).kind !== "microsoft-organizer-dispatch") fail();
+        const current = await read(baseline.id);
+        // A lost response is never permission to send another cancellation.
+        // Absence without the durable HTTP acceptance is not proof of notices.
+        if (saved.dispatch) return { kind: saved.dispatch.acceptedAt && !current ? "deleted" as const : "unconfirmed" as const };
+        if (!current || current.etag !== baseline.etag || !isDeepStrictEqual(current, baseline)) fail();
+        await beforeDispatch();
+        let acknowledged = false;
+        try {
+          const response = await fetch(`${base}/${encodeURIComponent(baseline.id)}/cancel`, {
+            method: "POST", headers: { ...headers, "Content-Type": "application/json", "If-Match": baseline.etag },
+            body: "{}", redirect: "error", signal,
+          });
+          if (response.status === 202) { await accepted(); acknowledged = true; }
+        } catch (error) { if (signal?.aborted) throw error; }
+        const remaining = await read(baseline.id);
+        return { kind: acknowledged && !remaining ? "deleted" as const : "unconfirmed" as const };
+      }
+      if (saved.baseline || saved.mappingID || !isDeepStrictEqual(saved.desired, microsoftOrganizerBody(request, email))) fail();
       if (saved.dispatch && OrganizerDispatchSchema.parse(saved.dispatch).kind !== "microsoft-organizer-dispatch") fail();
       if (saved.dispatch) { const observed = await find(request); return observed ? { kind: "observed" as const, ...observed } : { kind: "unconfirmed" as const }; }
       const existing = await find(request);

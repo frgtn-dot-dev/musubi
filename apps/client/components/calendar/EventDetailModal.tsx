@@ -710,10 +710,10 @@ export default function EventDetailModal({
 														label: "This event only",
 														onPress: deleteThisOccurrence,
 													},
-													{
-														label: "This and following events",
-														onPress: deleteFollowing,
-													},
+                          ...(calendars.find(calendar => calendar.id === (master.originCalendarID ?? master.calendars[0]))?.provider === "microsoft" ? [] : [{
+                            label: "This and following events",
+                            onPress: deleteFollowing,
+                          }]),
 													{
 														label: "All events",
 														destructive: true,

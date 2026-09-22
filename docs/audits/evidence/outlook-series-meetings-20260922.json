@@ -1,0 +1,503 @@
+{
+  "schemaVersion": 1,
+  "runID": "a33e5f81-4828-4638-a1bd-3b15d5cb4561",
+  "startedAt": "2026-09-22T08:16:40.918Z",
+  "completed": true,
+  "cases": [
+    {
+      "scenario": "personal-timed-series",
+      "checks": {
+        "freshOccurrencePatch": true,
+        "masterVersionChangedByChild": true,
+        "staleOccurrencePatchRejected": true,
+        "masterOldVersionPatchStatus": 412,
+        "staleMasterPatchRejected": true,
+        "staleOccurrenceDeleteStatus": 204,
+        "deletedOccurrenceAbsent": true,
+        "otherOccurrencesPreserved": true,
+        "staleMasterDeleteStatus": 204,
+        "masterAbsent": true,
+        "childrenAbsent": true,
+        "exceptionUnchangedAfterMasterAttempt": true
+      }
+    },
+    {
+      "scenario": "personal-all-day-series",
+      "checks": {
+        "freshOccurrencePatch": true,
+        "masterVersionChangedByChild": true,
+        "staleOccurrencePatchRejected": true,
+        "masterOldVersionPatchStatus": 412,
+        "staleMasterPatchRejected": true,
+        "staleOccurrenceDeleteStatus": 204,
+        "deletedOccurrenceAbsent": true,
+        "otherOccurrencesPreserved": true,
+        "staleMasterDeleteStatus": 204,
+        "masterAbsent": true,
+        "childrenAbsent": true,
+        "exceptionUnchangedAfterMasterAttempt": true
+      }
+    },
+    {
+      "scenario": "organizer-one-off-meeting",
+      "checks": {
+        "freshPatchAccepted": true,
+        "stalePatchRejected": true,
+        "staleCancelStatus": 202,
+        "cancelledCopyAbsent": true
+      }
+    },
+    {
+      "scenario": "organizer-recurring-meeting",
+      "checks": {
+        "freshPatchAccepted": true,
+        "stalePatchRejected": true,
+        "staleCancelStatus": 202,
+        "cancelledCopyAbsent": true,
+        "otherOccurrencesPreserved": true
+      }
+    }
+  ],
+  "requests": [
+    {
+      "label": "create-test-calendar",
+      "method": "POST",
+      "status": 201,
+      "requestID": "9eb2646e-e865-42c7-a0c6-00a36d6b1730"
+    },
+    {
+      "label": "personal-timed-series:create",
+      "method": "POST",
+      "status": 201,
+      "requestID": "588a436c-83e3-4140-9d5f-f8d27ee637dc"
+    },
+    {
+      "label": "personal-timed-series:master-before",
+      "method": "GET",
+      "status": 200,
+      "requestID": "e1f49382-33b2-460a-9a47-c40531e5a493"
+    },
+    {
+      "label": "personal-timed-series:instances",
+      "method": "GET",
+      "status": 200,
+      "requestID": "546be75e-ad85-4735-812d-5516298168fb"
+    },
+    {
+      "label": "personal-timed-series:occurrence-before",
+      "method": "GET",
+      "status": 200,
+      "requestID": "57df5350-3014-450c-b5e8-8e78cb7164af"
+    },
+    {
+      "label": "personal-timed-series:occurrence-fresh-patch",
+      "method": "PATCH",
+      "status": 200,
+      "requestID": "ffd13ff4-e0bf-44f0-8d77-4f460c119b76"
+    },
+    {
+      "label": "personal-timed-series:occurrence-after",
+      "method": "GET",
+      "status": 200,
+      "requestID": "9ea66f88-3dfd-4690-bcb3-d8c68934d399"
+    },
+    {
+      "label": "personal-timed-series:master-after-child",
+      "method": "GET",
+      "status": 200,
+      "requestID": "32bd62ae-62c1-4a39-89bb-8e4ed86f9ef0"
+    },
+    {
+      "label": "personal-timed-series:occurrence-stale-patch",
+      "method": "PATCH",
+      "status": 412,
+      "requestID": "fe39d5f0-9b11-4753-9eaf-a8c818d91394"
+    },
+    {
+      "label": "personal-timed-series:occurrence-after-stale",
+      "method": "GET",
+      "status": 200,
+      "requestID": "317e5870-c689-430c-84e2-dba3c9361808"
+    },
+    {
+      "label": "personal-timed-series:master-old-version-patch",
+      "method": "PATCH",
+      "status": 412,
+      "requestID": "fdb6ed25-9878-40f9-ae47-5c765449adbe"
+    },
+    {
+      "label": "personal-timed-series:master-after-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "abed03bc-37cf-44b7-8995-fdda0493dccc"
+    },
+    {
+      "label": "personal-timed-series:exception-after-master-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "ca5846d1-c77e-4917-9402-f7b283cc6ad6"
+    },
+    {
+      "label": "personal-timed-series:master-concurrent-edit",
+      "method": "PATCH",
+      "status": 200,
+      "requestID": "d23abfd7-5539-4122-b5bd-fe260e2e31f6"
+    },
+    {
+      "label": "personal-timed-series:master-stale-patch",
+      "method": "PATCH",
+      "status": 412,
+      "requestID": "2a937548-830c-4f1c-80ce-128dfa72e153"
+    },
+    {
+      "label": "personal-timed-series:master-after-stale-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "a9751855-2965-43a6-9c5e-4162364ddadd"
+    },
+    {
+      "label": "personal-timed-series:occurrence-stale-delete",
+      "method": "DELETE",
+      "status": 204,
+      "requestID": "d741c681-743c-4b52-91a6-ca7a51eb7fed"
+    },
+    {
+      "label": "personal-timed-series:occurrence-after-delete:1",
+      "method": "GET",
+      "status": 404,
+      "requestID": "baf96954-8e11-463f-ac45-35caaab9c533"
+    },
+    {
+      "label": "personal-timed-series:remaining-instances",
+      "method": "GET",
+      "status": 200,
+      "requestID": "56da321c-4dcc-4e6a-841f-2e9694fb2e70"
+    },
+    {
+      "label": "personal-timed-series:master-stale-delete",
+      "method": "DELETE",
+      "status": 204,
+      "requestID": "5eadf2de-6100-445a-9ecd-f008701eead4"
+    },
+    {
+      "label": "personal-timed-series:master-after-delete:1",
+      "method": "GET",
+      "status": 404,
+      "requestID": "f53e2cc4-9c2c-4c23-8d30-a690dadb3454"
+    },
+    {
+      "label": "personal-timed-series:child-after-master-delete:1",
+      "method": "GET",
+      "status": 404,
+      "requestID": "7c490f40-f397-4222-8903-a49bc6d66e70"
+    },
+    {
+      "label": "personal-timed-series:child-after-master-delete:1",
+      "method": "GET",
+      "status": 404,
+      "requestID": "c4fdb1a5-b77f-4247-9ab8-766f32db8ed2"
+    },
+    {
+      "label": "personal-all-day-series:create",
+      "method": "POST",
+      "status": 201,
+      "requestID": "c158b774-91b8-4106-bda4-8e2851cc146b"
+    },
+    {
+      "label": "personal-all-day-series:master-before",
+      "method": "GET",
+      "status": 200,
+      "requestID": "ec9bc3a4-7dba-4c6c-a892-537131cbf689"
+    },
+    {
+      "label": "personal-all-day-series:instances",
+      "method": "GET",
+      "status": 200,
+      "requestID": "85b7da03-d0eb-4272-8c9e-a7cd0a772fa9"
+    },
+    {
+      "label": "personal-all-day-series:occurrence-before",
+      "method": "GET",
+      "status": 200,
+      "requestID": "a936ff57-950d-47ba-93ff-b8ef023fabe7"
+    },
+    {
+      "label": "personal-all-day-series:occurrence-fresh-patch",
+      "method": "PATCH",
+      "status": 200,
+      "requestID": "6c84ee6b-7b2f-43b6-b1dc-720089ea4503"
+    },
+    {
+      "label": "personal-all-day-series:occurrence-after",
+      "method": "GET",
+      "status": 200,
+      "requestID": "6420a464-440f-48e9-a879-877b467623e0"
+    },
+    {
+      "label": "personal-all-day-series:master-after-child",
+      "method": "GET",
+      "status": 200,
+      "requestID": "0dccd63d-cf82-4a27-b044-8740dc6842d1"
+    },
+    {
+      "label": "personal-all-day-series:occurrence-stale-patch",
+      "method": "PATCH",
+      "status": 412,
+      "requestID": "b6526ce0-135d-4aa1-a487-ff950db25e33"
+    },
+    {
+      "label": "personal-all-day-series:occurrence-after-stale",
+      "method": "GET",
+      "status": 200,
+      "requestID": "7a52a13b-f743-46b4-afb0-22f8301ef1a6"
+    },
+    {
+      "label": "personal-all-day-series:master-old-version-patch",
+      "method": "PATCH",
+      "status": 412,
+      "requestID": "6c9953bc-b13e-4d49-9f6e-8986473150d6"
+    },
+    {
+      "label": "personal-all-day-series:master-after-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "549577af-e6d9-4375-b1cc-dd19d7515318"
+    },
+    {
+      "label": "personal-all-day-series:exception-after-master-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "8430bc46-3a62-47fa-ae23-13b2e80c2fc3"
+    },
+    {
+      "label": "personal-all-day-series:master-concurrent-edit",
+      "method": "PATCH",
+      "status": 200,
+      "requestID": "1eda0012-42fd-4aae-92cc-b71cce9a4560"
+    },
+    {
+      "label": "personal-all-day-series:master-stale-patch",
+      "method": "PATCH",
+      "status": 412,
+      "requestID": "2a2756a8-1356-4b0f-9a0f-4140e808c693"
+    },
+    {
+      "label": "personal-all-day-series:master-after-stale-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "4075d39e-9643-472a-966c-19fa97b2e843"
+    },
+    {
+      "label": "personal-all-day-series:occurrence-stale-delete",
+      "method": "DELETE",
+      "status": 204,
+      "requestID": "f80cc523-c240-4499-b776-753331d7fd47"
+    },
+    {
+      "label": "personal-all-day-series:occurrence-after-delete:1",
+      "method": "GET",
+      "status": 404,
+      "requestID": "ecd61d6e-be05-4940-85f5-cf6fb9b7ae78"
+    },
+    {
+      "label": "personal-all-day-series:remaining-instances",
+      "method": "GET",
+      "status": 200,
+      "requestID": "a6e04dac-e1be-4039-a3eb-9340ac0e795c"
+    },
+    {
+      "label": "personal-all-day-series:master-stale-delete",
+      "method": "DELETE",
+      "status": 204,
+      "requestID": "2982ef3b-75da-44bf-9e19-f39375340754"
+    },
+    {
+      "label": "personal-all-day-series:master-after-delete:1",
+      "method": "GET",
+      "status": 404,
+      "requestID": "35290c54-6ca1-4de3-b80e-58a08f7924c8"
+    },
+    {
+      "label": "personal-all-day-series:child-after-master-delete:1",
+      "method": "GET",
+      "status": 404,
+      "requestID": "f80d8549-4111-4d18-bef3-052e6743055b"
+    },
+    {
+      "label": "personal-all-day-series:child-after-master-delete:1",
+      "method": "GET",
+      "status": 404,
+      "requestID": "3fc0ade4-f739-4f64-bd06-f08dfad89c1c"
+    },
+    {
+      "label": "default-calendar",
+      "method": "GET",
+      "status": 200,
+      "requestID": "72704bf3-02a7-49fb-8b49-e80b56834c1f"
+    },
+    {
+      "label": "organizer-one-off-meeting:create",
+      "method": "POST",
+      "status": 201,
+      "requestID": "435fc263-43ff-4a04-a486-98b3a0efe714"
+    },
+    {
+      "label": "organizer-one-off-meeting:before",
+      "method": "GET",
+      "status": 200,
+      "requestID": "d3a6cd39-2857-4bf6-97eb-83d197e48412"
+    },
+    {
+      "label": "organizer-one-off-meeting:fresh-patch",
+      "method": "PATCH",
+      "status": 200,
+      "requestID": "67402e2d-df35-4170-91e9-6318cc3694e9"
+    },
+    {
+      "label": "organizer-one-off-meeting:after-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "fc3e3754-4373-4bce-b3c7-5525f351fed5"
+    },
+    {
+      "label": "organizer-one-off-meeting:stale-patch",
+      "method": "PATCH",
+      "status": 412,
+      "requestID": "dfac871e-ce9e-496e-84d4-3d65e6d7088c"
+    },
+    {
+      "label": "organizer-one-off-meeting:after-stale-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "62ec6cd0-7df6-4943-9ea4-ecb271fa24ff"
+    },
+    {
+      "label": "organizer-one-off-meeting:stale-cancel",
+      "method": "POST",
+      "status": 202,
+      "requestID": "2e3be112-28af-4ce8-a3a2-665e55714e45"
+    },
+    {
+      "label": "organizer-one-off-meeting:after-cancel:1",
+      "method": "GET",
+      "status": 404,
+      "requestID": "ab99c067-f652-40c3-abc8-62b83cf7c5b7"
+    },
+    {
+      "label": "organizer-recurring-meeting:create",
+      "method": "POST",
+      "status": 201,
+      "requestID": "4f3b4607-6e0f-48df-9b75-b8a8246f5d0b"
+    },
+    {
+      "label": "organizer-recurring-meeting:before",
+      "method": "GET",
+      "status": 200,
+      "requestID": "b2752b73-f932-4319-b755-c9a86f4ab226"
+    },
+    {
+      "label": "organizer-recurring-meeting:instances",
+      "method": "GET",
+      "status": 200,
+      "requestID": "b6b98251-7dcb-4975-b9d4-12713c4e6fb3"
+    },
+    {
+      "label": "organizer-recurring-meeting:occurrence-before",
+      "method": "GET",
+      "status": 200,
+      "requestID": "b45358b0-6d2c-41db-b97e-fb856c0a1049"
+    },
+    {
+      "label": "organizer-recurring-meeting:fresh-patch",
+      "method": "PATCH",
+      "status": 200,
+      "requestID": "90adbf49-e4de-4481-bb49-6e1608fbfb96"
+    },
+    {
+      "label": "organizer-recurring-meeting:after-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "55f37ccd-c738-4630-8ef1-bef6485bd5d1"
+    },
+    {
+      "label": "organizer-recurring-meeting:stale-patch",
+      "method": "PATCH",
+      "status": 412,
+      "requestID": "802f7398-80d4-456e-bee5-25b8a54e1bc7"
+    },
+    {
+      "label": "organizer-recurring-meeting:after-stale-patch",
+      "method": "GET",
+      "status": 200,
+      "requestID": "cdafc7c5-c012-4914-834c-1f7129b2858b"
+    },
+    {
+      "label": "organizer-recurring-meeting:stale-cancel",
+      "method": "POST",
+      "status": 202,
+      "requestID": "4ec8a7ba-3f5b-4a06-ac5e-dcdef7512665"
+    },
+    {
+      "label": "organizer-recurring-meeting:after-cancel:1",
+      "method": "GET",
+      "status": 404,
+      "requestID": "fbc229b5-60b5-4d20-90bb-b1eaf79aec51"
+    },
+    {
+      "label": "organizer-recurring-meeting:remaining-instances",
+      "method": "GET",
+      "status": 200,
+      "requestID": "d5c074ce-aa83-4162-b798-559461a58143"
+    },
+    {
+      "label": "cleanup-meeting-read:1",
+      "method": "GET",
+      "status": 200,
+      "requestID": "e755709d-066a-4eba-8bcd-f7e4a0509944"
+    },
+    {
+      "label": "cleanup-meeting-read:2",
+      "method": "GET",
+      "status": 200,
+      "requestID": "4309dd11-fdc5-4095-9196-4744ebbf5b6f"
+    },
+    {
+      "label": "cleanup-meeting-read:3",
+      "method": "GET",
+      "status": 200,
+      "requestID": "59271fef-fedb-4bd9-a283-f220f29f8d8e"
+    },
+    {
+      "label": "cleanup-meeting-read:4",
+      "method": "GET",
+      "status": 200,
+      "requestID": "52a7ceaf-2309-41e6-b388-3d19b161697e"
+    },
+    {
+      "label": "cleanup-meeting-cancel",
+      "method": "POST",
+      "status": 202,
+      "requestID": "26361575-5529-47b3-9d56-cc25150403d7"
+    },
+    {
+      "label": "cleanup-meeting-verify:1",
+      "method": "GET",
+      "status": 404,
+      "requestID": "5acd869f-8814-4aca-8b33-56bf63539534"
+    },
+    {
+      "label": "cleanup-test-calendar",
+      "method": "DELETE",
+      "status": 204,
+      "requestID": "5452e912-3e88-4b98-a0dd-bd48e3e3d64e"
+    },
+    {
+      "label": "cleanup-test-calendar-read",
+      "method": "GET",
+      "status": 404,
+      "requestID": "e3713445-ab54-48cb-b11b-18a3f8d4dbfc"
+    }
+  ],
+  "cleanup": "verified",
+  "notificationDelivery": "unknown"
+}

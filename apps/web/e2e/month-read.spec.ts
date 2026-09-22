@@ -8574,7 +8574,7 @@ for (const [width, theme] of [[390, "dark"], [1280, "light"]] as const) {
     await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
     const imported = event("00000000-0000-4000-8000-000000000166", "Provider meeting", "personal", "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z", { recurrence: "FREQ=DAILY;COUNT=2" });
     await mockAuthenticatedReads(page, { ...events, events: [imported] }, [{ ...calendars[0]!, provider: "microsoft", accountID: "fixture", accountLabel: "Fixture" }]);
-    await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, { state: { provider: "microsoft", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [{ name: "Alex Chen", address: "alex@example.test", self: false, role: "required", response: "accepted" }, { name: "Sam Lee", address: "sam@example.test", self: false, role: "optional", response: "tentative" }], attendeesComplete: false, ownResponse: "notResponded", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "workingElsewhere", privacy: "confidential", status: null, eventType: "singleInstance", conferenceURLs: [] } }));
+    await page.route(`**/api/v1/events/${imported.id}/provider-state*`, route => respond(route, { state: { provider: "microsoft", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [{ name: "Alex Chen", address: "alex@example.test", self: false, role: "required", response: "accepted" }, { name: "Sam Lee", address: "sam@example.test", self: false, role: "optional", response: "tentative" }], attendeesComplete: false, ownResponse: "notResponded", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "workingElsewhere", privacy: "confidential", status: null, eventType: "singleInstance", conferenceURLs: [] } }));
     await page.goto("/app/p/my-calendar/month?date=2026-07-26");
     await page.getByRole("button", { name: /Provider meeting/ }).first().click();
     await page.locator("summary").filter({ hasText: "Outlook details" }).click();
@@ -8664,7 +8664,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     const imported = event("00000000-0000-4000-8000-000000000184", "Google reminder meeting", "personal", "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z");
     await mockAuthenticatedReads(page, { ...events, events: [imported] }, [{ ...calendars[0]!, provider: "google", accountID: "fixture", accountLabel: "Fixture" }]);
     let observations = 0;
-    await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, {
+    await page.route(`**/api/v1/events/${imported.id}/provider-state*`, route => respond(route, {
       state: { provider: "google", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [], attendeesComplete: true, ownResponse: "accepted", reminders: { provider: "google", useDefault: false, overrides: [{ method: "popup", minutes: 30 }, { method: "email", minutes: 60 }] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] },
       version: (++observations === 1 ? "b" : "a").repeat(64), reminderEdit: { provider: "google", expectedRevision: 7 },
     }));
@@ -8718,7 +8718,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     const imported = event("00000000-0000-4000-8000-000000000192", "Google RSVP meeting", "personal", "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z");
     await mockAuthenticatedReads(page, { ...events, events: [imported] }, [{ ...calendars[0]!, provider: "google", accountID: "fixture", accountLabel: "Fixture" }]);
     let observations = 0;
-    await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, {
+    await page.route(`**/api/v1/events/${imported.id}/provider-state*`, route => respond(route, {
       state: { provider: "google", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [{ name: "Guest", address: "guest@example.test", self: true, role: "required", response: "needsAction" }], attendeesComplete: true, ownResponse: "needsAction", reminders: { provider: "google", useDefault: true, overrides: [] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] },
       version: (++observations === 1 ? "b" : "a").repeat(64), rsvpEdit: { provider: "google", expectedRevision: 7 },
     }));
@@ -8822,7 +8822,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     Object.assign(imported, { seriesID: master.id, originalStart: { kind: "instant", value: "2026-07-26T09:00:00.000Z" }, start: "2026-07-26T11:00:00Z", end: "2026-07-26T12:00:00Z", timeModel: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-07-26T13:00:00.000", endLocal: "2026-07-26T14:00:00.000" } });
     await mockAuthenticatedReads(page, { ...events, events: [master, imported] }, [{ ...calendars[0]!, provider: "google", accountID: "fixture", accountLabel: "Fixture" }]);
     let observations = 0;
-    await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, {
+    await page.route(`**/api/v1/events/${imported.id}/provider-state*`, route => respond(route, {
       state: { provider: "google", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [{ name: "Guest", address: "guest@example.test", self: true, role: "required", response: "needsAction" }], attendeesComplete: true, ownResponse: "needsAction", reminders: { provider: "google", useDefault: true, overrides: [] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] },
       version: (++observations === 1 ? "b" : "a").repeat(64), rsvpEdit: { provider: "google", expectedRevision: 7 },
     }));
@@ -9166,7 +9166,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     }
     await mockAuthenticatedReads(page, { ...events, events: [master, imported] }, [{ ...calendars[0]!, provider: "google", accountID: "fixture", accountLabel: "Fixture" }]);
     let observations = 0;
-    await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, {
+    await page.route(`**/api/v1/events/${imported.id}/provider-state*`, route => respond(route, {
       state: { provider: "google", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [], attendeesComplete: true, ownResponse: "accepted", reminders: { provider: "google", useDefault: inherited, overrides: inherited ? [] : [{ method: "popup", minutes: 30 }, { method: "email", minutes: 60 }] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] },
       version: (++observations === 1 ? "b" : "a").repeat(64), reminderEdit: { provider: "google", expectedRevision: 7 },
     }));
@@ -9263,7 +9263,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
       await mockAuthenticatedReads(page, { ...events, events: [imported] }, [source]);
       await page.route(/\/api\/v1\/events(?:\?.*)?$/, route => route.request().method() === "GET" ? respond(route, { ...events, events: [redacted ? { ...imported, revision: 2, title: "Busy", description: null, location: null, organizer: "", url: null } : imported] }) : route.fallback());
       await page.route("**/api/v1/calendars", route => route.request().method() === "GET" ? respond(route, [{ ...source, role: redacted ? "viewer" : "owner" }]) : route.fallback());
-      await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, redacted ? { state: null, version: null } : {
+      await page.route(`**/api/v1/events/${imported.id}/provider-state*`, route => respond(route, redacted ? { state: null, version: null } : {
         state: { provider: "google", organizer: { name: "Native private host", address: "private-host@example.test", self: false }, isOrganizer: false, attendees: [], attendeesComplete: true, ownResponse: "accepted", reminders: { provider: "google", useDefault: false, overrides: [{ method: "popup", minutes: 30 }] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] }, version: "a".repeat(64), reminderEdit: { provider: "google", expectedRevision: 1 },
       }));
       await page.goto("/app/p/my-calendar/month?date=2026-07-26");
@@ -9381,7 +9381,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     const imported = event("00000000-0000-4000-8000-000000000184", "CalDAV alarm event", "personal", "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z");
     await mockAuthenticatedReads(page, { ...events, events: [imported] }, [{ ...calendars[0]!, provider: "caldav", accountID: "fixture", accountLabel: "Fixture" }]);
     let observations = 0;
-    await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, {
+    await page.route(`**/api/v1/events/${imported.id}/provider-state*`, route => respond(route, {
       state: { provider: "caldav", organizer: null, isOrganizer: false, attendees: [], attendeesComplete: true, ownResponse: null, reminders: { provider: "caldav", alarms: [{ action: "DISPLAY", trigger: "-PT30M", related: null, repeat: null, duration: null }] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] },
       version: (++observations === 1 ? "b" : "a").repeat(64), reminderEdit: { provider: "caldav", expectedRevision: 7, minutesBeforeStart: 30 },
     }));
@@ -9585,7 +9585,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     const imported = event("00000000-0000-4000-8000-000000000192", "CalDAV RSVP meeting", "personal", "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z");
     await mockAuthenticatedReads(page, { ...events, events: [imported] }, [{ ...calendars[0]!, provider: "caldav", accountID: "fixture", accountLabel: "Fixture" }]);
     let observations = 0;
-    await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, {
+    await page.route(`**/api/v1/events/${imported.id}/provider-state*`, route => respond(route, {
       state: { provider: "caldav", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [{ name: "Guest", address: "guest@example.test", self: true, role: "required", response: "needsAction" }], attendeesComplete: true, ownResponse: "needsAction", reminders: { provider: "caldav", alarms: [] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] },
       version: (++observations === 1 ? "b" : "a").repeat(64), rsvpEdit: { provider: "caldav", expectedRevision: 7 },
     }));
@@ -9773,7 +9773,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     const imported = event("00000000-0000-4000-8000-000000000192", "Graph RSVP meeting", "personal", "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z");
     await mockAuthenticatedReads(page, { ...events, events: [imported] }, [{ ...calendars[0]!, provider: "microsoft", accountID: "fixture", accountLabel: "Fixture" }]);
     let observations = 0;
-    await page.route(`**/api/v1/events/${imported.id}/provider-state`, route => respond(route, {
+    await page.route(`**/api/v1/events/${imported.id}/provider-state*`, route => respond(route, {
       state: { provider: "microsoft", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [{ name: "Guest", address: "guest@example.test", self: true, role: "required", response: "needsAction" }], attendeesComplete: true, ownResponse: "needsAction", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] },
       version: (++observations === 1 ? "b" : "a").repeat(64), rsvpEdit: { provider: "microsoft", expectedRevision: 7 },
     }));
@@ -9862,7 +9862,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
     });
     await mockAuthenticatedReads(page, { ...events, events: [master] }, [{ ...calendars[0]!, provider: "caldav", accountID: "fixture", accountLabel: "Fixture" }]);
     let stale = false;
-    await page.route(`**/api/v1/events/${master.id}/provider-state`, route => respond(route, {
+    await page.route(`**/api/v1/events/${master.id}/provider-state*`, route => respond(route, {
       state: { provider: "caldav", organizer: null, isOrganizer: false, attendees: [], attendeesComplete: true, ownResponse: null, reminders: { provider: "caldav", alarms: [] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] },
       version: "a".repeat(64), reminderEdit: { provider: "caldav", scope: "series", expectedRevision: stale ? 8 : 7, minutesBeforeStart: 15 },
     }));
@@ -9900,7 +9900,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (con
     const saved = { ...event(eventID, "Organizer meeting", calendarID, "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z"), revision: 4, timeModel: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-07-26T11:00:00.000", endLocal: "2026-07-26T12:00:00.000" } };
     await mockAuthenticatedReads(page, { ...events, events: [saved] }, [{ ...calendars[0]!, id: calendarID, provider: "google", accountID: "fixture", accountLabel: "Fixture" }]);
     await page.route(`**/api/v1/calendars/${calendarID}/provider-organizer`, route => respond(route, { provider: "google", calendarID, sendUpdates: "all" }));
-    await page.route(`**/api/v1/events/${eventID}/provider-state`, route => respond(route, { state: { provider: "google", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "needsAction" }], attendeesComplete: true, ownResponse: null, reminders: { provider: "google", useDefault: true, overrides: [] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] }, version: "a".repeat(64), organizerEdit: { provider: "google", calendarID, expectedRevision: 4 } }));
+    await page.route(`**/api/v1/events/${eventID}/provider-state*`, route => respond(route, { state: { provider: "google", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "needsAction" }], attendeesComplete: true, ownResponse: null, reminders: { provider: "google", useDefault: true, overrides: [] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] }, version: "a".repeat(64), organizerEdit: { provider: "google", calendarID, expectedRevision: 4 } }));
     const writes: any[] = [], errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.route("**/api/v1/provider-organizer", route => { const body = route.request().postDataJSON(); writes.push(body); if (action === "create" && writes.length === 1) return respond(route, { error: "Choose external guests", organizerAdmissionRejected: true }, 400); return writes.length === (action === "create" ? 2 : 1) ? respond(route, { error: "Temporary failure" }, 503) : respond(route, { operationID: body.operationID, eventID: body.eventID, replayed: true, status: "pending", localCommitted: true, notificationDelivery: "unknown" }, 202); });
@@ -9982,7 +9982,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (con
     const saved = { ...event(eventID, "Organizer meeting", calendarID, "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z"), revision: 4, timeModel: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-07-26T11:00:00.000", endLocal: "2026-07-26T12:00:00.000" } };
     await mockAuthenticatedReads(page, { ...events, events: [saved] }, [{ ...calendars[0]!, id: calendarID, provider: "caldav", accountID: "fixture", accountLabel: "Fixture" }]);
     await page.route(`**/api/v1/calendars/${calendarID}/provider-organizer`, route => respond(route, { provider: "caldav", calendarID, notificationPolicy: "server-invite", createTime: "utc-or-all-day" }));
-    await page.route(`**/api/v1/events/${eventID}/provider-state`, route => respond(route, { state: { provider: "caldav", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "needsAction" }], attendeesComplete: true, ownResponse: null, reminders: { provider: "caldav", alarms: [] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] }, version: "a".repeat(64), organizerEdit: { provider: "caldav", calendarID, expectedRevision: 4, actions: action === "delete" ? ["delete"] : ["update"] } }));
+    await page.route(`**/api/v1/events/${eventID}/provider-state*`, route => respond(route, { state: { provider: "caldav", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "needsAction" }], attendeesComplete: true, ownResponse: null, reminders: { provider: "caldav", alarms: [] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] }, version: "a".repeat(64), organizerEdit: { provider: "caldav", calendarID, expectedRevision: 4, actions: action === "delete" ? ["delete"] : ["update"] } }));
     const writes: any[] = [], errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.route("**/api/v1/provider-organizer", route => { const body = route.request().postDataJSON(); writes.push(body); if (action === "create" && writes.length === 1) return respond(route, { error: "Choose external guests", organizerAdmissionRejected: true }, 400); return writes.length === (action === "create" ? 2 : 1) ? respond(route, { error: "Temporary failure" }, 503) : respond(route, { operationID: body.operationID, eventID: body.eventID, replayed: true, status: "pending", localCommitted: true, notificationDelivery: "unknown" }, 202); });
@@ -10035,7 +10035,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (con
     const saved = { ...event(eventID, "Bound organizer occurrence", calendarID, "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z"), revision: 4, seriesID: parentID, originalStart: { kind: "instant", value: "2026-07-25T09:00:00.000Z" }, timeModel: { kind: "zoned", timeZone: "Europe/Prague", startLocal: "2026-07-26T11:00:00.000", endLocal: "2026-07-26T12:00:00.000" } };
     const master = { ...saved, id: parentID, title: "Organizer series", revision: 9, seriesID: null, originalStart: null, recurrence: "RRULE:FREQ=DAILY;COUNT=3" };
     await mockAuthenticatedReads(page, { ...events, events: [master, saved] }, [{ ...calendars[0]!, id: calendarID, provider: "google", accountID: "fixture", accountLabel: "Fixture" }]);
-    await page.route(`**/api/v1/events/${eventID}/provider-state`, route => respond(route, { state: { provider: "google", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "accepted" }], attendeesComplete: true, ownResponse: null, reminders: { provider: "google", useDefault: true, overrides: [] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] }, version: "a".repeat(64), organizerEdit: { provider: "google", calendarID, expectedRevision: 4, scope: "occurrence", instanceVersion: "b".repeat(64) } }));
+    await page.route(`**/api/v1/events/${eventID}/provider-state*`, route => respond(route, { state: { provider: "google", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "accepted" }], attendeesComplete: true, ownResponse: null, reminders: { provider: "google", useDefault: true, overrides: [] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] }, version: "a".repeat(64), organizerEdit: { provider: "google", calendarID, expectedRevision: 4, scope: "occurrence", instanceVersion: "b".repeat(64) } }));
     const writes: any[] = [], errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.route("**/api/v1/provider-organizer", route => { const body = route.request().postDataJSON(); writes.push(body); return respond(route, { operationID: body.operationID, eventID: body.eventID, replayed: false, status: "pending", localCommitted: true, notificationDelivery: "unknown" }, 202); });
@@ -10120,7 +10120,7 @@ for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) for (con
     const calendarID = "00000000-0000-4000-8000-000000000311", eventID = "00000000-0000-4000-8000-000000000312";
     const saved = { ...event(eventID, "Retime meeting", calendarID, "red", kind === "all-day" ? "2026-07-26T00:00:00Z" : "2026-07-26T09:00:00Z", kind === "all-day" ? "2026-07-26T00:00:00Z" : "2026-07-26T10:00:00Z"), revision: 4, isAllDay: kind === "all-day", timeModel: kind === "all-day" ? { kind } : { kind, timeZone: "Europe/Prague", startLocal: "2026-07-26T11:00:00.000", endLocal: "2026-07-26T12:00:00.000" } };
     await mockAuthenticatedReads(page, { ...events, events: [saved] }, [{ ...calendars[0]!, id: calendarID, provider: "caldav", accountID: "fixture", accountLabel: "Fixture" }]);
-    await page.route(`**/api/v1/events/${eventID}/provider-state`, route => respond(route, { state: { provider: "caldav", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "ACCEPTED" }], attendeesComplete: true, ownResponse: null, reminders: { provider: "caldav", alarms: [] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] }, version: "a".repeat(64), organizerEdit: { provider: "caldav", calendarID, expectedRevision: 4, actions: ["update"], timeEdit: true } }));
+    await page.route(`**/api/v1/events/${eventID}/provider-state*`, route => respond(route, { state: { provider: "caldav", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "ACCEPTED" }], attendeesComplete: true, ownResponse: null, reminders: { provider: "caldav", alarms: [] }, availability: "opaque", privacy: "private", status: "confirmed", eventType: "default", conferenceURLs: [] }, version: "a".repeat(64), organizerEdit: { provider: "caldav", calendarID, expectedRevision: 4, actions: ["update"], timeEdit: true } }));
     const writes: any[] = [], errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.route("**/api/v1/provider-organizer", route => { const body = route.request().postDataJSON(); writes.push(body); return writes.length === 1 ? respond(route, { error: "Response lost" }, 503) : respond(route, { operationID: body.operationID, eventID, replayed: true, status: "pending", localCommitted: true, notificationDelivery: "unknown" }, 202); });
@@ -10900,3 +10900,46 @@ test("task inspector keeps compact form spacing at tall heights and retains floa
   await editor.getByRole("button", { name: "Close task editor" }).click();
   await expect(detail).toHaveAttribute("data-presentation", "panel");
 });
+
+for (const [width, theme] of [[1280, "light"], [390, "dark"]] as const) {
+  test(`Outlook organizer guarded cancellation: ${theme} ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ colorScheme: theme });
+    await page.addInitScript(value => localStorage.setItem("musubi-theme", value), theme);
+    const calendarID = "00000000-0000-4000-8000-000000000361", eventID = "00000000-0000-4000-8000-000000000362";
+    const saved = { ...event(eventID, "Outlook review meeting", calendarID, "red", "2026-07-26T09:00:00Z", "2026-07-26T10:00:00Z"), revision: 4, timeModel: { kind: "zoned", timeZone: "UTC", startLocal: "2026-07-26T09:00:00.000", endLocal: "2026-07-26T10:00:00.000" } };
+    await mockAuthenticatedReads(page, { ...events, events: [saved] }, [{ ...calendars[0]!, id: calendarID, provider: "microsoft", accountID: "fixture", accountLabel: "Fixture" }]);
+    await page.route(`**/api/v1/events/${eventID}/provider-state?outlookOrganizer=1`, route => respond(route, { state: { provider: "microsoft", organizer: { name: "Owner", address: "owner@example.test", self: true }, isOrganizer: true, attendees: [{ name: "Guest", role: "required", address: "guest@example.test", self: false, response: "accepted" }], attendeesComplete: true, ownResponse: "organizer", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 }, availability: "busy", privacy: "normal", status: "active", eventType: "singleInstance", conferenceURLs: [] }, version: "a".repeat(64), organizerEdit: { provider: "microsoft", calendarID, expectedRevision: 4, actions: ["delete"] } }));
+    const writes: any[] = [], errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await page.route("**/api/v1/provider-organizer", route => {
+      const body = route.request().postDataJSON(); writes.push(body);
+      return writes.length === 1 ? respond(route, { error: "Response lost" }, 503) : respond(route, { operationID: body.operationID, eventID, replayed: true, status: "pending", localCommitted: true, notificationDelivery: "unknown" }, 202);
+    });
+    await page.goto("/app/p/my-calendar/month?date=2026-07-26");
+    await expect(page).toHaveTitle(/Musubi/);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    await page.getByRole("button", { name: /Outlook review meeting/ }).first().click();
+    const trigger = page.getByRole("button", { name: "Manage Outlook meeting", exact: true }); await trigger.click();
+    const editor = page.getByRole("dialog", { name: "Manage Outlook meeting", exact: true });
+    await expect(editor.getByRole("button", { name: "Save and notify guests" })).toHaveCount(0);
+    await expect(editor.getByRole("textbox", { name: "Title", exact: true })).toBeDisabled();
+    await editor.getByRole("button", { name: "Cancel meeting and notify guests" }).click();
+    const confirmation = page.getByRole("dialog", { name: "Cancel Outlook meeting", exact: true });
+    await expect(confirmation).toContainText("Outlook will be asked to cancel this meeting");
+    await expect(confirmation.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    expect(writes).toHaveLength(0);
+    await expectOrganizerPaintedAbovePopover(confirmation);
+    await expectNoAccessibilityViolations(page);
+    expect(await confirmation.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: `/tmp/outlook-cancellation-${theme}.png` });
+    await confirmation.getByRole("button", { name: "Cancel meeting and notify guests" }).press("Enter");
+    await expect(confirmation.getByRole("alert")).toContainText("Response lost");
+    await confirmation.getByRole("button", { name: "Cancel meeting and notify guests" }).press("Enter");
+    await expect(editor.getByRole("status")).toContainText("Guest notification delivery remains unknown");
+    expect(writes).toHaveLength(2); expect(writes[1]).toEqual(writes[0]);
+    expect(writes[0]).toMatchObject({ provider: "microsoft", action: "delete", notificationPolicy: "server-invite", expectedRevision: 4 });
+    await editor.getByRole("button", { name: "Close", exact: true }).press("Space");
+    await expect(trigger).toBeFocused(); expect(errors).toEqual([]);
+  });
+}

@@ -1,3 +1,4 @@
+import type { GraphSeriesDeletionPrepared } from "./queries/graph-series-delete";
 import type { GraphSeriesCreateJournal } from "./queries/graph-series-create";
 import type { CaldavSplitJournal } from "./queries/caldav-split";
 import type { CaldavSeriesPrepared, CaldavSeriesDeletionPrepared } from "./queries/caldav-series-scope";
@@ -900,6 +901,7 @@ export const eventOutbox = pgTable(
         caldavAlarm?: import("./queries/caldav-alarms").CaldavAlarmIntent;
         caldavSeriesDeletion?: CaldavSeriesDeletionPrepared;
         graphSeriesCreate?: GraphSeriesCreateJournal;
+        graphSeriesDeletion?: GraphSeriesDeletionPrepared;
         graphCreateAdoption?: import("@musubi/types").GraphCreateAdoptionRecord;
         createIdentityVersion?: 1;
         resolution?: {

@@ -1,3 +1,4 @@
+import { confirmGraphSeriesDeletionOutbox, completeGraphSeriesDeletionOutbox } from "@musubi/db";
 import { microsoftEventVersion } from "./adapters/microsoft_event_content";
 import { withProviderOrganizerLease, markProviderOrganizer, completeProviderOrganizer } from "@musubi/db";
 import { confirmCaldavAlarm } from "@musubi/db";
@@ -165,10 +166,11 @@ export async function deliverEventOutbox(
         const mark = async () => { await markProviderOrganizer(row); mutationStarted = true; };
         const accepted = async () => { await markProviderOrganizer(row, true); };
         if (row.provider === "microsoft") {
-          if (row.action !== "create") throw new EventWriteError("organizer", "unsupported");
+          if (row.action !== "create" && row.action !== "delete") throw new EventWriteError("organizer", "unsupported");
           const transport = await adapter!.microsoftOrganizer!(row.userID, row.accountID, row.externalCalendarID, signal);
           const outcome = await transport.deliver(row.payload.organizer, mark, accepted);
           if (outcome.kind === "observed") await completeProviderOrganizer(row, { ...outcome.native, state: outcome.state });
+          else if (outcome.kind === "deleted") await completeProviderOrganizer(row, null);
           else await finishEventOutbox(row.id, token, "unconfirmed", "organizer-outcome-unknown", { uncertain: !!row.payload.organizer.dispatch || mutationStarted, nextAttemptAt: new Date(Date.now() + Math.min(3_600_000, 30_000 * 2 ** Math.min(row.attempts, 7))) });
         } else if (caldav) {
           const transport = await adapter!.caldavOrganizer!(row.userID, row.accountID, row.externalCalendarID, row.action, row.externalEventID ?? undefined, signal);
@@ -208,6 +210,17 @@ export async function deliverEventOutbox(
         signal.throwIfAborted();
         if (!matchesProviderReminderInstanceState(intent, observed.state) || !matchesRsvpEventProjection(row.provider, event, observed.event, intent.instance)) throw new ProviderEventWriteError("provider-conflict", "unconfirmed");
         await completeProviderReminderInstanceOutbox(row.id, token, resultRef, expectedRef, { isEcho: true, externalEventId: resultRef.externalEventId, etag: resultRef.etag ?? null, deleted: false, providerState: observed.state, observedAt: new Date().toISOString() });
+        return;
+      }
+      if (row.payload.graphSeriesDeletion) {
+        if (!config.api.eventTimeEditsEnabled || row.provider !== "microsoft" || row.action !== "delete" || !adapter?.deleteGraphSeries) throw new EventWriteError("event-write", "unsupported");
+        const check = async () => {
+          if (!(await checkDestination()) || !(await confirmGraphSeriesDeletionOutbox(row.id, token))) throw new ProviderEventWriteError("provider-conflict");
+        };
+        await check();
+        const observation = await adapter.deleteGraphSeries(row.payload.graphSeriesDeletion, row.reconciling, async () => { await check(); mutationStarted = true; }, signal);
+        mutationStarted = true;
+        if (!(await completeGraphSeriesDeletionOutbox(row.id, token, observation))) throw new ProviderEventWriteError("provider-conflict", "unconfirmed");
         return;
       }
       if (row.payload.graphSeriesCreate) {

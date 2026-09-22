@@ -1,3 +1,4 @@
+import { prepareGraphSeriesDeletion, deleteGraphSeries } from "./microsoft_series_delete";
 import { assertMicrosoftPersonalContent, microsoftPersonalContentPatch, microsoftEventVersion, updateMicrosoftPersonalContent, deleteMicrosoftPersonalEvent } from "./microsoft_event_content";
 import { getOrganizerTimeEventIDs } from "@musubi/db";
 import { microsoftOrganizerTransport } from "./microsoft_organizer";
@@ -836,6 +837,14 @@ export const microsoftAdapter: CalendarAdapter = {
     return family;
   },
 
+  async prepareGraphDeletion(context, request, signal) {
+    await assertOAuthEventWriteGrant(context.address.userID, "microsoft", context.link.accountID);
+    return prepareGraphSeriesDeletion(await getAccessToken(context.address.userID, context.link.accountID), context, request, signal);
+  },
+  async deleteGraphSeries(saved, reconciling, beforeWrite, signal) {
+    await assertOAuthEventWriteGrant(saved.context.address.userID, "microsoft", saved.context.link.accountID);
+    return deleteGraphSeries(await getAccessToken(saved.context.address.userID, saved.context.link.accountID), saved, reconciling, beforeWrite, signal);
+  },
   async readGraphFamily(userID, accountId, externalCalendarId, template, ref, signal) {
     const timeout = AbortSignal.timeout(60_000);
     const bounded = signal ? AbortSignal.any([signal, timeout]) : timeout;

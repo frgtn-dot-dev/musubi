@@ -1,3 +1,4 @@
+import { microsoftAdapter } from "../sync/adapters/microsoft";
 import { queueProviderOrganizer, observeProviderOrganizer, observeOrganizerCalendar } from "../sync/provider_organizer";
 import { caldavAlarmObservation, queueCaldavAlarms } from "../sync/caldav_alarms";
 import { queueGoogleReminders } from "../sync/provider_reminders";
@@ -382,6 +383,16 @@ export async function handlerEventScope(req: Request, res: Response) {
       throw error;
     }
   }
+  if (result.status === "graph_delete_required") {
+    try {
+      const graphDeletion = await microsoftAdapter.prepareGraphDeletion!(result.context, req.body, AbortSignal.timeout(60_000));
+      result = await applyLocalEventScope(eventID, req.user!.id, req.body, { graphDeletion });
+    } catch (error) {
+      if (error instanceof ProviderEventWriteError && error.code === "provider-conflict")
+        return res.status(409).json({ error: "The Outlook series changed. Sync and reopen before deleting.", code: "provider-conflict", localCommitted: false });
+      throw error;
+    }
+  }
   if (result.status === "caldav_required") {
     try {
       if (result.deleteResource) {
@@ -400,7 +411,7 @@ export async function handlerEventScope(req: Request, res: Response) {
       throw error;
     }
   }
-  if (result.status === "provider_required" || result.status === "caldav_required") throw new Error("Missing provider scope preparation.");
+  if (result.status === "provider_required" || result.status === "caldav_required" || result.status === "graph_delete_required") throw new Error("Missing provider scope preparation.");
   if (result.status === "not_found") throw new NotFoundError("Event not found.");
   if (result.status === "conflict") return conflict(res, result.current);
   if (result.status === "replayed") return res.json({ ...result.outcome, localCommitted: true, replayed: true });
@@ -684,7 +695,7 @@ export async function handlerGetProviderEventState(req: Request, res: Response) 
   await assertCanViewEvent(req.user!.id, id);
   res.setHeader("Cache-Control", "private, no-store");
   const observation = await getOwnProviderEventObservation(req.user!.id, id, config.api.providerReminderEditsEnabled, config.api.providerRsvpEditsEnabled);
-  res.json(await observeProviderOrganizer(req.user!.id, id, await observeMicrosoftRsvp(req.user!.id, id, await observeCaldavRsvp(req.user!.id, id, await caldavAlarmObservation(req.user!.id, id, observation)))));
+  res.json(await observeProviderOrganizer(req.user!.id, id, await observeMicrosoftRsvp(req.user!.id, id, await observeCaldavRsvp(req.user!.id, id, await caldavAlarmObservation(req.user!.id, id, observation))), req.query.outlookOrganizer === "1"));
 }
 
 export async function handlerProviderReminderEdit(req: Request, res: Response) {

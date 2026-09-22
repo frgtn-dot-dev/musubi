@@ -166,7 +166,7 @@ export function ProviderOrganizerEditor({
   }
   const canEditTime =
     !event ||
-    provider !== "caldav" ||
+    provider === "google" ||
     observation?.organizerEdit?.timeEdit === true;
   const canUpdate =
     !event ||
@@ -174,8 +174,7 @@ export function ProviderOrganizerEditor({
     observation?.organizerEdit?.actions?.includes("update") === true));
   const canDelete =
     !!event &&
-    (provider !== "microsoft" && (provider !== "caldav" ||
-      observation?.organizerEdit?.actions?.includes("delete") === true));
+    (provider === "google" || observation?.organizerEdit?.actions?.includes("delete") === true);
   const canSubmit = frozenAction === "delete" ? canDelete : canUpdate;
   async function send(action: ProviderOrganizerRequest["action"]) {
     if (
@@ -310,7 +309,7 @@ export function ProviderOrganizerEditor({
                   {addressPickerOpen ? <OptionPicker visible title="Organizer address" options={organizerAddresses.map(value => ({value, label:value.slice(7)}))} value={draft.organizerAddress} onSelect={value => patch("organizerAddress", value)} onClose={() => setAddressPickerOpen(false)} /> : null}
                 </View> : null}
                 {fields.filter(([key]) => (!occurrence || key !== "guests") && !["description", "location"].includes(key)).map(renderField)}
-                {(provider === "caldav" && event && !canEditTime) || occurrence ? (
+                {(provider !== "google" && event && !canEditTime) || occurrence ? (
                   <View style={{ alignItems: "flex-end", paddingHorizontal: spacing[4] }}>
                     {info("Meeting editing", occurrence ? "Only this occurrence will change. Series timing and guests stay unchanged." : "Meeting time and guests are preserved.")}
                   </View>
@@ -350,8 +349,8 @@ export function ProviderOrganizerEditor({
                     onPress={() =>
                       confirm(
                         {
-                          title: occurrence ? "Cancel this occurrence" : `Cancel ${provider === "caldav" ? "CalDAV" : "Google"} meeting`,
-                          message: `${provider === "caldav" ? "The CalDAV server" : "Google"} will be asked to cancel ${occurrence ? "only this occurrence" : "this meeting"} and notify all guests. Guest notification delivery cannot be verified.`,
+                          title: occurrence ? "Cancel this occurrence" : `Cancel ${provider === "caldav" ? "CalDAV" : provider === "microsoft" ? "Outlook" : "Google"} meeting`,
+                          message: `${provider === "caldav" ? "The CalDAV server" : provider === "microsoft" ? "Outlook" : "Google"} will be asked to cancel ${occurrence ? "only this occurrence" : "this meeting"} and notify all guests. Guest notification delivery cannot be verified.`,
                           confirmLabel: occurrence ? "Cancel this occurrence and notify guests" : "Cancel meeting and notify guests",
                         },
                         () => {

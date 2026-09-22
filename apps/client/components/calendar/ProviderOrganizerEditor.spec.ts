@@ -145,6 +145,26 @@ beforeEach(() => {
   h.index = 0;
   vi.clearAllMocks();
 });
+it("confirms Outlook cancellation and retries only the same delete intent", async () => {
+  const observed: ProviderEventStateResponse = {
+    ...observation,
+    organizerEdit: { ...observation.organizerEdit!, provider: "microsoft", actions: ["delete"] },
+  };
+  const draw = () => render(event, observed);
+  h.save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "pending" });
+  expect(nodes(draw()).some(node => node.type === "Btn" && node.props.label === "Save & notify")).toBe(false);
+  expect(nodes(draw()).filter(node => node.type === "TextInput").every(node => node.props.editable === false)).toBe(true);
+  button(draw(), "Cancel meeting and notify guests").onPress();
+  expect(h.save).not.toHaveBeenCalled();
+  expect(h.confirm.mock.calls[0][0]).toMatchObject({ title: "Cancel Outlook meeting", message: expect.stringContaining("Outlook will be asked") });
+  h.confirm.mock.calls[0][1]();
+  await settle();
+  button(draw(), "Retry").onPress();
+  await settle();
+  expect(h.save).toHaveBeenCalledTimes(2);
+  expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
+  expect(h.save.mock.calls[0][0]).toMatchObject({ provider: "microsoft", action: "delete", notificationPolicy: "server-invite", expectedRevision: 7, expectedStateVersion: observation.version });
+});
 it("sends only a changed native note and freezes it after offline admission", async () => {
   h.save
     .mockRejectedValueOnce(new Error("offline"))

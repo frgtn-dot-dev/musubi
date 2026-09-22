@@ -145,7 +145,7 @@ export const CaldavOrganizerRequestSchema = z.discriminatedUnion("action", [
     })
     .strict(),
 ]);
-export const MicrosoftOrganizerRequestSchema = caldavCommon.extend({
+const microsoftCreate = caldavCommon.extend({
   provider: z.literal("microsoft"),
   action: z.literal("create"),
   content: content.strict(),
@@ -153,6 +153,14 @@ export const MicrosoftOrganizerRequestSchema = caldavCommon.extend({
   guests: z.array(guest).min(1).max(100).refine(values => new Set(values.map(value => value.email)).size === values.length, "Duplicate guest"),
   color: z.string().max(64),
 }).strict();
+export const MicrosoftOrganizerRequestSchema = z.discriminatedUnion("action", [
+  microsoftCreate,
+  caldavCommon.extend({
+    provider: z.literal("microsoft"), action: z.literal("delete"),
+    expectedRevision: z.number().int().positive(),
+    expectedStateVersion: z.string().regex(/^[0-9a-f]{64}$/),
+  }).strict(),
+]);
 export type MicrosoftOrganizerRequest = z.infer<typeof MicrosoftOrganizerRequestSchema>;
 export type GoogleOrganizerRequest = z.infer<
   typeof GoogleOrganizerRequestSchema
