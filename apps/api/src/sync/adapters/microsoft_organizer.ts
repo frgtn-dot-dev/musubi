@@ -1,3 +1,4 @@
+import { unambiguousCivilToInstant } from "@musubi/calendar";
 import { microsoftEventVersion } from "./microsoft_event_content";
 import { graphRsvpTime } from "./microsoft_rsvp";
 import { isDeepStrictEqual } from "node:util";
@@ -106,9 +107,9 @@ export function microsoftMeetingContentBody(request: MicrosoftOrganizerRequest) 
   if (request.action !== "update") fail();
   const payload: Record<string, unknown> = {};
   if (request.patch.time) {
-    if (request.scope !== "occurrence" || request.patch.time.kind !== "zoned" || request.patch.time.timeZone !== "UTC") fail();
-    payload.start = { dateTime: request.patch.time.startLocal, timeZone: "UTC" };
-    payload.end = { dateTime: request.patch.time.endLocal, timeZone: "UTC" };
+    if (request.scope !== "occurrence" || request.patch.time.kind !== "zoned") fail();
+    payload.start = { dateTime: request.patch.time.startLocal, timeZone: request.patch.time.timeZone };
+    payload.end = { dateTime: request.patch.time.endLocal, timeZone: request.patch.time.timeZone };
   }
   if (request.patch.title !== undefined) payload.subject = request.patch.title;
   if (request.patch.description !== undefined) payload.body = { contentType: "text", content: request.patch.description ?? "" };
@@ -119,6 +120,23 @@ export function matchesMeetingContent(baseline: Record<string, unknown>, patch: 
   try {
     const next = microsoftMeetingContentEvidence(actual, self, masterID, allowMaster);
     const expected = { ...baseline, ...patch };
+    const endpointInstant = (value: { dateTime: string; timeZone: string }) => value.timeZone === "UTC"
+      ? instant(value.dateTime) : unambiguousCivilToInstant(value.dateTime, value.timeZone).getTime();
+    const changedTime = ("start" in patch || "end" in patch) && ["start", "end"].some(key => {
+      const desired = expected[key] as { dateTime: string; timeZone: string };
+      const before = baseline[key] as { dateTime: string; timeZone: string };
+      return endpointInstant(desired) !== endpointInstant(before);
+    });
+    if (masterID && !allowMaster && changedTime) {
+      expected.attendees = (baseline.attendees as Record<string, unknown>[]).map((guest, index) => {
+        const status = next.attendees[index]?.status;
+        // A full meeting update can reset RSVP. Accept only the observed empty
+        // response sentinel; never accept another response, altered guest or
+        // role, or a new response timestamp as a side effect of our write.
+        return status && ["none", "notResponded"].includes(status.response) && status.time === "4501-01-01T00:00:00Z"
+          ? { ...guest, status: { response: status.response, time: status.time } } : guest;
+      });
+    }
     if ("location" in patch && next.locations != null) {
       const locations = z.array(z.object({ displayName: z.string() })).max(1).parse(next.locations);
       const name = (patch.location as { displayName: string }).displayName;
@@ -140,9 +158,12 @@ export function matchesMeetingContent(baseline: Record<string, unknown>, patch: 
         item.location = { displayName: (item.location as { displayName: string }).displayName };
       }
       if ("start" in patch || "end" in patch) {
-        // Graph pads UTC fractional seconds to seven digits; compare instants.
-        const time = graphRsvpTime({ ...item, type: "singleInstance" });
-        item.start = time.start.toISOString(); item.end = time.end.toISOString();
+        // The requested civil endpoints use the verified series zone; native
+        // evidence above remains a strict UTC projection (including precision).
+        for (const key of ["start", "end"]) {
+          const endpoint = item[key] as { dateTime: string; timeZone: string };
+          item[key] = new Date(endpointInstant(endpoint)).toISOString();
+        }
       }
       const body = item.body as { contentType: string; content: string };
       item.body = { ...body, contentType: body.contentType.toLowerCase(), content: body.content.trim() };

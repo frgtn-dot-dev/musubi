@@ -22,6 +22,7 @@ export async function observeGraphOccurrenceContent(token: string, context: Grap
   const native = microsoftMeetingContentEvidence(await transport.get(transport.path(mapping.externalEventID) + "?$select=*,originalStart"), transport.identity.selfAddress, context.masterID);
   const target = family.baseline.instances.find(n => n.externalID === mapping.externalEventID);
   if (!target || native.id !== target.externalID || native.iCalUId !== target.icalUid || native.etag !== target.etag || !same(graphOriginalStartFromUtc(String(native.originalStart), native.isAllDay), target.originalStart)) fail();
+  await requireSupportedSeriesZone(transport, family.template);
   return { ...family, native, version: graphMeetingVersion({ context, baseline: family.baseline, identity: family.identity, native }) };
 }
 
@@ -49,6 +50,7 @@ export async function updateGraphOccurrenceContent(token: string, saved: GraphOc
   if (!target || target.etag !== baseline.etag || target.icalUid !== baseline.iCalUId || saved.targetID !== baseline.id) fail();
   graphOccurrenceTimeChange(saved);
   if (saved.request.patch.time && !config.api.eventTimeEditsEnabled && !saved.dispatch) fail();
+  if (saved.request.patch.time && !saved.dispatch) await requireSupportedSeriesZone(transport, saved.template);
   const patch = microsoftMeetingContentBody(saved.request);
   const read = async () => {
     const family = await transport.read(saved.template, saved.baseline.master.icalUid);
@@ -92,4 +94,11 @@ export async function updateGraphOccurrenceContent(token: string, saved: GraphOc
     if (!after) return unknown();
     return { kind: "observed" as const, observation: after.family! };
   } catch { return unknown(); }
+}
+
+async function requireSupportedSeriesZone(transport: Awaited<ReturnType<typeof graphOrganizerFamilySession>>, template: GraphOccurrenceContent["template"]) {
+  if (template.timeModel?.kind !== "zoned" || template.timeModel.timeZone === "UTC") return;
+  const timeZone = template.timeModel.timeZone;
+  const zones = await transport.get("https://graph.microsoft.com/v1.0/me/outlook/supportedTimeZones(TimeZoneStandard=microsoft.graph.timeZoneStandard'Iana')");
+  if (!Array.isArray(zones?.value) || zones["@odata.nextLink"] || !zones.value.some((zone: { alias?: unknown }) => zone?.alias === timeZone)) fail();
 }

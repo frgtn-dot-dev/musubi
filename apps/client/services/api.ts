@@ -562,7 +562,7 @@ export function useApi() {
       const path = `/api/${apiVersion}/events/${encodeURIComponent(event.id)}/provider-state`;
       const remote = remoteOf(eventHome(event));
       if (remote) return readWire(ProviderEventStateResponseSchema, await fedFetch(remote, path, { method: "GET" }), "GET provider state (federated)");
-      const { error, data } = await authClient.$fetch(`${apiUrl}${path}?outlookOrganizer=5`, { method: "GET" });
+      const { error, data } = await authClient.$fetch(`${apiUrl}${path}?outlookOrganizer=6`, { method: "GET" });
       throwOnError(error);
       return readWire(ProviderEventStateResponseSchema, data, "GET provider state");
     },

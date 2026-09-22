@@ -16,23 +16,52 @@ async function main() {
   const oldFetch = globalThis.fetch, oldFlag = config.api.providerOrganizerEditsEnabled, oldTime = config.api.eventTimeEditsEnabled;
   config.api.providerOrganizerEditsEnabled = true; config.api.eventTimeEditsEnabled = true;
   try {
-    for (const mode of ["occurrence", "combined", "personal", "canonical", "canonical-cancelled", "cancelled-before", "all-day", "moved", "boundary", "boundary-rejected", "flag-off", "flag-delivery", "non-utc", "wrong-time", "changed-body", "noop", "stale-admission", "stale-delivery", "sibling-change", "lost-applied", "lost-retained", "restart", "accepted-recovery", "local-race", "denied", "identity", "partial", "survivor-changed", "rejected", "changed-guest", "attachments", "conference", "bad-response"] as const) {
+    for (const mode of ["occurrence", "combined", "personal", "canonical", "canonical-cancelled", "cancelled-before", "all-day", "moved", "boundary", "boundary-rejected", "flag-off", "flag-delivery", "non-utc", "wrong-time", "changed-body", "noop", "stale-admission", "stale-delivery", "sibling-change", "lost-applied", "lost-retained", "restart", "accepted-recovery", "local-race", "denied", "identity", "partial", "survivor-changed", "rejected", "changed-guest", "attachments", "conference", "bad-response", "rsvp-reset", "rsvp-reset-time", "rsvp-reset-role", "prague", "prague-canonical", "prague-spring", "prague-gap", "prague-fold", "prague-midnight", "prague-local-boundary", "prague-wrong-zone", "prague-unsupported", "prague-rsvp-reset"] as const) {
       const owner = `graph-series-cancel-${randomUUID()}`, allDay = mode === "all-day";
       let writes = 0, delivery = false;
+      const prague = mode.startsWith("prague"), spring = mode === "prague-spring" || mode === "prague-gap";
+      const dates = prague ? (spring ? ["2026-03-27", "2026-03-29", "2026-03-31"] : ["2026-10-23", "2026-10-25", "2026-10-27"]) : ["2026-09-25", "2026-09-26", "2026-09-27"];
+      const zone = prague ? "Europe/Prague" : "UTC";
+      const targetID = `occ-${dates[1]!.slice(-2)}`;
       const base: any = { id: "master", iCalUId: "master-uid", "@odata.etag": 'W/"master-1"', createdDateTime: "2026-09-01T10:00:00Z", type: "seriesMaster", subject: "Series", body: { contentType: "text", content: "Notes" }, location: { displayName: "Office" }, organizer: { emailAddress: { address: "owner@example.test" } }, isOrganizer: true, isCancelled: false, isDraft: false, isOnlineMeeting: false, onlineMeeting: null, onlineMeetingUrl: null, attendees: [{ emailAddress: { address: "guest@example.test" }, type: "required", status: { response: "accepted" } }], hasAttachments: false, isAllDay: allDay, originalStartTimeZone: "UTC", originalEndTimeZone: "UTC", start: { dateTime: `2026-09-25T${allDay ? "00" : "09"}:00:00`, timeZone: "UTC" }, end: { dateTime: allDay ? "2026-09-26T00:00:00" : "2026-09-25T10:00:00", timeZone: "UTC" }, recurrence: { pattern: { type: "daily", interval: 1 }, range: { type: "numbered", numberOfOccurrences: 3, startDate: "2026-09-25", recurrenceTimeZone: "UTC" } }, cancelledOccurrences: [], exceptionOccurrences: [], isReminderOn: true, reminderMinutesBeforeStart: 15, showAs: "busy", sensitivity: "normal", responseStatus: { response: "organizer" } };
       if (mode === "non-utc") { base.originalStartTimeZone = base.originalEndTimeZone = base.recurrence.range.recurrenceTimeZone = "Europe/Prague"; }
+      if (prague) {
+        base.originalStartTimeZone = base.originalEndTimeZone = "Europe/Prague";
+        base.recurrence.range.recurrenceTimeZone = "Central Europe Standard Time";
+        base.recurrence.range.startDate = dates[0]; base.recurrence.pattern.interval = 2;
+        base.start.dateTime = `${dates[0]}T${spring ? "11" : "10"}:00:00`;
+        base.end.dateTime = `${dates[0]}T${spring ? "12" : "11"}:00:00`;
+      }
       if (mode === "personal") base.attendees = [];
       if (mode === "attachments") base.hasAttachments = true;
       if (mode === "conference") { base.isOnlineMeeting = true; base.onlineMeetingUrl = "https://teams.example.test/meeting"; }
       let instances: any[] = [25, 26, 27].map(day => ({ ...structuredClone(base), id: `occ-${day}`, iCalUId: `uid-${day}`, "@odata.etag": `W/"occ-${day}"`, type: "occurrence", seriesMasterId: "master", originalStart: `2026-09-${day}T${allDay ? "00" : "09"}:00:00Z`, recurrence: null, start: { dateTime: `2026-09-${day}T${allDay ? "00" : "09"}:00:00`, timeZone: "UTC" }, end: { dateTime: allDay ? `2026-09-${day + 1}T00:00:00` : `2026-09-${day}T10:00:00`, timeZone: "UTC" } }));
+      if (prague) instances = dates.map((date, index) => {
+        const hour = (spring ? (index === 0 ? 11 : 10) : (index === 0 ? 10 : 11));
+        return { ...structuredClone(base), id: `occ-${date.slice(-2)}`, iCalUId: `uid-${date.slice(-2)}`, "@odata.etag": `W/"occ-${date.slice(-2)}"`, type: "occurrence", seriesMasterId: "master", originalStart: `${date}T${hour}:00:00Z`, recurrence: null,
+          start: { dateTime: `${date}T${hour}:00:00`, timeZone: "UTC" }, end: { dateTime: `${date}T${hour + 1}:00:00`, timeZone: "UTC" } };
+      });
       if (mode === "moved") { instances[1].createdDateTime = "2026-09-22T10:00:00Z"; instances[1].type = "exception"; instances[1].subject = "Moved appointment"; instances[1].start.dateTime = "2027-01-10T12:00:00"; instances[1].end.dateTime = "2027-01-10T13:00:00"; base.exceptionOccurrences = [...base.exceptionOccurrences.filter((n: any) => n.id !== instances[1].id), instances[1]]; }
 
       if (mode.includes("cancelled")) { instances = instances.slice(0, 2); base.cancelledOccurrences = ["already-cancelled-slot"]; }
       const originalInstances = structuredClone(instances);
       const patch = { ...(mode === "combined" ? { title: "Moved appointment", description: null, location: "Room B" } : {}), time: { kind: "zoned", timeZone: "UTC", startLocal: mode === "noop" ? "2026-09-26T09:00:00" : "2026-09-26T13:00:00", endLocal: mode === "noop" ? "2026-09-26T10:00:00" : "2026-09-26T14:00:00" } };
-      const payload = { ...(mode === "combined" ? { subject: "Moved appointment", body: { contentType: "text", content: "" }, location: { displayName: "Room B" } } : {}), start: { dateTime: patch.time.startLocal + ".000", timeZone: "UTC" }, end: { dateTime: patch.time.endLocal + ".000", timeZone: "UTC" } };
+      if (prague) {
+        patch.time = { kind: "zoned", timeZone: zone, startLocal: `${dates[1]}T14:00:00`, endLocal: `${dates[1]}T15:00:00` };
+        if (mode === "prague-fold" || mode === "prague-gap") patch.time.startLocal = `${dates[1]}T02:30:00`;
+        if (mode === "prague-midnight") { patch.time.startLocal = "2026-10-24T00:30:00"; patch.time.endLocal = "2026-10-24T01:30:00"; }
+        if (mode === "prague-local-boundary") { patch.time.startLocal = "2026-10-27T00:30:00"; patch.time.endLocal = "2026-10-27T01:30:00"; }
+        if (mode === "prague-wrong-zone") patch.time.timeZone = "UTC";
+      }
+      const intended = resolveEventTimeEdit(patch.time as any);
+      const payload = { ...(mode === "combined" ? { subject: "Moved appointment", body: { contentType: "text", content: "" }, location: { displayName: "Room B" } } : {}), start: { dateTime: intended.start.toISOString().slice(0, -1), timeZone: "UTC" }, end: { dateTime: intended.end.toISOString().slice(0, -1), timeZone: "UTC" } };
+      const requestPayload = { ...payload, start: { dateTime: patch.time.startLocal + ".000", timeZone: patch.time.timeZone }, end: { dateTime: patch.time.endLocal + ".000", timeZone: patch.time.timeZone } };
       function applyUpdate() {
         Object.assign(instances[1], payload, { createdDateTime: mode === "moved" ? instances[1].createdDateTime : "2026-09-22T10:00:00Z", type: "exception", "@odata.etag": 'W/"occ-updated"' });
+        if (mode.includes("rsvp-reset")) {
+          instances[1].attendees[0].status = { response: "notResponded", time: mode === "rsvp-reset-time" ? "2026-09-22T12:00:00Z" : "4501-01-01T00:00:00Z" };
+          if (mode === "rsvp-reset-role") instances[1].attendees[0].type = "optional";
+        }
         base.exceptionOccurrences = [...base.exceptionOccurrences.filter((n: any) => n.id !== instances[1].id), instances[1]]; base["@odata.etag"] = 'W/"master-2"';
       }
       const response = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
@@ -41,11 +70,12 @@ async function main() {
         if (url.pathname === "/v1.0/me") return response({ id: delivery && mode === "identity" ? "other-user" : "graph-user", mail: "owner@example.test", userPrincipalName: "owner@example.test" });
         if (url.pathname === "/v1.0/me/calendar") return response({ id: "native-calendar", isDefaultCalendar: true, canEdit: true, owner: { address: "owner@example.test" } });
         if (url.pathname === "/v1.0/me/calendars/native-calendar") return response({ id: "native-calendar" });
+        if (url.pathname.includes("/outlook/supportedTimeZones")) return response({ value: mode === "prague-unsupported" ? [] : [{ alias: "Europe/Prague" }] });
         if (url.pathname.endsWith("/instances")) return response({ value: mode === "partial" ? instances.slice(0, 1) : instances });
         if (init?.method === "PATCH") {
-          assert.ok(url.pathname.endsWith("/occ-26"));
-          assert.equal(new Headers(init.headers).get("If-Match"), 'W/"occ-26"');
-          assert.deepEqual(JSON.parse(String(init.body)), payload); writes++;
+          assert.ok(url.pathname.endsWith("/" + targetID));
+          assert.equal(new Headers(init.headers).get("If-Match"), `W/"${targetID}"`);
+          assert.deepEqual(JSON.parse(String(init.body)), requestPayload); writes++;
           const journal = (await db.select().from(eventOutbox).where(eq(eventOutbox.actorID, owner))).find(row => row.status === "attempting")!;
           assert.ok(journal.payload.graphOccurrenceContent?.dispatch?.startedAt, "Permanent marker precedes PATCH");
           if (mode === "boundary-rejected") return response({ error: { code: "ErrorOccurrenceCrossingBoundary" } }, 400);
@@ -67,9 +97,10 @@ async function main() {
         await db.insert(account).values({ id: randomUUID(), userId: owner, providerId: "microsoft", accountId: "fixture", scope: "Calendars.ReadWrite", refreshToken: "fixture", accessToken: "fixture", accessTokenExpiresAt: new Date(Date.now() + 3_600_000) });
         const calendar = await importExternalCalendar("microsoft", owner, "fixture", "Fixture", { externalId: "native-calendar", name: "Fixture", color: "red" });
         const time = resolveEventTimeEdit(allDay ? { kind: "all-day", startDate: "2026-09-25", endDate: "2026-09-25" } : { kind: "zoned", timeZone: mode === "non-utc" ? "Europe/Prague" : "UTC", startLocal: mode === "non-utc" ? "2026-09-25T11:00:00" : "2026-09-25T09:00:00", endLocal: mode === "non-utc" ? "2026-09-25T12:00:00" : "2026-09-25T10:00:00" });
-        const template = EventSchema.parse({ id: randomUUID(), creatorID: owner, title: "Series", organizer: "owner@example.test", color: "red", recurrence: "RRULE:FREQ=DAILY;COUNT=3", isCanceled: false, calendars: [calendar.id], ...time });
+        if (prague) Object.assign(time, resolveEventTimeEdit({ kind: "zoned", timeZone: zone, startLocal: `${dates[0]}T12:00:00`, endLocal: `${dates[0]}T13:00:00` }));
+        const template = EventSchema.parse({ id: randomUUID(), creatorID: owner, title: "Series", organizer: "owner@example.test", color: "red", recurrence: prague ? "RRULE:FREQ=DAILY;INTERVAL=2;COUNT=3" : "RRULE:FREQ=DAILY;COUNT=3", isCanceled: false, calendars: [calendar.id], ...time });
         const observation = graphFamilyObservation(graphSeriesFamilyEvidence(base, instances, template, { externalEventId: "master", icalUid: "master-uid" }));
-        if (mode.startsWith("canonical")) {
+        if (mode.startsWith("canonical") || mode === "prague-canonical") {
           await upsertExternalEvent("microsoft", owner, calendar.id, "native-calendar", "master", { ...observation.master.values, color: "red" }, base["@odata.etag"], "master-uid", undefined, { timeModel: time.timeModel }, undefined, observation.master.providerState);
           const address = { userID: owner, accountID: "fixture", calendarID: calendar.id, externalMasterID: "master" };
           await replaceGraphFamily(await readGraphFamilyContext(address), observation);
@@ -79,20 +110,23 @@ async function main() {
             await upsertExternalEvent("microsoft", owner, calendar.id, "native-calendar", n.externalId, { title: n.title, start: n.start, end: n.end, isAllDay: n.isAllDay, description: n.description, location: n.location, organizer: n.organizer ?? "", recurrence: null, url: n.url, color: "red" }, n.etag, n.icalUid, undefined, undefined, { externalSeriesID: "master", originalStart: { kind: "instant", value: new Date(item.originalStart).toISOString() } }, n.providerState, undefined, "master");
           }
         }
-        const mapping = (await db.select().from(externalEvents).where(eq(externalEvents.calendarID, calendar.id))).find(m => m.externalEventID === "occ-26")!;
+        const mapping = (await db.select().from(externalEvents).where(eq(externalEvents.calendarID, calendar.id))).find(m => m.externalEventID === targetID)!;
         const event = (await getEventSnapshot(mapping.eventID))!;
         const state = await getOwnProviderEventObservation(owner, event.id);
         assert.equal((await observeProviderOrganizer(owner, event.id, state, true)).outlookCancellation, undefined, "v1 clients never receive a new strict response field");
         assert.equal((await observeProviderOrganizer(owner, event.id, state, "content")).organizerEdit?.timeEdit, undefined, "v3 never enables time");
         assert.equal((await observeProviderOrganizer(owner, event.id, state, "series-content")).organizerEdit?.timeEdit, undefined, "v4 never enables time");
-        const capability = await observeProviderOrganizer(owner, event.id, state, "occurrence-time");
-        if (["partial", "attachments", "conference"].includes(mode)) { assert.equal(capability.organizerEdit, undefined); assert.equal(writes, 0); continue; }
+        const legacy = await observeProviderOrganizer(owner, event.id, state, "occurrence-time");
+        assert.equal(legacy.organizerEdit?.timeZone, undefined, "v5 cannot receive the strict v6 field");
+        if (prague) assert.equal(legacy.organizerEdit?.timeEdit, undefined);
+        const capability = prague ? await observeProviderOrganizer(owner, event.id, state, "occurrence-zone-time") : legacy;
+        if (["partial", "attachments", "conference", "prague-unsupported"].includes(mode)) { assert.equal(capability.organizerEdit, undefined); assert.equal(writes, 0); continue; }
         ProviderEventStateResponseSchema.parse(capability);
         assert.equal(capability.organizerEdit?.timeEdit, (allDay || mode === "non-utc") ? undefined : true);
         assert.ok(capability.organizerEdit?.seriesVersion, `No capability: ${mode}`);
         assert.equal((await observeProviderOrganizer(owner, event.id, state, "series")).organizerEdit, undefined, "v2 clients do not receive the v3 occurrence capability");
         const request = { provider: "microsoft", action: "update", patch, notificationPolicy: "server-invite", operationID: randomUUID(), eventID: event.id, calendarID: calendar.id, scope: "occurrence", expectedRevision: event.revision, expectedStateVersion: state.version, expectedSeriesVersion: capability.organizerEdit.seriesVersion };
-        if (allDay || mode === "non-utc" || mode === "boundary" || mode === "flag-off") {
+        if (allDay || ["non-utc", "boundary", "flag-off", "prague-gap", "prague-fold", "prague-local-boundary", "prague-wrong-zone"].includes(mode)) {
           if (mode === "boundary") { request.patch.time.startLocal = "2026-09-27T13:00:00"; request.patch.time.endLocal = "2026-09-27T14:00:00"; }
           if (mode === "flag-off") { config.api.eventTimeEditsEnabled = false; assert.equal((await observeProviderOrganizer(owner, event.id, state, "occurrence-time")).organizerEdit?.timeEdit, undefined); }
           await assert.rejects(() => queueProviderOrganizer(owner, request));
@@ -123,10 +157,10 @@ async function main() {
         const run = () => deliverEventOutbox(request.operationID, () => microsoftAdapter);
         const result = await run();
         config.api.eventTimeEditsEnabled = true;
-        const succeeds = ["occurrence", "combined", "personal", "canonical", "canonical-cancelled", "cancelled-before", "all-day", "moved", "noop", "accepted-recovery"].includes(mode);
+        const succeeds = ["occurrence", "combined", "personal", "canonical", "canonical-cancelled", "cancelled-before", "all-day", "moved", "noop", "accepted-recovery", "rsvp-reset", "prague", "prague-canonical", "prague-spring", "prague-midnight", "prague-rsvp-reset"].includes(mode);
         assert.equal(result?.status === "completed", succeeds, `${mode}: ${result?.status} ${result?.errorCode}`);
-        assert.equal(writes, ["occurrence", "combined", "personal", "canonical", "canonical-cancelled", "cancelled-before", "all-day", "moved", "boundary-rejected", "wrong-time", "changed-body", "lost-applied", "lost-retained", "survivor-changed", "changed-guest", "rejected", "bad-response"].includes(mode) ? 1 : 0);
-        if (["lost-applied", "lost-retained", "restart", "survivor-changed", "changed-guest", "wrong-time", "changed-body", "bad-response"].includes(mode)) {
+        assert.equal(writes, ["occurrence", "combined", "personal", "canonical", "canonical-cancelled", "cancelled-before", "all-day", "moved", "boundary-rejected", "wrong-time", "changed-body", "lost-applied", "lost-retained", "survivor-changed", "changed-guest", "rejected", "bad-response", "rsvp-reset", "rsvp-reset-time", "rsvp-reset-role", "prague", "prague-canonical", "prague-spring", "prague-midnight", "prague-rsvp-reset"].includes(mode) ? 1 : 0);
+        if (["lost-applied", "lost-retained", "restart", "survivor-changed", "changed-guest", "wrong-time", "changed-body", "bad-response", "rsvp-reset-time", "rsvp-reset-role"].includes(mode)) {
           const count = writes;
           await requestEventDeliveryRetry(owner, event.id, request.operationID);
           await db.update(eventOutbox).set({ nextAttemptAt: new Date(0) }).where(eq(eventOutbox.id, request.operationID));
@@ -134,7 +168,7 @@ async function main() {
         }
         if (succeeds) {
           const rows = await db.select().from(events).where(eq(events.creatorID, owner));
-          const visible = expandRecurringEvents(rows.filter(e => !e.deletedAt), new Date("2026-09-01Z"), new Date("2027-02-01Z"), { consumerTimeZone: "UTC" });
+          const visible = expandRecurringEvents(rows.filter(e => !e.deletedAt), new Date("2026-03-01Z"), new Date("2027-02-01Z"), { consumerTimeZone: "UTC" });
           assert.equal(visible.length, mode.includes("cancelled") ? 2 : 3);
           const edited = (await getEventSnapshot(event.id))!;
           for (const field of ["seriesID", "originalStart", "recurrence"] as const) assert.deepEqual(edited[field], event[field], field);
@@ -142,6 +176,8 @@ async function main() {
           assert.equal(edited.start.toISOString(), payload.start.dateTime + "Z");
           assert.equal(edited.end.toISOString(), payload.end.dateTime + "Z");
           if (mode !== "noop") assert.equal(edited.timeModel?.kind, "zoned");
+          if (prague) assert.equal(edited.timeModel?.kind === "zoned" && edited.timeModel.timeZone, zone);
+          if (mode.includes("rsvp-reset")) assert.equal((await getOwnProviderEventObservation(owner, event.id)).state?.attendees[0]?.response, "notResponded");
           const siblings = rows.filter(e => e.id !== event.id);
           assert.ok(siblings.every(e => e.start.getTime() !== edited.start.getTime()));
         }

@@ -215,7 +215,7 @@ export function ProviderOrganizerEditor({
         open
         closeLabel="Close meeting editor"
         title={wholeSeries ? "Edit series" : occurrence ? "Manage this occurrence" : `${event ? "Manage" : "Create"} ${provider === "caldav" ? "CalDAV" : provider === "microsoft" ? "Outlook" : "Google"} meeting`}
-        headerActions={personalOccurrence ? undefined : <DialogInfo label="Meeting invitation information" title="Invitations">{organizerNotificationNotice(provider)}</DialogInfo>}
+        headerActions={personalOccurrence ? undefined : <DialogInfo label="Meeting invitation information" title="Invitations">{organizerNotificationNotice(provider, observation?.organizerEdit?.timeEdit)}</DialogInfo>}
         returnFocus={returnFocus}
         onOpenChange={(open) => {
           if (!open && !pending.current) onClose();

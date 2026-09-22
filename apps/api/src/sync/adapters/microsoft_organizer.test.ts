@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { config } from "@musubi/config";
 import { MicrosoftOrganizerRequestSchema, ProviderOrganizerRequestSchema, type ProviderOrganizerIntent } from "@musubi/types";
 import { fetchMicrosoftChanges } from "./microsoft";
-import { microsoftOrganizerBody, microsoftOrganizerEvidence, microsoftOrganizerTransport } from "./microsoft_organizer";
+import { microsoftOrganizerBody, microsoftOrganizerEvidence, microsoftOrganizerTransport, matchesMeetingContent } from "./microsoft_organizer";
 async function main() {
   const request = MicrosoftOrganizerRequestSchema.parse({ provider: "microsoft", action: "create", notificationPolicy: "server-invite", operationID: randomUUID(), eventID: randomUUID(), calendarID: randomUUID(), color: "#777777", content: { title: "Team meeting", description: "Notes", location: "Room" }, guests: [{ email: "guest@example.test", optional: false }], time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-09-15T09:00:00", endLocal: "2026-09-15T10:00:00" } });
   const desired = microsoftOrganizerBody(request, "self@example.test");
@@ -20,6 +20,24 @@ async function main() {
   }
   const allDay = MicrosoftOrganizerRequestSchema.parse({ ...request, time: { kind: "all-day", startDate: "2026-09-15", endDate: "2026-09-16" } });
   assert.equal(microsoftOrganizerBody(allDay, "self@example.test").end.dateTime, "2026-09-17T00:00:00.000");
+  // Native reads keep seven fractional digits. A same-zone Prague request
+  // compares exact instants and may reset RSVP only for a real time change.
+  const occurrence = { ...native(), type: "occurrence", seriesMasterId: "master", originalStart: "2026-10-25T11:00:00Z", originalStartTimeZone: "Europe/Prague", originalEndTimeZone: "Europe/Prague",
+    start: { dateTime: "2026-10-25T11:00:00.0000000", timeZone: "UTC" }, end: { dateTime: "2026-10-25T11:30:00.0000000", timeZone: "UTC" },
+    attendees: [{ emailAddress: { address: "guest@example.test" }, type: "required", status: { response: "accepted", time: "2026-09-22T12:00:00Z" } }] };
+  const move = { start: { dateTime: "2026-10-25T14:00:00", timeZone: "Europe/Prague" }, end: { dateTime: "2026-10-25T15:00:00", timeZone: "Europe/Prague" } };
+  const moved = { ...occurrence, type: "exception", start: { dateTime: "2026-10-25T13:00:00.0000000", timeZone: "UTC" }, end: { dateTime: "2026-10-25T14:00:00.0000000", timeZone: "UTC" }, attendees: occurrence.attendees.map(guest => ({ ...guest, status: { response: "notResponded", time: "4501-01-01T00:00:00Z" } })) };
+  assert.equal(matchesMeetingContent(occurrence, move, moved, "self@example.test", "master"), true);
+  assert.equal(matchesMeetingContent(occurrence, move, { ...moved, attendees: occurrence.attendees }, "self@example.test", "master"), true);
+  for (const bad of [
+    { ...moved, start: { ...moved.start, dateTime: "2026-10-25T13:00:00.0000001" } },
+    { ...moved, attendees: moved.attendees.map(guest => ({ ...guest, type: "optional" })) },
+    { ...moved, attendees: moved.attendees.map(guest => ({ ...guest, status: { ...guest.status, time: "2026-09-22T13:00:00Z" } })) },
+    { ...moved, attendees: moved.attendees.map(guest => ({ ...guest, status: { ...guest.status, response: "declined" } })) },
+  ]) assert.equal(matchesMeetingContent(occurrence, move, bad, "self@example.test", "master"), false);
+  const unchangedTime = { ...occurrence, type: "exception", attendees: moved.attendees };
+  assert.equal(matchesMeetingContent(occurrence, { start: occurrence.start, end: occurrence.end }, unchangedTime, "self@example.test", "master"), false);
+  assert.equal(matchesMeetingContent(occurrence, { subject: "Renamed" }, { ...unchangedTime, subject: "Renamed" }, "self@example.test", "master"), false);
   const oldFetch = globalThis.fetch, oldFlag = config.api.providerOrganizerEditsEnabled;
   config.api.providerOrganizerEditsEnabled = true;
   let posts = 0, stored = false, mode = "ok", marked = false;
