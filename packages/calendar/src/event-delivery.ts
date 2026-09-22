@@ -2,6 +2,7 @@ import type { EventDeliveryTarget } from "@musubi/types";
 
 /** Shared language for the web and native clients; never aggregate receipts. */
 export function eventDeliveryLabel(target: EventDeliveryTarget): string {
+  if (target.organizerPhase && target.status === "cancelled" && target.provider === "microsoft" && target.action === "update") return "Meeting change not applied";
   if (target.caldavRsvpPhase === "observed") return "Response observed in CalDAV";
   if (target.caldavRsvpPhase === "check-only") return "CalDAV response needs verification";
   if (target.caldavRsvpPhase === "queued") return ["conflict", "blocked", "cancelled", "not-written"].includes(target.status) ? "CalDAV response not sent" : "Response request saved";
@@ -29,6 +30,7 @@ export function eventDeliveryLabel(target: EventDeliveryTarget): string {
 }
 
 export function eventDeliveryExplanation(target: EventDeliveryTarget): string {
+  if (target.organizerPhase && target.status === "cancelled" && target.provider === "microsoft" && target.action === "update") return "The saved change was not applied in Outlook. Sync and reopen the current meeting before trying again.";
   if (target.caldavRsvpPhase === "observed") return "The current CalDAV response matches your choice. Organizer delivery cannot be verified.";
   if (target.caldavRsvpPhase === "check-only") return "Musubi can check the saved response without sending it again. An earlier attempt may have reached the server, or its dispatch history is unavailable. Organizer delivery cannot be verified.";
   if (target.caldavRsvpPhase === "queued") return ["conflict", "blocked", "cancelled", "not-written"].includes(target.status) ? "Musubi stopped before sending this saved response. Check the current meeting and account permissions." : "The response request is saved. Musubi will ask the CalDAV server to notify the organizer. Organizer delivery cannot be verified.";

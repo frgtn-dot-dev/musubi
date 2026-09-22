@@ -140,7 +140,7 @@ export function organizerRequest(
     observation?.organizerEdit?.scope !== "occurrence" &&
     changed.some((key) => ["start", "end", "timeZone", "allDay"].includes(key))
   ) {
-    if (provider === "caldav" && !observation?.organizerEdit?.timeEdit)
+    if (provider !== "google" && !observation?.organizerEdit?.timeEdit)
       throw new Error("Time editing is not available for this meeting.");
     patch.time = time;
   }

@@ -32,7 +32,7 @@ import {
 } from "../schema";
 import { lockCalendarLifecycle, lockUserLifecycle } from "./calendar-lifecycle";
 import { lockExternalEventIdentity } from "./event-outbox-deletions";
-import { appendEventOutbox, type EventOutboxRow } from "./event-outbox";
+import { appendEventOutbox, stoppedMicrosoftMeetingUpdate, type EventOutboxRow } from "./event-outbox";
 import { createEventInTransaction } from "./events";
 import { providerStateVersion } from "./provider-reminders";
 import { hasProviderSyncScopes } from "./oauth";
@@ -330,6 +330,7 @@ export async function prepareProviderOrganizer(
           and(
             eq(eventOutbox.eventID, request.eventID),
             sql`${eventOutbox.status} not in ('completed', 'not-needed')`,
+            sql`not ${stoppedMicrosoftMeetingUpdate()}`,
           ),
         )
         .limit(1);
@@ -633,6 +634,27 @@ export async function markProviderOrganizer(
       .where(eq(eventOutbox.id, current.id));
   });
 }
+/** Only an undispatched update or the current attempt's explicit Graph 412 can
+ * stop here. Revert its optimistic fields only while its exact local revision
+ * is still current. A lost response/lease must retain the uncertainty marker. */
+export async function stopMicrosoftMeetingUpdate(row: EventOutboxRow, rejected = false) {
+  if (row.provider !== "microsoft" || row.action !== "update" || row.payload.organizer?.request.action !== "update") return false;
+  return db.transaction(async tx => {
+    await lockUserLifecycle(tx, [row.userID], "shared");
+    await lockCalendarLifecycle(tx, [row.calendarID], "shared");
+    const [event] = await tx.select().from(events).where(eq(events.id, row.eventID)).for("update");
+    const [current] = await tx.select().from(eventOutbox).where(and(eq(eventOutbox.id, row.id), eq(eventOutbox.status, "attempting"), eq(eventOutbox.leaseToken, row.leaseToken!), sql`${eventOutbox.leaseUntil} > clock_timestamp()`)).for("update");
+    const intent = current?.payload.organizer;
+    if (!current || !intent || !isDeepStrictEqual({ ...intent, dispatch: undefined }, { ...row.payload.organizer, dispatch: undefined })
+      || (rejected ? !intent.dispatch || !!intent.dispatch.acceptedAt : !!intent.dispatch)) return false;
+    if (event && !event.deletedAt && event.revision === current.revision && intent.request.action === "update") {
+      const restore = Object.fromEntries(Object.keys(intent.request.patch).filter(key => ["title", "description", "location"].includes(key)).map(key => [key, intent.sourceEvent[key as "title" | "description" | "location"] ?? null]));
+      await tx.update(events).set({ ...restore, revision: sql`${events.revision} + 1`, updatedAt: new Date() }).where(eq(events.id, event.id));
+    }
+    await tx.update(eventOutbox).set({ status: "cancelled", errorCode: rejected ? "outlook-update-rejected" : "organizer-not-dispatched", uncertain: false, leaseToken: null, leaseUntil: null, updatedAt: new Date() }).where(eq(eventOutbox.id, current.id));
+    return true;
+  });
+}
 export async function completeProviderOrganizer(
   row: EventOutboxRow,
   native: {
@@ -646,6 +668,8 @@ export async function completeProviderOrganizer(
     const intent = current.payload.organizer!;
     if (current.action === "delete" && (!intent.dispatch?.acceptedAt || native))
       throw new BadRequestError("Cancellation acceptance is unavailable.");
+    if (current.provider === "microsoft" && current.action === "update" && intent.dispatch && !intent.dispatch.acceptedAt)
+      throw new BadRequestError("Outlook meeting update acceptance is unavailable.");
     if (current.action !== "delete" && !native)
       throw new BadRequestError("Native confirmation is unavailable.");
     const id = native?.id ?? current.externalEventID!;

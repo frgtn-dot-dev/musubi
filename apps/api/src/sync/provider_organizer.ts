@@ -2,7 +2,7 @@ import { readGraphMeetingContext, findGraphMeetingCancellation, saveGraphMeeting
 import { MicrosoftSeriesCancellationRequestSchema } from "@musubi/types";
 import { caldavOrganizerTimeEvidence } from "./adapters/caldav_organizer_time";
 import { microsoftAdapter } from "./adapters/microsoft";
-import { microsoftOrganizerBody } from "./adapters/microsoft_organizer";
+import { microsoftOrganizerBody, microsoftMeetingContentBody, microsoftMeetingContentProjection } from "./adapters/microsoft_organizer";
 import { caldavAdapter } from "./adapters/caldav";
 import {
   caldavOrganizerDesired,
@@ -81,12 +81,12 @@ export async function queueProviderOrganizer(actorID: string, input: unknown) {
   const context = prepared.context;
   if (context.request.provider === "microsoft") {
     const transport = await microsoftAdapter.microsoftOrganizer!(actorID, context.link.accountID, context.link.externalCalendarID, AbortSignal.timeout(10_000));
-    const baseline = context.mapping ? await transport.read(context.mapping.externalEventID) : null;
-    if (context.mapping && (!baseline || baseline.etag !== context.mapping.etag))
+    const baseline = context.mapping ? await transport.read(context.mapping.externalEventID, context.request.action === "update") : null;
+    if (context.mapping && (!baseline || baseline.etag !== context.mapping.etag || context.request.action === "update" && !matchesRsvpEventProjection("microsoft", context.event!, microsoftMeetingContentProjection(baseline, transport.email))))
       throw new BadRequestError("The provider meeting changed. Sync and reopen.");
     let desired;
-    try { desired = context.request.action === "delete" ? null : microsoftOrganizerBody(context.request, transport.email); }
-    catch { throw new OrganizerAdmissionRejectedError("Choose external guests and explicit UTC or all-day time."); }
+    try { desired = context.request.action === "delete" ? null : context.request.action === "update" ? microsoftMeetingContentBody(context.request) : microsoftOrganizerBody(context.request, transport.email); }
+    catch { throw new OrganizerAdmissionRejectedError(context.request.action === "update" ? "Choose a title, notes or location change for this Outlook meeting." : "Choose external guests and explicit UTC or all-day time."); }
     const saved = await prepareProviderOrganizer(actorID, context.request, { context, baseline, desired, graphIdentity: transport.identity });
     if (saved.kind !== "saved") throw new Error("Organizer intent was not committed");
     return saved.receipt;
@@ -236,7 +236,14 @@ export async function observeProviderOrganizer(
       const transport = await microsoftAdapter.microsoftOrganizer!(actorID, ctx.link.accountID, ctx.link.externalCalendarID, AbortSignal.timeout(10_000));
       const native = await transport.read(ctx.mapping!.externalEventID);
       if (!native || native.etag !== ctx.mapping!.etag) return observation;
-      return { ...observation, organizerEdit: { provider: "microsoft" as const, calendarID: ctx.request.calendarID, expectedRevision: event.revision, actions: ["delete" as const] } };
+      const actions: ("update" | "delete")[] = ["delete"];
+      if (outlookOrganizer === "series") {
+        try {
+          const content = await transport.read(ctx.mapping!.externalEventID, true);
+          if (content?.etag === ctx.mapping!.etag && matchesRsvpEventProjection("microsoft", event, microsoftMeetingContentProjection(content, transport.email))) actions.unshift("update");
+        } catch { /* Cancellation can remain available without content proof. */ }
+      }
+      return { ...observation, organizerEdit: { provider: "microsoft" as const, calendarID: ctx.request.calendarID, expectedRevision: event.revision, actions } };
     }
     if (ctx.request.provider === "caldav") {
       const actions: ("update" | "delete")[] = [];

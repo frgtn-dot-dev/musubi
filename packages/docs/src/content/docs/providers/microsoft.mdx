@@ -94,6 +94,22 @@ recurrence patterns and exception operations. The adapter throws when asked to
 push a Musubi-native recurring event instead of silently losing recurrence.
 </Aside>
 
+## Editing organizer meetings
+
+With `PROVIDER_ORGANIZER_EDITS_ENABLED` enabled, the web and mobile meeting editor
+can update the title, notes and location of supported one-off meetings in the
+connected owner's default Outlook calendar. Saving requests an update to guests;
+Musubi cannot verify delivery to their inboxes. Time and guests are preserved.
+
+The edit capability is offered only after current source, ownership and native
+version checks. Recurring meetings, online meetings, attachments and
+shared/delegate copies are outside this content-editing path. Cancellation has
+its own separately verified capability and can also support finite series.
+
+If Outlook rejects a stale version, sync and reopen the meeting before creating
+a new edit. If the response is lost, Delivery details can check the result without
+sending the same meeting update again.
+
 ## Other mappings
 
 - Graph all-day end is exclusive; Musubi stores an inclusive end, so pull

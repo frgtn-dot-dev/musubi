@@ -404,3 +404,21 @@ it("offers the proven Outlook cancellation with Outlook wording and frozen reque
   expect(api.save.mock.calls[0][0]).toMatchObject({ provider: "microsoft", action: "delete", notificationPolicy: "server-invite", expectedRevision: 4 });
   expect(api.save.mock.calls[1]).toEqual(api.save.mock.calls[0]);
 });
+
+it("edits Outlook content without exposing time or guests and preserves a lost request", async () => {
+  api.save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "pending" });
+  render(<ProviderOrganizerEditor calendarID={calendarID} color="red" event={event} observation={{ ...observation, organizerEdit: { ...observation.organizerEdit!, provider: "microsoft", actions: ["update", "delete"] } }} onClose={vi.fn()} />);
+  expect(screen.queryByRole("textbox", { name: "Guest email addresses" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Start time" })).toBeNull();
+  fireEvent.change(screen.getByRole("textbox", { name: "Title" }), { target: { value: "New Outlook title" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Notes" }), { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save and notify guests" }));
+  await screen.findByText("offline");
+  expect((screen.getByRole("textbox", { name: "Title" }) as HTMLInputElement).disabled).toBe(true);
+  expect(screen.queryByRole("button", { name: "Cancel meeting and notify guests" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Retry saved meeting action" }));
+  await screen.findByRole("status");
+  expect(api.save.mock.calls[0][0]).toMatchObject({ provider: "microsoft", action: "update", notificationPolicy: "server-invite", expectedRevision: 4, patch: { title: "New Outlook title", description: null } });
+  expect(api.save.mock.calls[1]).toEqual(api.save.mock.calls[0]);
+  expect(api.save.mock.calls[0][0].patch).not.toHaveProperty("time");
+});

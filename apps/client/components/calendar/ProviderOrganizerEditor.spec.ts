@@ -379,3 +379,18 @@ it("requires a verified iCloud alias and preserves it through a frozen retry", a
   button(create(), "Retry").onPress(); await settle();
   expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
 });
+
+it("allows proven Outlook content changes without editing time and freezes offline retries", async () => {
+  const observed: ProviderEventStateResponse = { ...observation, organizerEdit: { ...observation.organizerEdit!, provider: "microsoft", actions: ["update", "delete"] } };
+  const draw = () => render(event, observed);
+  h.save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "pending" });
+  expect(nodes(draw()).some(node => node.props.accessibilityLabel === "Start date")).toBe(false);
+  expect(nodes(draw()).some(node => node.props.accessibilityLabel === "Guest email addresses")).toBe(false);
+  nodes(draw()).find(node => node.type === "TextInput" && node.props.accessibilityLabel === "Notes")!.props.onChangeText("Updated notes");
+  button(draw(), "Save & notify").onPress(); await settle();
+  expect(nodes(draw()).filter(node => node.type === "TextInput").every(node => node.props.editable === false)).toBe(true);
+  button(draw(), "Retry").onPress(); await settle();
+  expect(h.save.mock.calls[0][0]).toMatchObject({ provider: "microsoft", action: "update", notificationPolicy: "server-invite", patch: { description: "Updated notes" } });
+  expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
+  expect(h.save.mock.calls[0][0].patch).not.toHaveProperty("time");
+});

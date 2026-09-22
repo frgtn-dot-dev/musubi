@@ -1,0 +1,37 @@
+{
+  "date": "2026-09-22T10:35:21.217Z",
+  "syntheticOnly": true,
+  "guestNotificationDelivery": "unknown",
+  "results": [
+    {
+      "fields": [
+        "title"
+      ],
+      "status": "completed",
+      "error": null
+    },
+    {
+      "fields": [
+        "description",
+        "location"
+      ],
+      "status": "completed",
+      "error": null
+    },
+    {
+      "fields": [
+        "description",
+        "location"
+      ],
+      "status": "completed",
+      "error": null
+    }
+  ],
+  "untouchedHTMLPreserved": true,
+  "timeAndOriginalZonePreserved": true,
+  "guestsPreserved": true,
+  "notesAndLocationCleared": true,
+  "cleanupStatus": 202,
+  "testMeetingAbsent": true,
+  "localTestRowsRemoved": 1
+}

@@ -170,8 +170,8 @@ export function ProviderOrganizerEditor({
     observation?.organizerEdit?.timeEdit === true;
   const canUpdate =
     !event ||
-    (provider !== "microsoft" && (provider !== "caldav" ||
-    observation?.organizerEdit?.actions?.includes("update") === true));
+    provider === "google" ||
+    observation?.organizerEdit?.actions?.includes("update") === true;
   const canDelete =
     !!event &&
     (provider === "google" || observation?.organizerEdit?.actions?.includes("delete") === true);
