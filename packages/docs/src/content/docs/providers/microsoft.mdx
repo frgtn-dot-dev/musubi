@@ -113,7 +113,10 @@ match the new clock time.
 Outlook's master time update discards exceptions and restores cancellations, so
 Musubi does not offer that action for those families. Their content-only series
 editor continues to preserve individual changes. A time change can require guests
-to respond again.
+to respond again. Even changing only the duration resets exceptions and
+cancellations. Recreating them afterward requires separate writes and can lose
+previous guest responses, so Musubi does not attempt that repair automatically.
+Edit individual occurrences when a series contains independent changes.
 
 These capabilities require current ownership, version and complete native-family
 checks. Online meetings, attachments, shared/delegate copies, recurrence-rule

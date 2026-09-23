@@ -16,10 +16,11 @@ async function main() {
   const oldFetch = globalThis.fetch, oldFlag = config.api.providerOrganizerEditsEnabled, oldTime = config.api.eventTimeEditsEnabled;
   config.api.providerOrganizerEditsEnabled = true;
   try {
-    for (const mode of ["series", "personal", "canonical", "master-target", "combined", "duration", "noop", "exceptions", "cancelled", "all-day", "non-utc", "date-change", "overnight", "flag-off", "flag-delivery", "stale-admission", "stale-delivery", "sibling-change", "lost-applied", "lost-retained", "restart", "accepted-recovery", "local-race", "denied", "identity", "partial", "wrong-time", "wrong-slot", "wrong-id", "changed-body", "changed-guest", "raw-master-change", "rejected", "attachments", "conference", "bad-response", "rsvp-reset", "rsvp-reset-time", "rsvp-reset-role", "rsvp-sibling", "delayed-readback", "until", "until-personal", "until-canonical", "until-master-target", "until-earlier", "until-weekly", "until-gap", "until-duration", "until-noop", "until-accepted-recovery", "until-lost-applied", "until-lost-retained", "until-rejected", "until-stale-delivery", "until-exceptions", "until-cancelled", "until-range-change", "until-pattern-change", "until-fraction"] as const) {
+    for (const mode of ["series", "personal", "canonical", "master-target", "combined", "duration", "noop", "exceptions", "cancelled", "all-day", "non-utc", "date-change", "overnight", "flag-off", "flag-delivery", "stale-admission", "stale-delivery", "sibling-change", "lost-applied", "lost-retained", "restart", "accepted-recovery", "local-race", "denied", "identity", "partial", "wrong-time", "wrong-slot", "wrong-id", "changed-body", "changed-guest", "raw-master-change", "rejected", "attachments", "conference", "bad-response", "rsvp-reset", "rsvp-reset-time", "rsvp-reset-role", "rsvp-sibling", "delayed-readback", "until", "until-personal", "until-canonical", "until-master-target", "until-earlier", "until-weekly", "until-gap", "until-duration", "until-noop", "until-accepted-recovery", "until-lost-applied", "until-lost-retained", "until-rejected", "until-stale-delivery", "until-exceptions", "until-cancelled", "until-range-change", "until-pattern-change", "until-fraction", "exceptions-duration", "cancelled-duration", "sibling-cancel", "until-sibling-cancel"] as const) {
       const until = mode === "until" || mode.startsWith("until-");
       const scenario = mode.startsWith("until-") ? mode.slice(6) : mode;
       const gap = until && ["gap", "range-change"].includes(scenario);
+      const exceptionFamily = scenario.startsWith("exceptions"), cancelledFamily = scenario.startsWith("cancelled");
       const owner = `graph-series-time-${randomUUID()}`, allDay = scenario === "all-day";
       config.api.eventTimeEditsEnabled = scenario !== "flag-off";
       let writes = 0, delivery = false, staleRead = false;
@@ -31,17 +32,17 @@ async function main() {
       if (scenario === "weekly") base.recurrence.pattern = { type: "weekly", interval: 1, daysOfWeek: ["friday", "saturday", "sunday"], firstDayOfWeek: "monday" };
       let instances: any[] = (gap ? [25, 27, 29] : [25, 26, 27]).map(day => ({ ...structuredClone(base), id: `occ-${day}`, iCalUId: `uid-${day}`, "@odata.etag": `W/"occ-${day}"`, type: "occurrence", seriesMasterId: "master", originalStart: `2026-09-${day}T${allDay ? "00" : "09"}:00:00Z`, recurrence: null, start: { dateTime: `2026-09-${day}T${allDay ? "00" : "09"}:00:00`, timeZone: "UTC" }, end: { dateTime: allDay ? `2026-09-${day + 1}T00:00:00` : `2026-09-${day}T10:00:00`, timeZone: "UTC" } }));
 
-      if (scenario === "exceptions" || scenario === "sibling-change") {
-        if (scenario === "exceptions") { instances[0].type = "exception"; instances[0].subject = "Independent title"; base.exceptionOccurrences = [instances[0]]; }
+      if (exceptionFamily || scenario === "sibling-change") {
+        if (exceptionFamily) { instances[0].type = "exception"; instances[0].subject = "Independent title"; base.exceptionOccurrences = [instances[0]]; }
       }
-      if (scenario === "cancelled") { instances = instances.slice(0, 2); base.cancelledOccurrences = ["cancelled-slot"]; }
+      if (cancelledFamily) { instances = instances.slice(0, 2); base.cancelledOccurrences = ["cancelled-slot"]; }
       if (until) base.recurrence.range = { type: "endDate", startDate: "2026-09-25", endDate: gap || scenario === "weekly" ? "2026-09-30" : "2026-09-27", recurrenceTimeZone: "UTC" };
       if (scenario === "non-utc") {
         base.originalStartTimeZone = base.originalEndTimeZone = base.recurrence.range.recurrenceTimeZone = "Europe/Prague";
         for (const instance of instances) instance.originalStartTimeZone = instance.originalEndTimeZone = "Europe/Prague";
       }
       const originalInstances = structuredClone(instances);
-      const patch: any = { ...(scenario === "combined" ? { title: "New series", description: null, location: "Room B" } : {}), time: { kind: "zoned", timeZone: "UTC", startLocal: `2026-09-25T${["noop", "duration"].includes(scenario) ? "09" : "13"}:00:00`, endLocal: scenario === "noop" ? "2026-09-25T10:00:00" : "2026-09-25T14:30:00" } };
+      const patch: any = { ...(scenario === "combined" ? { title: "New series", description: null, location: "Room B" } : {}), time: { kind: "zoned", timeZone: "UTC", startLocal: `2026-09-25T${["noop", "duration", "exceptions-duration", "cancelled-duration"].includes(scenario) ? "09" : "13"}:00:00`, endLocal: scenario === "noop" ? "2026-09-25T10:00:00" : "2026-09-25T14:30:00" } };
       if (scenario === "date-change") { patch.time.startLocal = "2026-09-26T13:00:00"; patch.time.endLocal = "2026-09-26T14:30:00"; }
       if (scenario === "overnight") patch.time.endLocal = "2026-09-26T01:00:00";
       if (scenario === "earlier") { patch.time.startLocal = "2026-09-25T07:00:00"; patch.time.endLocal = "2026-09-25T08:15:00"; }
@@ -121,7 +122,7 @@ async function main() {
         const state = await getOwnProviderEventObservation(owner, event.id);
         const capability = await observeProviderOrganizer(owner, event.id, state, "series-time");
         ProviderEventStateResponseSchema.parse(capability);
-        const unsupported = ["exceptions", "cancelled", "all-day", "non-utc", "flag-off", "partial", "attachments", "conference"].includes(scenario);
+        const unsupported = exceptionFamily || cancelledFamily || ["all-day", "non-utc", "flag-off", "partial", "attachments", "conference"].includes(scenario);
         assert.equal(!!capability.outlookSeriesContent?.time, !unsupported, `Time capability: ${mode}`);
         for (const version of ["series-content", "occurrence-time", "occurrence-zone-time", "occurrence-all-day-time"] as const)
           assert.equal((await observeProviderOrganizer(owner, event.id, state, version)).outlookSeriesContent?.time, undefined, "Older strict clients do not receive the v8 field");
@@ -140,6 +141,7 @@ async function main() {
         await assert.rejects(() => upsertExternalEvent("microsoft", owner, calendar.id, "native-calendar", n.externalID, { ...n.values, color: "red" }, n.etag, n.icalUid), "Pending time edit fences ordinary pull");
         if (scenario === "stale-delivery") base["@odata.etag"] = 'W/"changed"';
         if (scenario === "sibling-change") { instances[0].type = "exception"; instances[0].subject = "Concurrent change"; base.exceptionOccurrences = [instances[0]]; }
+        if (scenario === "sibling-cancel") { instances = instances.slice(1); base.cancelledOccurrences = ["cancelled-slot"]; }
         if (scenario === "flag-delivery") config.api.eventTimeEditsEnabled = false;
         if (scenario === "denied") await db.update(calendarMembers).set({ role: "viewer" }).where(eq(calendarMembers.calendarID, calendar.id));
         if (scenario === "local-race") await db.update(events).set({ revision: sql`${events.revision} + 1` }).where(eq(events.id, event.id));
@@ -156,7 +158,7 @@ async function main() {
         const result = await run();
         const succeeds = ["series", "personal", "canonical", "master-target", "combined", "duration", "noop", "accepted-recovery", "rsvp-reset", "delayed-readback", "until", "earlier", "weekly", "gap"].includes(scenario);
         assert.equal(result?.status === "completed", succeeds, `${mode}: ${result?.status} ${result?.errorCode}`);
-        assert.equal(writes, ["noop", "accepted-recovery", "restart", "stale-delivery", "sibling-change", "flag-delivery", "local-race", "denied", "identity"].includes(scenario) ? 0 : 1, mode);
+        assert.equal(writes, ["noop", "accepted-recovery", "restart", "stale-delivery", "sibling-change", "sibling-cancel", "flag-delivery", "local-race", "denied", "identity"].includes(scenario) ? 0 : 1, mode);
         if (!succeeds && writes && scenario !== "rejected" || scenario === "restart") {
           const count = writes;
           await requestEventDeliveryRetry(owner, event.id, request.operationID);
