@@ -1,3 +1,4 @@
+import { OutlookMoveDialog } from "./OutlookMoveDialog";
 import { OutlookCancellationDialog } from "./OutlookCancellationDialog";
 import { HelpTooltip } from "~/ui/HelpTooltip";
 import { UsersRound } from "lucide-react";
@@ -62,9 +63,18 @@ function readableProviderPerson(person: { name: string | null; address: string |
 
 type Props = { providerFlavor?: string | null; presentation?: "default" | "panel"; event?: Event; seriesMaster?: Event; eventId: string; revision?: number; userId: string; connectionId?: string; series?: boolean; occurrence?: boolean; onEditReminders?: (observation: ProviderEventStateResponse) => void; onRespond?: (observation: ProviderEventStateResponse) => void };
 export function ProviderEventDetails(props: Props) {
-  return <ProviderEventDetailsBody key={JSON.stringify([getServerOrigin(), props.eventId, props.userId, props.connectionId, props.series, props.occurrence, props.revision, props.seriesMaster?.id, props.seriesMaster?.revision])} {...props} />;
+  return <ProviderEventDetailsSession key={JSON.stringify([getServerOrigin(), props.eventId, props.userId, props.connectionId, props.series, props.occurrence])} {...props} />;
 }
-function ProviderEventDetailsBody({ providerFlavor, presentation = "default", event: sourceEvent, seriesMaster, eventId, userId, connectionId, series = false, occurrence = false, onEditReminders, onRespond }: Props) {
+function ProviderEventDetailsSession(props: Props) {
+  const [moving, setMoving] = useState(false);
+  const moveTrigger = useRef<HTMLButtonElement>(null);
+  const revision = JSON.stringify([props.revision, props.seriesMaster?.id, props.seriesMaster?.revision]);
+  return <>
+    <ProviderEventDetailsBody key={revision} {...props} moveTrigger={moveTrigger} onMove={() => setMoving(true)} />
+    {moving ? <OutlookMoveDialog eventID={props.eventId} revision={revision} returnFocus={moveTrigger} onClose={() => setMoving(false)} /> : null}
+  </>;
+}
+function ProviderEventDetailsBody({ providerFlavor, presentation = "default", event: sourceEvent, seriesMaster, eventId, userId, connectionId, series = false, occurrence = false, onEditReminders, onRespond, moveTrigger, onMove }: Props & { moveTrigger: React.RefObject<HTMLButtonElement | null>; onMove: () => void }) {
   const titleId = useId();
   const key = JSON.stringify([eventId, userId, connectionId]);
   const [result, setResult] = useState<({ key: string; failed?: boolean } & Partial<ProviderEventStateResponse>)>();
@@ -143,6 +153,7 @@ function ProviderEventDetailsBody({ providerFlavor, presentation = "default", ev
     {details.rows.filter(row => presentation !== "panel" || row.label !== "Provider participants").map(row => <span key={row.label}><strong>{row.label}: </strong>{metadataValue(row)}{"\n"}</span>)}
   </p> : null;
   const actions = <>
+    {current?.outlookOccurrenceMove && sourceEvent?.id === eventId && !connectionId ? <Button variant="secondary" ref={moveTrigger} onClick={onMove}>Move selected occurrences</Button> : null}
     {current?.outlookCancellation && sourceEvent?.id === eventId && !connectionId ? <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget, "outlook-cancel")}>Cancel Outlook meeting</Button> : null}
     {current?.reminderEdit && current.state && current.version && !series && !(current.reminderEdit.provider === "caldav" && current.reminderEdit.scope === "series") ? <>
       <Button variant="secondary" loading={opening} onClick={event => void openEditor(event.currentTarget)}>{current?.reminderEdit?.provider === "caldav" ? "Edit CalDAV event alarms" : occurrence ? "Edit reminders for this occurrence" : "Edit Google reminders"}</Button>

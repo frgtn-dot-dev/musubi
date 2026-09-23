@@ -1,4 +1,5 @@
 import { graphSeriesTimeChange, graphSeriesTimeObserved } from "./graph-series-time";
+import { admitOutlookMoveChild, completeOutlookMoveChild } from "./outlook-moves";
 import { resolveEventTimeEdit, instantToCivil, unambiguousCivilToInstant } from "@musubi/calendar";
 import { and, eq, sql } from "drizzle-orm";
 import { BadRequestError, EventSchema, MicrosoftRecurringContentRequestSchema, type MicrosoftRecurringContentRequest, type Event } from "@musubi/types";
@@ -19,6 +20,7 @@ export type GraphOccurrenceContent = {
   // The durable graphOccurrenceContent key predates series editing. Sharing
   // this journal preserves its existing import fences and no-resend recovery.
   nativeExceptions?: Record<string, unknown>[];
+  bulkMove?: { operationID: string; leaseToken: string };
   dispatch?: { startedAt: string; acceptedAt?: string };
 };
 
@@ -166,6 +168,7 @@ export async function saveGraphOccurrenceContent(saved: GraphOccurrenceContent) 
     const current = await graphMeetingContextInTransaction(tx, saved.context.address);
     if (!same(current, saved.context)) refuse();
     assertGraphMeetingRequest(current, saved.request);
+    await admitOutlookMoveChild(tx, saved);
     const event = EventSchema.parse({ ...current.family.find(e => e.id === saved.request.eventID), calendars: [current.address.calendarID] });
     await appendEventOutbox(tx, event, [{ id: saved.request.operationID, actorID: current.address.actorID, mutationID: saved.request.operationID, position: 0,
       eventID: event.id, calendarID: current.address.calendarID, externalCalendarLinkID: current.link.id, provider: "microsoft", userID: current.address.actorID,
@@ -217,6 +220,7 @@ export const completeGraphOccurrenceContent = (row: EventOutboxRow, observation:
     if (current) await tx.update(externalEvents).set({ ...(seriesTime && "originalStart" in current ? { originalStart: current.originalStart } : {}), etag: current.etag, providerState: current.providerState, providerStateObservedAt: now }).where(eq(externalEvents.id, mapping.id));
   }
   await tx.update(eventOutbox).set({ status: "completed", errorCode: null, resultRef: { externalEventId: native.externalID, icalUid: native.icalUid, etag: native.etag }, uncertain: false, leaseToken: null, leaseUntil: null, remoteSnapshot: null, updatedAt: now }).where(eq(eventOutbox.id, row.id));
+  await completeOutlookMoveChild(tx, saved, observation);
 });
 
 /** No optimistic event mutation needs rolling back. Only definite no-write

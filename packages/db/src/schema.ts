@@ -1158,6 +1158,28 @@ export const eventScopeOperations = pgTable("event_scope_operations", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, table => [primaryKey({ columns: [table.actorID, table.operationID] })]);
 
+// Private, bounded bulk intent. Each provider write still has its own existing
+// outbox journal; this row records the preview and partial outcome across them.
+export const outlookMoves = pgTable("outlook_moves", {
+  id: uuid("id").primaryKey(),
+  actorID: text("actor_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  calendarID: uuid("calendar_id").notNull().references(() => calendars.id, { onDelete: "cascade" }),
+  linkID: uuid("link_id").notNull().references(() => externalCalendars.id, { onDelete: "cascade" }),
+  eventID: uuid("event_id").notNull(),
+  masterID: text("master_id").notNull(),
+  status: text("status").$type<"preview" | "running" | "completed" | "stopped">().notNull(),
+  journal: jsonb("journal").$type<import("./queries/outlook-move-plan").OutlookMoveJournal>().notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  leaseToken: uuid("lease_token"),
+  leaseUntil: timestamp("lease_until", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [
+  index("outlook_moves_owner_family_idx").on(t.actorID, t.linkID, t.masterID, t.createdAt),
+  index("outlook_moves_running_idx").on(t.updatedAt).where(sql`${t.status} = 'running'`),
+  uniqueIndex("outlook_moves_one_running_idx").on(t.linkID, t.masterID).where(sql`${t.status} = 'running'`),
+]);
+
 // Private connected-account availability. Never a shared calendar/event mirror.
 export const availabilityAccounts = pgTable("availability_accounts", {
   epoch: uuid("epoch").notNull().defaultRandom(),

@@ -60,6 +60,8 @@ export * from "./queries/availability";
 
 export * from "./queries/microsoft-access";
 export * from "./queries/provider-organizer";
+export * from "./queries/outlook-moves";
+export * from "./queries/outlook-move-plan";
 
 
 export * from "./queries/caldav-access";

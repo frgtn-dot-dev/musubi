@@ -554,6 +554,13 @@
       "when": 1789899621743,
       "tag": "0078_release_0_2_0_announcement",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1790163042733,
+      "tag": "0079_outlook_occurrence_moves",
+      "breakpoints": true
     }
   ]
 }
