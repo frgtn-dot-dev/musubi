@@ -197,7 +197,7 @@ export function outlookSeriesOrganizerObservation(event: Event | undefined, obse
   if (!event || !series || !observation?.state || observation.state.provider !== "microsoft" || !observation.version) return undefined;
   const result: ProviderEventStateResponse = { ...observation, state: observation.state, organizerEdit: {
     provider: "microsoft", scope: "series", seriesVersion: series.seriesVersion,
-    ...(series.time ? { timeEdit: true, timeZone: "UTC" } : {}),
+    ...(series.time ? { timeEdit: true, timeZone: series.time.timeZone } : {}),
     calendarID: series.calendarID, expectedRevision: series.expectedRevision, actions: ["update"],
   } };
   return canManageProviderOrganizer(event, result) ? result : undefined;

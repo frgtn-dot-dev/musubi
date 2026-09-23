@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { instantToCivil, unambiguousCivilToInstant } from "@musubi/calendar";
+import { instantToCivil, unambiguousCivilToInstant, outlookSeriesTimeZone } from "@musubi/calendar";
 import { CivilDateTimeSchema, EventTimeModelSchema, EventTimeZoneSchema, EventWriteError, OccurrenceStartSchema, type OccurrenceStart, type Event } from "@musubi/types";
 
 const DAY = 86_400_000;
@@ -79,20 +79,24 @@ export function graphInstanceTimeFromUtc(native: unknown, masterID: string, expe
   } catch { return refuse(); }
 }
 
-/** Comparison-only projection for a saved Prague family. CLDR release 48 maps
- * Central Europe Standard Time / CZ to Europe/Prague; its global default is
- * Budapest, so the Windows label alone must never select an authored zone.
- * https://github.com/unicode-org/cldr/blob/release-48/common/supplemental/windowsZones.xml
- * Generic import and unbound adoption continue to use the strict parser. */
+/** Comparison-only zone normalization. Preserve raw native labels elsewhere
+ * for revision fences and write/readback; only the finite-family proof consumes
+ * this projection. Unbound creation recovery retains its strict parser. */
 export function graphMasterForSavedZone(native: unknown, saved: Time): unknown {
-  const item = z.object({ recurrence: z.object({ range: z.object({ recurrenceTimeZone: z.unknown().optional() }).passthrough() }).passthrough(), originalStartTimeZone: z.unknown().optional(), originalEndTimeZone: z.unknown().optional() }).passthrough().parse(structuredClone(native));
-  if (item.recurrence.range.recurrenceTimeZone === "Central Europe Standard Time") {
-    const model = EventTimeModelSchema.parse(saved.timeModel);
-    if (saved.isAllDay || model.kind !== "zoned" || model.timeZone !== "Europe/Prague" ||
-        item.originalStartTimeZone !== "Europe/Prague" || item.originalEndTimeZone !== "Europe/Prague") refuse();
-    item.recurrence.range.recurrenceTimeZone = "Europe/Prague";
+  const item = masterTime.passthrough().parse(structuredClone(native));
+  const model = EventTimeModelSchema.parse(saved.timeModel);
+  if (item.isAllDay || model.kind !== "zoned") return native;
+  const zone = outlookSeriesTimeZone({ ...item, recurrenceTimeZone: item.recurrence.range.recurrenceTimeZone }, model.timeZone);
+  if (!zone) {
+    // Keep the earlier strict IANA/UTC contract when optional labels are absent.
+    const strict = graphMasterTimeFromUtc(native);
+    if (strict.timeModel?.kind !== "zoned" || strict.timeModel.timeZone !== model.timeZone) refuse();
+    return native;
   }
-  return item;
+  // Do not strip pattern/range or future fields while normalizing labels.
+  const raw = z.object({ recurrence: z.object({ range: z.record(z.string(), z.unknown()) }).passthrough() }).passthrough().parse(structuredClone(native));
+  return { ...raw, originalStartTimeZone: zone, originalEndTimeZone: zone,
+    recurrence: { ...raw.recurrence, range: { ...raw.recurrence.range, recurrenceTimeZone: zone } } };
 }
 
 /** Strict master-time evidence for future recurring-create recovery. Existing
@@ -118,14 +122,13 @@ export function graphMasterTimeFromUtc(native: unknown): Time {
   } catch { return refuse(); }
 }
 
-/** Organizer-only candidate for provider-expanded rows. Require explicit IANA
- * authoring labels as well as the known Windows alias; the caller must still
- * prove every slot against the full native family. This never adopts/imports
- * a rule or changes the strict unbound creation-recovery parser above. */
+/** Organizer-only candidate. CLDR resolves Windows labels; a caller must still
+ * prove every native occurrence against this zone before advertising edits. */
 export function graphOrganizerMasterTimeFromUtc(native: unknown): Time {
   const item = masterTime.parse(native);
-  if (!item.isAllDay && item.recurrence.range.recurrenceTimeZone === "Central Europe Standard Time" &&
-      item.originalStartTimeZone === "Europe/Prague" && item.originalEndTimeZone === "Europe/Prague")
-    return graphMasterTimeFromUtc({ ...item, recurrence: { ...item.recurrence, range: { ...item.recurrence.range, recurrenceTimeZone: "Europe/Prague" } } });
-  return graphMasterTimeFromUtc(native);
+  if (item.isAllDay) return graphMasterTimeFromUtc(native);
+  const zone = outlookSeriesTimeZone({ ...item, recurrenceTimeZone: item.recurrence.range.recurrenceTimeZone });
+  if (!zone) return graphMasterTimeFromUtc(native);
+  return graphMasterTimeFromUtc({ ...item, originalStartTimeZone: zone, originalEndTimeZone: zone,
+    recurrence: { ...item.recurrence, range: { ...item.recurrence.range, recurrenceTimeZone: zone } } });
 }

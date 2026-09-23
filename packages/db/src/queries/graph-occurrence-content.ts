@@ -1,6 +1,6 @@
 import { graphSeriesTimeChange, graphSeriesTimeObserved } from "./graph-series-time";
 import { admitOutlookMoveChild, completeOutlookMoveChild } from "./outlook-moves";
-import { resolveEventTimeEdit, instantToCivil, unambiguousCivilToInstant } from "@musubi/calendar";
+import { resolveEventTimeEdit, instantToCivil, unambiguousCivilToInstant, outlookEndpointZonesMatch } from "@musubi/calendar";
 import { and, eq, sql } from "drizzle-orm";
 import { BadRequestError, EventSchema, MicrosoftRecurringContentRequestSchema, type MicrosoftRecurringContentRequest, type Event } from "@musubi/types";
 import { db } from "..";
@@ -25,15 +25,14 @@ export type GraphOccurrenceContent = {
 };
 
 /** Render/edit in the proven series zone, never an inferred exception zone.
- * Keep the allowlist bounded to native-tested zone contracts. */
+ * Native label evidence and the complete family proof bind the zone. */
 export function graphOccurrenceTimeSupported(saved: Pick<GraphOccurrenceContent, "baseline" | "targetID" | "template" | "native">) {
   const target = saved.baseline.instances.find(n => n.externalID === saved.targetID);
   if (saved.template.timeModel?.kind === "all-day")
     return saved.template.isAllDay && saved.native.isAllDay === true &&
       saved.native.originalStartTimeZone === "UTC" && saved.native.originalEndTimeZone === "UTC" &&
       !!target && target.values.isAllDay && target.originalStart.kind === "date";
-  return saved.template.timeModel?.kind === "zoned" && ["UTC", "Europe/Prague"].includes(saved.template.timeModel.timeZone) &&
-    saved.native.originalStartTimeZone === saved.template.timeModel.timeZone && saved.native.originalEndTimeZone === saved.template.timeModel.timeZone &&
+  return saved.template.timeModel?.kind === "zoned" && outlookEndpointZonesMatch(saved.native, saved.template.timeModel.timeZone) &&
     !!target && !target.values.isAllDay && target.originalStart.kind === "instant";
 }
 export function graphOccurrenceTimeChange(saved: Pick<GraphOccurrenceContent, "baseline" | "targetID" | "template" | "native" | "request">) {

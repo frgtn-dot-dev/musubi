@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { EventTimeZoneSchema } from "./event_time";
 
 export const OUTLOOK_MOVE_LIMIT = 20;
 const stamp = z.iso.datetime();
@@ -12,14 +13,14 @@ export const OutlookMoveRequestSchema = z.object({
 export type OutlookMoveRequest = z.infer<typeof OutlookMoveRequestSchema>;
 export const OutlookMoveOptionsSchema = z.object({
   eventID: z.uuid(), calendarID: z.uuid(), version: z.string(), title: z.string(),
-  meeting: z.boolean(), timeZone: z.literal("UTC"),
+  meeting: z.boolean(), timeZone: EventTimeZoneSchema,
   preserved: z.object({ edited: z.number().int(), cancelled: z.number().int(), unavailable: z.number().int() }).strict(),
   occurrences: z.array(occurrence),
 }).strict();
 export type OutlookMoveOptions = z.infer<typeof OutlookMoveOptionsSchema>;
 export const OutlookMoveResultSchema = z.object({
   operationID: z.uuid(), eventID: z.uuid(), title: z.string(), meeting: z.boolean(),
-  timeZone: z.literal("UTC"), status: z.enum(["preview", "running", "completed", "stopped"]),
+  timeZone: EventTimeZoneSchema, status: z.enum(["preview", "running", "completed", "stopped"]),
   expiresAt: stamp, offsetMinutes: z.number().int(),
   items: z.array(occurrence.extend({
     newStart: stamp, newEnd: stamp,

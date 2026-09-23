@@ -458,10 +458,10 @@ it("keeps inclusive all-day dates in the native picker and frozen retry", async 
   expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
 });
 
-it("uses time pickers with the master date for series edits and freezes retries", async () => {
+it.each(["UTC", "Asia/Kathmandu", "America/New_York"])("uses the master date and %s series zone and freezes retries", async timeZone => {
   const observed: ProviderEventStateResponse = { ...observation,
-    outlookSeriesContent: { calendarID: observation.organizerEdit!.calendarID, expectedRevision: event.revision!, seriesVersion: "d".repeat(64), content: { title: "Series title", description: null, location: null }, time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-09-08T09:00:00", endLocal: "2026-09-08T10:00:00" } },
-    organizerEdit: { ...observation.organizerEdit!, provider: "microsoft", scope: "series", seriesVersion: "d".repeat(64), actions: ["update"], timeEdit: true, timeZone: "UTC" },
+    outlookSeriesContent: { calendarID: observation.organizerEdit!.calendarID, expectedRevision: event.revision!, seriesVersion: "d".repeat(64), content: { title: "Series title", description: null, location: null }, time: { kind: "zoned", timeZone, startLocal: "2026-09-08T09:00:00", endLocal: "2026-09-08T10:00:00" } },
+    organizerEdit: { ...observation.organizerEdit!, provider: "microsoft", scope: "series", seriesVersion: "d".repeat(64), actions: ["update"], timeEdit: true, timeZone },
   };
   const draw = () => render(event, observed);
   h.save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "pending" });
@@ -475,6 +475,6 @@ it("uses time pickers with the master date for series edits and freezes retries"
   button(draw(), "Save").onPress(); await settle();
   expect(nodes(draw()).find(node => node.props.accessibilityLabel === "end time")!.props.disabled).toBe(true);
   button(draw(), "Retry").onPress(); await settle();
-  expect(h.save.mock.calls[0][0]).toMatchObject({ scope: "series", expectedSeriesVersion: "d".repeat(64), patch: { time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-09-08T09:00:00.000", endLocal: "2026-09-08T11:30:00.000" } } });
+  expect(h.save.mock.calls[0][0]).toMatchObject({ scope: "series", expectedSeriesVersion: "d".repeat(64), patch: { time: { kind: "zoned", timeZone, startLocal: "2026-09-08T09:00:00.000", endLocal: "2026-09-08T11:30:00.000" } } });
   expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
 });

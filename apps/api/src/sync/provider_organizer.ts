@@ -205,7 +205,7 @@ export async function observeProviderOrganizer(
   actorID: string,
   eventID: string,
   observation: ProviderEventStateResponse,
-  outlookOrganizer: boolean | "series" | "content" | "series-content" | "occurrence-time" | "occurrence-zone-time" | "occurrence-all-day-time" | "series-time" | "occurrence-move" = false,
+  outlookOrganizer: boolean | "series" | "content" | "series-content" | "occurrence-time" | "occurrence-zone-time" | "occurrence-all-day-time" | "series-time" | "occurrence-move" | "global-time-zones" = false,
 ): Promise<ProviderEventStateResponse> {
   // Older clients strictly parse the provider enum. Only advertise the new
   // capability to clients that explicitly opt into this additive read.
@@ -223,14 +223,16 @@ export async function observeProviderOrganizer(
     const { getEventSnapshot } = await import("@musubi/db");
     const event = await getEventSnapshot(eventID);
     if (!event?.originCalendarID || !event.revision) return observation;
-    const bulkMove = outlookOrganizer === "occurrence-move" && config.api.eventTimeEditsEnabled;
+    const globalZones = outlookOrganizer === "global-time-zones";
+    const bulkMove = (globalZones || outlookOrganizer === "occurrence-move") && config.api.eventTimeEditsEnabled;
     if (bulkMove) {
       try {
-        if (await latestOutlookMove(actorID, eventID, event.originCalendarID))
+        const previous = await latestOutlookMove(actorID, eventID, event.originCalendarID);
+        if (previous && (globalZones || previous.journal.initial.template.timeModel?.kind === "zoned" && previous.journal.initial.template.timeModel.timeZone === "UTC"))
           observation = { ...observation, outlookOccurrenceMove: { calendarID: event.originCalendarID } };
       } catch { /* No authorized previous move. */ }
     }
-    const seriesTime = outlookOrganizer === "series-time" || outlookOrganizer === "occurrence-move";
+    const seriesTime = globalZones || outlookOrganizer === "series-time" || outlookOrganizer === "occurrence-move";
     const allDayTime = seriesTime || outlookOrganizer === "occurrence-all-day-time";
     const zoneTime = allDayTime || outlookOrganizer === "occurrence-zone-time";
     const occurrenceTime = zoneTime || outlookOrganizer === "occurrence-time";
@@ -242,12 +244,12 @@ export async function observeProviderOrganizer(
         const context = await readGraphMeetingContext({ actorID, eventID, calendarID: event.originCalendarID });
         const native = await microsoftAdapter.observeGraphSeriesContent!(context, AbortSignal.timeout(20_000));
         const { title, description, location, timeModel } = native.baseline.master.values;
-        if (bulkMove) {
-          try { outlookMoveOptions(native); observation = { ...observation, outlookOccurrenceMove: { calendarID: event.originCalendarID } }; }
-          catch { /* Only bounded UTC families with unchanged imported slots. */ }
+        if (bulkMove && native.timeZoneSupported) {
+          try { const choices = outlookMoveOptions(native); if (globalZones || choices.timeZone === "UTC") observation = { ...observation, outlookOccurrenceMove: { calendarID: event.originCalendarID } }; }
+          catch { /* Only bounded verified families with unchanged imported slots. */ }
         }
-        const time = seriesTime && config.api.eventTimeEditsEnabled && graphSeriesTimeSupported(native) && timeModel.kind === "zoned" && timeModel.timeZone === "UTC"
-          ? { kind: "zoned" as const, timeZone: "UTC" as const, startLocal: timeModel.startLocal, endLocal: timeModel.endLocal } : undefined;
+        const time = seriesTime && native.timeZoneSupported && config.api.eventTimeEditsEnabled && graphSeriesTimeSupported(native) && timeModel.kind === "zoned" && (globalZones || timeModel.timeZone === "UTC")
+          ? { kind: "zoned" as const, timeZone: timeModel.timeZone, startLocal: timeModel.startLocal, endLocal: timeModel.endLocal } : undefined;
         observation = { ...observation, outlookSeriesContent: { ...(time ? { time } : {}), calendarID: event.originCalendarID, expectedRevision: event.revision, seriesVersion: native.version, content: { title, description, location } } };
       } catch { /* Individual occurrence editing can still qualify. */ }
     }
@@ -258,7 +260,7 @@ export async function observeProviderOrganizer(
         // v3 alone advertises the new occurrence proof. Older strict readers keep v2.
         const cancellation = native.baseline.master.providerState.attendees.length ? await microsoftAdapter.observeGraphMeetingCancellation!(context, AbortSignal.timeout(20_000)).catch(() => undefined) : undefined;
         const model = native.template.timeModel;
-        const timeZone = model?.kind === "zoned" && (model.timeZone === "UTC" || model.timeZone === "Europe/Prague") ? model.timeZone : undefined;
+        const timeZone = model?.kind === "zoned" && (globalZones || model.timeZone === "UTC" || model.timeZone === "Europe/Prague") ? model.timeZone : undefined;
         const timeEditing = occurrenceTime && config.api.eventTimeEditsEnabled && (allDayTime && model?.kind === "all-day" || timeZone && (zoneTime || timeZone === "UTC")) &&
           graphOccurrenceTimeSupported({ ...native, targetID: native.native.id });
         return { ...observation,

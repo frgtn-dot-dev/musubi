@@ -16,7 +16,7 @@ it("requires selection and a preview before any write, with exact times and meet
   mount(); await select();
   expect(api.start).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Preview 1 occurrence" }));
-  expect(await screen.findByText("09:00–10:00 → 09:30–10:30 UTC")).toBeTruthy();
+  expect(await screen.findByText("09:00–10:00 → 09:30–10:30")).toBeTruthy();
   expect(screen.getByText(/Guests may need to respond again/)).toBeTruthy();
   expect(api.start).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Move 1 occurrence & notify guests" }));
@@ -29,7 +29,7 @@ it("reuses the same frozen preview identity after a lost response", async () => 
   await screen.findByText("Lost response");
   expect((screen.getByRole("spinbutton", { name: "Minutes" }) as HTMLInputElement).disabled).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "Preview 1 occurrence" }));
-  await screen.findByText("09:00–10:00 → 09:30–10:30 UTC");
+  await screen.findByText("09:00–10:00 → 09:30–10:30");
   expect(api.preview.mock.calls[1]![0]).toEqual(api.preview.mock.calls[0]![0]);
 });
 it("reopens a saved partial result without re-sending any move", async () => {
@@ -75,4 +75,14 @@ it("hides stale details and reloads the saved result on an event revision change
   finish({ ...preview, status: "completed", items: [{ ...preview.items[0]!, status: "completed" }] });
   await screen.findByText("1 occurrence moved.");
   expect(api.start).not.toHaveBeenCalled();
+});
+
+it("uses the saved series zone for dates and previews instead of the browser zone", async () => {
+  api.options.mockResolvedValue({ ...choices, timeZone: "Pacific/Auckland", occurrences: [{ eventID, start: "2026-09-30T22:00:00Z", end: "2026-09-30T23:00:00Z" }] });
+  api.preview.mockResolvedValue({ ...preview, timeZone: "Pacific/Auckland", items: [{ ...preview.items[0], start: "2026-09-30T22:00:00Z", end: "2026-09-30T23:00:00Z", newStart: "2026-09-30T22:30:00Z", newEnd: "2026-09-30T23:30:00Z" }] });
+  mount(); await select();
+  expect(screen.getByText("11:00–12:00")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Preview 1 occurrence" }));
+  expect(await screen.findByText("11:00–12:00 → 11:30–12:30")).toBeTruthy();
+  expect(screen.getByText(/Times in Pacific\/Auckland/)).toBeTruthy();
 });

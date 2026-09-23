@@ -1,3 +1,4 @@
+import { requireSupportedSeriesZone } from "./microsoft_time_zone";
 import { setTimeout as delay } from "node:timers/promises";
 import { config } from "@musubi/config";
 import { OrganizerAdmissionRejectedError } from "@musubi/types";
@@ -22,7 +23,7 @@ export async function observeGraphOccurrenceContent(token: string, context: Grap
   const native = microsoftMeetingContentEvidence(await transport.get(transport.path(mapping.externalEventID) + "?$select=*,originalStart"), transport.identity.selfAddress, context.masterID);
   const target = family.baseline.instances.find(n => n.externalID === mapping.externalEventID);
   if (!target || native.id !== target.externalID || native.iCalUId !== target.icalUid || native.etag !== target.etag || !same(graphOriginalStartFromUtc(String(native.originalStart), native.isAllDay), target.originalStart)) fail();
-  await requireSupportedSeriesZone(transport, family.template);
+  await requireSupportedSeriesZone(transport, family.template, native);
   return { ...family, native, version: graphMeetingVersion({ context, baseline: family.baseline, identity: family.identity, native }) };
 }
 
@@ -50,15 +51,15 @@ export async function updateGraphOccurrenceContent(token: string, saved: GraphOc
   if (!target || target.etag !== baseline.etag || target.icalUid !== baseline.iCalUId || saved.targetID !== baseline.id) fail();
   graphOccurrenceTimeChange(saved);
   if (saved.request.patch.time && !config.api.eventTimeEditsEnabled && !saved.dispatch) fail();
-  if (saved.request.patch.time && !saved.dispatch) await requireSupportedSeriesZone(transport, saved.template);
-  const patch = microsoftMeetingContentBody(saved.request);
+  if (saved.request.patch.time && !saved.dispatch) await requireSupportedSeriesZone(transport, saved.template, saved.native);
+  const patch = microsoftMeetingContentBody(saved.request, saved.native);
   const read = async () => {
     const family = await transport.read(saved.template, saved.baseline.master.icalUid);
     const native = await transport.get(transport.path(saved.targetID) + "?$select=*,originalStart");
     return { family, native };
   };
   const matches = (value: Awaited<ReturnType<typeof read>>) => value.family && graphOccurrenceContentObserved(saved, value.family) &&
-    matchesMeetingContent(baseline, patch, value.native, saved.identity.selfAddress, saved.context.masterID) &&
+    matchesMeetingContent(baseline, patch, value.native, saved.identity.selfAddress, saved.context.masterID, false, saved.template.timeModel?.kind === "zoned" ? saved.template.timeModel.timeZone : undefined) &&
     value.family.instances.find(n => n.externalID === saved.targetID)?.etag === microsoftMeetingContentEvidence(value.native, saved.identity.selfAddress, saved.context.masterID).etag;
   const verify = async () => {
     for (const wait of [0, 200, 400, 800]) {
@@ -94,11 +95,4 @@ export async function updateGraphOccurrenceContent(token: string, saved: GraphOc
     if (!after) return unknown();
     return { kind: "observed" as const, observation: after.family! };
   } catch { return unknown(); }
-}
-
-async function requireSupportedSeriesZone(transport: Awaited<ReturnType<typeof graphOrganizerFamilySession>>, template: GraphOccurrenceContent["template"]) {
-  if (template.timeModel?.kind !== "zoned" || template.timeModel.timeZone === "UTC") return;
-  const timeZone = template.timeModel.timeZone;
-  const zones = await transport.get("https://graph.microsoft.com/v1.0/me/outlook/supportedTimeZones(TimeZoneStandard=microsoft.graph.timeZoneStandard'Iana')");
-  if (!Array.isArray(zones?.value) || zones["@odata.nextLink"] || !zones.value.some((zone: { alias?: unknown }) => zone?.alias === timeZone)) fail();
 }
