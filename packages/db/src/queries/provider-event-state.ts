@@ -1,3 +1,4 @@
+import { readGraphRsvpOccurrence } from "./graph-rsvp-occurrence";
 import { readProviderRsvpInstance } from "./provider-rsvp-instance";
 import { providerStateVersion } from "./provider-reminders";
 import { and, eq, isNull, sql } from "drizzle-orm";
@@ -7,7 +8,7 @@ import { calendarEvents, calendarMembers, events, externalCalendars, externalEve
 
 /** The connected account's own source copy only. Provider responses/reminders
  * are personal evidence and must not leak through another member's calendar. */
-export async function getOwnProviderEventObservation(actorID: string, eventID: string, reminderEditsEnabled = false, rsvpEditsEnabled = false): Promise<ProviderEventStateResponse> {
+export async function getOwnProviderEventObservation(actorID: string, eventID: string, reminderEditsEnabled = false, rsvpEditsEnabled = false, outlookOccurrenceRsvp = false): Promise<ProviderEventStateResponse> {
   const [row] = await db.select({ mapping: externalEvents, externalCalendarID: externalCalendars.externalCalendarID, id: externalEvents.id, etag: externalEvents.etag, providerState: externalEvents.providerState, role: calendarMembers.role, event: events }).from(externalEvents)
     .innerJoin(events, and(eq(events.id, externalEvents.eventID), eq(events.originCalendarID, externalEvents.calendarID), isNull(events.deletedAt)))
     .innerJoin(calendarEvents, and(eq(calendarEvents.eventID, events.id), eq(calendarEvents.calendarID, externalEvents.calendarID)))
@@ -33,10 +34,14 @@ export async function getOwnProviderEventObservation(actorID: string, eventID: s
     catch { personalScope = false; }
   }
   const caldavEligible = rsvpEditsEnabled && state.provider === "caldav" && ["owner", "editor"].includes(row.role) && !!row.etag && !row.etag.startsWith("W/") && !!row.mapping.icalUid && !event.recurrence && !event.isCanceled && ["zoned", "all-day"].includes(event.timeModel?.kind ?? "") && state.attendeesComplete && state.attendees.length > 0 && state.attendees.length <= 200 && !!state.organizer?.address;
-  const graphEligible = rsvpEditsEnabled && state.provider === "microsoft" && state.isOrganizer === false && state.eventType === "singleInstance" && state.status === "active" && !!row.mapping.icalUid && !!row.etag && ["owner", "editor"].includes(row.role) && !event.recurrence && !event.isCanceled && event.timeModel?.kind !== "floating" && state.attendeesComplete;
-  const rsvpEditable = (rsvpEligible || caldavEligible || graphEligible) && personalScope;
+  let graphOccurrence = false;
+  if (outlookOccurrenceRsvp && state.provider === "microsoft") {
+    try { graphOccurrence = !!readGraphRsvpOccurrence(event, row.mapping, actorID); } catch { /* Unbound/imported master is not an occurrence target. */ }
+  }
+  const graphEligible = rsvpEditsEnabled && state.provider === "microsoft" && state.isOrganizer === false && (state.eventType === "singleInstance" || graphOccurrence) && state.status === "active" && !!row.mapping.icalUid && !!row.etag && ["owner", "editor"].includes(row.role) && !event.recurrence && !event.isCanceled && event.timeModel?.kind !== "floating" && state.attendeesComplete;
+  const rsvpEditable = (rsvpEligible || caldavEligible || graphEligible) && (personalScope || graphOccurrence);
   const editable = reminderEligible && personalScope;
-  return { state, version: providerStateVersion(row), ...(rsvpEditable ? { rsvpEdit: { provider: state.provider === "microsoft" ? "microsoft" as const : state.provider === "caldav" ? "caldav" as const : "google" as const, expectedRevision: event.revision } } : {}), ...(editable ? { reminderEdit: { provider: "google" as const, expectedRevision: event.revision } } : {}) };
+  return { state, version: providerStateVersion(row), ...(rsvpEditable ? { rsvpEdit: { provider: state.provider === "microsoft" ? "microsoft" as const : state.provider === "caldav" ? "caldav" as const : "google" as const, expectedRevision: event.revision, ...(graphOccurrence ? { scope: "occurrence" as const } : {}) } } : {}), ...(editable ? { reminderEdit: { provider: "google" as const, expectedRevision: event.revision } } : {}) };
 
 }
 

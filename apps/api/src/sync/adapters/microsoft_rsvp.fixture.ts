@@ -9,10 +9,15 @@ export function graphRsvpNative() {
     attendees: [{ emailAddress: { address: "self@example.test", name: "Self" }, type: "required", status: { response: "notResponded", time: "2026-03-27T08:00:00Z" } }, { emailAddress: { address: "guest@example.test" }, type: "optional", status: { response: "accepted" } }],
     responseStatus: { response: "notResponded", time: "2026-03-27T08:00:00Z" }, isReminderOn: true, reminderMinutesBeforeStart: 15, showAs: "busy", sensitivity: "normal", onlineMeeting: null, onlineMeetingUrl: null,
     customPreserved: { value: "untouched" },
+    createdDateTime: "2026-03-27T07:00:00Z",
   };
 }
-export async function graphRsvpFixture() {
-  const state = { native: graphRsvpNative(), mode: "ok", posts: 0, reads: 0, marked: false, hook: undefined as (() => Promise<void>) | undefined };
+export async function graphRsvpFixture(recurring = false) {
+  const native: ReturnType<typeof graphRsvpNative> & { seriesMasterId?: string; originalStart?: string } = graphRsvpNative();
+  if (recurring) { native.type = "occurrence"; native.seriesMasterId = "series"; native.originalStart = "2026-03-28T08:00:00.000Z"; }
+  const master = { ...graphRsvpNative(), id: "series", iCalUId: "series-uid", type: "seriesMaster", recurrence: { pattern: { type: "daily", interval: 1 }, range: { type: "numbered", numberOfOccurrences: 3, startDate: "2026-03-28", recurrenceTimeZone: "Europe/Prague" } } };
+  master.responseStatus.response = "tentativelyAccepted";
+  const state = { native, master, mode: "ok", posts: 0, reads: 0, marked: false, hook: undefined as (() => Promise<void>) | undefined };
   const server = createServer((req, res) => { void (async () => {
     assert.equal(req.headers.authorization, "Bearer fixture");
     const url = new URL(req.url!, "http://fixture"), reply = (value: unknown, status = 200) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(value)); };
@@ -20,11 +25,14 @@ export async function graphRsvpFixture() {
       state.reads++;
       if (url.pathname === "/v1.0/me") return reply({ id: state.mode === "swapped" ? "other-graph-id" : "graph-object-id", mail: "self@example.test", userPrincipalName: "self@example.test" });
       if (url.pathname === "/v1.0/me/calendar") return reply({ id: "calendar", isDefaultCalendar: true, canEdit: state.mode !== "denied", owner: { address: state.mode === "foreign" ? "foreign@example.test" : "self@example.test" } });
+      if (recurring && url.pathname === "/v1.0/me/calendars/calendar/events/series") return reply(state.master);
       assert.equal(url.pathname, "/v1.0/me/calendars/calendar/events/meeting");
       await state.hook?.();
+      if (recurring) assert.equal(url.searchParams.get("$select"), "*,originalStart");
       return state.mode === "missing" || state.mode === "decline-absent" && state.posts > 0 ? reply({}, 404) : reply(state.native);
     }
     assert.equal(req.method, "POST"); assert.equal(state.marked, true, "private marker must exist before network action");
+    assert.ok(url.pathname.startsWith("/v1.0/me/calendars/calendar/events/meeting/"), "Only the selected occurrence may receive a response");
     state.posts++;
     let body = ""; for await (const chunk of req) body += chunk;
     assert.deepEqual(JSON.parse(body), { sendResponse: true }); assert.equal(req.headers["if-match"], undefined);
@@ -36,6 +44,7 @@ export async function graphRsvpFixture() {
       if (!state.mode.startsWith("live-accept") && state.mode !== "live-tentative") state.native.attendees[0]!.status.response = response;
       else state.native.showAs = state.mode === "live-tentative" ? "tentative" : "busy";
       state.native["@odata.etag"] = 'W/"v2"'; state.native.changeKey = "v2";
+      if (recurring) { if (state.native.type === "occurrence") state.native.createdDateTime = "2026-03-27T08:01:00Z"; state.native.type = "exception"; state.master["@odata.etag"] = 'W/"master-v2"'; state.master.changeKey = "master-v2"; }
     }
     if (state.mode === "live-accept-foreign") state.native.attendees[1]!.status.response = "declined";
     if (state.mode === "live-accept-content") state.native.body.content = "Concurrent content";

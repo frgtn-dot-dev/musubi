@@ -329,3 +329,24 @@ actual queue/outbox edits passed with fixture cleanup. Details and redacted
 results: [all-day occurrence contract](./outlook-occurrence-allday-20260922.md).
 Other zones, timed/all-day conversion and whole-series time/recurrence changes
 remain open; this is not a production activation.
+
+
+### 2026-09-23: Outlook attendee RSVP for one imported occurrence
+
+The first recurring RSVP scope now has an explicit client opt-in and occurrence
+request, exact native parent/originalStart binding, frozen target/master proof,
+and the existing durable at-most-once POST marker. Web/native reuse their RSVP
+editor with occurrence wording. Synthetic tests cover moved exceptions,
+occurrence-to-exception materialization, concurrent mapping/parent edits,
+read-only recovery and disappearance after decline.
+
+Live verification found that a first instance RSVP changes an unanswered
+master and inherited sibling responses to tentative. Those masters are now
+refused before admission and dispatch. Initial exception materialization also
+refreshes a valid creation timestamp. The final actual queue/outbox pass on an
+already-answered series completed Accept/Tentative, preserved the master and
+neighbours, and kept a disappeared Decline copy explicitly unconfirmed without
+resending. Native/local cleanup is verified; [evidence](outlook-occurrence-rsvp-20260923.md).
+Whole-series RSVP, canonical local-series attendee children, delegated calendars
+and general all-day representations remain separate work. No production gate,
+release tag or deployment changes. [Contract](../sync/microsoft-rsvp.md).

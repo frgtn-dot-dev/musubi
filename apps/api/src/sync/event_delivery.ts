@@ -382,8 +382,9 @@ export async function deliverEventOutbox(
         const { markGraphRsvpDispatched, markGraphRsvpAccepted, providerRsvpBaselineVersion } = await import("@musubi/db");
         const intent = row.payload.rsvp, request = ProviderRsvpEditSchema.parse(intent.request);
         if (request.provider !== "microsoft" || intent.instance || request.expectedRevision !== row.revision) throw new ProviderEventWriteError("provider-conflict");
-        const evidence = microsoftRsvpEvidence(intent.baseline.native, String(intent.baseline.selfAddress), request.response, intent.baseline.graphIdentity);
-        if (!isDeepStrictEqual(evidence, intent.baseline) || evidence.id !== row.externalEventID || evidence.etag !== row.expectedEtag || !matchesRsvpEventProjection("microsoft", row.payload.event, microsoftRsvpProjection(evidence)) || !isDeepStrictEqual(intent.desiredState, microsoftRsvpDesiredState(intent.baselineState, evidence.selfAddress, request.response))) throw new ProviderEventWriteError("provider-conflict");
+        const evidence = microsoftRsvpEvidence(intent.baseline.native, String(intent.baseline.selfAddress), request.response, intent.baseline.graphIdentity, intent.graphOccurrence, intent.baseline.master);
+        if (!!intent.graphOccurrence !== (request.scope === "occurrence")) throw new ProviderEventWriteError("provider-conflict");
+        if (!isDeepStrictEqual(evidence, intent.baseline) || evidence.id !== row.externalEventID || evidence.etag !== row.expectedEtag || !matchesRsvpEventProjection("microsoft", row.payload.event, microsoftRsvpProjection(evidence), undefined, intent.graphOccurrence) || !isDeepStrictEqual(intent.desiredState, microsoftRsvpDesiredState(intent.baselineState, evidence.selfAddress, request.response))) throw new ProviderEventWriteError("provider-conflict");
         expectedRef = { externalEventId: row.externalEventID!, etag: row.expectedEtag, icalUid: row.icalUid };
         const dispatched = intent.graphDispatch !== undefined;
         if (dispatched) GraphRsvpDispatchSchema.parse(intent.graphDispatch);

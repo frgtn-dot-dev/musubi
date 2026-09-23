@@ -1,7 +1,7 @@
-# Graph one-off RSVP actions
+# Graph RSVP actions
 
 The default-off `PROVIDER_RSVP_EDITS_ENABLED` gate includes the connected account's
-own one-off Outlook meeting response. Public admission, private durable intent,
+own one-off Outlook meeting response and an explicitly bound imported occurrence. Public admission, private durable intent,
 worker, readback, delivery status and existing web/native RSVP controls are wired.
 The explicit action is **Send response to organizer**. Notification delivery
 always remains unknown. Bounded live Accept/Tentative evidence is linked below;
@@ -29,7 +29,7 @@ explicitly editable. Current OAuth/source/role/lease evidence is rechecked befor
 marking dispatch. Local account, source, membership, mapping and event rows stay
 locked through the lease-fenced marker transaction; this does not lock the remote
 meeting or authorize a resend. Organizer-self, delegation/secondary calendars, ambiguous or
-duplicate attendees, recurrence, draft/cancelled meetings and incomplete native
+duplicate attendees, whole-series responses, draft/cancelled meetings and incomplete native
 evidence remain unsupported. Existing Graph event UPDATE/DELETE guards remain.
 
 Transport requests explicit UTC endpoints and plain-text bodies. Exact UTC
@@ -40,6 +40,53 @@ canonical reads; RSVP never changes the saved event time model. Canonical text
 uses the importer’s trimming rules while the private native baseline remains
 byte-for-byte unchanged. An authoritative unchanged one-off import can backfill a
 missing mapping UID without revising the canonical event or queuing writes.
+
+## One recurring occurrence
+
+New web/native clients opt in with `outlookRsvp=1` on the provider-state read.
+The fresh native preflight may expose `rsvpEdit.scope: "occurrence"`; the client
+must echo `scope: "occurrence"` in the response request. Older readers receive no
+new capability. A one-off request cannot target an occurrence, or vice versa.
+
+The first scope is an existing flat, provider-expanded attendee copy in the
+owned default calendar. Its mapping must bind the native target ID and UID to
+an exact native series ID and originalStart UTC instant. Missing/partial slot
+identity, local canonical series children, master targets and floating times
+remain refused. Import obtains originalStart independently of the time-edit
+flag; it does not adopt a local series or rewrite the canonical time model.
+
+Each fresh read requests the target with `$select=*,originalStart` and reads its
+master in the same calendar. Both must prove the same mailbox attendee and
+organizer; the master must be active, recurring and already accepted or tentative.
+An unanswered or declined master is refused before admission or dispatch. Native
+QA showed a first instance RSVP changing the unanswered master and inherited
+sibling responses to tentative; a slot-only action must not permit that. The durable baseline
+includes the complete target and master. The only POST targets that exact
+occurrence. No action is sent to the master or neighbouring slots.
+
+Readback may observe `occurrence` becoming `exception`. The target must still
+have the same ID, UID, parent, originalStart, content, time and non-self guests.
+First materialization may refresh `createdDateTime` only when both creation
+timestamps are valid. An existing exception must retain its creation timestamp.
+Only the existing own-response/availability transitions are allowed. The
+master may refresh ETag, changeKey and lastModifiedDateTime, but all other
+fields, including its response and recurrence, must remain unchanged.
+Moved exceptions are addressed by originalStart, not their current start time.
+
+Database admission, dispatch and ACK recheck the saved slot mapping. A matching
+sync echo preserves the worker lease; it cannot acknowledge RSVP on its own.
+The ordinary no-resend and missing-copy rules below apply unchanged. Timed
+meetings use exact UTC observations irrespective of their authored zone.
+All-day evidence currently requires UTC-midnight endpoints; broader all-day
+representations are not inferred.
+
+This extension is covered by synthetic HTTP, database, web/native and browser
+tests. Live QA on 2026-09-23 found and blocked the unanswered-master side effect
+and established the materialization timestamp change. A subsequent actual
+queue/outbox pass completed Accept and Tentative on an already-answered series
+while preserving the master and other slots. Decline removed only its target
+and remained explicitly unavailable/unconfirmed with no resend. This is not
+production activation or proof of organizer notification delivery. [Evidence and limits](../audits/outlook-occurrence-rsvp-20260923.md).
 
 ## Durable dispatch and recovery
 
@@ -116,7 +163,7 @@ Live one-off Accept/Tentative and their read-only recovery passed on 2026-09-10;
 the external organizer displayed both responses. Decline removed the Outlook
 copy but the organizer still showed the earlier Maybe response, so its delivery
 remains unverified. [Exact evidence and retained history](../audits/calendar-outlook-live-acceptance-20260910.md).
-Recurring RSVP, delegated calendars, proposed times and broader organizer
+Whole-series RSVP, canonical local-series attendee children, delegated calendars, proposed times and broader organizer
 operations remain separate work. Ordinary Graph
 conditional UPDATE/DELETE proof is still missing and is not supplied by these
 response actions or fake servers.

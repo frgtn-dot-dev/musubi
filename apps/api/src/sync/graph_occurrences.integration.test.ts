@@ -8,7 +8,7 @@ import { expandRecurringEvents } from "@musubi/calendar";
 import { microsoftAdapter } from "./adapters/microsoft";
 import { syncProvider } from "./engine";
 
-async function main() {
+async function main(rsvpOnly = false) {
   assert.equal(process.env.ENVIRONMENT, "test");
   const userID = `graph-occurrence-${randomUUID()}`;
   const master = { id: "series", type: "seriesMaster", "@odata.etag": '"MASTER"', subject: "Master", isAllDay: false, body: { content: "Master content" }, start: { dateTime: "2026-03-28T08:00:00", timeZone: "UTC" }, end: { dateTime: "2026-03-28T09:00:00", timeZone: "UTC" }, recurrence: { pattern: { type: "daily", interval: 1 }, range: { type: "numbered", numberOfOccurrences: 4 } } };
@@ -45,6 +45,7 @@ async function main() {
   const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   const fetch = globalThis.fetch;
   const enabled = config.api.eventTimeEditsEnabled;
+  const rsvpEnabled = config.api.providerRsvpEditsEnabled;
   globalThis.fetch = (input, init) => {
     const url = new URL(String(input));
     assert.equal(url.hostname, "graph.microsoft.com");
@@ -57,9 +58,12 @@ async function main() {
     const sync = () => syncProvider(microsoftAdapter, userID, { id: "account", label: "Fixture" });
     const rows = () => db.select().from(events).where(eq(events.creatorID, userID)).orderBy(events.id);
     config.api.eventTimeEditsEnabled = false;
+    config.api.providerRsvpEditsEnabled = false;
     await sync();
     const legacy = await rows();
-    config.api.eventTimeEditsEnabled = true;
+    // RSVP must acquire a precise slot even with all time-writing disabled.
+    config.api.eventTimeEditsEnabled = !rsvpOnly;
+    config.api.providerRsvpEditsEnabled = rsvpOnly;
     await sync();
     const initial = await rows();
     assert.deepEqual(initial, legacy, "Identity adoption preserves local UUIDs and revisions");
@@ -114,10 +118,11 @@ async function main() {
   } finally {
     globalThis.fetch = fetch;
     config.api.eventTimeEditsEnabled = enabled;
+    config.api.providerRsvpEditsEnabled = rsvpEnabled;
     server.closeAllConnections();
     await new Promise<void>(resolve => server.close(() => resolve()));
     await db.delete(user).where(eq(user.id, userID));
   }
-  console.log("Graph expanded occurrence identity, hydration, validators and reset: OK");
+  console.log(`Graph expanded occurrence identity, hydration, validators and reset (${rsvpOnly ? "RSVP only" : "time edits"}): OK`);
 }
-main().finally(() => db.$client.end());
+main().then(() => main(true)).finally(() => db.$client.end());

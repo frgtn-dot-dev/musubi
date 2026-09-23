@@ -1,5 +1,6 @@
 import { hasProviderSyncScopes } from "./oauth";
 import type { DbTransaction } from "./calendars";
+import { readGraphRsvpOccurrence } from "./graph-rsvp-occurrence";
 import { readProviderRsvpInstance } from "./provider-rsvp-instance";
 import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
@@ -29,7 +30,7 @@ import { lockCalendarLifecycle, lockUserLifecycle } from "./calendar-lifecycle";
 import { appendEventOutbox } from "./event-outbox";
 import { providerStateVersion } from "./provider-reminders";
 import { isDeepStrictEqual } from "node:util";
-export type ProviderRsvpContext = { actorID: string; eventID: string; request: ProviderRsvpEdit; event: Event; mappingID: string; externalEventID: string; etag: string; icalUid: string | null; accountID: string; externalCalendarID: string; linkID: string; state: import("@musubi/types").ProviderEventState; instance?: ProviderRsvpInstance };
+export type ProviderRsvpContext = { actorID: string; eventID: string; request: ProviderRsvpEdit; event: Event; mappingID: string; externalEventID: string; etag: string; icalUid: string | null; accountID: string; externalCalendarID: string; linkID: string; state: import("@musubi/types").ProviderEventState; instance?: ProviderRsvpInstance; graphOccurrence?: import("@musubi/types").GraphRsvpOccurrence };
 export type ProviderRsvpReceipt = { operationID: string; replayed: boolean; status: string };
 export type ProviderRsvpPreparation = { kind: "replay"; receipt: ProviderRsvpReceipt } | { kind: "prepared"; context: ProviderRsvpContext };
 export async function prepareProviderRsvpEdit(actorID: string, eventID: string, input: unknown): Promise<ProviderRsvpPreparation> {
@@ -155,8 +156,10 @@ async function rsvpTransaction(
       !mapping.providerState
     )
       throw new EventWriteError("event-write", "unsupported");
-    if (request.provider !== "google" && (event.seriesID || event.originalStart || mapping.externalSeriesID || mapping.originalStart || !mapping.icalUid || (request.provider === "caldav" && !["zoned", "all-day"].includes(event.timeModel?.kind ?? "")))) throw new EventWriteError("event-write", "unsupported");
+    if (request.provider === "caldav" && (event.seriesID || event.originalStart || mapping.externalSeriesID || mapping.originalStart || !mapping.icalUid || !["zoned", "all-day"].includes(event.timeModel?.kind ?? ""))) throw new EventWriteError("event-write", "unsupported");
     const instance = request.provider === "google" ? await readProviderRsvpInstance(tx, event, mapping, actorID) : undefined;
+    const graphOccurrence = request.provider === "microsoft" ? readGraphRsvpOccurrence(event, mapping, actorID) : undefined;
+    if (request.provider === "microsoft" && (!mapping.icalUid || !!graphOccurrence !== (request.scope === "occurrence"))) throw new EventWriteError("event-write", "unsupported");
     if (
       event.revision !== request.expectedRevision ||
       providerStateVersion(mapping) !== request.expectedStateVersion
@@ -209,7 +212,7 @@ async function rsvpTransaction(
     });
     const state = ProviderEventStateSchema.parse(mapping.providerState);
     const desiredState = request.provider === "google" ? providerRsvpDesiredState(state, target.link.externalCalendarID, request.response) : prepared ? (request.provider === "microsoft" ? microsoftRsvpDesiredState : caldavRsvpDesiredState)(state, String(prepared.baseline.selfAddress), request.response) : state;
-    const context: ProviderRsvpContext = { actorID, eventID, request, event: snapshot, mappingID: mapping.id, externalEventID: mapping.externalEventID, etag: mapping.etag, icalUid: mapping.icalUid, accountID: target.link.accountID, externalCalendarID: target.link.externalCalendarID, linkID: target.link.id, state, ...(instance ? { instance } : {}) };
+    const context: ProviderRsvpContext = { actorID, eventID, request, event: snapshot, mappingID: mapping.id, externalEventID: mapping.externalEventID, etag: mapping.etag, icalUid: mapping.icalUid, accountID: target.link.accountID, externalCalendarID: target.link.externalCalendarID, linkID: target.link.id, state, ...(instance ? { instance } : {}), ...(graphOccurrence ? { graphOccurrence } : {}) };
     if (!prepared) return { kind: "prepared", context };
     if (!isDeepStrictEqual(context, prepared.context)) throw new BadRequestError("RSVP source changed during provider verification.");
     if (request.provider === "caldav" && !(await hasCaldavRsvpBoundary({ userID: actorID, accountID: target.link.accountID, externalCalendarID: target.link.externalCalendarID, externalEventID: mapping.externalEventID }, prepared.baseline, tx, true)))
@@ -217,7 +220,7 @@ async function rsvpTransaction(
     // Raw evidence is server-internal and was normalized/compared by preflight.
     if (prepared.baseline.id !== mapping.externalEventID || prepared.baseline.etag !== mapping.etag)
       throw new BadRequestError("RSVP provider identity changed.");
-    const rsvp: ProviderRsvpIntent = { request, ...(request.provider === "caldav" ? { caldavDelivery: CaldavRsvpDeliverySchema.parse({ kind: "caldav-rsvp-at-most-once", version: 1 }) } : {}), baseline: prepared.baseline, nativeTime: prepared.nativeTime, ...(instance ? { instance } : {}), baselineState: state, desiredState, mappingID: mapping.id };
+    const rsvp: ProviderRsvpIntent = { request, ...(request.provider === "caldav" ? { caldavDelivery: CaldavRsvpDeliverySchema.parse({ kind: "caldav-rsvp-at-most-once", version: 1 }) } : {}), baseline: prepared.baseline, nativeTime: prepared.nativeTime, ...(instance ? { instance } : {}), ...(graphOccurrence ? { graphOccurrence } : {}), baselineState: state, desiredState, mappingID: mapping.id };
     const id = randomUUID();
     await appendEventOutbox(tx, snapshot, [
       {
@@ -259,6 +262,9 @@ export async function hasProviderRsvpSource(row: import("./event-outbox").EventO
   if (!source || !["owner", "editor"].includes(source.role) || source.event.revision !== row.revision || source.mapping.etag !== row.expectedEtag || providerStateVersion(source.mapping) !== intent.request.expectedStateVersion) return false;
   try {
     if (row.provider === "caldav" && (!(await hasCaldavRsvpBoundary(row, intent.baseline, executor, lock)) || (intent.baseline.mode === "icloud-oneoff-attendee" && !CaldavRsvpDeliverySchema.safeParse(intent.caldavDelivery).success))) return false;
+    if (row.provider === "microsoft") return config.api.providerRsvpEditsEnabled && !intent.instance && source.mapping.icalUid === row.icalUid &&
+      (intent.request.provider === "microsoft" && (intent.request.scope === "occurrence") === !!intent.graphOccurrence) &&
+      isDeepStrictEqual(readGraphRsvpOccurrence(source.event, source.mapping, row.userID), intent.graphOccurrence);
     if (row.provider !== "google") return config.api.providerRsvpEditsEnabled && !intent.instance && !source.event.seriesID && !source.event.originalStart && !source.event.recurrence && !source.event.isCanceled && !source.mapping.externalSeriesID && !source.mapping.originalStart && source.mapping.icalUid === row.icalUid;
     const current = await readProviderRsvpInstance(executor, source.event, source.mapping, row.userID);
     return isDeepStrictEqual(current, intent.instance);

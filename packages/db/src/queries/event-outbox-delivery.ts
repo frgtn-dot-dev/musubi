@@ -1,6 +1,7 @@
 import { matchesRsvpEventProjection } from "./event-outbox-projection";
 import { hasCaldavRsvpBoundary, providerRsvpBaselineVersion } from "./provider-rsvp";
 import { matchesProviderReminderInstanceState } from "./provider-reminder-instance";
+import { readGraphRsvpOccurrence } from "./graph-rsvp-occurrence";
 import { readProviderRsvpInstance } from "./provider-rsvp-instance";
 import { isDeepStrictEqual } from "node:util";
 import { providerStateVersion } from "./provider-reminders";
@@ -224,6 +225,10 @@ async function completeEventOutboxInternal(
         const intent = settings;
         const caldav = row.payload.rsvp?.request.provider === "caldav";
         const graph = row.payload.rsvp?.request.provider === "microsoft";
+        if (graph && (!isDeepStrictEqual(row.payload.rsvp!.graphOccurrence, intent.baseline.occurrence) ||
+            !isDeepStrictEqual(row.payload.rsvp!.graphOccurrence, address.payload.rsvp?.graphOccurrence) ||
+            (row.payload.rsvp!.request.provider === "microsoft" && row.payload.rsvp!.request.scope === "occurrence") !== !!row.payload.rsvp!.graphOccurrence))
+          return settle(tx, row, "unconfirmed", sourceChanged, resultRef);
         if (graph && (!config.api.providerRsvpEditsEnabled || !graphConfirmation || graphConfirmation.baselineHash !== providerRsvpBaselineVersion(intent.mappingID, intent.baseline) || graphConfirmation.observedResponse !== intent.desiredState.ownResponse || current?.seriesID || current?.originalStart || current?.recurrence || current?.isCanceled)) return settle(tx, row, "unconfirmed", "rsvp-confirmation-unavailable", resultRef);
         if (caldav && (!config.api.providerRsvpEditsEnabled || !caldavConfirmation || (caldavConfirmation.mode !== undefined && caldavConfirmation.mode !== "strict" && caldavConfirmation.mode !== "icloud-oneoff-attendee") || caldavConfirmation.resourceHash !== row.payload.rsvp!.baseline.desiredResourceHash || caldavConfirmation.selfAddress !== row.payload.rsvp!.baseline.selfAddress || !(await hasCaldavRsvpBoundary(row, row.payload.rsvp!.baseline, tx, true)) || (caldavConfirmation.mode ?? "strict") !== (row.payload.rsvp!.baseline.mode ?? "strict") || (caldavConfirmation.mode === "icloud-oneoff-attendee" ? caldavConfirmation.scheduleTag !== null || !CaldavRsvpDeliverySchema.safeParse(row.payload.rsvp!.caldavDelivery).success : typeof caldavConfirmation.scheduleTag !== "string" || !/^"[\x21\x23-\x7e\x80-\xff]*"$/.test(caldavConfirmation.scheduleTag)) || current?.seriesID || current?.originalStart || current?.recurrence || current?.isCanceled)) return settle(tx, row, "unconfirmed", "rsvp-confirmation-unavailable", resultRef);
         if (!isDeepStrictEqual(intent.instance, addressInstance))
@@ -278,8 +283,7 @@ async function completeEventOutboxInternal(
         if (snapshot.icalUid === resultRef?.icalUid && observation.observedAt >= snapshot.observedAt &&
             isDeepStrictEqual(snapshot.providerState, observation.providerState) && values.success &&
             isDeepStrictEqual(values.data.timeModel, row.payload.rsvp.nativeTime) &&
-            !snapshot.values?.externalSeriesID &&
-            matchesRsvpEventProjection("microsoft", row.payload.event, { ...values.data, description: values.data.description ?? null, location: values.data.location ?? null, recurrence: values.data.recurrence ?? null })) row.remoteSnapshot = observation;
+            matchesRsvpEventProjection("microsoft", row.payload.event, { ...values.data, externalSeriesID: typeof snapshot.values?.externalSeriesID === "string" ? snapshot.values.externalSeriesID : undefined, description: values.data.description ?? null, location: values.data.location ?? null, recurrence: values.data.recurrence ?? null }, undefined, row.payload.rsvp.graphOccurrence)) row.remoteSnapshot = observation;
       }
       if (observation?.isEcho && observation.externalEventId === resultRef?.externalEventId &&
           (!row.remoteSnapshot || row.remoteSnapshot.isEcho && observation.observedAt >= row.remoteSnapshot.observedAt))
@@ -378,7 +382,8 @@ async function completeEventOutboxInternal(
         if (settings) {
           try {
             const instance = row.provider === "google" && current && mapping ? await readProviderRsvpInstance(tx, current, mapping, row.userID) : undefined;
-            if ((row.provider === "caldav" || row.provider === "microsoft") && (mapping?.externalSeriesID || mapping?.originalStart || mapping?.icalUid !== row.icalUid)) return settle(tx, row, "unconfirmed", sourceChanged, resultRef);
+            if (row.provider === "microsoft" && (!current || !mapping || mapping.icalUid !== row.icalUid || !isDeepStrictEqual(readGraphRsvpOccurrence(current, mapping, row.userID), row.payload.rsvp?.graphOccurrence))) return settle(tx, row, "unconfirmed", sourceChanged, resultRef);
+            if (row.provider === "caldav" && (mapping?.externalSeriesID || mapping?.originalStart || mapping?.icalUid !== row.icalUid)) return settle(tx, row, "unconfirmed", sourceChanged, resultRef);
             if (!isDeepStrictEqual(instance, settings.instance))
               return settle(tx, row, "unconfirmed", sourceChanged, resultRef);
           } catch { return settle(tx, row, "unconfirmed", sourceChanged, resultRef); }

@@ -963,10 +963,10 @@ async function upsertExternalEventInTransaction(
           await tx.update(externalEvents).set({ icalUid }).where(and(eq(externalEvents.id, map.id), isNull(externalEvents.icalUid)));
         // An unchanged baseline is not a conflict with a queued local write.
         // It can still supersede a previously retained personal observation.
-        if (state !== undefined) await retainPendingEventPull(tx, map.event.id, calendarID, provider, externalEventID, { ...values, ...pendingTemporal }, etag, icalUid, state, true);
+        if (state !== undefined) await retainPendingEventPull(tx, map.event.id, calendarID, provider, externalEventID, { ...values, ...pendingTemporal, ...expandedIdentity }, etag, icalUid, state, true);
         return false;
       }
-      const retained = await retainPendingEventPull(tx, map.event.id, calendarID, provider, externalEventID, { ...values, ...pendingTemporal }, etag, icalUid, state);
+      const retained = await retainPendingEventPull(tx, map.event.id, calendarID, provider, externalEventID, { ...values, ...pendingTemporal, ...expandedIdentity }, etag, icalUid, state);
       if (retained && !readRecovery) return false;
       if (map.event.originCalendarID !== calendarID) {
         const changedFields = (
