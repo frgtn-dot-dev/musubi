@@ -77,5 +77,84 @@
     "cleanup": "verified"
   },
   "notificationDelivery": "unknown",
-  "finalProbe": "pending"
+  "finalProbe": {
+    "startedAt": "2026-09-23T18:00:25.265Z",
+    "unansweredParentRefused": true,
+    "setup": "One expressly authorized native whole-series Tentative response, separately from the occurrence-only application action",
+    "cases": [
+      {
+        "response": "accepted",
+        "status": "completed",
+        "errorCode": null,
+        "posts": 1,
+        "copyStatus": 200,
+        "parentUnchanged": true,
+        "otherExceptionsUnchanged": true,
+        "cancellationExpected": true,
+        "neighboursUnchanged": true,
+        "expectedOutcome": true,
+        "originalStart": "2026-10-30T13:00:00Z",
+        "typeBefore": "occurrence",
+        "typeAfter": "exception",
+        "ownResponseAfter": "accepted",
+        "changedTargetFields": [
+          "@odata.etag",
+          "createdDateTime",
+          "lastModifiedDateTime",
+          "changeKey",
+          "showAs",
+          "type",
+          "responseStatus"
+        ]
+      },
+      {
+        "response": "tentative",
+        "status": "completed",
+        "errorCode": null,
+        "posts": 1,
+        "copyStatus": 200,
+        "parentUnchanged": true,
+        "otherExceptionsUnchanged": true,
+        "cancellationExpected": true,
+        "neighboursUnchanged": true,
+        "expectedOutcome": true,
+        "originalStart": "2026-10-30T13:00:00Z",
+        "typeBefore": "exception",
+        "typeAfter": "exception",
+        "ownResponseAfter": "tentativelyAccepted",
+        "changedTargetFields": [
+          "@odata.etag",
+          "lastModifiedDateTime",
+          "changeKey",
+          "showAs",
+          "responseStatus"
+        ]
+      },
+      {
+        "response": "declined",
+        "status": "unconfirmed",
+        "errorCode": "graph-rsvp-copy-absent",
+        "posts": 1,
+        "copyStatus": 404,
+        "parentUnchanged": true,
+        "otherExceptionsUnchanged": true,
+        "cancellationExpected": true,
+        "neighboursUnchanged": true,
+        "expectedOutcome": true,
+        "originalStart": "2026-11-01T14:00:00Z",
+        "typeBefore": "occurrence",
+        "typeAfter": null,
+        "ownResponseAfter": null,
+        "changedTargetFields": [
+          "copy absent"
+        ]
+      }
+    ],
+    "cleanup": {
+      "googleSeries": "cancelled and read back",
+      "outlookSeries": "isCancelled=true read back",
+      "remainingLocalTestUsers": 0
+    },
+    "result": "passed"
+  }
 }

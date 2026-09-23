@@ -29,7 +29,7 @@ availability and materialization metadata. Master exception bookkeeping changed
 as expected in an explicit expanded read. Decline removed its own copy (404),
 which remains **unconfirmed / copy unavailable**, not proof of delivery. The
 original probe's positive acknowledgements were blocked by the creation-time
-difference; final live verification of the corrected path is pending.
+difference; the final live pass below verifies the corrected path.
 
 All three actions used exactly one POST despite a subsequent read-only check.
 The disposable series were cancelled at the Google organizer and cancellation
@@ -37,6 +37,25 @@ was read back; isolated local fixture rows were removed. Two earlier harness
 attempts ended early (receipt ID lookup and a strict parent assertion); their
 series were also cancelled. Notification delivery to the organizer is unproven.
 No addresses, tokens or raw mailbox resources are committed.
+
+## Final live pass
+
+The corrected code rejected the native unanswered parent. After an expressly
+approved native whole-series Tentative response used only to prepare the test
+fixture, the **actual Musubi queue/outbox** completed:
+
+- Accept on the first occurrence: `completed`, own response `accepted`, one POST.
+- Tentative on that now-existing exception: `completed`, own response
+  `tentativelyAccepted`, one POST, creation timestamp preserved.
+- Decline on the occurrence after the DST transition: target 404 and
+  `unconfirmed / graph-rsvp-copy-absent`. A read-only recheck sent no second POST.
+
+Each step preserved the parent response, authored fields, neighbouring slots and
+unrelated exceptions. Expanded master bookkeeping changed only for the selected
+exception/cancellation, with the cancelled occurrence ID checked exactly. The
+series was cancelled at Google, Outlook readback confirmed `isCancelled=true`,
+and the isolated database contained zero remaining test users. This setup does
+not add a whole-series response capability to Musubi or prove mail delivery.
 
 ## Verification
 
@@ -46,8 +65,9 @@ No addresses, tokens or raw mailbox resources are committed.
   an unanswered parent, parent becoming unanswered after admission, mapping and
   lease races, sync echoes, disappearance and retained private evidence.
 - Existing web/native and six Chromium light/dark desktop/narrow scenarios
-  passed before these server-only refinements. Initial GitHub CI passed 20/20;
-  final commit checks remain pending.
+  passed, including keyboard/focus, axe and overflow checks. GitHub CI passed
+  all 20 checks on code commit `d3ad8ef`, including all DB/web shards, native/web
+  tests, typechecks, image builds and production-container smoke checks.
 
 ## Boundaries
 

@@ -82,9 +82,11 @@ representations are not inferred.
 
 This extension is covered by synthetic HTTP, database, web/native and browser
 tests. Live QA on 2026-09-23 found and blocked the unanswered-master side effect
-and established the materialization timestamp change. Final live verification of
-already-answered series remains pending. This is not production activation or
-proof of organizer notification delivery. [Evidence and limits](../audits/outlook-occurrence-rsvp-20260923.md).
+and established the materialization timestamp change. A subsequent actual
+queue/outbox pass completed Accept and Tentative on an already-answered series
+while preserving the master and other slots. Decline removed only its target
+and remained explicitly unavailable/unconfirmed with no resend. This is not
+production activation or proof of organizer notification delivery. [Evidence and limits](../audits/outlook-occurrence-rsvp-20260923.md).
 
 ## Durable dispatch and recovery
 

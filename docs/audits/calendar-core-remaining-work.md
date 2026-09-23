@@ -343,8 +343,10 @@ read-only recovery and disappearance after decline.
 Live verification found that a first instance RSVP changes an unanswered
 master and inherited sibling responses to tentative. Those masters are now
 refused before admission and dispatch. Initial exception materialization also
-refreshes a valid creation timestamp. Final positive live verification of an
-already-answered series remains pending; [evidence](outlook-occurrence-rsvp-20260923.md).
+refreshes a valid creation timestamp. The final actual queue/outbox pass on an
+already-answered series completed Accept/Tentative, preserved the master and
+neighbours, and kept a disappeared Decline copy explicitly unconfirmed without
+resending. Native/local cleanup is verified; [evidence](outlook-occurrence-rsvp-20260923.md).
 Whole-series RSVP, canonical local-series attendee children, delegated calendars
 and general all-day representations remain separate work. No production gate,
 release tag or deployment changes. [Contract](../sync/microsoft-rsvp.md).
