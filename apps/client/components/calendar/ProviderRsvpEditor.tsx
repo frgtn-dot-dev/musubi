@@ -17,6 +17,7 @@ export function ProviderRsvpEditor({ event, observation, onClose }: { event: Eve
   const api = useApi(); const insets = useSafeAreaInsets();
   const graph = observation.rsvpEdit?.provider === "microsoft";
   const caldav = observation.rsvpEdit?.provider === "caldav";
+  const occurrence = !!event.seriesID || observation.rsvpEdit?.scope === "occurrence";
   const [response, setResponse] = useState(""); const [picker, setPicker] = useState(false);
   const [error, setError] = useState(""); const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false); const pending = useRef(false);
@@ -36,9 +37,9 @@ export function ProviderRsvpEditor({ event, observation, onClose }: { event: Eve
   }
   const copy = { fontFamily: fonts.sans, color: colors.fg2 };
   return <ModalPortal visible onRequestClose={close}>
-      <BottomSheetFrame motion={motion} onClose={close} dismissible={!busy} header={<View style={styles.modalTitleRow}><Text accessibilityRole="header" style={styles.modalTitle}>{event.seriesID ? "Respond to this occurrence" : graph ? "Respond in Outlook" : caldav ? "Respond in calendar" : "Respond in Google"}</Text></View>}>
+      <BottomSheetFrame motion={motion} onClose={close} dismissible={!busy} header={<View style={styles.modalTitleRow}><Text accessibilityRole="header" style={styles.modalTitle}>{occurrence ? "Respond to this occurrence" : graph ? "Respond in Outlook" : caldav ? "Respond in calendar" : "Respond in Google"}</Text></View>}>
       <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: spacing[4], paddingBottom: spacing[4] + insets.bottom, gap: spacing[3] }}>
-        <Text style={copy}>{event.seriesID ? "This Google response applies only to this occurrence. " : ""}{graph ? microsoftRsvpNotice : caldav ? caldavRsvpNotice : providerRsvpNotice}</Text>
+        <Text style={copy}>{occurrence ? `This ${graph ? "Outlook" : "Google"} response applies only to this occurrence. ` : ""}{graph ? microsoftRsvpNotice : caldav ? caldavRsvpNotice : providerRsvpNotice}</Text>
         {notice ? <Text accessibilityLiveRegion="polite" style={copy}>{notice}</Text> : <>
           <Btn variant="secondary" label={`${(caldav || graph) ? "Your response" : "Your Google response"}: ${providerRsvpOptions.find(item => item.value === response)?.label ?? "Choose a response"}`} disabled={busy} onPress={() => setPicker(true)} />
           {error ? <Text accessibilityRole="alert" style={copy}>{error}</Text> : null}

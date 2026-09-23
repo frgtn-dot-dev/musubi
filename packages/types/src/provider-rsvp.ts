@@ -9,7 +9,7 @@ const ProviderRsvpCommonSchema = z.object({
 });
 export const ProviderRsvpEditSchema = z.discriminatedUnion("provider", [
   ProviderRsvpCommonSchema.extend({ provider: z.literal("google"), sendUpdates: z.literal("all") }).strict(),
-  ProviderRsvpCommonSchema.extend({ provider: z.literal("microsoft"), notificationPolicy: z.literal("send-response") }).strict(),
+  ProviderRsvpCommonSchema.extend({ provider: z.literal("microsoft"), notificationPolicy: z.literal("send-response"), scope: z.literal("occurrence").optional() }).strict(),
   ProviderRsvpCommonSchema.extend({ provider: z.literal("caldav"), notificationPolicy: z.literal("server-reply") }).strict(),
 ]);
 export type ProviderRsvpEdit = z.infer<typeof ProviderRsvpEditSchema>;
@@ -20,12 +20,19 @@ export const ProviderRsvpInstanceSchema = z.object({
   originalStart: OccurrenceStartSchema.refine(value => value.kind !== "floating"),
 }).strict();
 export type ProviderRsvpInstance = z.infer<typeof ProviderRsvpInstanceSchema>;
+/** Graph calendarView materializes attendee copies without a local master. */
+export const GraphRsvpOccurrenceSchema = z.object({
+  externalSeriesID: z.string().min(1),
+  originalStart: OccurrenceStartSchema.refine(value => value.kind === "instant"),
+}).strict();
+export type GraphRsvpOccurrence = z.infer<typeof GraphRsvpOccurrenceSchema>;
 /** Private outbox payload. Native raw evidence never belongs in a public DTO. */
 export type ProviderRsvpIntent = {
   request: ProviderRsvpEdit;
   baseline: Record<string, unknown>;
   nativeTime?: EventTimeModel;
   instance?: ProviderRsvpInstance;
+  graphOccurrence?: GraphRsvpOccurrence;
   baselineState: ProviderEventState;
   desiredState: ProviderEventState;
   mappingID: string;
@@ -85,7 +92,7 @@ export type ProviderRsvpReceiptResponse = z.infer<typeof ProviderRsvpReceiptSche
 export function microsoftRsvpDesiredState(input: ProviderEventState, selfAddress: string, response: ProviderRsvpEdit["response"]): ProviderEventState {
   const state = ProviderEventStateSchema.parse(input);
   const own = selfAddress.toLowerCase(), self = state.attendees.filter(item => item.address?.toLowerCase() === own);
-  if (state.provider !== "microsoft" || !state.attendeesComplete || state.isOrganizer !== false || state.eventType !== "singleInstance" || state.status !== "active" || self.length !== 1 || self[0]!.role === "resource" || !state.organizer?.address || state.organizer.address.toLowerCase() === own) throw new Error("Unsupported Graph RSVP identity");
+  if (state.provider !== "microsoft" || !state.attendeesComplete || state.isOrganizer !== false || !["singleInstance", "occurrence", "exception"].includes(state.eventType ?? "") || state.status !== "active" || self.length !== 1 || self[0]!.role === "resource" || !state.organizer?.address || state.organizer.address.toLowerCase() === own) throw new Error("Unsupported Graph RSVP identity");
   const native = response === "tentative" ? "tentativelyAccepted" : response;
   self[0]!.response = native; state.ownResponse = native;
   return state;
@@ -103,6 +110,7 @@ export function matchesMicrosoftRsvpObservedState(baseline: ProviderEventState, 
     self[0]!.response = expected.ownResponse;
     if (response === "accepted" && baseline.availability === "tentative" && observed.availability === "busy") observed.availability = "tentative";
     if (response === "tentative" && baseline.availability === "busy" && observed.availability === "tentative") observed.availability = "busy";
+    if (baseline.eventType === "occurrence" && observed.eventType === "exception") observed.eventType = "occurrence";
     return JSON.stringify(observed) === JSON.stringify(expected);
   } catch { return false; }
 }

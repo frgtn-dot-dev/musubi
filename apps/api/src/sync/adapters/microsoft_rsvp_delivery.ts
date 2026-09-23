@@ -2,7 +2,7 @@ import { verifiedGraphIdentity } from "./microsoft_identity";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import { config } from "@musubi/config";
-import { EventWriteError, type ProviderRsvpEdit } from "@musubi/types";
+import { EventWriteError, type GraphRsvpOccurrence, type ProviderRsvpEdit } from "@musubi/types";
 import { assertCompleteEventReadResponse } from "../event_create_identity";
 import { ProviderEventWriteError } from "../event_write";
 import { microsoftRsvpEvidence, matchesMicrosoftRsvp, type MicrosoftRsvpEvidence } from "./microsoft_rsvp";
@@ -21,16 +21,25 @@ export async function graphRsvpSession(token: string, accountID: string, calenda
   const identity = await verifiedGraphIdentity(get, accountID, calendarID);
   const selfAddress = identity.selfAddress;
   const url = (eventID: string) => `${base}/me/calendars/${encodeURIComponent(calendarID)}/events/${encodeURIComponent(id.parse(eventID))}`;
+  const targetURL = (eventID: string, occurrence?: GraphRsvpOccurrence) => url(eventID) + (occurrence ? "?$select=*,originalStart" : "");
+  const read = async (eventID: string, response: ProviderRsvpEdit["response"], occurrence?: GraphRsvpOccurrence) => {
+    const native = await get(targetURL(eventID, occurrence), true);
+    if (!native) return null;
+    const master = occurrence ? await get(url(occurrence.externalSeriesID)) : undefined;
+    const evidence = microsoftRsvpEvidence(native, selfAddress, response, identity, occurrence, master);
+    if (evidence.id !== eventID) fail();
+    return evidence;
+  };
   return {
-    read: async (eventID: string, response: ProviderRsvpEdit["response"]) => { const native = await get(url(eventID), true); if (!native) return null; const evidence = microsoftRsvpEvidence(native, selfAddress, response, identity); if (evidence.id !== eventID) fail(); return evidence; },
+    read,
     write: async (saved: MicrosoftRsvpEvidence, dispatched: boolean, beforeDispatch: () => Promise<void>, accepted: () => Promise<void>) => {
       saved = structuredClone(saved);
       if (!isDeepStrictEqual(saved.graphIdentity, identity) || saved.selfAddress !== selfAddress) fail();
-      const native = await get(url(saved.id), true);
-      if (!native) return { kind: "absent" as const };
-      if (matchesMicrosoftRsvp(saved, native)) return { kind: "observed" as const, evidence: microsoftRsvpEvidence(native, selfAddress, saved.response, identity) };
+      const current = await read(saved.id, saved.response, saved.occurrence);
+      if (!current) return { kind: "absent" as const };
+      if (matchesMicrosoftRsvp(saved, current.native, current.master)) return { kind: "observed" as const, evidence: current };
       if (dispatched) return { kind: "unconfirmed" as const };
-      if (!isDeepStrictEqual(native, saved.native)) fail();
+      if (!isDeepStrictEqual(current, saved)) fail();
       await beforeDispatch();
       // The durable marker is committed before this call. Even a definite HTTP
       // failure cannot remove it or grant permission to repeat the action.
@@ -38,9 +47,9 @@ export async function graphRsvpSession(token: string, accountID: string, calenda
       const response = await fetch(`${url(saved.id)}/${action}`, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ sendResponse: true }), redirect: "error", signal });
       if (response.status !== 202) throw new ProviderEventWriteError("provider-write-failed", "unconfirmed", response.status);
       await accepted();
-      const result = await get(url(saved.id), true);
+      const result = await read(saved.id, saved.response, saved.occurrence);
       if (!result) return { kind: "absent" as const };
-      return matchesMicrosoftRsvp(saved, result) ? { kind: "observed" as const, evidence: microsoftRsvpEvidence(result, selfAddress, saved.response, identity) } : { kind: "unconfirmed" as const };
+      return matchesMicrosoftRsvp(saved, result.native, result.master) ? { kind: "observed" as const, evidence: result } : { kind: "unconfirmed" as const };
     },
   };
 }

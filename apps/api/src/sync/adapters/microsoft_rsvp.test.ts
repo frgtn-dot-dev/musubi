@@ -82,6 +82,57 @@ async function main() {
     const native = graphRsvpNative(), evidence = microsoftRsvpEvidence(native, "self@example.test", "accepted");
     native.responseStatus.response = "accepted"; native.attendees[0]!.status.response = "accepted";
     assert.equal(matchesMicrosoftRsvp(evidence, native), true); native.customPreserved.value = "different"; assert.equal(matchesMicrosoftRsvp(evidence, native), false);
+    // A recurring response is bound to one imported slot, never its master.
+    for (const response of ["accepted", "tentative", "declined"] as const) {
+      const fixture = await graphRsvpFixture(true);
+      const binding = { externalSeriesID: "series", originalStart: { kind: "instant" as const, value: fixture.state.native.originalStart! } };
+      try {
+        // A moved exception keeps its original slot identity; current time is
+        // independent of originalStart and must remain unchanged by the action.
+        if (response === "accepted") { fixture.state.native.type = "exception"; fixture.state.native.start.dateTime = "2026-03-29T15:00:00"; fixture.state.native.end.dateTime = "2026-03-29T16:00:00"; }
+        const session = await graphRsvpSession("fixture", "account", "calendar");
+        await assert.rejects(() => session.read("meeting", response), "Unscoped requests cannot target a recurring meeting");
+        const saved = (await session.read("meeting", response, binding))!;
+        const master = structuredClone(fixture.state.master);
+        const result = await session.write(saved, false, async () => { fixture.state.marked = true; }, async () => {});
+        assert.equal(result.kind, "observed"); assert.equal(fixture.state.posts, 1);
+        assert.equal((await session.write(saved, true, async () => { throw Error("must not resend"); }, async () => {})).kind, "observed");
+        assert.deepEqual({ ...fixture.state.master, "@odata.etag": master["@odata.etag"], changeKey: master.changeKey }, master);
+        const actual = structuredClone(fixture.state.native);
+        for (const mutate of [
+          (n: typeof actual) => { n.originalStart = "2026-03-29T08:00:00.000Z"; },
+          (n: typeof actual) => { n.seriesMasterId = "another-series"; },
+          (n: typeof actual) => { n.iCalUId = "another-uid"; },
+          (n: typeof actual) => { n.start.dateTime = "2026-03-28T10:00:00"; },
+          (n: typeof actual) => { n.attendees[1]!.status.response = "declined"; },
+        ]) { const changed = structuredClone(actual); mutate(changed); assert.equal(matchesMicrosoftRsvp(saved, changed, fixture.state.master), false); }
+        for (const mutate of [
+          (n: typeof master) => { n.responseStatus.response = "accepted"; },
+          (n: typeof master) => { n.subject = "Changed series"; },
+          (n: typeof master) => { n.recurrence.pattern.interval = 2; },
+          (n: typeof master) => { n.attendees[1]!.status.response = "declined"; },
+        ]) { const changed = structuredClone(fixture.state.master); mutate(changed); assert.equal(matchesMicrosoftRsvp(saved, actual, changed), false); }
+        if (saved.native.type === "exception") { const changed = { ...actual, type: "occurrence" }; assert.equal(matchesMicrosoftRsvp(saved, changed, fixture.state.master), false); }
+        fixture.state.master.subject = "Concurrent series edit";
+        assert.equal((await session.write(saved, true, async () => { throw Error("must not resend"); }, async () => {})).kind, "unconfirmed");
+        assert.equal(fixture.state.posts, 1);
+      } finally { await fixture.close(); }
+    }
+    for (const mutation of ["parent-content", "parent-response", "slot", "missing-parent", "self-on-master"] as const) {
+      const fixture = await graphRsvpFixture(true);
+      try {
+        const binding = { externalSeriesID: "series", originalStart: { kind: "instant" as const, value: fixture.state.native.originalStart! } };
+        const session = await graphRsvpSession("fixture", "account", "calendar");
+        const saved = (await session.read("meeting", "accepted", binding))!;
+        if (mutation === "parent-content") fixture.state.master.subject = "Concurrent series edit";
+        if (mutation === "parent-response") fixture.state.master.responseStatus.response = "accepted";
+        if (mutation === "slot") fixture.state.native.originalStart = "2026-03-29T08:00:00.000Z";
+        if (mutation === "missing-parent") fixture.state.master.id = "different";
+        if (mutation === "self-on-master") fixture.state.master.attendees[0]!.emailAddress.address = "another@example.test";
+        await assert.rejects(() => session.write(saved, false, async () => { throw Error("must not dispatch"); }, async () => {}));
+        assert.equal(fixture.state.posts, 0);
+      } finally { await fixture.close(); }
+    }
     console.log("Graph RSVP fake HTTP: three actions, exact body, persisted dispatch fence, lost response/read-only recovery, accepted-unobserved, decline absence, unrelated change, self/grant/flag refusals: OK");
   } finally { config.api.providerRsvpEditsEnabled = previous; }
 }

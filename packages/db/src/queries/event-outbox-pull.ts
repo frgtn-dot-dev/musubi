@@ -22,13 +22,20 @@ function matchesPersonalSettingTime(row: EventOutboxRow, values: PullValues) {
   // Unknown canonical metadata cannot erase a known provider zone. Missing or
   // still-unknown native time cannot establish a safe echo at all.
   if (!nativeTime.success || !["zoned", "all-day"].includes(nativeTime.data.kind)) return false;
-  return matchesRsvpEventProjection(row.provider, { ...row.payload.event, timeModel: nativeTime.data }, values, (row.payload.rsvp ?? row.payload.reminderInstance)?.instance);
+  return matchesRsvpEventProjection(row.provider, { ...row.payload.event, timeModel: nativeTime.data }, values, (row.payload.rsvp ?? row.payload.reminderInstance)?.instance, row.payload.rsvp?.graphOccurrence);
 }
 function matchesProjection(row: EventOutboxRow, values: PullValues, providerState?: ProviderEventState) {
   if (row.payload.organizer) return false; // Only full native organizer readback may ACK.
   if (row.payload.caldavAlarm) return false; // Component summaries cannot acknowledge a full alarm resource.
   if (row.payload.reminderInstance) return row.action === "update" && matchesPersonalSettingTime(row, values) && matchesProviderReminderInstanceState(row.payload.reminderInstance, providerState);
-  if (row.payload.rsvp) return row.action === "update" && matchesPersonalSettingTime(row, values) && isDeepStrictEqual(providerState, row.payload.rsvp.desiredState);
+  if (row.payload.rsvp) {
+    // Outlook may materialize the answered slot as an exception. This is only
+    // an echo candidate: ACK still needs exact native target + master readback.
+    const observed = row.payload.rsvp.graphOccurrence && row.payload.rsvp.baselineState.eventType === "occurrence" && providerState?.eventType === "exception"
+      ? { ...providerState, eventType: "occurrence" }
+      : providerState;
+    return row.action === "update" && matchesPersonalSettingTime(row, values) && isDeepStrictEqual(observed, row.payload.rsvp.desiredState);
+  }
   if (row.payload.reminderEdit) return row.action === "update" && matchesReminderEventProjection(row.provider, row.payload.event, values) && matchesGoogleReminderIntent(row.payload.reminderEdit.reminders, providerState);
   if (row.payload.googleOccurrence) return values.seriesID === row.payload.googleOccurrence.master.id && matchesGoogleOccurrenceProjection(row.payload.event, values);
   return (

@@ -42,9 +42,9 @@ export async function queueProviderRsvp(actorID: string, eventID: string, input:
     const { microsoftRsvpProjection } = await import("./adapters/microsoft_rsvp");
     const { microsoftEventState } = await import("./adapters/provider_event_state");
     const context = prepared.context;
-    const evidence = await microsoftAdapter.readMicrosoftRsvp!(actorID, context.accountID, context.externalCalendarID, { externalEventId: context.externalEventID, etag: context.etag, icalUid: context.icalUid }, request.response, AbortSignal.timeout(10_000));
+    const evidence = await microsoftAdapter.readMicrosoftRsvp!(actorID, context.accountID, context.externalCalendarID, { externalEventId: context.externalEventID, etag: context.etag, icalUid: context.icalUid }, request.response, AbortSignal.timeout(10_000), context.graphOccurrence);
     const native = microsoftRsvpProjection(evidence);
-    if (!matchesRsvpEventProjection("microsoft", context.event, native) || !isDeepStrictEqual(context.state, microsoftEventState(evidence.native))) throw new BadRequestError("Provider meeting changed. Sync and reopen before responding.");
+    if (!matchesRsvpEventProjection("microsoft", context.event, native, undefined, context.graphOccurrence) || !isDeepStrictEqual(context.state, microsoftEventState(evidence.native))) throw new BadRequestError("Provider meeting changed. Sync and reopen before responding.");
     return commitProviderRsvpEdit(context, evidence, native.timeModel!);
   }
   const { evidence, native } = await caldavEvidence(prepared.context).catch(() => { throw new BadRequestError("Calendar scheduling could not be verified. Sync and reopen before responding."); });
@@ -71,13 +71,13 @@ export async function observeMicrosoftRsvp(actorID: string, eventID: string, obs
   if (observation.rsvpEdit?.provider !== "microsoft" || !observation.version || !observation.state) return observation;
   try {
     const { randomUUID } = await import("node:crypto");
-    const prepared = await prepareProviderRsvpEdit(actorID, eventID, { operationID: randomUUID(), provider: "microsoft", response: "accepted", notificationPolicy: "send-response", expectedRevision: observation.rsvpEdit.expectedRevision, expectedStateVersion: observation.version });
+    const prepared = await prepareProviderRsvpEdit(actorID, eventID, { operationID: randomUUID(), provider: "microsoft", response: "accepted", notificationPolicy: "send-response", ...(observation.rsvpEdit.scope ? { scope: observation.rsvpEdit.scope } : {}), expectedRevision: observation.rsvpEdit.expectedRevision, expectedStateVersion: observation.version });
     if (prepared.kind !== "prepared") throw new Error("Unexpected replay");
     const { microsoftAdapter } = await import("./adapters/microsoft");
     const { microsoftRsvpProjection } = await import("./adapters/microsoft_rsvp");
     const context = prepared.context;
-    const evidence = await microsoftAdapter.readMicrosoftRsvp!(actorID, context.accountID, context.externalCalendarID, { externalEventId: context.externalEventID, etag: context.etag, icalUid: context.icalUid }, "accepted", AbortSignal.timeout(10_000));
-    if (!matchesRsvpEventProjection("microsoft", context.event, microsoftRsvpProjection(evidence)) || !isDeepStrictEqual(context.state, microsoftRsvpProjection(evidence).providerState)) throw new Error("Changed event");
+    const evidence = await microsoftAdapter.readMicrosoftRsvp!(actorID, context.accountID, context.externalCalendarID, { externalEventId: context.externalEventID, etag: context.etag, icalUid: context.icalUid }, "accepted", AbortSignal.timeout(10_000), context.graphOccurrence);
+    if (!matchesRsvpEventProjection("microsoft", context.event, microsoftRsvpProjection(evidence), undefined, context.graphOccurrence) || !isDeepStrictEqual(context.state, microsoftRsvpProjection(evidence).providerState)) throw new Error("Changed event");
     return observation;
   } catch { const { rsvpEdit: _rsvpEdit, ...rest } = observation; return rest; }
 }

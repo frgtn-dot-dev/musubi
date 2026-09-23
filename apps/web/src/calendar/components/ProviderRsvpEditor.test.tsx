@@ -46,10 +46,11 @@ it("sends CalDAV's explicit server reply policy and keeps an offline retry immut
   expect(save.mock.calls[0][1]).not.toHaveProperty("sendUpdates");
 });
 
-it("sends Outlook's explicit server reply policy and keeps an offline retry immutable", async () => {
-  const graph = { ...observation, rsvpEdit: { provider: "microsoft" as const, expectedRevision: 7 }, state: { ...observation.state!, provider: "microsoft" as const, reminders: { provider: "microsoft" as const, isOn: true, minutesBeforeStart: 15 } } };
+it.each([undefined, "occurrence"] as const)("sends an Outlook %s response with immutable retry", async scope => {
+  const graph = { ...observation, rsvpEdit: { provider: "microsoft" as const, expectedRevision: 7, ...(scope ? { scope } : {}) }, state: { ...observation.state!, provider: "microsoft" as const, reminders: { provider: "microsoft" as const, isOn: true, minutesBeforeStart: 15 } } };
   save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "completed" });
   render(<ProviderRsvpEditor eventId="event" observation={graph} returnFocus={document.body} onClose={vi.fn()} />);
+  if (scope) expect(screen.getByRole("dialog", { name: "Respond to this occurrence" })).toBeTruthy();
   expect(screen.getByText(/Organizer delivery cannot be verified/)).toBeTruthy();
   fireEvent.click(screen.getByRole("combobox", { name: "Your response" }));
   fireEvent.click(await screen.findByRole("option", { name: "Accept" }));
@@ -58,6 +59,6 @@ it("sends Outlook's explicit server reply policy and keeps an offline retry immu
   fireEvent.click(screen.getByRole("button", { name: "Send response to organizer" }));
   await screen.findByText(/Your response is observed in Outlook/);
   expect(save.mock.calls[1]).toEqual(save.mock.calls[0]);
-  expect(save.mock.calls[0][1]).toMatchObject({ provider: "microsoft", response: "accepted", notificationPolicy: "send-response" });
+  expect(save.mock.calls[0][1]).toMatchObject({ provider: "microsoft", response: "accepted", notificationPolicy: "send-response", ...(scope ? { scope } : {}) });
   expect(save.mock.calls[0][1]).not.toHaveProperty("sendUpdates");
 });

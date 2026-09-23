@@ -84,7 +84,15 @@ export function matchesRsvpEventProjection(
   expected: Event,
   actual: EventProjection & Partial<Pick<Event, "timeModel" | "seriesID" | "originalStart" | "isCanceled">> & { externalSeriesID?: string | null },
   instance?: ProviderRsvpInstance,
+  graphOccurrence?: import("@musubi/types").GraphRsvpOccurrence,
 ) {
+  if (provider === "microsoft" && graphOccurrence) {
+    const observed = EventTimeModelSchema.safeParse(actual.timeModel);
+    return !instance && !expected.seriesID && !expected.originalStart && !expected.recurrence && !expected.isCanceled &&
+      !actual.seriesID && !actual.recurrence && !actual.isCanceled && actual.externalSeriesID === graphOccurrence.externalSeriesID &&
+      JSON.stringify(actual.originalStart) === JSON.stringify(graphOccurrence.originalStart) && observed.success &&
+      ["zoned", "all-day"].includes(observed.data.kind) && matchesEventProviderProjection(provider, expected, actual);
+  }
   if (provider === "caldav" || provider === "microsoft") {
     const observed = EventTimeModelSchema.safeParse(actual.timeModel);
     return !instance && !expected.recurrence && !expected.seriesID && !expected.originalStart && !expected.isCanceled && !actual.recurrence && !actual.seriesID && !actual.externalSeriesID && !actual.originalStart && !actual.isCanceled && observed.success && ["zoned", "all-day"].includes(observed.data.kind) && (provider === "microsoft" || hasKnownEventTime(expected) && JSON.stringify(EventTimeModelSchema.parse(expected.timeModel)) === JSON.stringify(observed.data)) && matchesEventProviderProjection(provider, expected, actual);

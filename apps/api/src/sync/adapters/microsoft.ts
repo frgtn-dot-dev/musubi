@@ -145,8 +145,8 @@ export function toNormalized(item: any): NormalizedEvent {
     : parseGraphDate(item.end.dateTime);
 
   let reminderTimeEvidence: NormalizedEvent["reminderTimeEvidence"];
-  if (item.type === "singleInstance" && !item.recurrence && !item.seriesMasterId) {
-    try { const native = graphRsvpTime(item); reminderTimeEvidence = { timeModel: native.timeModel!, start: native.start, end: native.end, isAllDay: native.isAllDay }; } catch { /* Legacy reads remain available without action evidence. */ }
+  if (item.type === "singleInstance" && !item.recurrence && !item.seriesMasterId || ["occurrence", "exception"].includes(item.type) && item.providerOccurrence) {
+    try { const native = graphRsvpTime({ ...item, type: "singleInstance" }); reminderTimeEvidence = { timeModel: native.timeModel!, start: native.start, end: native.end, isAllDay: native.isAllDay }; } catch { /* Legacy reads remain available without action evidence. */ }
   }
   return {
     ...(typeof item.iCalUId === "string" ? { icalUid: item.iCalUId } : {}),
@@ -548,6 +548,7 @@ export async function fetchMicrosoftChanges(
     graphBase?: string;
     now?: number;
     timeModels?: boolean;
+    rsvpOccurrences?: boolean;
     organizerEventIDs?: readonly string[];
     excludedEventIDs?: readonly string[];
     excludedSeriesIDs?: readonly string[];
@@ -608,7 +609,7 @@ export async function fetchMicrosoftChanges(
           fetchImpl,
           graphBase,
         );
-        if (options.timeModels) {
+        if (options.timeModels || options.rsvpOccurrences) {
           if (!item.originalStart || item.type === "exception") {
             // Graph can omit originalStart even from an unprojected instance
             // GET. Select it explicitly while retaining the default fields so
@@ -641,7 +642,7 @@ export async function fetchMicrosoftChanges(
           throw new Error("Outlook returned an invalid source series address.");
         event.sourceSeriesID = item.seriesMasterId;
       }
-      if (options.timeModels && !item["@removed"]) {
+      if ((options.timeModels || options.rsvpOccurrences) && !item["@removed"]) {
         event.providerOccurrence = item.providerOccurrence;
         // The provider expands this bounded view. Never attach its recurrence
         // to local instances, which would generate the series a second time.
@@ -789,7 +790,7 @@ export const microsoftAdapter: CalendarAdapter = {
       throw new TaskScopeMissingError();
     return taskListId
       ? fetchMicrosoftTaskChanges(accessToken, taskListId, cursor)
-      : fetchMicrosoftChanges(accessToken, externalCalendarId, cursor, { timeModels: config.api.eventTimeEditsEnabled, organizerEventIDs: await getOrganizerTimeEventIDs(userID, accountId, externalCalendarId, "microsoft"), ...exclusions });
+      : fetchMicrosoftChanges(accessToken, externalCalendarId, cursor, { timeModels: config.api.eventTimeEditsEnabled, rsvpOccurrences: config.api.providerRsvpEditsEnabled, organizerEventIDs: await getOrganizerTimeEventIDs(userID, accountId, externalCalendarId, "microsoft"), ...exclusions });
   },
 
   async createGraphFamily(userID, accountId, externalCalendarId, event, identity, state) {
@@ -808,12 +809,12 @@ export const microsoftAdapter: CalendarAdapter = {
     return family;
   },
 
-  async readMicrosoftRsvp(user, account, calendar, ref, response, signal) {
+  async readMicrosoftRsvp(user, account, calendar, ref, response, signal, occurrence) {
     if (!config.api.providerRsvpEditsEnabled) throw new EventWriteError("event-write", "unsupported");
     const token = await getAccessToken(user, account);
     await assertOAuthEventWriteGrant(user, "microsoft", account);
     const { graphRsvpSession } = await import("./microsoft_rsvp_delivery");
-    const evidence = await (await graphRsvpSession(token, account, calendar, signal)).read(ref.externalEventId, response);
+    const evidence = await (await graphRsvpSession(token, account, calendar, signal)).read(ref.externalEventId, response, occurrence);
     if (!evidence || evidence.etag !== ref.etag || evidence.native.iCalUId !== ref.icalUid) throw new ProviderEventWriteError("provider-conflict");
     return evidence;
   },

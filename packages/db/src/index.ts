@@ -42,6 +42,7 @@ export * from "./queries/caldav-split";
 export * from "./queries/caldav-split-delivery";
 
 export * from "./queries/provider-rsvp";
+export * from "./queries/graph-rsvp-occurrence";
 
 export * from "./queries/graph-family";
 

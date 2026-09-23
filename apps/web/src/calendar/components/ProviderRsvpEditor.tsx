@@ -13,6 +13,7 @@ export function ProviderRsvpEditor({ eventId, connectionId, observation, onClose
 }) {
   const graph = observation.rsvpEdit?.provider === "microsoft";
   const caldav = observation.rsvpEdit?.provider === "caldav";
+  const occurrenceResponse = occurrence || observation.rsvpEdit?.scope === "occurrence";
   const [response, setResponse] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -31,7 +32,7 @@ export function ProviderRsvpEditor({ eventId, connectionId, observation, onClose
     finally { pending.current = false; setBusy(false); }
   }
   return <div className={styles.layerBoundary} onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
-    <Dialog open title={occurrence ? "Respond to this occurrence" : graph ? "Respond in Outlook" : caldav ? "Respond in calendar" : "Respond in Google"} description={`${occurrence ? "This Google response applies only to this occurrence. " : ""}${graph ? microsoftRsvpNotice : caldav ? caldavRsvpNotice : providerRsvpNotice}`} closeLabel={graph ? "Close Outlook response" : caldav ? "Close calendar response" : "Close Google response"} returnFocus={returnFocus} onOpenChange={open => { if (!open && !pending.current) onClose(); }} size="compact" footer={<>
+    <Dialog open title={occurrenceResponse ? "Respond to this occurrence" : graph ? "Respond in Outlook" : caldav ? "Respond in calendar" : "Respond in Google"} description={`${occurrenceResponse ? `This ${graph ? "Outlook" : "Google"} response applies only to this occurrence. ` : ""}${graph ? microsoftRsvpNotice : caldav ? caldavRsvpNotice : providerRsvpNotice}`} closeLabel={graph ? "Close Outlook response" : caldav ? "Close calendar response" : "Close Google response"} returnFocus={returnFocus} onOpenChange={open => { if (!open && !pending.current) onClose(); }} size="compact" footer={<>
       <Button variant="secondary" disabled={busy} onClick={onClose}>{notice ? "Close" : "Cancel"}</Button>
       {!notice ? <Button disabled={!response} loading={busy} onClick={() => void send()}>{(caldav || graph) ? "Send response to organizer" : "Send response"}</Button> : null}
     </>}>

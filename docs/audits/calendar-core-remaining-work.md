@@ -329,3 +329,19 @@ actual queue/outbox edits passed with fixture cleanup. Details and redacted
 results: [all-day occurrence contract](./outlook-occurrence-allday-20260922.md).
 Other zones, timed/all-day conversion and whole-series time/recurrence changes
 remain open; this is not a production activation.
+
+
+### 2026-09-23: Outlook attendee RSVP for one imported occurrence
+
+The first recurring RSVP scope now has an explicit client opt-in and occurrence
+request, exact native parent/originalStart binding, frozen target/master proof,
+and the existing durable at-most-once POST marker. Web/native reuse their RSVP
+editor with occurrence wording. Synthetic tests cover moved exceptions,
+occurrence-to-exception materialization, concurrent mapping/parent edits,
+read-only recovery and disappearance after decline.
+
+Live recurring attendee verification remains pending on renewing the local
+Google organizer grant and approving its disposable invitation to Outlook.
+Whole-series RSVP, canonical local-series attendee children, delegated calendars
+and general all-day representations remain separate work. No production gate,
+release tag or deployment changes. [Contract](../sync/microsoft-rsvp.md).
