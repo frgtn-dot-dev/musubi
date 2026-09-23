@@ -12,6 +12,7 @@ const responseStatus = z.object({ response: z.enum(["accepted", "tentativelyAcce
 const nativeCommon = z.object({
   id: z.string().min(1), iCalUId: z.string().min(1), "@odata.etag": z.string().min(1),
   changeKey: z.string().min(1).optional(), lastModifiedDateTime: z.iso.datetime({ offset: true }).optional(),
+  createdDateTime: z.iso.datetime({ offset: true }).optional(),
   isCancelled: z.literal(false), isOrganizer: z.literal(false), isDraft: z.literal(false),
   "@removed": z.never().optional(), "@odata.nextLink": z.never().optional(), "attendees@odata.nextLink": z.never().optional(),
   attendees: z.array(address.extend({ type: z.enum(["required", "optional", "resource"]), status: responseStatus })).min(1).max(200),
@@ -35,6 +36,10 @@ export function microsoftRsvpEvidence(input: unknown, selfAddress: string, respo
     if (/\.\d{3}\d*[1-9]/.test(target.originalStart) || new Date(target.originalStart).toISOString() !== occurrence.originalStart.value || target.seriesMasterId !== occurrence.externalSeriesID || target.id === target.seriesMasterId) fail();
     const parent = masterSchema.parse(structuredClone(masterInput));
     if (parent.id !== occurrence.externalSeriesID || parent.organizer.emailAddress.address.toLowerCase() !== native.organizer.emailAddress.address.toLowerCase()) fail();
+    // Live Graph changes an unanswered master's response (and inherited sibling
+    // responses) on the first instance RSVP. Do not present this as a slot-only
+    // action; the participant must respond to the series in Outlook first.
+    if (!["accepted", "tentativelyAccepted"].includes(parent.responseStatus.response)) fail();
     // The attendee must belong to this mailbox in both the series and target.
     const self = parent.attendees.filter(a => a.emailAddress.address.toLowerCase() === own);
     if (self.length !== 1 || self[0]!.type === "resource" || parent.organizer.emailAddress.address.toLowerCase() === own || new Set(parent.attendees.map(a => a.emailAddress.address.toLowerCase())).size !== parent.attendees.length) fail();
@@ -57,7 +62,13 @@ export function matchesMicrosoftRsvp(evidence: MicrosoftRsvpEvidence, actual: un
     const normalize = (input: Record<string, unknown>) => {
       const item = structuredClone(input) as any;
       for (const key of ["@odata.etag", "changeKey", "lastModifiedDateTime"]) delete item[key];
-      if (evidence.occurrence && evidence.native.type === "occurrence" && item.type === "exception") item.type = "occurrence";
+      if (evidence.occurrence && evidence.native.type === "occurrence" && next.native.type === "exception") {
+        item.type = "occurrence";
+        // First materialization creates a new exception for the same ID/slot.
+        // Ignore only two valid creation timestamps, never absent/invalid data
+        // or a timestamp change on an already existing exception.
+        if (evidence.native.createdDateTime && next.native.createdDateTime) delete item.createdDateTime;
+      }
       // The state check above authorizes only the evidenced availability transition.
       if (evidence.response === "accepted" && evidence.native.showAs === "tentative" && item.showAs === "busy") item.showAs = "tentative";
       if (evidence.response === "tentative" && evidence.native.showAs === "busy" && item.showAs === "tentative") item.showAs = "busy";

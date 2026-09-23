@@ -9,12 +9,14 @@ export function graphRsvpNative() {
     attendees: [{ emailAddress: { address: "self@example.test", name: "Self" }, type: "required", status: { response: "notResponded", time: "2026-03-27T08:00:00Z" } }, { emailAddress: { address: "guest@example.test" }, type: "optional", status: { response: "accepted" } }],
     responseStatus: { response: "notResponded", time: "2026-03-27T08:00:00Z" }, isReminderOn: true, reminderMinutesBeforeStart: 15, showAs: "busy", sensitivity: "normal", onlineMeeting: null, onlineMeetingUrl: null,
     customPreserved: { value: "untouched" },
+    createdDateTime: "2026-03-27T07:00:00Z",
   };
 }
 export async function graphRsvpFixture(recurring = false) {
   const native: ReturnType<typeof graphRsvpNative> & { seriesMasterId?: string; originalStart?: string } = graphRsvpNative();
   if (recurring) { native.type = "occurrence"; native.seriesMasterId = "series"; native.originalStart = "2026-03-28T08:00:00.000Z"; }
   const master = { ...graphRsvpNative(), id: "series", iCalUId: "series-uid", type: "seriesMaster", recurrence: { pattern: { type: "daily", interval: 1 }, range: { type: "numbered", numberOfOccurrences: 3, startDate: "2026-03-28", recurrenceTimeZone: "Europe/Prague" } } };
+  master.responseStatus.response = "tentativelyAccepted";
   const state = { native, master, mode: "ok", posts: 0, reads: 0, marked: false, hook: undefined as (() => Promise<void>) | undefined };
   const server = createServer((req, res) => { void (async () => {
     assert.equal(req.headers.authorization, "Bearer fixture");
@@ -42,7 +44,7 @@ export async function graphRsvpFixture(recurring = false) {
       if (!state.mode.startsWith("live-accept") && state.mode !== "live-tentative") state.native.attendees[0]!.status.response = response;
       else state.native.showAs = state.mode === "live-tentative" ? "tentative" : "busy";
       state.native["@odata.etag"] = 'W/"v2"'; state.native.changeKey = "v2";
-      if (recurring) { state.native.type = "exception"; state.master["@odata.etag"] = 'W/"master-v2"'; state.master.changeKey = "master-v2"; }
+      if (recurring) { if (state.native.type === "occurrence") state.native.createdDateTime = "2026-03-27T08:01:00Z"; state.native.type = "exception"; state.master["@odata.etag"] = 'W/"master-v2"'; state.master.changeKey = "master-v2"; }
     }
     if (state.mode === "live-accept-foreign") state.native.attendees[1]!.status.response = "declined";
     if (state.mode === "live-accept-content") state.native.body.content = "Concurrent content";

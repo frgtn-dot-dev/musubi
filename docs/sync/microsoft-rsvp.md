@@ -57,12 +57,17 @@ flag; it does not adopt a local series or rewrite the canonical time model.
 
 Each fresh read requests the target with `$select=*,originalStart` and reads its
 master in the same calendar. Both must prove the same mailbox attendee and
-organizer; the master must be active and recurring. The durable baseline
+organizer; the master must be active, recurring and already accepted or tentative.
+An unanswered or declined master is refused before admission or dispatch. Native
+QA showed a first instance RSVP changing the unanswered master and inherited
+sibling responses to tentative; a slot-only action must not permit that. The durable baseline
 includes the complete target and master. The only POST targets that exact
 occurrence. No action is sent to the master or neighbouring slots.
 
 Readback may observe `occurrence` becoming `exception`. The target must still
 have the same ID, UID, parent, originalStart, content, time and non-self guests.
+First materialization may refresh `createdDateTime` only when both creation
+timestamps are valid. An existing exception must retain its creation timestamp.
 Only the existing own-response/availability transitions are allowed. The
 master may refresh ETag, changeKey and lastModifiedDateTime, but all other
 fields, including its response and recurrence, must remain unchanged.
@@ -76,9 +81,10 @@ All-day evidence currently requires UTC-midnight endpoints; broader all-day
 representations are not inferred.
 
 This extension is covered by synthetic HTTP, database, web/native and browser
-tests. Live recurring attendee verification is still pending; the local Google
-organizer grant returned `invalid_grant`. This is not production activation or
-proof of organizer notification delivery.
+tests. Live QA on 2026-09-23 found and blocked the unanswered-master side effect
+and established the materialization timestamp change. Final live verification of
+already-answered series remains pending. This is not production activation or
+proof of organizer notification delivery. [Evidence and limits](../audits/outlook-occurrence-rsvp-20260923.md).
 
 ## Durable dispatch and recovery
 

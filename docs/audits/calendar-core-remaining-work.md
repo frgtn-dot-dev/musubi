@@ -340,8 +340,11 @@ editor with occurrence wording. Synthetic tests cover moved exceptions,
 occurrence-to-exception materialization, concurrent mapping/parent edits,
 read-only recovery and disappearance after decline.
 
-Live recurring attendee verification remains pending on renewing the local
-Google organizer grant and approving its disposable invitation to Outlook.
+Live verification found that a first instance RSVP changes an unanswered
+master and inherited sibling responses to tentative. Those masters are now
+refused before admission and dispatch. Initial exception materialization also
+refreshes a valid creation timestamp. Final positive live verification of an
+already-answered series remains pending; [evidence](outlook-occurrence-rsvp-20260923.md).
 Whole-series RSVP, canonical local-series attendee children, delegated calendars
 and general all-day representations remain separate work. No production gate,
 release tag or deployment changes. [Contract](../sync/microsoft-rsvp.md).

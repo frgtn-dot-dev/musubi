@@ -1,0 +1,81 @@
+{
+  "date": "2026-09-23",
+  "scope": "Outlook recurring attendee occurrence RSVP",
+  "fixture": {
+    "organizerProvider": "Google",
+    "attendeeProvider": "Outlook",
+    "zone": "America/New_York",
+    "count": 3,
+    "dates": [
+      "2026-10-30",
+      "2026-10-31",
+      "2026-11-01"
+    ],
+    "nativeReadZone": "UTC"
+  },
+  "initialProbe": {
+    "cases": [
+      {
+        "response": "tentative",
+        "status": "unconfirmed",
+        "errorCode": "graph-rsvp-response-unconfirmed",
+        "posts": 1,
+        "copyStatus": 200,
+        "parentUnchanged": false,
+        "changedParentFields": [
+          "@odata.etag",
+          "lastModifiedDateTime",
+          "changeKey",
+          "responseStatus",
+          "exceptionOccurrences"
+        ],
+        "neighboursUnchanged": false
+      },
+      {
+        "response": "accepted",
+        "status": "unconfirmed",
+        "errorCode": "graph-rsvp-response-unconfirmed",
+        "posts": 1,
+        "copyStatus": 200,
+        "parentUnchanged": false,
+        "changedParentFields": [
+          "@odata.etag",
+          "lastModifiedDateTime",
+          "changeKey",
+          "exceptionOccurrences"
+        ],
+        "neighboursUnchanged": true
+      },
+      {
+        "response": "declined",
+        "status": "unconfirmed",
+        "errorCode": "graph-rsvp-copy-absent",
+        "posts": 1,
+        "copyStatus": 404,
+        "parentUnchanged": false,
+        "changedParentFields": [
+          "@odata.etag",
+          "lastModifiedDateTime",
+          "changeKey",
+          "cancelledOccurrences",
+          "exceptionOccurrences"
+        ],
+        "neighboursUnchanged": true
+      }
+    ],
+    "unexpectedSideEffect": {
+      "parentResponse": [
+        "notResponded",
+        "tentativelyAccepted"
+      ],
+      "inheritedSiblingResponses": [
+        "notResponded",
+        "tentativelyAccepted"
+      ],
+      "newExceptionCreatedDateTime": "changed"
+    },
+    "cleanup": "verified"
+  },
+  "notificationDelivery": "unknown",
+  "finalProbe": "pending"
+}

@@ -105,6 +105,7 @@ async function main() {
           (n: typeof actual) => { n.iCalUId = "another-uid"; },
           (n: typeof actual) => { n.start.dateTime = "2026-03-28T10:00:00"; },
           (n: typeof actual) => { n.attendees[1]!.status.response = "declined"; },
+          (n: typeof actual) => { n.createdDateTime = "invalid"; },
         ]) { const changed = structuredClone(actual); mutate(changed); assert.equal(matchesMicrosoftRsvp(saved, changed, fixture.state.master), false); }
         for (const mutate of [
           (n: typeof master) => { n.responseStatus.response = "accepted"; },
@@ -112,10 +113,25 @@ async function main() {
           (n: typeof master) => { n.recurrence.pattern.interval = 2; },
           (n: typeof master) => { n.attendees[1]!.status.response = "declined"; },
         ]) { const changed = structuredClone(fixture.state.master); mutate(changed); assert.equal(matchesMicrosoftRsvp(saved, actual, changed), false); }
-        if (saved.native.type === "exception") { const changed = { ...actual, type: "occurrence" }; assert.equal(matchesMicrosoftRsvp(saved, changed, fixture.state.master), false); }
+        if (saved.native.type === "exception") {
+          assert.equal(matchesMicrosoftRsvp(saved, { ...actual, type: "occurrence" }, fixture.state.master), false);
+          assert.equal(matchesMicrosoftRsvp(saved, { ...actual, createdDateTime: "2026-03-27T10:00:00Z" }, fixture.state.master), false);
+        } else {
+          assert.equal(matchesMicrosoftRsvp(saved, { ...actual, createdDateTime: undefined }, fixture.state.master), false);
+          assert.equal(matchesMicrosoftRsvp(saved, { ...actual, type: "occurrence", createdDateTime: "2026-03-27T10:00:00Z" }, fixture.state.master), false);
+        }
         fixture.state.master.subject = "Concurrent series edit";
         assert.equal((await session.write(saved, true, async () => { throw Error("must not resend"); }, async () => {})).kind, "unconfirmed");
         assert.equal(fixture.state.posts, 1);
+      } finally { await fixture.close(); }
+    }
+    for (const response of ["none", "notResponded", "declined"]) {
+      const fixture = await graphRsvpFixture(true);
+      try {
+        fixture.state.master.responseStatus.response = response;
+        const session = await graphRsvpSession("fixture", "account", "calendar");
+        await assert.rejects(() => session.read("meeting", "accepted", { externalSeriesID: "series", originalStart: { kind: "instant", value: fixture.state.native.originalStart! } }));
+        assert.equal(fixture.state.posts, 0, "An unanswered series must not receive an instance response");
       } finally { await fixture.close(); }
     }
     for (const mutation of ["parent-content", "parent-response", "slot", "missing-parent", "self-on-master"] as const) {

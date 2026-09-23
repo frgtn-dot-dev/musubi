@@ -27,7 +27,7 @@ export async function runMicrosoftRsvpIntegration(recurring = false) {
   const address = api.address(); assert.ok(address && typeof address !== "string");
   const origin = `http://127.0.0.1:${address.port}`;
   try {
-    for (const scenario of ["live-tentative", "live-accept-pull", "live-accept-snapshot-mismatch", "live-accept", "live-accept-foreign", "live-accept-content", "mark-lock-role", "mark-lock-revision", "mark-lock-source", "mark-lock-account", "whitespace", "uid-backfill", "decline-pull-before-ack", "all-day", "echo-dst", "public", "accepted", "tentative", "declined", "no-op", "lost", "not-observed", "decline-absent", "changed", "before-network-restart", "echo-before-ack", "flag", "worker-flag", "account-after-read", "role-after-read", "revision-after-read", "lease-after-read", ...(recurring ? ["mark-lock-slot", "slot-after-read", "parent-after-read", "slot-before-ack", "admission-binding"] as const : [])] as const) {
+    for (const scenario of ["live-tentative", "live-accept-pull", "live-accept-snapshot-mismatch", "live-accept", "live-accept-foreign", "live-accept-content", "mark-lock-role", "mark-lock-revision", "mark-lock-source", "mark-lock-account", "whitespace", "uid-backfill", "decline-pull-before-ack", "all-day", "echo-dst", "public", "accepted", "tentative", "declined", "no-op", "lost", "not-observed", "decline-absent", "changed", "before-network-restart", "echo-before-ack", "flag", "worker-flag", "account-after-read", "role-after-read", "revision-after-read", "lease-after-read", ...(recurring ? ["mark-lock-slot", "slot-after-read", "parent-after-read", "slot-before-ack", "admission-binding", "unanswered-parent", "parent-response-after-admission"] as const : [])] as const) {
       const actor = `graph-rsvp-${randomUUID()}`;
       const fixture = await graphRsvpFixture(recurring);
       await db.insert(user).values({ id: actor, name: "Fixture", email: `${actor}@example.test`, isExternal: true });
@@ -79,6 +79,17 @@ export async function runMicrosoftRsvpIntegration(recurring = false) {
         const credential = issueMemberToken(); await replaceMemberToken(actor, credential.tokenHash);
         const headers = { authorization: `Bearer ${credential.raw}`, "content-type": "application/json", [CLIENT_VERSION_HEADER]: PRODUCT_VERSION };
         const endpoint = `${origin}/events/${original.id}`;
+        if (scenario === "unanswered-parent") {
+          fixture.state.master.responseStatus.response = "notResponded";
+          const result = await fixture.originalFetch(`${endpoint}/provider-state?outlookRsvp=1`, { headers });
+          assert.equal(result.status, 200);
+          assert.equal((await result.json()).rsvpEdit, undefined);
+          await assert.rejects(() => queueProviderRsvp(actor, original.id, request));
+          assert.equal(fixture.state.posts, 0);
+          assert.equal((await db.select().from(eventOutbox).where(eq(eventOutbox.eventID, original.id))).length, 0);
+          console.log("Graph RSVP unanswered parent: capability hidden and no intent/POST: OK");
+          continue;
+        }
         if (scenario === "public") {
           assert.equal((await fixture.originalFetch(`${endpoint}/provider-state`)).status, 401);
           assert.equal(fixture.state.reads, 0);
@@ -101,6 +112,14 @@ export async function runMicrosoftRsvpIntegration(recurring = false) {
           assert.equal(fixture.state.posts, 0); console.log(`Graph RSVP ${recurring ? "occurrence" : "one-off"} DB ${scenario}: OK`); continue;
         }
         const deliver = () => deliverEventOutbox(queued.operationID, () => microsoftAdapter, { timeoutMs: 5000 });
+        if (scenario === "parent-response-after-admission") {
+          fixture.state.master.responseStatus.response = "notResponded";
+          await deliver();
+          assert.equal((await row()).status, "conflict");
+          assert.equal(fixture.state.posts, 0);
+          console.log("Graph RSVP unanswered parent after admission: no POST: OK");
+          continue;
+        }
         fixture.state.mode = scenario;
         // Fake server also verifies the actual persisted marker before POST.
         fixture.state.hook = async () => { fixture.state.marked = !!(await row()).payload.rsvp?.graphDispatch; };
