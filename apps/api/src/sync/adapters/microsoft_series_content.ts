@@ -1,3 +1,4 @@
+import { requireSupportedSeriesZone } from "./microsoft_time_zone";
 import { config } from "@musubi/config";
 import { OrganizerAdmissionRejectedError } from "@musubi/types";
 import { graphSeriesTimeChange } from "@musubi/db";
@@ -42,7 +43,8 @@ export async function observeGraphSeriesContent(token: string, context: GraphMee
   const transport = await graphOrganizerFamilySession(token, context, signal, true);
   if (!same(family.identity, transport.identity)) fail();
   const native = await readNative(transport, family.baseline, context.masterID);
-  return { ...family, ...native, version: graphContentVersion({ ...family, ...native }) };
+  const timeZoneSupported = await requireSupportedSeriesZone(transport, family.template, native.native).then(() => true, () => false);
+  return { ...family, ...native, timeZoneSupported, version: graphContentVersion({ ...family, ...native }) };
 }
 export async function prepareGraphSeriesContent(token: string, context: GraphMeetingContext, request: MicrosoftRecurringContentRequest, signal?: AbortSignal): Promise<GraphOccurrenceContent> {
   if (request.scope !== "series") fail();
@@ -51,6 +53,7 @@ export async function prepareGraphSeriesContent(token: string, context: GraphMee
   if (observed.version !== request.expectedSeriesVersion) fail();
   const saved: GraphOccurrenceContent = { version: 1, context, request, baseline: observed.baseline, native: observed.native, nativeExceptions: observed.nativeExceptions, identity: observed.identity, template: observed.template, targetID: context.masterID };
   if (request.patch.time) {
+    if (!observed.timeZoneSupported) throw new OrganizerAdmissionRejectedError("The series time zone is not supported by this Outlook mailbox.");
     if (!config.api.eventTimeEditsEnabled) throw new OrganizerAdmissionRejectedError("Time editing is not available.");
     try { graphSeriesTimeChange(saved); }
     catch (error) { throw new OrganizerAdmissionRejectedError(error instanceof Error ? error.message : "Choose a supported series time."); }
@@ -69,7 +72,7 @@ export async function updateGraphSeriesContent(token: string, saved: GraphOccurr
   const transport = await graphOrganizerFamilySession(token, saved.context, signal, true);
   if (!same(transport.identity, saved.identity)) fail();
   const baseline = microsoftMeetingContentEvidence(saved.native, saved.identity.selfAddress, saved.context.masterID, true);
-  const patch = microsoftMeetingContentBody(saved.request);
+  const patch = microsoftMeetingContentBody(saved.request, saved.native);
   const time = graphSeriesTimeChange(saved);
   if (time && !config.api.eventTimeEditsEnabled && !saved.dispatch) fail();
   const read = async (after = false) => {
@@ -78,7 +81,7 @@ export async function updateGraphSeriesContent(token: string, saved: GraphOccurr
     return { family, ...await readNative(transport, family, saved.context.masterID) };
   };
   const matches = (after: Awaited<ReturnType<typeof read>>) => {
-    if (!graphSeriesContentObserved(saved, after.family) || !matchesMeetingContent(baseline, patch, after.native, saved.identity.selfAddress, saved.context.masterID, true) || after.nativeExceptions.length !== saved.nativeExceptions!.length) return false;
+    if (!graphSeriesContentObserved(saved, after.family) || !matchesMeetingContent(baseline, patch, after.native, saved.identity.selfAddress, saved.context.masterID, true, saved.template.timeModel?.kind === "zoned" ? saved.template.timeModel.timeZone : undefined) || after.nativeExceptions.length !== saved.nativeExceptions!.length) return false;
     return saved.nativeExceptions!.every(before => {
       const next = after.nativeExceptions.find(n => n.id === before.id);
       if (!next) return false;
@@ -104,6 +107,7 @@ export async function updateGraphSeriesContent(token: string, saved: GraphOccurr
     if (!saved.dispatch.acceptedAt) return unknown();
     return verify();
   }
+  if (time) await requireSupportedSeriesZone(transport, saved.template, saved.native);
   const current = await read();
   if (!same(current.family, saved.baseline) || !same(current.native, baseline) || !same(current.nativeExceptions, saved.nativeExceptions)) fail();
   if (matches(current)) return { kind: "observed" as const, observation: current.family };

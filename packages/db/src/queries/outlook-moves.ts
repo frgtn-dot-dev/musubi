@@ -9,7 +9,7 @@ import { graphMeetingContextInTransaction, lockGraphMeetingContext } from "./gra
 import { sameCaldavScopeContext as same } from "./caldav-series-scope";
 import type { GraphOccurrenceContent } from "./graph-occurrence-content";
 import type { GraphFamilyObservation } from "./graph-family";
-import { outlookMoveTime, sameOutlookMoveFamily, type OutlookMoveJournal } from "./outlook-move-plan";
+import { outlookMoveTime, outlookMoveZone, sameOutlookMoveFamily, type OutlookMoveJournal } from "./outlook-move-plan";
 
 export type OutlookMoveRow = typeof outlookMoves.$inferSelect;
 function refuse(): never { throw new BadRequestError("This move is no longer available. Refresh the series and preview it again."); }
@@ -17,7 +17,7 @@ export function outlookMoveResult(row: OutlookMoveRow) {
   const { journal } = row;
   return OutlookMoveResultSchema.parse({ operationID: row.id, eventID: row.eventID, status: row.status,
     title: journal.initial.baseline.master.values.title, meeting: journal.initial.baseline.master.providerState.attendees.length > 0,
-    timeZone: "UTC", expiresAt: row.expiresAt.toISOString(), offsetMinutes: journal.request.offsetMinutes,
+    timeZone: outlookMoveZone(journal.initial), expiresAt: row.expiresAt.toISOString(), offsetMinutes: journal.request.offsetMinutes,
     items: journal.items.map(({ operationID: _operation, nativeID: _native, ...item }) => item) });
 }
 async function assertReadable(tx: DbTransaction, actorID: string, row: OutlookMoveRow) {
@@ -121,7 +121,7 @@ export async function admitOutlookMoveChild(tx: DbTransaction, saved: GraphOccur
   const index = row.journal.items.findIndex(item => item.status !== "completed");
   const item = row.journal.items[index];
   if (!item || item.status !== "pending" || item.eventID !== saved.request.eventID || item.nativeID !== saved.targetID || item.operationID !== saved.request.operationID ||
-      saved.request.scope !== "occurrence" || !same(saved.request.patch, { time: outlookMoveTime(item) })) refuse();
+      saved.request.scope !== "occurrence" || !same(saved.request.patch, { time: outlookMoveTime(item, outlookMoveZone(row.journal.initial)) })) refuse();
   const items = row.journal.items.map((n, i) => i === index ? { ...n, status: "queued" as const } : n);
   await tx.update(outlookMoves).set({ journal: { ...row.journal, expected: saved.baseline, items }, leaseToken: null, leaseUntil: null, updatedAt: new Date() }).where(eq(outlookMoves.id, row.id));
 }

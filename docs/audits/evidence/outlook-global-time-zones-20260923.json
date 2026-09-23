@@ -1,0 +1,197 @@
+{
+  "date": "2026-09-23",
+  "bulk": [
+    {
+      "meeting": false,
+      "zone": "America/New_York",
+      "label": "Eastern Standard Time",
+      "status": "completed",
+      "cleanup": "verified",
+      "nativePatches": 2,
+      "results": [
+        "completed",
+        "completed"
+      ],
+      "checks": {
+        "masterUnchanged": true,
+        "existingExceptionPreserved": true,
+        "cancellationPreserved": true,
+        "bothSelectedMoved": true
+      },
+      "cleanupStatus": 204
+    },
+    {
+      "meeting": true,
+      "zone": "Australia/Sydney",
+      "label": "AUS Eastern Standard Time",
+      "status": "completed",
+      "cleanup": "verified",
+      "nativePatches": 2,
+      "preparation": {
+        "status": 200
+      },
+      "results": [
+        "completed",
+        "completed"
+      ],
+      "checks": {
+        "masterUnchanged": true,
+        "existingExceptionPreserved": true,
+        "cancellationPreserved": true,
+        "bothSelectedMoved": true
+      },
+      "cleanupStatus": 202
+    },
+    {
+      "meeting": false,
+      "zone": "Asia/Kathmandu",
+      "label": "Asia/Kathmandu",
+      "status": "completed",
+      "cleanup": "verified",
+      "nativePatches": 2,
+      "preparation": {
+        "status": 200
+      },
+      "results": [
+        "completed",
+        "completed"
+      ],
+      "checks": {
+        "masterUnchanged": true,
+        "existingExceptionPreserved": true,
+        "cancellationPreserved": true,
+        "bothSelectedMoved": true
+      },
+      "cleanupStatus": 204
+    }
+  ],
+  "series": [
+    {
+      "meeting": false,
+      "zone": "America/New_York",
+      "label": "Eastern Standard Time",
+      "status": "completed",
+      "cleanup": "verified",
+      "nativePatches": 1,
+      "preparationDrift": [
+        {
+          "type": "instance",
+          "etag": true,
+          "state": false,
+          "uid": false
+        },
+        {
+          "type": "master",
+          "etag": true,
+          "state": false,
+          "uid": false
+        },
+        {
+          "type": "instance",
+          "etag": true,
+          "state": false,
+          "uid": false
+        },
+        {
+          "type": "instance",
+          "etag": true,
+          "state": false,
+          "uid": false
+        },
+        {
+          "type": "instance",
+          "etag": true,
+          "state": false,
+          "uid": false
+        },
+        {
+          "type": "instance",
+          "etag": true,
+          "state": false,
+          "uid": false
+        }
+      ],
+      "uncertain": false,
+      "checks": {
+        "recurrenceUnchanged": true,
+        "allLocalTimesVerified": true,
+        "originalNativeZonePreserved": true,
+        "onePatch": true
+      },
+      "cleanupStatus": 204
+    },
+    {
+      "meeting": true,
+      "zone": "Australia/Sydney",
+      "label": "AUS Eastern Standard Time",
+      "status": "completed",
+      "cleanup": "verified",
+      "nativePatches": 1,
+      "preparationDrift": [],
+      "uncertain": false,
+      "checks": {
+        "recurrenceUnchanged": true,
+        "allLocalTimesVerified": true,
+        "originalNativeZonePreserved": true,
+        "onePatch": true
+      },
+      "cleanupStatus": 202
+    },
+    {
+      "meeting": false,
+      "zone": "Asia/Kathmandu",
+      "label": "Asia/Kathmandu",
+      "status": "completed",
+      "cleanup": "verified",
+      "nativePatches": 1,
+      "preparationDrift": [
+        {
+          "type": "instance",
+          "etag": true,
+          "state": false,
+          "uid": false
+        },
+        {
+          "type": "instance",
+          "etag": true,
+          "state": false,
+          "uid": false
+        },
+        {
+          "type": "instance",
+          "etag": true,
+          "state": false,
+          "uid": false
+        },
+        {
+          "type": "instance",
+          "etag": true,
+          "state": false,
+          "uid": false
+        },
+        {
+          "type": "instance",
+          "etag": true,
+          "state": false,
+          "uid": false
+        },
+        {
+          "type": "master",
+          "etag": true,
+          "state": false,
+          "uid": false
+        }
+      ],
+      "uncertain": false,
+      "checks": {
+        "recurrenceUnchanged": true,
+        "allLocalTimesVerified": true,
+        "originalNativeZonePreserved": true,
+        "onePatch": true
+      },
+      "cleanupStatus": 204
+    }
+  ],
+  "notificationDelivery": "unknown",
+  "preparation": "One meeting fixture preparation received a stale native revision; it was cleaned before retry. Newly created series refreshed ETags before admission; tests resynchronized the fixture mirror rather than weakening revision checks. All fixture cleanup verified with GET 404."
+}

@@ -152,7 +152,7 @@ assert.equal(timedDraft.timeZone, "UTC");
 assert.equal(timedDraft.start, child.start.toISOString().slice(0, -1));
 const timeUpdate = organizerRequest("update", { ...timedDraft, start: "2026-10-23T10:00:00", end: "2026-10-23T11:00:00" }, ["start", "end"], identity, outlookTime);
 assert.deepEqual(timeUpdate.action === "update" && timeUpdate.patch, { time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-10-23T10:00:00.000", endLocal: "2026-10-23T11:00:00.000" } });
-for (const change of [ { scope: undefined }, { expectedSeriesVersion: undefined }, { patch: { time: { kind: "zoned", timeZone: "America/New_York", startLocal: "2026-10-23T10:00:00", endLocal: "2026-10-23T11:00:00" } } }]) assert.equal(ProviderOrganizerRequestSchema.safeParse({ ...timeUpdate, ...change }).success, false);
+for (const change of [ { scope: undefined }, { expectedSeriesVersion: undefined }, { patch: { time: { kind: "zoned", timeZone: "Not/AZone", startLocal: "2026-10-23T10:00:00", endLocal: "2026-10-23T11:00:00" } } }]) assert.equal(ProviderOrganizerRequestSchema.safeParse({ ...timeUpdate, ...change }).success, false);
 
 const pragueTime = { ...outlookTime, organizerEdit: { ...outlookTime.organizerEdit, timeZone: "Europe/Prague" as const } };
 for (const [instant, local] of [["2026-10-23T10:00:00Z", "2026-10-23T12:00:00.000"], ["2026-10-25T11:00:00Z", "2026-10-25T12:00:00.000"]]) {
@@ -183,5 +183,16 @@ assert.equal(seriesDraft.end, seriesTimeModel.endLocal);
 const seriesTimeUpdate = organizerRequest("update", { ...seriesDraft, end: "2026-10-20T11:30:00" }, ["end"], identity, seriesTimeObservation);
 assert.deepEqual(seriesTimeUpdate.action === "update" && seriesTimeUpdate.patch, { time: { kind: "zoned", timeZone: "UTC", startLocal: "2026-10-20T09:00:00.000", endLocal: "2026-10-20T11:30:00.000" } });
 assert.equal(seriesTimeUpdate.action === "update" && seriesTimeUpdate.provider === "microsoft" && seriesTimeUpdate.scope, "series");
-assert.equal(ProviderOrganizerRequestSchema.safeParse({ ...seriesTimeUpdate, patch: { time: { ...seriesTimeModel, timeZone: "Europe/Prague" } } }).success, false);
+assert.equal(ProviderOrganizerRequestSchema.safeParse({ ...seriesTimeUpdate, patch: { time: { ...seriesTimeModel, timeZone: "Not/AZone" } } }).success, false);
 console.log("Outlook series time: first occurrence anchor and explicit scope: OK");
+
+for (const timeZone of ["America/New_York", "Australia/Sydney", "Asia/Kathmandu", "Pacific/Chatham"]) {
+  const time = { ...seriesTimeModel, timeZone };
+  const observation = outlookSeriesOrganizerObservation(child, { ...seriesSource, outlookSeriesContent: { ...seriesSource.outlookSeriesContent, time } })!;
+  const draft = organizerDraft(child, "microsoft", observation);
+  assert.equal(draft.timeZone, timeZone);
+  assert.equal(draft.start, time.startLocal);
+  const update = organizerRequest("update", { ...draft, end: "2026-10-20T11:30:00" }, ["end"], identity, observation);
+  assert.equal(update.action === "update" && update.patch.time?.kind === "zoned" && update.patch.time.timeZone, timeZone);
+  assert.throws(() => organizerRequest("update", { ...draft, timeZone: "UTC" }, ["timeZone"], identity, observation));
+}

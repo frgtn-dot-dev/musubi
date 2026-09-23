@@ -1,4 +1,4 @@
-import { resolveEventTimeEdit, unambiguousCivilToInstant } from "@musubi/calendar";
+import { resolveEventTimeEdit, unambiguousCivilToInstant, outlookEndpointZonesMatch, outlookTimeZoneMatches } from "@musubi/calendar";
 import { microsoftEventVersion } from "./microsoft_event_content";
 import { graphTimeForEvent } from "./microsoft_time";
 import { graphRsvpTime } from "./microsoft_rsvp";
@@ -103,7 +103,7 @@ export function microsoftMeetingContentProjection(raw: unknown, self: string) {
   return { title: item.subject, description: item.body.content.trim() || null, location: item.location.displayName.trim() || null,
     recurrence: null, ...graphRsvpTime(item) };
 }
-export function microsoftMeetingContentBody(request: MicrosoftOrganizerRequest) {
+export function microsoftMeetingContentBody(request: MicrosoftOrganizerRequest, native?: Record<string, unknown>) {
   request = MicrosoftOrganizerRequestSchema.parse(request);
   if (request.action !== "update") fail();
   const payload: Record<string, unknown> = {};
@@ -111,6 +111,11 @@ export function microsoftMeetingContentBody(request: MicrosoftOrganizerRequest) 
     if (!request.scope) fail();
     const time = graphTimeForEvent(resolveEventTimeEdit(request.patch.time));
     // Preserve all-day mode and every attendee field; only write endpoints.
+    if (native && request.patch.time.kind === "zoned") {
+      if (!outlookEndpointZonesMatch(native, request.patch.time.timeZone)) fail();
+      time.start.timeZone = native.originalStartTimeZone as string;
+      time.end.timeZone = native.originalEndTimeZone as string;
+    }
     payload.start = time.start;
     payload.end = time.end;
   }
@@ -119,12 +124,12 @@ export function microsoftMeetingContentBody(request: MicrosoftOrganizerRequest) 
   if (request.patch.location !== undefined) payload.location = { displayName: request.patch.location ?? "" };
   return payload;
 }
-export function matchesMeetingContent(baseline: Record<string, unknown>, patch: Record<string, unknown>, actual: unknown, self: string, masterID?: string, allowMaster = false) {
+export function matchesMeetingContent(baseline: Record<string, unknown>, patch: Record<string, unknown>, actual: unknown, self: string, masterID?: string, allowMaster = false, seriesTimeZone?: string) {
   try {
     const next = microsoftMeetingContentEvidence(actual, self, masterID, allowMaster);
     const expected = { ...baseline, ...patch };
     const endpointInstant = (value: { dateTime: string; timeZone: string }) => value.timeZone === "UTC"
-      ? instant(value.dateTime) : unambiguousCivilToInstant(value.dateTime, value.timeZone).getTime();
+      ? instant(value.dateTime) : unambiguousCivilToInstant(value.dateTime, seriesTimeZone && outlookTimeZoneMatches(value.timeZone, seriesTimeZone) ? seriesTimeZone : value.timeZone).getTime();
     const changedTime = ("start" in patch || "end" in patch) && ["start", "end"].some(key => {
       const desired = expected[key] as { dateTime: string; timeZone: string };
       const before = baseline[key] as { dateTime: string; timeZone: string };

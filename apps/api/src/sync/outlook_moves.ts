@@ -4,7 +4,7 @@ import { BadRequestError, OutlookMoveRequestSchema } from "@musubi/types";
 import {
   claimOutlookMove, findOutlookMoveRequest, outlookMoveOptions, planOutlookMove, readGraphMeetingContext,
   saveOutlookMovePreview, pendingOutlookMoves, releaseOutlookMove, stopOutlookMove, outlookMoveChildStatus,
-  sameOutlookMoveFamily, sameCaldavScopeContext as same, outlookMoveTime, providerStateVersion, saveGraphOccurrenceContent,
+  sameOutlookMoveFamily, sameCaldavScopeContext as same, outlookMoveTime, outlookMoveZone, providerStateVersion, saveGraphOccurrenceContent,
 } from "@musubi/db";
 import { microsoftAdapter } from "./adapters/microsoft";
 
@@ -15,18 +15,23 @@ function enabled() {
 export async function observeOutlookMove(actorID: string, eventID: string, calendarID: string) {
   enabled();
   const context = await readGraphMeetingContext({ actorID, eventID, calendarID });
-  return microsoftAdapter.observeGraphSeriesContent!(context, AbortSignal.timeout(20_000));
+  const observed = await microsoftAdapter.observeGraphSeriesContent!(context, AbortSignal.timeout(20_000));
+  if (!observed.timeZoneSupported) throw new BadRequestError("The series time zone is not supported by this Outlook mailbox.");
+  return observed;
 }
-export async function previewOutlookMove(actorID: string, input: unknown) {
+export async function previewOutlookMove(actorID: string, input: unknown, globalZones = false) {
   enabled();
   const request = OutlookMoveRequestSchema.parse(input);
   const replay = await findOutlookMoveRequest(actorID, request);
-  if (replay) return replay;
+  if (replay) { assertOutlookMoveZoneVersion(outlookMoveZone(replay.journal.initial), globalZones); return replay; }
   const observed = await observeOutlookMove(actorID, request.eventID, request.calendarID);
+  assertOutlookMoveZoneVersion(outlookMoveZone(observed), globalZones);
   return saveOutlookMovePreview(planOutlookMove(observed, request, randomUUID));
 }
-export async function outlookMoveChoices(actorID: string, eventID: string, calendarID: string) {
-  return outlookMoveOptions(await observeOutlookMove(actorID, eventID, calendarID));
+export async function outlookMoveChoices(actorID: string, eventID: string, calendarID: string, globalZones = false) {
+  const options = outlookMoveOptions(await observeOutlookMove(actorID, eventID, calendarID));
+  assertOutlookMoveZoneVersion(options.timeZone, globalZones);
+  return options;
 }
 
 /** One child admission per tick. Its existing outbox owns dispatch/recovery;
@@ -56,7 +61,7 @@ export async function advanceOutlookMove(id: string) {
     if (!stateVersion) throw new Error("Missing provider state");
     const request = { provider: "microsoft" as const, action: "update" as const, notificationPolicy: "server-invite" as const, scope: "occurrence" as const,
       operationID: item.operationID, eventID: item.eventID, calendarID: row.calendarID, expectedRevision: event.revision,
-      expectedStateVersion: stateVersion, expectedSeriesVersion: observed.version, patch: { time: outlookMoveTime(item) } };
+      expectedStateVersion: stateVersion, expectedSeriesVersion: observed.version, patch: { time: outlookMoveTime(item, outlookMoveZone(row.journal.initial)) } };
     const prepared = await microsoftAdapter.prepareGraphOccurrenceContent!(context, request, AbortSignal.timeout(20_000));
     await saveGraphOccurrenceContent({ ...prepared, bulkMove: { operationID: row.id, leaseToken: row.leaseToken! } });
   } catch {
@@ -67,4 +72,9 @@ export async function advanceOutlookMove(id: string) {
 }
 export async function drainOutlookMoves() {
   await Promise.all((await pendingOutlookMoves()).map(row => advanceOutlookMove(row.id)));
+}
+
+/** Pre-v10 clients have a strict UTC-only result schema and preview semantics. */
+export function assertOutlookMoveZoneVersion(timeZone: string, globalZones: boolean) {
+  if (!globalZones && timeZone !== "UTC") throw new BadRequestError("Update Musubi to move occurrences in this time zone.");
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { OUTLOOK_MOVE_LIMIT, type OutlookMoveOptions, type OutlookMoveRequest, type OutlookMoveResult } from "@musubi/types";
 import { getLatestOutlookMove, getOutlookMove, getOutlookMoveOptions, previewOutlookMove, startOutlookMove } from "~/api/outlook-moves";
 import { Button } from "~/ui/Button";
@@ -10,9 +10,6 @@ import { Row } from "~/ui/Row";
 import { Select } from "~/ui/Select";
 import styles from "./styles/outlook-move.module.css";
 
-const date = new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
-const clock = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
-const range = (start: string, end: string) => `${clock.format(new Date(start))}–${clock.format(new Date(end))}`;
 const statusLabels = { pending: "Waiting", queued: "Saving", completed: "Moved", failed: "Not moved", unconfirmed: "Unconfirmed", "not-started": "Not started" };
 
 export function OutlookMoveDialog({ eventID, revision = "", returnFocus, onClose }: { eventID: string; revision?: string; returnFocus?: HTMLElement | React.RefObject<HTMLElement | null> | null; onClose: () => void }) {
@@ -74,6 +71,12 @@ export function OutlookMoveDialog({ eventID, revision = "", returnFocus, onClose
   const waiting = loading || loadedRevision !== revision;
   const previewing = result?.status === "preview";
   const total = result?.items.length ?? selected.length;
+  const timeZone = result?.timeZone ?? options?.timeZone ?? "UTC";
+  const { date, clock } = useMemo(() => ({
+    date: new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric", timeZone }),
+    clock: new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", timeZone }),
+  }), [timeZone]);
+  const range = (start: string, end: string) => `${clock.format(new Date(start))}–${clock.format(new Date(end))}`;
   return <div className={styles.layerBoundary} onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
     <Dialog open elevated title="Move selected occurrences" closeLabel="Close occurrence move" returnFocus={returnFocus}
       onOpenChange={open => { if (!open && !busy) onClose(); }}
@@ -91,7 +94,7 @@ export function OutlookMoveDialog({ eventID, revision = "", returnFocus, onClose
             <Field label="Direction"><Select label="Direction" disabled={locked} value={direction} onChange={setDirection} options={[{ value: "later", label: "Later" }, { value: "earlier", label: "Earlier" }]} /></Field>
             <Field label="Minutes" error={invalidMinutes ? "Choose 1–720 minutes." : undefined}><input inputMode="numeric" type="number" min={1} max={720} step={1} value={minutes} disabled={locked} onChange={e => setMinutes(e.target.value)} /></Field>
           </div>
-          <p className={styles.note}>Times in UTC. Edited and cancelled occurrences stay as they are. The series rule stays unchanged.</p>
+          <p className={styles.note}>Times in {timeZone.replaceAll("_", " ")}. Edited and cancelled occurrences stay as they are. The series rule stays unchanged.</p>
           <div className={styles.selection}>
             <span>{selected.length} of {OUTLOOK_MOVE_LIMIT} selected</span>
             <Button variant="ghost" size="compact" disabled={locked} onClick={() => setSelected(selected.length ? [] : options.occurrences.filter(n => Date.parse(n.start) >= Date.now()).slice(0, OUTLOOK_MOVE_LIMIT).map(n => n.eventID))}>{selected.length ? "Clear selection" : `Select next ${OUTLOOK_MOVE_LIMIT}`}</Button>
@@ -107,14 +110,14 @@ export function OutlookMoveDialog({ eventID, revision = "", returnFocus, onClose
         {!waiting && result ? <>
           <p>{result.title}</p>
           {previewing ? <>
-            <p>{total} {total === 1 ? "occurrence" : "occurrences"}, {Math.abs(result.offsetMinutes)} minutes {result.offsetMinutes > 0 ? "later" : "earlier"}. Times in UTC.</p>
+            <p>{total} {total === 1 ? "occurrence" : "occurrences"}, {Math.abs(result.offsetMinutes)} minutes {result.offsetMinutes > 0 ? "later" : "earlier"}. Times in {timeZone.replaceAll("_", " ")}.</p>
             <p className={styles.note}>The series rule, edited occurrences and cancelled dates stay unchanged.</p>
             {result.meeting ? <p>Outlook will send updates for these meetings. Guests may need to respond again.</p> : null}
             <p className={styles.note}>If a change cannot be confirmed, the remaining occurrences stop. Earlier changes may already be saved.</p>
           </> : <p role="status">{result.status === "completed" ? `${total} ${total === 1 ? "occurrence" : "occurrences"} moved.` : result.status === "running" ? `${result.items.filter(n => n.status === "completed").length} of ${total} moved. You can close this window; changes will continue.` : "Move stopped. Review each occurrence below; earlier changes have not been rolled back."}</p>}
           <div className={styles.results}>
             {result.items.map(item => <Row key={item.eventID} label={date.format(new Date(item.start))}
-              detail={`${range(item.start, item.end)} → ${range(item.newStart, item.newEnd)} UTC`} value={previewing ? undefined : statusLabels[item.status]} />)}
+              detail={`${range(item.start, item.end)} → ${range(item.newStart, item.newEnd)}`} value={previewing ? undefined : statusLabels[item.status]} />)}
           </div>
           {unfinished ? <p className={styles.note}>An unconfirmed occurrence may already have moved. Check its Delivery details before making another change.</p> : null}
           {result.status !== "running" ? <div className={styles.selection}>

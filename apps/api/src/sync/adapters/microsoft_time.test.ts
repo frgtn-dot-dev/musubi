@@ -59,7 +59,7 @@ for (const [startLocal, utcStart] of [["2026-03-27T09:00:00", "2026-03-27T08:00:
   const raw = { ...native, start: { dateTime: utcStart, timeZone: "UTC" }, end: { dateTime: utcStart!.replace(/T(\d{2}):/, (_, h) => `T${String(Number(h) + 1).padStart(2, "0")}:`), timeZone: "UTC" }, recurrence: { pattern: { type: "daily", interval: 1 }, range: { type: "numbered", startDate: startLocal!.slice(0, 10), numberOfOccurrences: 4, recurrenceTimeZone: "Central Europe Standard Time" } } };
   const before = structuredClone(raw); assert.throws(() => graphMasterTimeFromUtc(raw), "Unbound parser stays strict");
   assert.deepEqual(graphOrganizerMasterTimeFromUtc(raw), { start: saved.start, end: saved.end, isAllDay: false, timeModel: saved.timeModel });
-  for (const labels of [{ originalStartTimeZone: undefined }, { originalEndTimeZone: undefined }, { originalStartTimeZone: "Europe/Budapest" }, { originalEndTimeZone: "Central Europe Standard Time" }])
+  for (const labels of [{ originalStartTimeZone: undefined }, { originalEndTimeZone: undefined }, { originalStartTimeZone: "Europe/Budapest" }])
     assert.throws(() => graphOrganizerMasterTimeFromUtc({ ...raw, ...labels }));
   const projected = graphMasterForSavedZone(raw, saved) as typeof raw;
   const time = graphMasterTimeFromUtc(projected), recurrence = recurrenceFromGraph({ ...saved, ...time }, projected.recurrence);

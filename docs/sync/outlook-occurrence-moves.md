@@ -1,10 +1,10 @@
 # Move selected Outlook occurrences
 
 The web event detail offers **Move selected occurrences** for verified finite,
-timed UTC families in the connected owner's default Outlook calendar. The user
+timed families in their verified series time zone in the connected owner's default Outlook calendar. The user
 selects up to 20 unchanged, synchronized occurrences, chooses an earlier/later
 shift of 1–720 minutes and reviews each old/new time before starting. Every
-occurrence must remain on its original occupied UTC dates. Individually edited
+occurrence must remain on its original occupied local dates. Individually edited
 exceptions, cancelled dates and the master recurrence/time stay unchanged.
 
 This is a separate action from changing a recurring series. Each moved ordinary
@@ -65,7 +65,7 @@ addresses. Disconnect/deletion is handled by the existing source lifecycle and
 journal foreign keys. No frontend polling request dispatches a write.
 
 The optional `outlookOccurrenceMove` capability is sent only to clients requesting
-`outlookOrganizer=9`; v8 and earlier responses retain their existing shape.
+`outlookOrganizer=10`; v9 keeps its UTC-only contract, and v8 and earlier responses retain their existing shape. Bulk endpoints also require this opt-in for non-UTC previews, results and starts. See [global time-zone rules](outlook-time-zones.md).
 The existing organizer-write and event-time-edit flags must be enabled. This work
 does not change their deployment configuration. Mobile native clients do not yet
 expose this bulk action; the responsive web dialog does.
