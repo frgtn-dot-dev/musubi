@@ -1,3 +1,5 @@
+import { drainOutlookMoves } from "./sync/outlook_moves";
+import { handlerOutlookMoveOptions, handlerLatestOutlookMove, handlerPreviewOutlookMove, handlerReadOutlookMove, handlerStartOutlookMove } from "./handlers/outlook_moves";
 import { handlerAvailabilitySources, handlerAvailabilitySelection, handlerAvailability } from "./handlers/availability";
 import { assertEventTimeActivation } from "./event_time_activation";
 import { config, logger } from "@musubi/config";
@@ -344,6 +346,11 @@ app.post("/api/v1/events/:eventId/scope", requireAuth, wrap(handlerEventScope));
 app.get("/api/v1/events/:eventId/provider-state", requireAuth, wrap(handlerGetProviderEventState));
 app.post("/api/v1/events/:eventId/provider-reminders", requireAuth, wrap(handlerProviderReminderEdit));
 app.post("/api/v1/provider-organizer", requireAuth, wrap(handlerProviderOrganizer));
+app.get("/api/v1/events/:eventId/outlook-move/options", requireAuth, wrap(handlerOutlookMoveOptions));
+app.get("/api/v1/events/:eventId/outlook-move", requireAuth, wrap(handlerLatestOutlookMove));
+app.post("/api/v1/outlook-moves/preview", requireAuth, wrap(handlerPreviewOutlookMove));
+app.get("/api/v1/outlook-moves/:operationId", requireAuth, wrap(handlerReadOutlookMove));
+app.post("/api/v1/outlook-moves/:operationId/start", requireAuth, wrap(handlerStartOutlookMove));
 app.get("/api/v1/calendars/:calendarId/provider-organizer", requireAuth, wrap(handlerOrganizerCalendar));
 app.post("/api/v1/events/:eventId/provider-rsvp", requireAuth, wrap(handlerProviderRsvpEdit));
 // PUT deliberately uses the same strict PATCH contract: no legacy write bypass.
@@ -671,7 +678,7 @@ const runExternalSync = nonOverlapping(syncExternalAccounts, () => {
 });
 
 const runEventOutbox = nonOverlapping(async () => {
-  try { await drainEventOutbox(); }
+  try { await drainEventOutbox(); await drainOutlookMoves(); }
   catch { logger.error("sync.event_outbox.scheduler_failed", { code: "delivery-state-unavailable" }); }
 }, () => { recordScheduledTaskSkip("event_outbox"); });
 

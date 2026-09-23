@@ -4,6 +4,8 @@ import { ProviderEventDetails } from "./ProviderEventDetails";
 import { providerEventDetails } from "@musubi/calendar";
 import { EventSchema, type ProviderEventState } from "@musubi/types";
 const fetchState = vi.hoisted(() => vi.fn());
+const bulkRead = vi.hoisted(() => vi.fn());
+vi.mock("~/api/outlook-moves", () => ({ getLatestOutlookMove: bulkRead, getOutlookMove: bulkRead }));
 vi.mock("~/api/resources", () => ({ getProviderEventState: fetchState }));
 const state: ProviderEventState = { provider: "microsoft", organizer: { name: "Host", address: "host@example.test", self: false }, isOrganizer: false, attendees: [], attendeesComplete: false, ownResponse: "notResponded", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 0 }, availability: "workingElsewhere", privacy: "confidential", status: null, eventType: "singleInstance", conferenceURLs: [] };
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
@@ -288,4 +290,21 @@ it("refreshes the series proof before editing and refuses a revoked capability",
   expect(screen.queryByRole("dialog", { name: "Edit series" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Edit series" })).toBeNull();
   expect(fetchState).toHaveBeenCalledTimes(2);
+});
+
+it("keeps the bulk progress window through a revision refresh and closes it on account change", async () => {
+  const calendarID = "00000000-0000-4000-8000-000000000004";
+  const stored = EventSchema.parse({ id: "00000000-0000-4000-8000-000000000001", revision: 7, title: "Title", isCanceled: false, start: new Date("2026-09-10T09:00:00Z"), end: new Date("2026-09-10T10:00:00Z"), isAllDay: false, creatorID: "owner", organizer: "owner", color: "red", calendars: [calendarID], originCalendarID: calendarID });
+  fetchState.mockResolvedValue({ state, outlookOccurrenceMove: { calendarID } });
+  bulkRead.mockResolvedValue({ operationID: calendarID, eventID: stored.id, title: "Series", meeting: false, status: "running", items: [] });
+  const view = render(<ProviderEventDetails event={stored} eventId={stored.id} userId="owner" revision={7} />);
+  const move = await screen.findByRole("button", { name: "Move selected occurrences" });
+  await act(async () => move.click());
+  await screen.findByText(/changes will continue/);
+  view.rerender(<ProviderEventDetails event={stored} eventId={stored.id} userId="owner" revision={8} />);
+  expect(screen.getByRole("dialog", { name: "Move selected occurrences" })).toBeTruthy();
+  await screen.findByText(/changes will continue/);
+  expect(bulkRead).toHaveBeenCalledTimes(2);
+  view.rerender(<ProviderEventDetails event={stored} eventId={stored.id} userId="another" revision={8} />);
+  expect(screen.queryByRole("dialog", { name: "Move selected occurrences" })).toBeNull();
 });
