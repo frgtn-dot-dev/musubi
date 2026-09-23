@@ -1,0 +1,481 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-23",
+  "syntheticOnly": true,
+  "scope": "New finite UTC series in the connected owner default calendar; one previously authorized test invitee. No existing events mutated.",
+  "notes": [
+    "Initial per-occurrence attempts used versions captured before a sibling edit and both returned 412; these do not establish a partial update.",
+    "The next harness revision read each version freshly but omitted originalStart from the individual GET projection, yielding invalid dates and HTTP 400. Those fixtures were also cleaned.",
+    "Final per-occurrence probes explicitly select originalStart, accept the first edit, introduce a controlled concurrent edit, and prove the second stale request is rejected without rolling back the first.",
+    "Guest RSVP was seeded for diagnostic purposes. Notification delivery and actual attendee acceptance were not verified.",
+    "Native IDs, addresses, body content, account data and credentials are omitted. Private cleanup checkpoint is empty after all 16 fixtures were verified absent."
+  ],
+  "runs": {
+    "personal": {
+      "initial": {
+        "schemaVersion": 1,
+        "startedAt": "2026-09-23T10:51:43.002Z",
+        "completed": true,
+        "cases": [
+          {
+            "scenario": "exceptions-clock",
+            "meeting": false,
+            "completed": true,
+            "cleanup": "verified",
+            "checks": {
+              "before": {
+                "active": 5,
+                "exceptions": 2,
+                "cancellations": 0
+              },
+              "patchStatus": 200,
+              "after": {
+                "active": 5,
+                "exceptions": 0,
+                "cancellations": 0
+              },
+              "nativeRuleUnchanged": true,
+              "originalExceptionIDsPreserved": false,
+              "independentContentPreserved": false,
+              "cancelledSlotRevived": false,
+              "masterResponses": []
+            },
+            "cleanupStatus": 204
+          },
+          {
+            "scenario": "cancelled-clock",
+            "meeting": false,
+            "completed": true,
+            "cleanup": "verified",
+            "checks": {
+              "before": {
+                "active": 4,
+                "exceptions": 0,
+                "cancellations": 1
+              },
+              "patchStatus": 200,
+              "after": {
+                "active": 5,
+                "exceptions": 0,
+                "cancellations": 0
+              },
+              "nativeRuleUnchanged": true,
+              "originalExceptionIDsPreserved": true,
+              "independentContentPreserved": true,
+              "cancelledSlotRevived": true,
+              "masterResponses": []
+            },
+            "cleanupStatus": 204
+          },
+          {
+            "scenario": "mixed-duration",
+            "meeting": false,
+            "completed": true,
+            "cleanup": "verified",
+            "checks": {
+              "before": {
+                "active": 4,
+                "exceptions": 2,
+                "cancellations": 1
+              },
+              "patchStatus": 200,
+              "after": {
+                "active": 5,
+                "exceptions": 0,
+                "cancellations": 0
+              },
+              "nativeRuleUnchanged": true,
+              "originalExceptionIDsPreserved": false,
+              "independentContentPreserved": false,
+              "cancelledSlotRevived": true,
+              "masterResponses": []
+            },
+            "cleanupStatus": 204
+          },
+          {
+            "scenario": "mixed-explicit-rule",
+            "meeting": false,
+            "completed": true,
+            "cleanup": "verified",
+            "checks": {
+              "before": {
+                "active": 4,
+                "exceptions": 2,
+                "cancellations": 1
+              },
+              "patchStatus": 200,
+              "after": {
+                "active": 5,
+                "exceptions": 0,
+                "cancellations": 0
+              },
+              "nativeRuleUnchanged": true,
+              "originalExceptionIDsPreserved": false,
+              "independentContentPreserved": false,
+              "cancelledSlotRevived": true,
+              "masterResponses": []
+            },
+            "cleanupStatus": 204
+          },
+          {
+            "scenario": "restore-exceptions",
+            "meeting": false,
+            "completed": true,
+            "cleanup": "verified",
+            "checks": {
+              "before": {
+                "active": 4,
+                "exceptions": 2,
+                "cancellations": 1
+              },
+              "patchStatus": 200,
+              "after": {
+                "active": 5,
+                "exceptions": 0,
+                "cancellations": 0
+              },
+              "nativeRuleUnchanged": true,
+              "originalExceptionIDsPreserved": false,
+              "independentContentPreserved": false,
+              "cancelledSlotRevived": true,
+              "masterResponses": [],
+              "restoreStatuses": [
+                200,
+                200,
+                204
+              ],
+              "restoreContentAndTimes": true,
+              "restoreOriginalExceptionIDs": true,
+              "restoreOriginalExceptionUIDs": true,
+              "restoreCancellation": true,
+              "restoreExceptionResponses": true,
+              "restoreWriteCount": 3
+            },
+            "cleanupStatus": 204
+          },
+          {
+            "scenario": "individual-partial",
+            "meeting": false,
+            "completed": true,
+            "cleanup": "verified",
+            "checks": {
+              "before": {
+                "active": 4,
+                "exceptions": 2,
+                "cancellations": 1
+              },
+              "individualStatuses": [
+                412,
+                412
+              ],
+              "firstChangedDespiteLaterFailure": false,
+              "masterClockUnchanged": true,
+              "originalExceptionsUnchanged": true,
+              "cancellationPreserved": true
+            },
+            "cleanupStatus": 204
+          }
+        ],
+        "notificationDelivery": "not-applicable"
+      },
+      "partialMissingOriginalStart": {
+        "schemaVersion": 1,
+        "startedAt": "2026-09-23T10:55:35.636Z",
+        "completed": true,
+        "cases": [
+          {
+            "scenario": "individual-partial",
+            "meeting": false,
+            "completed": true,
+            "cleanup": "verified",
+            "checks": {
+              "before": {
+                "active": 4,
+                "exceptions": 2,
+                "cancellations": 1
+              },
+              "individualStatuses": [
+                400,
+                400
+              ],
+              "firstChangedDespiteLaterFailure": false,
+              "masterClockUnchanged": true,
+              "originalExceptionsUnchanged": true,
+              "cancellationPreserved": true
+            },
+            "cleanupStatus": 204
+          }
+        ],
+        "notificationDelivery": "not-applicable"
+      },
+      "partialFinal": {
+        "schemaVersion": 1,
+        "startedAt": "2026-09-23T10:57:40.338Z",
+        "completed": true,
+        "cases": [
+          {
+            "scenario": "individual-partial",
+            "meeting": false,
+            "completed": true,
+            "cleanup": "verified",
+            "checks": {
+              "before": {
+                "active": 4,
+                "exceptions": 2,
+                "cancellations": 1
+              },
+              "individualStatuses": [
+                200,
+                412
+              ],
+              "firstChangedDespiteLaterFailure": true,
+              "masterClockUnchanged": true,
+              "originalExceptionsUnchanged": true,
+              "cancellationPreserved": true
+            },
+            "cleanupStatus": 204
+          }
+        ],
+        "notificationDelivery": "not-applicable"
+      }
+    },
+    "meeting": {
+      "initial": {
+        "schemaVersion": 1,
+        "startedAt": "2026-09-23T10:52:25.131Z",
+        "completed": true,
+        "cases": [
+          {
+            "scenario": "exceptions-clock",
+            "meeting": true,
+            "completed": true,
+            "cleanup": "verified",
+            "checks": {
+              "before": {
+                "active": 5,
+                "exceptions": 2,
+                "cancellations": 0
+              },
+              "patchStatus": 200,
+              "after": {
+                "active": 5,
+                "exceptions": 0,
+                "cancellations": 0
+              },
+              "nativeRuleUnchanged": true,
+              "originalExceptionIDsPreserved": false,
+              "independentContentPreserved": false,
+              "cancelledSlotRevived": false,
+              "masterResponses": [
+                "notResponded"
+              ]
+            },
+            "cleanupStatus": 202
+          },
+          {
+            "scenario": "cancelled-clock",
+            "meeting": true,
+            "completed": true,
+            "cleanup": "verified",
+            "checks": {
+              "before": {
+                "active": 4,
+                "exceptions": 0,
+                "cancellations": 1
+              },
+              "patchStatus": 200,
+              "after": {
+                "active": 5,
+                "exceptions": 0,
+                "cancellations": 0
+              },
+              "nativeRuleUnchanged": true,
+              "originalExceptionIDsPreserved": true,
+              "independentContentPreserved": true,
+              "cancelledSlotRevived": true,
+              "masterResponses": [
+                "notResponded"
+              ]
+            },
+            "cleanupStatus": 202
+          },
+          {
+            "scenario": "mixed-duration",
+            "meeting": true,
+            "completed": true,
+            "cleanup": "verified",
+            "checks": {
+              "before": {
+                "active": 4,
+                "exceptions": 2,
+                "cancellations": 1
+              },
+              "patchStatus": 200,
+              "after": {
+                "active": 5,
+                "exceptions": 0,
+                "cancellations": 0
+              },
+              "nativeRuleUnchanged": true,
+              "originalExceptionIDsPreserved": false,
+              "independentContentPreserved": false,
+              "cancelledSlotRevived": true,
+              "masterResponses": [
+                "notResponded"
+              ]
+            },
+            "cleanupStatus": 202
+          },
+          {
+            "scenario": "mixed-explicit-rule",
+            "meeting": true,
+            "completed": true,
+            "cleanup": "verified",
+            "checks": {
+              "before": {
+                "active": 4,
+                "exceptions": 2,
+                "cancellations": 1
+              },
+              "patchStatus": 200,
+              "after": {
+                "active": 5,
+                "exceptions": 0,
+                "cancellations": 0
+              },
+              "nativeRuleUnchanged": true,
+              "originalExceptionIDsPreserved": false,
+              "independentContentPreserved": false,
+              "cancelledSlotRevived": true,
+              "masterResponses": [
+                "notResponded"
+              ]
+            },
+            "cleanupStatus": 202
+          },
+          {
+            "scenario": "restore-exceptions",
+            "meeting": true,
+            "completed": true,
+            "cleanup": "verified",
+            "checks": {
+              "before": {
+                "active": 4,
+                "exceptions": 2,
+                "cancellations": 1
+              },
+              "patchStatus": 200,
+              "after": {
+                "active": 5,
+                "exceptions": 0,
+                "cancellations": 0
+              },
+              "nativeRuleUnchanged": true,
+              "originalExceptionIDsPreserved": false,
+              "independentContentPreserved": false,
+              "cancelledSlotRevived": true,
+              "masterResponses": [
+                "notResponded"
+              ],
+              "restoreStatuses": [
+                200,
+                200,
+                202
+              ],
+              "restoreContentAndTimes": true,
+              "restoreOriginalExceptionIDs": true,
+              "restoreOriginalExceptionUIDs": true,
+              "restoreCancellation": true,
+              "restoreExceptionResponses": false,
+              "restoreWriteCount": 3
+            },
+            "cleanupStatus": 202
+          },
+          {
+            "scenario": "individual-partial",
+            "meeting": true,
+            "completed": true,
+            "cleanup": "verified",
+            "checks": {
+              "before": {
+                "active": 4,
+                "exceptions": 2,
+                "cancellations": 1
+              },
+              "individualStatuses": [
+                412,
+                412
+              ],
+              "firstChangedDespiteLaterFailure": false,
+              "masterClockUnchanged": true,
+              "originalExceptionsUnchanged": true,
+              "cancellationPreserved": true
+            },
+            "cleanupStatus": 202
+          }
+        ],
+        "notificationDelivery": "unknown"
+      },
+      "partialMissingOriginalStart": {
+        "schemaVersion": 1,
+        "startedAt": "2026-09-23T10:55:46.566Z",
+        "completed": true,
+        "cases": [
+          {
+            "scenario": "individual-partial",
+            "meeting": true,
+            "completed": true,
+            "cleanup": "verified",
+            "checks": {
+              "before": {
+                "active": 4,
+                "exceptions": 2,
+                "cancellations": 1
+              },
+              "individualStatuses": [
+                400,
+                400
+              ],
+              "firstChangedDespiteLaterFailure": false,
+              "masterClockUnchanged": true,
+              "originalExceptionsUnchanged": true,
+              "cancellationPreserved": true
+            },
+            "cleanupStatus": 202
+          }
+        ],
+        "notificationDelivery": "unknown"
+      },
+      "partialFinal": {
+        "schemaVersion": 1,
+        "startedAt": "2026-09-23T10:57:46.413Z",
+        "completed": true,
+        "cases": [
+          {
+            "scenario": "individual-partial",
+            "meeting": true,
+            "completed": true,
+            "cleanup": "verified",
+            "checks": {
+              "before": {
+                "active": 4,
+                "exceptions": 2,
+                "cancellations": 1
+              },
+              "individualStatuses": [
+                200,
+                412
+              ],
+              "firstChangedDespiteLaterFailure": true,
+              "masterClockUnchanged": true,
+              "originalExceptionsUnchanged": true,
+              "cancellationPreserved": true
+            },
+            "cleanupStatus": 202
+          }
+        ],
+        "notificationDelivery": "unknown"
+      }
+    }
+  }
+}
