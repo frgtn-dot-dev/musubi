@@ -1,3 +1,4 @@
+import { OutlookMoveSheet } from "./OutlookMoveSheet";
 import { OutlookCancellationAction } from "./OutlookCancellationAction";
 import { ProviderOrganizerEditor } from "./ProviderOrganizerEditor";
 import { ProviderRsvpEditor } from "./ProviderRsvpEditor";
@@ -26,10 +27,18 @@ export function ProviderEventDetails({ event, userId, observationRevision, serie
   const { apiUrl } = useServer();
   const targetID = event.id.replace(/_-?\d+$/, "");
   const remoteID = remoteForCalendar(event.originCalendarID ?? event.calendars[0])?.id;
-  const key = JSON.stringify([targetID, event.originCalendarID, event.calendars, userId, apiUrl, remoteID, event.seriesID, event.originalStart, observationRevision ?? event.revision, seriesMaster?.id, seriesMaster?.revision]);
-  return <ProviderEventDetailsBody key={key} seriesMaster={seriesMaster} event={event} userId={userId} />;
+  const key = JSON.stringify([targetID, event.originCalendarID, event.calendars, userId, apiUrl, remoteID, event.seriesID, event.originalStart]);
+  const revision = JSON.stringify([observationRevision ?? event.revision, seriesMaster?.id, seriesMaster?.revision]);
+  return <ProviderEventDetailsSession key={key} revision={revision} seriesMaster={seriesMaster} event={event} userId={userId} />;
 }
-export function ProviderEventDetailsBody({ event, userId, seriesMaster }: { seriesMaster?: Event; event: Event; userId: string }) {
+export function ProviderEventDetailsSession({ revision, ...props }: { revision: string; seriesMaster?: Event; event: Event; userId: string }) {
+  const [moving, setMoving] = useState(false);
+  return <>
+    <ProviderEventDetailsBody key={revision} {...props} onMove={() => setMoving(true)} />
+    {moving ? <OutlookMoveSheet eventID={props.event.id} revision={revision} onClose={() => setMoving(false)} /> : null}
+  </>;
+}
+export function ProviderEventDetailsBody({ event, userId, seriesMaster, onMove }: { seriesMaster?: Event; event: Event; userId: string; onMove?: () => void }) {
   const api = useApi();
   const targetID = event.id.replace(/_-?\d+$/, "");
   const key = JSON.stringify([targetID, userId, event.seriesID, event.originalStart]);
@@ -101,6 +110,7 @@ export function ProviderEventDetailsBody({ event, userId, seriesMaster }: { seri
     {current?.rsvpEdit && current.state && current.version && !event.recurrence ? <Btn label={current.rsvpEdit.provider === "microsoft" && current.rsvpEdit.series ? "Respond in Outlook" : event.seriesID || current.rsvpEdit.scope === "occurrence" ? "Respond to this occurrence" : current.rsvpEdit.provider === "microsoft" ? "Respond in Outlook" : current.rsvpEdit.provider === "caldav" ? "Respond in calendar" : "Respond in Google"} variant="secondary" loading={opening} onPress={() => void openEditor("rsvp")} /> : null}
     {editor?.kind === "reminders" ? <ProviderReminderEditor event={editor.master ?? { ...event, id: targetID }} observation={editor.observation} onClose={() => setEditor(undefined)} /> : null}
     {editor?.kind === "rsvp" ? <ProviderRsvpEditor event={editor.master ?? { ...event, id: targetID }} observation={editor.observation} onClose={() => setEditor(undefined)} /> : null}
+    {onMove && current?.outlookOccurrenceMove && event.id === targetID && !remoteForCalendar(event.originCalendarID ?? event.calendars[0]) ? <Btn label="Move selected occurrences" variant="secondary" onPress={onMove} /> : null}
     {current?.outlookCancellation && event.id === targetID && !remoteForCalendar(event.originCalendarID ?? event.calendars[0]) ? <OutlookCancellationAction event={event} /> : null}
     {outlookSeriesOrganizerObservation(event, current) && event.id === targetID && !remoteForCalendar(event.originCalendarID ?? event.calendars[0]) ? <Btn label="Edit series" variant="secondary" loading={opening} onPress={() => void openEditor("outlook-series")} /> : null}
     {canManageProviderOrganizer(event, current) && event.id === targetID && !remoteForCalendar(event.originCalendarID ?? event.calendars[0]) ? <Btn label={current?.organizerEdit?.scope === "occurrence" ? "Manage this occurrence" : `Manage ${current?.organizerEdit?.provider === "caldav" ? "CalDAV" : current?.organizerEdit?.provider === "microsoft" ? "Outlook" : "Google"} meeting`} variant="secondary" loading={opening} onPress={() => void openEditor("organizer")} /> : null}

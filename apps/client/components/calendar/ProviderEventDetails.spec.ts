@@ -1,8 +1,8 @@
-import { ProviderEventDetails, ProviderEventDetailsBody } from "./ProviderEventDetails";
+import { ProviderEventDetails, ProviderEventDetailsBody, ProviderEventDetailsSession } from "./ProviderEventDetails";
 import { beforeEach, expect, it, vi } from "vitest";
 import { isValidElement, type ReactNode } from "react";
 import { EventSchema } from "@musubi/types";
-const h = vi.hoisted(() => ({ slots: [] as any[], index: 0, effects: [] as (() => void)[], fetch: vi.fn() }));
+const h = vi.hoisted(() => ({ slots: [] as any[], index: 0, effects: [] as (() => void)[], fetch: vi.fn(), remote: false }));
 vi.mock("react", async original => ({ ...(await original<typeof import("react")>()),
   useState: (initial: any) => { const index = h.index++; if (!(index in h.slots)) h.slots[index] = typeof initial === "function" ? initial() : initial; return [h.slots[index], (value: any) => { h.slots[index] = typeof value === "function" ? value(h.slots[index]) : value; }]; },
   useRef: (initial: any) => { const index = h.index++; if (!(index in h.slots)) h.slots[index] = { current: initial }; return h.slots[index]; },
@@ -15,16 +15,17 @@ vi.mock("@/components/ui/Btn", () => ({ Btn: "Btn" }));
 vi.mock("./ProviderRsvpEditor", () => ({ ProviderRsvpEditor: "ProviderRsvpEditor" }));
 vi.mock("./ProviderReminderEditor", () => ({ ProviderReminderEditor: "ProviderReminderEditor" }));
 vi.mock("./OutlookCancellationAction", () => ({ OutlookCancellationAction: "OutlookCancellationAction" }));
+vi.mock("./OutlookMoveSheet", () => ({ OutlookMoveSheet: "OutlookMoveSheet" }));
 vi.mock("./ProviderOrganizerEditor", () => ({ ProviderOrganizerEditor: "ProviderOrganizerEditor" }));
 vi.mock("@/services/api", () => ({ useApi: () => ({ getProviderEventState: h.fetch }) }));
-vi.mock("@/services/federation", () => ({ remoteForCalendar: () => null }));
+vi.mock("@/services/federation", () => ({ remoteForCalendar: () => h.remote ? { id: "remote" } : null }));
 vi.mock("@/contexts/ServerContext", () => ({ useServer: () => ({ apiUrl: "https://example.test" }) }));
 const event = EventSchema.parse({ id: "00000000-0000-4000-8000-000000000001", revision: 7, title: "Meeting", start: new Date("2026-09-10T09:00:00Z"), end: new Date("2026-09-10T10:00:00Z"), isAllDay: false, organizer: "owner", creatorID: "owner", color: "red", calendars: ["source"], hasAttendees: false, isCanceled: false });
 const observation = { version: "a".repeat(64), reminderEdit: { provider: "google", expectedRevision: 7 }, state: { provider: "google", organizer: null, isOrganizer: false, attendees: [], attendeesComplete: true, ownResponse: null, reminders: { provider: "google", useDefault: true, overrides: [] }, availability: null, privacy: null, status: null, eventType: null, conferenceURLs: [] } };
 function render(value = event, seriesMaster?: typeof event) { h.index = 0; const result = ProviderEventDetailsBody({ event: value, userId: "owner", seriesMaster }); for (const effect of h.effects.splice(0)) effect(); return result; }
 function nodes(node: ReactNode): any[] { if (Array.isArray(node)) return node.flatMap(nodes); if (!isValidElement(node)) return []; const props = node.props as any; return [{ type: node.type, props }, ...nodes(props.children)]; }
 async function settle() { for (let i = 0; i < 8; i++) await Promise.resolve(); }
-beforeEach(() => { h.slots = []; h.index = 0; h.effects = []; vi.clearAllMocks(); });
+beforeEach(() => { h.slots = []; h.index = 0; h.effects = []; h.remote = false; vi.clearAllMocks(); });
 it("reloads native settings on every open and does not open from a failed refresh", async () => {
   h.fetch.mockResolvedValueOnce(observation).mockResolvedValueOnce({ ...observation, version: "b".repeat(64) }).mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce({ ...observation, version: "c".repeat(64), state: { ...observation.state, reminders: { provider: "google", useDefault: false, overrides: [] } } });
   render(); await settle();
@@ -69,11 +70,17 @@ it("invalidates a cached native editor from canonical observation revision witho
   const known = { ...event, recurrence: "FREQ=DAILY", timeModel: { kind: "zoned" as const, timeZone: "Europe/Prague", startLocal: "2026-09-10T11:00:00.000", endLocal: "2026-09-10T12:00:00.000" } };
   const before = ProviderEventDetails({ event: known, userId: "owner", observationRevision: 7 });
   const after = ProviderEventDetails({ event: { ...known, title: "Busy" }, userId: "owner", observationRevision: 8 });
-  expect(after.key).not.toBe(before.key);
+  expect(after.key).toBe(before.key);
+  expect(after.props.revision).not.toBe(before.props.revision);
+  const sessionBefore = ProviderEventDetailsSession(before.props);
+  h.index = 0;
+  const sessionAfter = ProviderEventDetailsSession(after.props);
+  expect(sessionBefore.props.children[0].key).not.toBe(sessionAfter.props.children[0].key);
+  h.slots = []; h.index = 0; h.effects = [];
   expect(after.props.event.revision).toBe(7);
   expect(after.props.event.timeModel).toBe(known.timeModel);
   h.fetch.mockResolvedValueOnce(observation).mockResolvedValueOnce(observation).mockResolvedValueOnce({ state: null });
-  // A one-off permits opening its native editor; a new wrapper key unmounts it.
+  // The revision-keyed body unmounts its editor; the move session stays outside.
   render(); await settle();
   nodes(render()).find(node => node.type === "Btn")!.props.onPress(); await settle();
   expect(nodes(render()).some(node => node.type === "ProviderReminderEditor")).toBe(true);
@@ -126,4 +133,29 @@ it("opens series editing only from a fresh series proof and clears revoked acces
   editor.props.onClose();
   nodes(render(stored)).find(n => n.type === "Btn" && n.props.label === "Edit series")!.props.onPress(); await settle();
   expect(nodes(render(stored)).some(n => n.type === "ProviderOrganizerEditor")).toBe(false);
+});
+
+
+it("keeps the move sheet mounted through revisions but isolates account and source changes", () => {
+  const before = ProviderEventDetails({ event, userId: "owner" });
+  const anotherAccount = ProviderEventDetails({ event, userId: "another" });
+  const anotherSource = ProviderEventDetails({ event: { ...event, originCalendarID: "other" }, userId: "owner" });
+  expect(before.key).not.toBe(anotherAccount.key);
+  expect(before.key).not.toBe(anotherSource.key);
+  let tree = ProviderEventDetailsSession(before.props);
+  nodes(tree).find(node => node.type === ProviderEventDetailsBody).props.onMove();
+  h.index = 0;
+  tree = ProviderEventDetailsSession({ ...before.props, revision: "changed" });
+  const sheet = nodes(tree).find(node => node.type === "OutlookMoveSheet");
+  expect(sheet.props).toMatchObject({ eventID: event.id, revision: "changed" });
+  sheet.props.onClose(); h.index = 0;
+  expect(nodes(ProviderEventDetailsSession(before.props)).some(node => node.type === "OutlookMoveSheet")).toBe(false);
+});
+it("offers moves only for the exact stored home event with an explicit capability", async () => {
+  const onMove = vi.fn();
+  h.fetch.mockResolvedValue({ ...observation, outlookOccurrenceMove: { calendarID: "source" } });
+  const renderMove = (value = event) => { h.index = 0; const tree = ProviderEventDetailsBody({ event: value, userId: "owner", onMove }); for (const effect of h.effects.splice(0)) effect(); return nodes(tree).find(node => node.props.label === "Move selected occurrences"); };
+  renderMove(); await settle(); renderMove().props.onPress(); expect(onMove).toHaveBeenCalledOnce();
+  h.remote = true; expect(renderMove()).toBeUndefined();
+  h.remote = false; expect(renderMove({ ...event, id: event.id + "_123" })).toBeUndefined();
 });

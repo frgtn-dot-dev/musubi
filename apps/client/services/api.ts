@@ -3,6 +3,7 @@ import { ProviderOrganizerCalendarSchema, ProviderOrganizerReceiptSchema, type P
 import { ProviderRsvpReceiptSchema, type ProviderRsvpEdit } from "@musubi/types";
 import { ProviderEventStateResponseSchema, ProviderReminderReceiptSchema, type AnyProviderReminderEdit } from "@musubi/types";
 import {
+  OutlookMoveOptionsSchema, OutlookMoveRequestSchema, OutlookMoveResultSchema, type OutlookMoveRequest,
   AvailabilitySourcesSchema, AvailabilityResponseSchema, AvailabilityRequestSchema, type AvailabilityRequest,
   AnnouncementsResponseSchema,
   CLIENT_VERSION_HEADER,
@@ -48,6 +49,7 @@ import {
   setHomeRequester,
 } from "@/services/federation";
 import { setReminderWriter } from "@/services/notifications";
+import { OutlookMoveRequestError } from "@/lib/outlookMoveSession";
 import { SettingsConflictError } from "@/lib/settingsConflict";
 import { notifySessionExpired } from "@/lib/signOut";
 import { fetchWithTimeout } from "@/lib/network";
@@ -176,12 +178,31 @@ export function useApi() {
     return data;
   }
 
+  // Bulk moves belong to this captured home account, never the mutable federation requester.
+  async function outlookMoveRequest(path: `/api/v1/${string}`, body?: unknown, signal?: AbortSignal) {
+    const { error, data } = await authClient.$fetch<unknown>(`${apiUrl}${path}?outlookOrganizer=10`, {
+      method: body === undefined ? "GET" : "POST", signal,
+      headers: { "Cache-Control": "no-store", "Content-Type": "application/json" },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    if (error) {
+      if (Number(error.status) === 401) notifySessionExpired();
+      throw new OutlookMoveRequestError(Number(error.status));
+    }
+    return data;
+  }
+
   async function availabilityRequest(path: string, method: "GET" | "PUT" | "POST", body?: unknown, signal?: AbortSignal) {
     const { error, data } = await authClient.$fetch<unknown>(`${apiUrl}/api/v1/availability${path}`, { method, signal, headers: { "Cache-Control": "no-store", "Content-Type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
     throwOnError(error);
     return data;
   }
   return {
+    async getOutlookMoveOptions(eventID: string, signal?: AbortSignal) { return OutlookMoveOptionsSchema.parse(await outlookMoveRequest(`/api/v1/events/${encodeURIComponent(eventID)}/outlook-move/options`, undefined, signal)); },
+    async getLatestOutlookMove(eventID: string, signal?: AbortSignal) { return OutlookMoveResultSchema.nullable().parse(await outlookMoveRequest(`/api/v1/events/${encodeURIComponent(eventID)}/outlook-move`, undefined, signal)); },
+    async getOutlookMove(operationID: string, signal?: AbortSignal) { return OutlookMoveResultSchema.parse(await outlookMoveRequest(`/api/v1/outlook-moves/${encodeURIComponent(operationID)}`, undefined, signal)); },
+    async previewOutlookMove(request: OutlookMoveRequest, signal?: AbortSignal) { return OutlookMoveResultSchema.parse(await outlookMoveRequest("/api/v1/outlook-moves/preview", OutlookMoveRequestSchema.parse(request), signal)); },
+    async startOutlookMove(operationID: string, signal?: AbortSignal) { return OutlookMoveResultSchema.parse(await outlookMoveRequest(`/api/v1/outlook-moves/${encodeURIComponent(operationID)}/start`, {}, signal)); },
     async getAvailabilitySources(signal?: AbortSignal) { return AvailabilitySourcesSchema.parse(await availabilityRequest("/sources", "GET", undefined, signal)); },
     async selectAvailabilitySource(id: string, enabled: boolean, expectedGeneration: number, signal?: AbortSignal) { return AvailabilitySourcesSchema.parse(await availabilityRequest(`/sources/${encodeURIComponent(id)}`, "PUT", { enabled, expectedGeneration }, signal)); },
     async getAvailability(range: AvailabilityRequest, signal?: AbortSignal) { return AvailabilityResponseSchema.parse(await availabilityRequest("", "POST", AvailabilityRequestSchema.parse(range), signal)); },
