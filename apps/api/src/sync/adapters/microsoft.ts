@@ -809,12 +809,12 @@ export const microsoftAdapter: CalendarAdapter = {
     return family;
   },
 
-  async readMicrosoftRsvp(user, account, calendar, ref, response, signal, occurrence) {
+  async readMicrosoftRsvp(user, account, calendar, ref, response, signal, occurrence, series) {
     if (!config.api.providerRsvpEditsEnabled) throw new EventWriteError("event-write", "unsupported");
     const token = await getAccessToken(user, account);
     await assertOAuthEventWriteGrant(user, "microsoft", account);
     const { graphRsvpSession } = await import("./microsoft_rsvp_delivery");
-    const evidence = await (await graphRsvpSession(token, account, calendar, signal)).read(ref.externalEventId, response, occurrence);
+    const evidence = await (await graphRsvpSession(token, account, calendar, signal)).read(ref.externalEventId, response, occurrence, series);
     if (!evidence || evidence.etag !== ref.etag || evidence.native.iCalUId !== ref.icalUid) throw new ProviderEventWriteError("provider-conflict");
     return evidence;
   },

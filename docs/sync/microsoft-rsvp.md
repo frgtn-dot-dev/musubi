@@ -1,7 +1,8 @@
 # Graph RSVP actions
 
 The default-off `PROVIDER_RSVP_EDITS_ENABLED` gate includes the connected account's
-own one-off Outlook meeting response and an explicitly bound imported occurrence. Public admission, private durable intent,
+own one-off Outlook meeting response, an explicitly bound imported occurrence,
+and its fully observed finite meeting series. Public admission, private durable intent,
 worker, readback, delivery status and existing web/native RSVP controls are wired.
 The explicit action is **Send response to organizer**. Notification delivery
 always remains unknown. Bounded live Accept/Tentative evidence is linked below;
@@ -29,7 +30,7 @@ explicitly editable. Current OAuth/source/role/lease evidence is rechecked befor
 marking dispatch. Local account, source, membership, mapping and event rows stay
 locked through the lease-fenced marker transaction; this does not lock the remote
 meeting or authorize a resend. Organizer-self, delegation/secondary calendars, ambiguous or
-duplicate attendees, whole-series responses, draft/cancelled meetings and incomplete native
+duplicate attendees, unbounded or incomplete families, draft/cancelled meetings and incomplete native
 evidence remain unsupported. Existing Graph event UPDATE/DELETE guards remain.
 
 Transport requests explicit UTC endpoints and plain-text bodies. Exact UTC
@@ -43,7 +44,9 @@ missing mapping UID without revising the canonical event or queuing writes.
 
 ## One recurring occurrence
 
-New web/native clients opt in with `outlookRsvp=1` on the provider-state read.
+Occurrence-only clients opt in with `outlookRsvp=1` on the provider-state read.
+Current web/native clients use `outlookRsvp=2`, also allowing the verified series
+capability below; `=1` retains its previous response shape.
 The fresh native preflight may expose `rsvpEdit.scope: "occurrence"`; the client
 must echo `scope: "occurrence"` in the response request. Older readers receive no
 new capability. A one-off request cannot target an occurrence, or vice versa.
@@ -60,7 +63,8 @@ master in the same calendar. Both must prove the same mailbox attendee and
 organizer; the master must be active, recurring and already accepted or tentative.
 An unanswered or declined master is refused before admission or dispatch. Native
 QA showed a first instance RSVP changing the unanswered master and inherited
-sibling responses to tentative; a slot-only action must not permit that. The durable baseline
+sibling responses to tentative; a slot-only action must not permit that. New clients may instead offer the
+explicit whole-series action below when its complete proof is available. The durable baseline
 includes the complete target and master. The only POST targets that exact
 occurrence. No action is sent to the master or neighbouring slots.
 
@@ -87,6 +91,61 @@ queue/outbox pass completed Accept and Tentative on an already-answered series
 while preserving the master and other slots. Decline removed only its target
 and remained explicitly unavailable/unconfirmed with no resend. This is not
 production activation or proof of organizer notification delivery. [Evidence and limits](../audits/outlook-occurrence-rsvp-20260923.md).
+
+## An entire recurring meeting series
+
+`outlookRsvp=2` allows fresh preflight to expose `rsvpEdit.series.version` and
+`ownResponse`. An already accepted/tentative master permits choosing **This
+occurrence** or **Entire series** in the existing editor. An unanswered/declined
+master exposes only **Entire series**; no implicit first-instance initialization
+is permitted. Non-finite/unverifiable families may retain the earlier bound
+occurrence action when its independent preflight passes. Older clients receive
+no new fields or unsupported scope.
+
+The anchor is still an existing flat imported occurrence/exception with its
+exact source identity and original slot. This does not adopt a canonical local
+master. The complete master, paginated `/instances`, expanded exceptions
+(including those moved outside the range), explicit cancellations and a repeated
+expanded master must prove one finite family. Supported COUNT/UNTIL families
+have 1–366 original slots within 730 days. The shared strict time/recurrence
+parsers prove IANA/Windows zones against every original slot. Windows labels are
+normalized only for transient expansion; raw native evidence remains unchanged.
+Ambiguous times, incomplete pagination and unsupported native shapes are refused.
+All-day proof remains limited to the existing UTC-midnight representation.
+
+`scope: "series"` requires the exact `expectedSeriesVersion` from that preview.
+The opaque hash includes full native evidence and mailbox identity, independent
+of the response the user later chooses. The selected occurrence revision,
+provider-state version and mapping still have to match. All local RSVP admissions
+for the same native family share a transaction lock; a pending sibling operation
+blocks a new response, including from occurrence-only clients. Admission and the
+last pre-dispatch source check enforce this boundary.
+
+The sole action targets the exact **series master**, using the same permanent
+marker and `{ "sendResponse": true }` policy as other Graph responses. Readback
+must prove the requested master/ordinary-occurrence response and preserved
+membership, rule, original slots, content, time and guests. Existing exceptions
+keep their response and availability; only version metadata and the observed
+response timestamp may refresh. An exception anchor therefore keeps its actual
+own response even when the series response changes. Completion separately proves
+the master response; it never substitutes that response into an exception.
+Sibling local mirrors refresh through ordinary provider sync, not fabricated
+family-wide state. A projected sync echo may retain the worker lease but cannot
+acknowledge the action without the full native-family proof.
+
+Live native and actual queue/outbox verification on 2026-09-24 covered an
+unanswered America/New_York COUNT=4 invitation spanning DST, a moved/content
+exception and a separate per-occurrence response override. Initial Tentative,
+Accept and subsequent Tentative completed. Decline removed the master and copies:
+it remains **unconfirmed / copy unavailable**, with read-only recovery and no
+resend. Organizer notification delivery remains unknown. The editor warns that
+Decline can remove the entire series, including exceptions.
+[Evidence and limits](../audits/outlook-series-rsvp-20260924.md).
+
+Neither repeated family reads nor unchanged ETags make the action atomic with
+concurrent remote edits. Series without a finite complete proof, canonical
+local-series attendee children, delegated calendars and proposed times remain
+outside this extension. The existing default-off gate remains unchanged.
 
 ## Durable dispatch and recovery
 
@@ -163,7 +222,7 @@ Live one-off Accept/Tentative and their read-only recovery passed on 2026-09-10;
 the external organizer displayed both responses. Decline removed the Outlook
 copy but the organizer still showed the earlier Maybe response, so its delivery
 remains unverified. [Exact evidence and retained history](../audits/calendar-outlook-live-acceptance-20260910.md).
-Whole-series RSVP, canonical local-series attendee children, delegated calendars, proposed times and broader organizer
+Unbounded/unverifiable whole-series RSVP, canonical local-series attendee children, delegated calendars, proposed times and broader organizer
 operations remain separate work. Ordinary Graph
 conditional UPDATE/DELETE proof is still missing and is not supplied by these
 response actions or fake servers.

@@ -1,0 +1,553 @@
+{
+  "date": "2026-09-24",
+  "scope": "bounded finite Outlook attendee series RSVP",
+  "productionActivation": false,
+  "fixture": {
+    "organizerProvider": "google",
+    "attendeeProvider": "microsoft",
+    "timeZone": "America/New_York",
+    "count": 4,
+    "startDate": "2026-10-30",
+    "endDate": "2026-11-02",
+    "organizerModifiedException": true,
+    "separateResponseOverride": true
+  },
+  "runs": [
+    {
+      "startedAt": "2026-09-24T12:01:01.064Z",
+      "initialResponse": "notResponded",
+      "notificationDelivery": "unknown",
+      "cleanup": {
+        "google": "cancelled",
+        "outlook": "copy absent"
+      },
+      "path": "native contract probe",
+      "cases": [
+        {
+          "label": "initial-series-tentative",
+          "postCount": 1,
+          "master": {
+            "response": "tentativelyAccepted",
+            "changedFields": [
+              "@odata.etag",
+              "lastModifiedDateTime",
+              "changeKey",
+              "responseStatus",
+              "exceptionOccurrences"
+            ],
+            "exceptions": 1,
+            "cancelled": 0
+          },
+          "instances": [
+            {
+              "originalStart": "2026-10-30T13:00:00Z",
+              "responseBefore": "notResponded",
+              "responseAfter": "tentativelyAccepted",
+              "typeBefore": "occurrence",
+              "typeAfter": "occurrence",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-10-31T13:00:00Z",
+              "responseBefore": "notResponded",
+              "responseAfter": "notResponded",
+              "typeBefore": "exception",
+              "typeAfter": "exception",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-11-01T14:00:00Z",
+              "responseBefore": "notResponded",
+              "responseAfter": "tentativelyAccepted",
+              "typeBefore": "occurrence",
+              "typeAfter": "occurrence",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-11-02T14:00:00Z",
+              "responseBefore": "notResponded",
+              "responseAfter": "tentativelyAccepted",
+              "typeBefore": "occurrence",
+              "typeAfter": "occurrence",
+              "contentTimePreserved": true
+            }
+          ]
+        },
+        {
+          "label": "setup-occurrence-accepted",
+          "postCount": 1,
+          "master": {
+            "response": "tentativelyAccepted",
+            "changedFields": [
+              "@odata.etag",
+              "lastModifiedDateTime",
+              "changeKey",
+              "exceptionOccurrences"
+            ],
+            "exceptions": 2,
+            "cancelled": 0
+          },
+          "instances": [
+            {
+              "originalStart": "2026-10-30T13:00:00Z",
+              "responseBefore": "tentativelyAccepted",
+              "responseAfter": "tentativelyAccepted",
+              "typeBefore": "occurrence",
+              "typeAfter": "occurrence",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-10-31T13:00:00Z",
+              "responseBefore": "notResponded",
+              "responseAfter": "notResponded",
+              "typeBefore": "exception",
+              "typeAfter": "exception",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-11-01T14:00:00Z",
+              "responseBefore": "tentativelyAccepted",
+              "responseAfter": "tentativelyAccepted",
+              "typeBefore": "occurrence",
+              "typeAfter": "occurrence",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-11-02T14:00:00Z",
+              "responseBefore": "tentativelyAccepted",
+              "responseAfter": "accepted",
+              "typeBefore": "occurrence",
+              "typeAfter": "exception",
+              "contentTimePreserved": true
+            }
+          ],
+          "purpose": "authorized fixture setup; not an application series operation"
+        },
+        {
+          "label": "whole-series-accept",
+          "postCount": 1,
+          "master": {
+            "response": "accepted",
+            "changedFields": [
+              "@odata.etag",
+              "lastModifiedDateTime",
+              "changeKey",
+              "showAs",
+              "responseStatus",
+              "exceptionOccurrences"
+            ],
+            "exceptions": 2,
+            "cancelled": 0
+          },
+          "instances": [
+            {
+              "originalStart": "2026-10-30T13:00:00Z",
+              "responseBefore": "tentativelyAccepted",
+              "responseAfter": "accepted",
+              "typeBefore": "occurrence",
+              "typeAfter": "occurrence",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-10-31T13:00:00Z",
+              "responseBefore": "notResponded",
+              "responseAfter": "notResponded",
+              "typeBefore": "exception",
+              "typeAfter": "exception",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-11-01T14:00:00Z",
+              "responseBefore": "tentativelyAccepted",
+              "responseAfter": "accepted",
+              "typeBefore": "occurrence",
+              "typeAfter": "occurrence",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-11-02T14:00:00Z",
+              "responseBefore": "accepted",
+              "responseAfter": "accepted",
+              "typeBefore": "exception",
+              "typeAfter": "exception",
+              "contentTimePreserved": true
+            }
+          ]
+        },
+        {
+          "label": "whole-series-tentative",
+          "postCount": 1,
+          "master": {
+            "response": "tentativelyAccepted",
+            "changedFields": [
+              "@odata.etag",
+              "lastModifiedDateTime",
+              "changeKey",
+              "showAs",
+              "responseStatus",
+              "exceptionOccurrences"
+            ],
+            "exceptions": 2,
+            "cancelled": 0
+          },
+          "instances": [
+            {
+              "originalStart": "2026-10-30T13:00:00Z",
+              "responseBefore": "accepted",
+              "responseAfter": "tentativelyAccepted",
+              "typeBefore": "occurrence",
+              "typeAfter": "occurrence",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-10-31T13:00:00Z",
+              "responseBefore": "notResponded",
+              "responseAfter": "notResponded",
+              "typeBefore": "exception",
+              "typeAfter": "exception",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-11-01T14:00:00Z",
+              "responseBefore": "accepted",
+              "responseAfter": "tentativelyAccepted",
+              "typeBefore": "occurrence",
+              "typeAfter": "occurrence",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-11-02T14:00:00Z",
+              "responseBefore": "accepted",
+              "responseAfter": "accepted",
+              "typeBefore": "exception",
+              "typeAfter": "exception",
+              "contentTimePreserved": true
+            }
+          ]
+        },
+        {
+          "label": "whole-series-decline",
+          "postCount": 1,
+          "master": null,
+          "instances": [
+            {
+              "originalStart": "2026-10-30T13:00:00Z",
+              "responseBefore": "tentativelyAccepted",
+              "typeBefore": "occurrence",
+              "observedAbsent": true
+            },
+            {
+              "originalStart": "2026-10-31T13:00:00Z",
+              "responseBefore": "notResponded",
+              "typeBefore": "exception",
+              "observedAbsent": true
+            },
+            {
+              "originalStart": "2026-11-01T14:00:00Z",
+              "responseBefore": "tentativelyAccepted",
+              "typeBefore": "occurrence",
+              "observedAbsent": true
+            },
+            {
+              "originalStart": "2026-11-02T14:00:00Z",
+              "responseBefore": "accepted",
+              "typeBefore": "exception",
+              "observedAbsent": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "startedAt": "2026-09-24T12:21:51.996Z",
+      "initialResponse": "notResponded",
+      "notificationDelivery": "unknown",
+      "cleanup": {
+        "google": "cancelled",
+        "outlook": "copy absent"
+      },
+      "path": "actual Musubi admission/outbox/adapter/ACK",
+      "cases": [
+        {
+          "label": "initial-series-tentative",
+          "postCount": 1,
+          "master": {
+            "response": "tentativelyAccepted",
+            "changedFields": [
+              "@odata.etag",
+              "lastModifiedDateTime",
+              "changeKey",
+              "responseStatus",
+              "exceptionOccurrences"
+            ],
+            "exceptions": 1,
+            "cancelled": 0
+          },
+          "instances": [
+            {
+              "originalStart": "2026-10-30T13:00:00Z",
+              "responseBefore": "notResponded",
+              "responseAfter": "tentativelyAccepted",
+              "typeBefore": "occurrence",
+              "typeAfter": "occurrence",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-10-31T13:00:00Z",
+              "responseBefore": "notResponded",
+              "responseAfter": "notResponded",
+              "typeBefore": "exception",
+              "typeAfter": "exception",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-11-01T14:00:00Z",
+              "responseBefore": "notResponded",
+              "responseAfter": "tentativelyAccepted",
+              "typeBefore": "occurrence",
+              "typeAfter": "occurrence",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-11-02T14:00:00Z",
+              "responseBefore": "notResponded",
+              "responseAfter": "tentativelyAccepted",
+              "typeBefore": "occurrence",
+              "typeAfter": "occurrence",
+              "contentTimePreserved": true
+            }
+          ],
+          "application": {
+            "status": "completed",
+            "errorCode": null,
+            "posts": 1,
+            "anchorType": "occurrence",
+            "initialSeriesResponse": "notResponded",
+            "notificationDelivery": "unknown",
+            "recoveryExercised": false
+          }
+        },
+        {
+          "label": "setup-occurrence-accepted",
+          "postCount": 1,
+          "master": {
+            "response": "tentativelyAccepted",
+            "changedFields": [
+              "@odata.etag",
+              "lastModifiedDateTime",
+              "changeKey",
+              "exceptionOccurrences"
+            ],
+            "exceptions": 2,
+            "cancelled": 0
+          },
+          "instances": [
+            {
+              "originalStart": "2026-10-30T13:00:00Z",
+              "responseBefore": "tentativelyAccepted",
+              "responseAfter": "tentativelyAccepted",
+              "typeBefore": "occurrence",
+              "typeAfter": "occurrence",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-10-31T13:00:00Z",
+              "responseBefore": "notResponded",
+              "responseAfter": "notResponded",
+              "typeBefore": "exception",
+              "typeAfter": "exception",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-11-01T14:00:00Z",
+              "responseBefore": "tentativelyAccepted",
+              "responseAfter": "tentativelyAccepted",
+              "typeBefore": "occurrence",
+              "typeAfter": "occurrence",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-11-02T14:00:00Z",
+              "responseBefore": "tentativelyAccepted",
+              "responseAfter": "accepted",
+              "typeBefore": "occurrence",
+              "typeAfter": "exception",
+              "contentTimePreserved": true
+            }
+          ],
+          "purpose": "authorized fixture setup; not an application series operation"
+        },
+        {
+          "label": "whole-series-accept",
+          "postCount": 1,
+          "master": {
+            "response": "accepted",
+            "changedFields": [
+              "@odata.etag",
+              "lastModifiedDateTime",
+              "changeKey",
+              "showAs",
+              "responseStatus",
+              "exceptionOccurrences"
+            ],
+            "exceptions": 2,
+            "cancelled": 0
+          },
+          "instances": [
+            {
+              "originalStart": "2026-10-30T13:00:00Z",
+              "responseBefore": "tentativelyAccepted",
+              "responseAfter": "accepted",
+              "typeBefore": "occurrence",
+              "typeAfter": "occurrence",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-10-31T13:00:00Z",
+              "responseBefore": "notResponded",
+              "responseAfter": "notResponded",
+              "typeBefore": "exception",
+              "typeAfter": "exception",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-11-01T14:00:00Z",
+              "responseBefore": "tentativelyAccepted",
+              "responseAfter": "accepted",
+              "typeBefore": "occurrence",
+              "typeAfter": "occurrence",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-11-02T14:00:00Z",
+              "responseBefore": "accepted",
+              "responseAfter": "accepted",
+              "typeBefore": "exception",
+              "typeAfter": "exception",
+              "contentTimePreserved": true
+            }
+          ],
+          "application": {
+            "status": "completed",
+            "errorCode": null,
+            "posts": 1,
+            "anchorType": "occurrence",
+            "initialSeriesResponse": "tentativelyAccepted",
+            "notificationDelivery": "unknown",
+            "recoveryExercised": false
+          }
+        },
+        {
+          "label": "whole-series-tentative",
+          "postCount": 1,
+          "master": {
+            "response": "tentativelyAccepted",
+            "changedFields": [
+              "@odata.etag",
+              "lastModifiedDateTime",
+              "changeKey",
+              "showAs",
+              "responseStatus",
+              "exceptionOccurrences"
+            ],
+            "exceptions": 2,
+            "cancelled": 0
+          },
+          "instances": [
+            {
+              "originalStart": "2026-10-30T13:00:00Z",
+              "responseBefore": "accepted",
+              "responseAfter": "tentativelyAccepted",
+              "typeBefore": "occurrence",
+              "typeAfter": "occurrence",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-10-31T13:00:00Z",
+              "responseBefore": "notResponded",
+              "responseAfter": "notResponded",
+              "typeBefore": "exception",
+              "typeAfter": "exception",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-11-01T14:00:00Z",
+              "responseBefore": "accepted",
+              "responseAfter": "tentativelyAccepted",
+              "typeBefore": "occurrence",
+              "typeAfter": "occurrence",
+              "contentTimePreserved": true
+            },
+            {
+              "originalStart": "2026-11-02T14:00:00Z",
+              "responseBefore": "accepted",
+              "responseAfter": "accepted",
+              "typeBefore": "exception",
+              "typeAfter": "exception",
+              "contentTimePreserved": true
+            }
+          ],
+          "application": {
+            "status": "completed",
+            "errorCode": null,
+            "posts": 1,
+            "anchorType": "exception",
+            "initialSeriesResponse": "accepted",
+            "notificationDelivery": "unknown",
+            "recoveryExercised": false
+          }
+        },
+        {
+          "label": "whole-series-decline",
+          "postCount": 1,
+          "master": null,
+          "instances": [
+            {
+              "originalStart": "2026-10-30T13:00:00Z",
+              "responseBefore": "tentativelyAccepted",
+              "typeBefore": "occurrence",
+              "observedAbsent": true
+            },
+            {
+              "originalStart": "2026-10-31T13:00:00Z",
+              "responseBefore": "notResponded",
+              "typeBefore": "exception",
+              "observedAbsent": true
+            },
+            {
+              "originalStart": "2026-11-01T14:00:00Z",
+              "responseBefore": "tentativelyAccepted",
+              "typeBefore": "occurrence",
+              "observedAbsent": true
+            },
+            {
+              "originalStart": "2026-11-02T14:00:00Z",
+              "responseBefore": "accepted",
+              "typeBefore": "exception",
+              "observedAbsent": true
+            }
+          ],
+          "application": {
+            "status": "unconfirmed",
+            "errorCode": "graph-rsvp-copy-absent",
+            "posts": 1,
+            "anchorType": "occurrence",
+            "initialSeriesResponse": "tentativelyAccepted",
+            "notificationDelivery": "unknown",
+            "recoveryExercised": true,
+            "recoveryAdditionalPosts": 0
+          }
+        }
+      ]
+    }
+  ],
+  "localCleanup": {
+    "remainingSyntheticUsers": 0
+  },
+  "limits": [
+    "Organizer notification delivery remains unknown.",
+    "Decline disappearance remains unconfirmed; no resend.",
+    "Completed application cases did not exercise recovery.",
+    "Repeated native reads do not provide atomic remote revision protection."
+  ]
+}

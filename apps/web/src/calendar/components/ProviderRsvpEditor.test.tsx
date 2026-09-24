@@ -62,3 +62,26 @@ it.each([undefined, "occurrence"] as const)("sends an Outlook %s response with i
   expect(save.mock.calls[0][1]).toMatchObject({ provider: "microsoft", response: "accepted", notificationPolicy: "send-response", ...(scope ? { scope } : {}) });
   expect(save.mock.calls[0][1]).not.toHaveProperty("sendUpdates");
 });
+
+it.each(["occurrence", "series"] as const)("offers only verified scopes from %s and freezes a whole-series retry", async scope => {
+  const graph: ProviderEventStateResponse = { ...observation, rsvpEdit: { provider: "microsoft", expectedRevision: 7, scope, series: { version: "c".repeat(64), ownResponse: "notResponded" } }, state: { ...observation.state!, provider: "microsoft", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 } } };
+  save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "pending" });
+  render(<ProviderRsvpEditor eventId="event" observation={graph} onClose={vi.fn()} />);
+  if (scope === "occurrence") {
+    fireEvent.click(screen.getByRole("combobox", { name: "Response applies to" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Entire series" }));
+  } else {
+    expect(screen.queryByRole("combobox", { name: "Response applies to" })).toBeNull();
+    expect(screen.getByText("Response applies to: Entire series")).toBeTruthy();
+  }
+  expect(screen.getByText(/Existing exceptions keep their own response/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("combobox", { name: "Your response" }));
+  fireEvent.click(await screen.findByRole("option", { name: "Decline" }));
+  expect(screen.getByText(/including exceptions/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Send response to organizer" }));
+  await screen.findByRole("alert");
+  fireEvent.click(screen.getByRole("button", { name: "Send response to organizer" }));
+  await screen.findByText(/Response request saved/);
+  expect(save.mock.calls[1]).toEqual(save.mock.calls[0]);
+  expect(save.mock.calls[0][1]).toMatchObject({ scope: "series", expectedSeriesVersion: "c".repeat(64), response: "declined" });
+});

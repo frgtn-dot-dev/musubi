@@ -378,13 +378,17 @@ export async function deliverEventOutbox(
         if (!config.api.providerRsvpEditsEnabled || row.provider !== "microsoft" || row.action !== "update" || !adapter?.writeMicrosoftRsvp) throw new EventWriteError("event-write", "unsupported");
         if (!(await checkDestination())) return;
         const { microsoftRsvpEvidence, microsoftRsvpProjection } = await import("./adapters/microsoft_rsvp");
-        const { GraphRsvpDispatchSchema, microsoftRsvpDesiredState } = await import("@musubi/types");
+        const { GraphRsvpDispatchSchema, microsoftRsvpTargetDesiredState } = await import("@musubi/types");
         const { markGraphRsvpDispatched, markGraphRsvpAccepted, providerRsvpBaselineVersion } = await import("@musubi/db");
         const intent = row.payload.rsvp, request = ProviderRsvpEditSchema.parse(intent.request);
         if (request.provider !== "microsoft" || intent.instance || request.expectedRevision !== row.revision) throw new ProviderEventWriteError("provider-conflict");
-        const evidence = microsoftRsvpEvidence(intent.baseline.native, String(intent.baseline.selfAddress), request.response, intent.baseline.graphIdentity, intent.graphOccurrence, intent.baseline.master);
-        if (!!intent.graphOccurrence !== (request.scope === "occurrence")) throw new ProviderEventWriteError("provider-conflict");
-        if (!isDeepStrictEqual(evidence, intent.baseline) || evidence.id !== row.externalEventID || evidence.etag !== row.expectedEtag || !matchesRsvpEventProjection("microsoft", row.payload.event, microsoftRsvpProjection(evidence), undefined, intent.graphOccurrence) || !isDeepStrictEqual(intent.desiredState, microsoftRsvpDesiredState(intent.baselineState, evidence.selfAddress, request.response))) throw new ProviderEventWriteError("provider-conflict");
+        const evidence = microsoftRsvpEvidence(intent.baseline.native, String(intent.baseline.selfAddress), request.response, intent.baseline.graphIdentity, intent.graphOccurrence, intent.baseline.master, intent.baseline.series as Record<string, unknown>[] | undefined);
+        if (!!intent.graphOccurrence !== !!request.scope || (request.scope === "series") !== !!evidence.series) throw new ProviderEventWriteError("provider-conflict");
+        if (!isDeepStrictEqual(evidence, intent.baseline) || evidence.id !== row.externalEventID || evidence.etag !== row.expectedEtag || !matchesRsvpEventProjection("microsoft", row.payload.event, microsoftRsvpProjection(evidence), undefined, intent.graphOccurrence) || !isDeepStrictEqual(intent.desiredState, microsoftRsvpTargetDesiredState(intent.baselineState, evidence.selfAddress, request.response, request.scope === "series"))) throw new ProviderEventWriteError("provider-conflict");
+        if (request.scope === "series") {
+          const { microsoftRsvpSeriesVersion } = await import("./adapters/microsoft_rsvp_series");
+          if (microsoftRsvpSeriesVersion(evidence) !== request.expectedSeriesVersion) throw new ProviderEventWriteError("provider-conflict");
+        }
         expectedRef = { externalEventId: row.externalEventID!, etag: row.expectedEtag, icalUid: row.icalUid };
         const dispatched = intent.graphDispatch !== undefined;
         if (dispatched) GraphRsvpDispatchSchema.parse(intent.graphDispatch);
@@ -400,7 +404,7 @@ export async function deliverEventOutbox(
         }
         const native = microsoftRsvpProjection(observed.evidence);
         resultRef = { externalEventId: native.externalId, etag: native.etag, icalUid: native.icalUid };
-        await completeProviderRsvpOutbox(row.id, token, resultRef, expectedRef!, { isEcho: true, externalEventId: native.externalId, etag: native.etag, deleted: false, providerState: native.providerState, observedAt: new Date().toISOString() }, undefined, { baselineHash: providerRsvpBaselineVersion(intent.mappingID, intent.baseline), observedResponse: native.providerState.ownResponse! });
+        await completeProviderRsvpOutbox(row.id, token, resultRef, expectedRef!, { isEcho: true, externalEventId: native.externalId, etag: native.etag, deleted: false, providerState: native.providerState, observedAt: new Date().toISOString() }, undefined, { baselineHash: providerRsvpBaselineVersion(intent.mappingID, intent.baseline), observedResponse: native.providerState.ownResponse!, ...(request.scope === "series" ? { seriesResponse: (observed.evidence.master!.responseStatus as { response: string }).response } : {}) });
         return;
       }
       if (row.payload.rsvp?.request.provider === "caldav") {

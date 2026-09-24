@@ -1,6 +1,6 @@
 import { matchesProviderReminderInstanceState } from "./provider-reminder-instance";
 import { isDeepStrictEqual } from "node:util";
-import { EventTimeModelSchema, type Event, type ProviderEventState } from "@musubi/types";
+import { EventTimeModelSchema, matchesMicrosoftRsvpTargetState, type Event, type ProviderEventState } from "@musubi/types";
 import { matchesEventProviderProjection, matchesGoogleOccurrenceProjection, matchesReminderEventProjection, matchesRsvpEventProjection, matchesGoogleReminderIntent } from "./event-outbox-projection";
 import { and, eq, sql } from "drizzle-orm";
 import { eventOutbox, events, externalCalendars } from "../schema";
@@ -29,6 +29,13 @@ function matchesProjection(row: EventOutboxRow, values: PullValues, providerStat
   if (row.payload.caldavAlarm) return false; // Component summaries cannot acknowledge a full alarm resource.
   if (row.payload.reminderInstance) return row.action === "update" && matchesPersonalSettingTime(row, values) && matchesProviderReminderInstanceState(row.payload.reminderInstance, providerState);
   if (row.payload.rsvp) {
+    if (row.payload.rsvp.request.provider === "microsoft" && row.payload.rsvp.request.scope === "series") {
+      const intent = row.payload.rsvp;
+      // Preserve the lease for a possible series echo. Only the worker's full
+      // native-family proof can acknowledge it; this projection is not proof.
+      return row.action === "update" && matchesPersonalSettingTime(row, values) &&
+        matchesMicrosoftRsvpTargetState(intent.baselineState, providerState, String(intent.baseline.selfAddress), intent.request.response, true);
+    }
     // Outlook may materialize the answered slot as an exception. This is only
     // an echo candidate: ACK still needs exact native target + master readback.
     const observed = row.payload.rsvp.graphOccurrence && row.payload.rsvp.baselineState.eventType === "occurrence" && providerState?.eventType === "exception"

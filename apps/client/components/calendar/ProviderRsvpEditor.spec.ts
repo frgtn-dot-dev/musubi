@@ -76,3 +76,22 @@ it.each([undefined, "occurrence"] as const)("sends an Outlook %s response with i
   expect(h.save.mock.calls[0][1]).not.toHaveProperty("sendUpdates");
   expect(nodes(render(event, graph)).some(node => typeof node.props.children === "string" && node.props.children.includes("Your response is observed in Outlook"))).toBe(true);
 });
+
+it.each(["occurrence", "series"] as const)("limits native response scopes from %s and preserves a whole-series retry", async scope => {
+  const graph: ProviderEventStateResponse = { ...observation, rsvpEdit: { provider: "microsoft", expectedRevision: 7, scope, series: { version: "c".repeat(64), ownResponse: "notResponded" } }, state: { ...observation.state!, provider: "microsoft", reminders: { provider: "microsoft", isOn: true, minutesBeforeStart: 15 } } };
+  h.save.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ status: "pending" });
+  let tree = render(event, graph);
+  if (scope === "occurrence") {
+    button(tree, "Response applies to: This occurrence").onPress();
+    tree = render(event, graph);
+    nodes(tree).find(node => node.type === "OptionPicker" && node.props.title === "Response applies to")!.props.onSelect("series");
+  } else expect(nodes(tree).some(node => node.type === "Btn" && node.props.label === "Response applies to: This occurrence")).toBe(false);
+  tree = render(event, graph);
+  nodes(tree).find(node => node.type === "OptionPicker" && node.props.title === "Your response")!.props.onSelect("declined");
+  tree = render(event, graph);
+  expect(nodes(tree).some(node => typeof node.props.children === "string" && node.props.children.includes("including exceptions"))).toBe(true);
+  button(tree, "Send response to organizer").onPress(); await settle();
+  tree = render(event, graph); button(tree, "Send response to organizer").onPress(); await settle();
+  expect(h.save.mock.calls[1]).toEqual(h.save.mock.calls[0]);
+  expect(h.save.mock.calls[0][1]).toMatchObject({ scope: "series", expectedSeriesVersion: "c".repeat(64), response: "declined" });
+});

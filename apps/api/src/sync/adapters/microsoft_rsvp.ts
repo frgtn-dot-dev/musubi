@@ -6,6 +6,7 @@ import { GraphRsvpOccurrenceSchema, type GraphRsvpOccurrence, type ProviderRsvpE
 import { resolveEventTimeEdit } from "@musubi/calendar";
 import { microsoftEventState } from "./provider_event_state";
 import { ProviderEventWriteError } from "../event_write";
+import { validateMicrosoftRsvpSeries } from "./microsoft_rsvp_series";
 
 const address = z.object({ emailAddress: z.object({ address: z.email(), name: z.string().optional() }).passthrough() }).passthrough();
 const responseStatus = z.object({ response: z.enum(["accepted", "tentativelyAccepted", "declined", "notResponded", "none"]), time: z.iso.datetime({ offset: true }).optional() }).passthrough();
@@ -20,11 +21,13 @@ const nativeCommon = z.object({
   location: z.object({ displayName: z.string() }).passthrough(),
 }).passthrough();
 const nativeSchema = nativeCommon.extend({ type: z.literal("singleInstance"), recurrence: z.null(), seriesMasterId: z.null().optional(), originalStart: z.never().optional() });
-const occurrenceSchema = nativeCommon.extend({ type: z.enum(["occurrence", "exception"]), recurrence: z.null(), seriesMasterId: z.string().min(1), originalStart: z.iso.datetime({ offset: true }) });
-const masterSchema = nativeCommon.extend({ type: z.literal("seriesMaster"), recurrence: z.object({ pattern: z.record(z.string(), z.unknown()), range: z.record(z.string(), z.unknown()) }).passthrough(), seriesMasterId: z.null().optional(), originalStart: z.never().optional() });
-export type MicrosoftRsvpEvidence = { graphIdentity?: GraphIdentity; occurrence?: GraphRsvpOccurrence; master?: Record<string, unknown>; id: string; etag: string; selfAddress: string; response: ProviderRsvpEdit["response"]; native: Record<string, unknown> };
+export const graphRsvpOccurrenceNativeSchema = nativeCommon.extend({ type: z.enum(["occurrence", "exception"]), recurrence: z.null(), seriesMasterId: z.string().min(1), originalStart: z.iso.datetime({ offset: true }) });
+const occurrenceSchema = graphRsvpOccurrenceNativeSchema;
+export const graphRsvpMasterNativeSchema = nativeCommon.extend({ type: z.literal("seriesMaster"), recurrence: z.object({ pattern: z.record(z.string(), z.unknown()), range: z.record(z.string(), z.unknown()) }).passthrough(), seriesMasterId: z.null().optional(), originalStart: z.null().optional() });
+const masterSchema = graphRsvpMasterNativeSchema;
+export type MicrosoftRsvpEvidence = { graphIdentity?: GraphIdentity; occurrence?: GraphRsvpOccurrence; master?: Record<string, unknown>; series?: Record<string, unknown>[]; id: string; etag: string; selfAddress: string; response: ProviderRsvpEdit["response"]; native: Record<string, unknown> };
 const fail = (): never => { throw new ProviderEventWriteError("provider-conflict"); };
-export function microsoftRsvpEvidence(input: unknown, selfAddress: string, response: ProviderRsvpEdit["response"], graphIdentity?: unknown, occurrence?: GraphRsvpOccurrence, masterInput?: unknown): MicrosoftRsvpEvidence {
+export function microsoftRsvpEvidence(input: unknown, selfAddress: string, response: ProviderRsvpEdit["response"], graphIdentity?: unknown, occurrence?: GraphRsvpOccurrence, masterInput?: unknown, series?: Record<string, unknown>[]): MicrosoftRsvpEvidence {
   const native = (occurrence ? occurrenceSchema : nativeSchema).parse(structuredClone(input));
   const own = selfAddress.toLowerCase();
   const self = native.attendees.filter(a => a.emailAddress.address.toLowerCase() === own);
@@ -39,15 +42,17 @@ export function microsoftRsvpEvidence(input: unknown, selfAddress: string, respo
     // Live Graph changes an unanswered master's response (and inherited sibling
     // responses) on the first instance RSVP. Do not present this as a slot-only
     // action; the participant must respond to the series in Outlook first.
-    if (!["accepted", "tentativelyAccepted"].includes(parent.responseStatus.response)) fail();
+    if (!series && !["accepted", "tentativelyAccepted"].includes(parent.responseStatus.response)) fail();
     // The attendee must belong to this mailbox in both the series and target.
     const self = parent.attendees.filter(a => a.emailAddress.address.toLowerCase() === own);
     if (self.length !== 1 || self[0]!.type === "resource" || parent.organizer.emailAddress.address.toLowerCase() === own || new Set(parent.attendees.map(a => a.emailAddress.address.toLowerCase())).size !== parent.attendees.length) fail();
     master = parent;
-  } else if (masterInput !== undefined) fail();
+  } else if (masterInput !== undefined || series !== undefined) fail();
   graphRsvpTime({ ...native, type: "singleInstance" });
   microsoftRsvpDesiredState(microsoftEventState(native), own, response);
-  return { ...(graphIdentity ? { graphIdentity: graphIdentitySchema.parse(graphIdentity) } : {}), ...(occurrence ? { occurrence, master } : {}), id: native.id, etag: native["@odata.etag"], selfAddress: own, response, native };
+  const evidence = { ...(graphIdentity ? { graphIdentity: graphIdentitySchema.parse(graphIdentity) } : {}), ...(occurrence ? { occurrence, master } : {}), ...(series ? { series: structuredClone(series) } : {}), id: native.id, etag: native["@odata.etag"], selfAddress: own, response, native };
+  if (series) validateMicrosoftRsvpSeries(evidence);
+  return evidence;
 }
 export function microsoftRsvpProjection(evidence: MicrosoftRsvpEvidence) {
   const item = (evidence.occurrence ? occurrenceSchema : nativeSchema).parse(evidence.native);
