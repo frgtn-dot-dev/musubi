@@ -8,9 +8,16 @@ export const providerRsvpOptions = [
 export const providerRsvpNotice = "Google may notify the organizer and other participants. Email delivery cannot be verified.";
 export const microsoftRsvpNotice = "Outlook will be asked to send your response to the organizer. Organizer delivery cannot be verified. An uncertain action is checked without resending it.";
 export const caldavRsvpNotice = "Your calendar server will send a response to the organizer. Organizer delivery cannot be verified.";
-export function providerRsvpRequest(observation: ProviderEventStateResponse, response: string, operationID: string) {
+export const microsoftRsvpScopeOptions = [{ value: "occurrence", label: "This occurrence" }, { value: "series", label: "Entire series" }] as const;
+export function microsoftSeriesRsvpNotice(response: string) {
+  return response === "declined" ? "Outlook may remove the entire series, including exceptions, from your calendar." : "Changes the series response. Existing exceptions keep their own response.";
+}
+export function providerRsvpRequest(observation: ProviderEventStateResponse, response: string, operationID: string, scope = observation.rsvpEdit?.scope) {
   if (!observation.rsvpEdit || !observation.version || observation.state?.provider !== observation.rsvpEdit.provider) throw new Error("Refresh the event before responding.");
-  if (observation.rsvpEdit.provider === "microsoft") return ProviderRsvpEditSchema.parse({ operationID, expectedRevision: observation.rsvpEdit.expectedRevision, expectedStateVersion: observation.version, provider: "microsoft", response, notificationPolicy: "send-response", ...(observation.rsvpEdit.scope ? { scope: observation.rsvpEdit.scope } : {}) });
+  if (observation.rsvpEdit.provider === "microsoft") {
+    if (scope === "series" ? !observation.rsvpEdit.series : scope !== observation.rsvpEdit.scope) throw new Error("Refresh the event before changing response scope.");
+    return ProviderRsvpEditSchema.parse({ operationID, expectedRevision: observation.rsvpEdit.expectedRevision, expectedStateVersion: observation.version, provider: "microsoft", response, notificationPolicy: "send-response", ...(scope ? { scope } : {}), ...(scope === "series" ? { expectedSeriesVersion: observation.rsvpEdit.series!.version } : {}) });
+  }
   if (observation.rsvpEdit.provider === "caldav") return ProviderRsvpEditSchema.parse({ operationID, expectedRevision: observation.rsvpEdit.expectedRevision, expectedStateVersion: observation.version, provider: "caldav", response, notificationPolicy: "server-reply" });
   return ProviderRsvpEditSchema.parse({ operationID, expectedRevision: observation.rsvpEdit.expectedRevision, expectedStateVersion: observation.version, provider: "google", response, sendUpdates: "all" });
 }

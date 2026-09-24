@@ -42,7 +42,11 @@ export async function queueProviderRsvp(actorID: string, eventID: string, input:
     const { microsoftRsvpProjection } = await import("./adapters/microsoft_rsvp");
     const { microsoftEventState } = await import("./adapters/provider_event_state");
     const context = prepared.context;
-    const evidence = await microsoftAdapter.readMicrosoftRsvp!(actorID, context.accountID, context.externalCalendarID, { externalEventId: context.externalEventID, etag: context.etag, icalUid: context.icalUid }, request.response, AbortSignal.timeout(10_000), context.graphOccurrence);
+    const evidence = await microsoftAdapter.readMicrosoftRsvp!(actorID, context.accountID, context.externalCalendarID, { externalEventId: context.externalEventID, etag: context.etag, icalUid: context.icalUid }, request.response, AbortSignal.timeout(10_000), context.graphOccurrence, request.scope === "series");
+    if (request.scope === "series") {
+      const { microsoftRsvpSeriesVersion } = await import("./adapters/microsoft_rsvp_series");
+      if (microsoftRsvpSeriesVersion(evidence) !== request.expectedSeriesVersion) throw new BadRequestError("The Outlook series changed. Reopen it before responding.");
+    }
     const native = microsoftRsvpProjection(evidence);
     if (!matchesRsvpEventProjection("microsoft", context.event, native, undefined, context.graphOccurrence) || !isDeepStrictEqual(context.state, microsoftEventState(evidence.native))) throw new BadRequestError("Provider meeting changed. Sync and reopen before responding.");
     return commitProviderRsvpEdit(context, evidence, native.timeModel!);
@@ -67,7 +71,7 @@ export async function observeCaldavRsvp(actorID: string, eventID: string, observ
   }
 }
 
-export async function observeMicrosoftRsvp(actorID: string, eventID: string, observation: import("@musubi/types").ProviderEventStateResponse) {
+export async function observeMicrosoftRsvp(actorID: string, eventID: string, observation: import("@musubi/types").ProviderEventStateResponse, seriesSupported = false): Promise<import("@musubi/types").ProviderEventStateResponse> {
   if (observation.rsvpEdit?.provider !== "microsoft" || !observation.version || !observation.state) return observation;
   try {
     const { randomUUID } = await import("node:crypto");
@@ -76,7 +80,17 @@ export async function observeMicrosoftRsvp(actorID: string, eventID: string, obs
     const { microsoftAdapter } = await import("./adapters/microsoft");
     const { microsoftRsvpProjection } = await import("./adapters/microsoft_rsvp");
     const context = prepared.context;
-    const evidence = await microsoftAdapter.readMicrosoftRsvp!(actorID, context.accountID, context.externalCalendarID, { externalEventId: context.externalEventID, etag: context.etag, icalUid: context.icalUid }, "accepted", AbortSignal.timeout(10_000), context.graphOccurrence);
+    const read = (series: boolean) => microsoftAdapter.readMicrosoftRsvp!(actorID, context.accountID, context.externalCalendarID, { externalEventId: context.externalEventID, etag: context.etag, icalUid: context.icalUid }, "accepted", AbortSignal.timeout(10_000), context.graphOccurrence, series);
+    if (seriesSupported && context.graphOccurrence) {
+      try {
+        const evidence = await read(true);
+        const { microsoftRsvpSeriesVersion } = await import("./adapters/microsoft_rsvp_series");
+        if (!matchesRsvpEventProjection("microsoft", context.event, microsoftRsvpProjection(evidence), undefined, context.graphOccurrence) || !isDeepStrictEqual(context.state, microsoftRsvpProjection(evidence).providerState)) throw new Error("Changed event");
+        const response = (evidence.master!.responseStatus as { response: string }).response;
+        return { ...observation, rsvpEdit: { ...observation.rsvpEdit, scope: ["accepted", "tentativelyAccepted"].includes(response) ? "occurrence" as const : "series" as const, series: { version: microsoftRsvpSeriesVersion(evidence), ownResponse: response } } };
+      } catch { /* A non-finite/unverifiable family may still allow a bound occurrence. */ }
+    }
+    const evidence = await read(false);
     if (!matchesRsvpEventProjection("microsoft", context.event, microsoftRsvpProjection(evidence), undefined, context.graphOccurrence) || !isDeepStrictEqual(context.state, microsoftRsvpProjection(evidence).providerState)) throw new Error("Changed event");
     return observation;
   } catch { const { rsvpEdit: _rsvpEdit, ...rest } = observation; return rest; }

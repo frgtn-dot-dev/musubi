@@ -350,3 +350,26 @@ resending. Native/local cleanup is verified; [evidence](outlook-occurrence-rsvp-
 Whole-series RSVP, canonical local-series attendee children, delegated calendars
 and general all-day representations remain separate work. No production gate,
 release tag or deployment changes. [Contract](../sync/microsoft-rsvp.md).
+
+
+### 2026-09-24: Outlook RSVP for a finite meeting series
+
+Current web/native clients opt in with `outlookRsvp=2` and offer Entire series
+only after complete finite native proof. This also permits a first response to
+an unanswered invitation without presenting it as an occurrence-only change.
+The master and inherited occurrences receive the requested response; existing
+exceptions retain their own response. Native-family admission serialization,
+preview/version checks and the permanent dispatch marker prevent automatic
+resends and overlapping local RSVP intents.
+
+The actual queue/outbox completed initial Tentative, Accept and another Tentative
+anchored from an exception on an America/New_York series spanning DST. Decline
+removed the copies and remained unconfirmed; read-only recovery sent no second
+POST. Fixtures are removed and notification delivery remains unknown. Global
+IANA/Windows labels, UTC all-day and COUNT/UNTIL representations have separate
+synthetic regressions. [Audit and redacted evidence](outlook-series-rsvp-20260924.md).
+
+This supersedes the whole-series/initial-response gap noted in the September 23
+entry. Unbounded/unverifiable families, canonical local-series attendee children,
+delegation and general all-day representations remain outside the contract.
+Production gate, deployment and release settings are unchanged.

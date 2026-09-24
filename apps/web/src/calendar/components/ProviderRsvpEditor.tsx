@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { ProviderEventStateResponse, ProviderRsvpEdit } from "@musubi/types";
-import { providerRsvpOptions, providerRsvpNotice, caldavRsvpNotice, microsoftRsvpNotice, providerRsvpRequest, providerRsvpReceiptMessage } from "@musubi/calendar";
+import { providerRsvpOptions, providerRsvpNotice, caldavRsvpNotice, microsoftRsvpNotice, microsoftRsvpScopeOptions, microsoftSeriesRsvpNotice, providerRsvpRequest, providerRsvpReceiptMessage } from "@musubi/calendar";
 import { editProviderRsvp } from "~/api/resources";
 import { Button } from "~/ui/Button";
 import { Dialog } from "~/ui/Dialog";
@@ -13,7 +13,9 @@ export function ProviderRsvpEditor({ eventId, connectionId, observation, onClose
 }) {
   const graph = observation.rsvpEdit?.provider === "microsoft";
   const caldav = observation.rsvpEdit?.provider === "caldav";
-  const occurrenceResponse = occurrence || observation.rsvpEdit?.scope === "occurrence";
+  const [scope, setScope] = useState(observation.rsvpEdit?.scope);
+  const hasSeries = graph && !!observation.rsvpEdit?.series;
+  const occurrenceResponse = occurrence || scope === "occurrence";
   const [response, setResponse] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -24,7 +26,7 @@ export function ProviderRsvpEditor({ eventId, connectionId, observation, onClose
     if (pending.current || notice || !response) return;
     pending.current = true; setBusy(true); setError("");
     try {
-      const request = lastRequest.current?.response === response ? lastRequest.current : providerRsvpRequest(observation, response, crypto.randomUUID());
+      const request = lastRequest.current?.response === response && (!graph || lastRequest.current.provider === "microsoft" && lastRequest.current.scope === scope) ? lastRequest.current : providerRsvpRequest(observation, response, crypto.randomUUID(), scope);
       lastRequest.current = request;
       const receipt = await editProviderRsvp(eventId, request, connectionId);
       setNotice(providerRsvpReceiptMessage(receipt.status, graph ? "microsoft" : caldav ? "caldav" : "google"));
@@ -32,14 +34,16 @@ export function ProviderRsvpEditor({ eventId, connectionId, observation, onClose
     finally { pending.current = false; setBusy(false); }
   }
   return <div className={styles.layerBoundary} onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
-    <Dialog open title={occurrenceResponse ? "Respond to this occurrence" : graph ? "Respond in Outlook" : caldav ? "Respond in calendar" : "Respond in Google"} description={`${occurrenceResponse ? `This ${graph ? "Outlook" : "Google"} response applies only to this occurrence. ` : ""}${graph ? microsoftRsvpNotice : caldav ? caldavRsvpNotice : providerRsvpNotice}`} closeLabel={graph ? "Close Outlook response" : caldav ? "Close calendar response" : "Close Google response"} returnFocus={returnFocus} onOpenChange={open => { if (!open && !pending.current) onClose(); }} size="compact" footer={<>
+    <Dialog open title={hasSeries ? "Respond in Outlook" : occurrenceResponse ? "Respond to this occurrence" : graph ? "Respond in Outlook" : caldav ? "Respond in calendar" : "Respond in Google"} description={`${occurrenceResponse && !hasSeries ? `This ${graph ? "Outlook" : "Google"} response applies only to this occurrence. ` : ""}${graph ? microsoftRsvpNotice : caldav ? caldavRsvpNotice : providerRsvpNotice}`} closeLabel={graph ? "Close Outlook response" : caldav ? "Close calendar response" : "Close Google response"} returnFocus={returnFocus} onOpenChange={open => { if (!open && !pending.current) onClose(); }} size="compact" footer={<>
       <Button variant="secondary" disabled={busy} onClick={onClose}>{notice ? "Close" : "Cancel"}</Button>
       {!notice ? <Button disabled={!response} loading={busy} onClick={() => void send()}>{(caldav || graph) ? "Send response to organizer" : "Send response"}</Button> : null}
     </>}>
-      {notice ? <p role="status">{notice}</p> : <>
+      {notice ? <p role="status">{notice}</p> : <div className={styles.reminderForm}>
+        {hasSeries && observation.rsvpEdit?.scope === "series" ? <p className={styles.rsvpScopeNote}>Response applies to: Entire series</p> : hasSeries ? <Select label="Response applies to" value={scope ?? "series"} disabled={busy} options={microsoftRsvpScopeOptions.filter(option => observation.rsvpEdit?.scope !== "series" || option.value === "series")} onChange={value => setScope(value as "occurrence" | "series")} /> : null}
         <Select label={(caldav || graph) ? "Your response" : "Your Google response"} placeholder="Choose a response" value={response} disabled={busy} options={[...providerRsvpOptions]} onChange={setResponse} />
+        {hasSeries ? <p className={styles.rsvpScopeNote} role="status">{scope === "series" ? microsoftSeriesRsvpNotice(response) : "Only this occurrence will receive your response."}</p> : null}
         {error ? <InlineError>{error}</InlineError> : null}
-      </>}
+      </div>}
     </Dialog>
   </div>;
 }

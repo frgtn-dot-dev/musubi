@@ -9,7 +9,7 @@ const ProviderRsvpCommonSchema = z.object({
 });
 export const ProviderRsvpEditSchema = z.discriminatedUnion("provider", [
   ProviderRsvpCommonSchema.extend({ provider: z.literal("google"), sendUpdates: z.literal("all") }).strict(),
-  ProviderRsvpCommonSchema.extend({ provider: z.literal("microsoft"), notificationPolicy: z.literal("send-response"), scope: z.literal("occurrence").optional() }).strict(),
+  ProviderRsvpCommonSchema.extend({ provider: z.literal("microsoft"), notificationPolicy: z.literal("send-response"), scope: z.enum(["occurrence", "series"]).optional(), expectedSeriesVersion: z.string().regex(/^[0-9a-f]{64}$/).optional() }).strict().refine(value => (value.scope === "series") === !!value.expectedSeriesVersion, "A series response requires its exact preview version"),
   ProviderRsvpCommonSchema.extend({ provider: z.literal("caldav"), notificationPolicy: z.literal("server-reply") }).strict(),
 ]);
 export type ProviderRsvpEdit = z.infer<typeof ProviderRsvpEditSchema>;
@@ -97,6 +97,19 @@ export function microsoftRsvpDesiredState(input: ProviderEventState, selfAddress
   self[0]!.response = native; state.ownResponse = native;
   return state;
 }
+/** Whole-series responses preserve existing exception replies. A selected
+ * exception is still the source anchor, not the master response being edited. */
+export function microsoftRsvpTargetDesiredState(input: ProviderEventState, selfAddress: string, response: ProviderRsvpEdit["response"], series = false): ProviderEventState {
+  const desired = microsoftRsvpDesiredState(input, selfAddress, response);
+  return series && input.eventType === "exception" ? ProviderEventStateSchema.parse(input) : desired;
+}
+export function matchesMicrosoftRsvpTargetState(baseline: ProviderEventState, actual: unknown, selfAddress: string, response: ProviderRsvpEdit["response"], series = false): boolean {
+  if (series && baseline.eventType === "exception") {
+    const observed = ProviderEventStateSchema.safeParse(actual);
+    return observed.success && JSON.stringify(observed.data) === JSON.stringify(ProviderEventStateSchema.parse(baseline));
+  }
+  return matchesMicrosoftRsvpObservedState(baseline, actual, selfAddress, response);
+}
 /** Graph's own response is authoritative. Live Accept/Tentative readback can
  * leave the self attendee unchanged and apply the evidenced availability pair. */
 export function matchesMicrosoftRsvpObservedState(baseline: ProviderEventState, actual: unknown, selfAddress: string, response: ProviderRsvpEdit["response"]): boolean {
@@ -115,7 +128,7 @@ export function matchesMicrosoftRsvpObservedState(baseline: ProviderEventState, 
   } catch { return false; }
 }
 export const GraphRsvpDispatchSchema = z.object({ kind: z.literal("graph-rsvp-dispatch"), version: z.literal(1), startedAt: z.iso.datetime(), acceptedAt: z.iso.datetime().optional() }).strict();
-export type MicrosoftRsvpConfirmation = { baselineHash: string; observedResponse: string };
+export type MicrosoftRsvpConfirmation = { baselineHash: string; observedResponse: string; seriesResponse?: string };
 
 /** Durable permission for at most one CalDAV scheduling PUT. Missing legacy
  * policy and a started policy permit read-only recovery, never another PUT. */

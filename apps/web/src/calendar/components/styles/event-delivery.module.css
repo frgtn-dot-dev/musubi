@@ -11,3 +11,11 @@
   gap: var(--space-3);
   min-width: 0;
 }
+
+/* Scope consequences sit with the choice, using the dialog's secondary copy. */
+.rsvpScopeNote {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-13);
+  line-height: 1.5;
+}
