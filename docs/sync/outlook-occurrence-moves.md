@@ -1,6 +1,6 @@
 # Move selected Outlook occurrences
 
-The web event detail offers **Move selected occurrences** for verified finite,
+The web and native mobile event details offer **Move selected occurrences** for verified finite,
 timed families in their verified series time zone in the connected owner's default Outlook calendar. The user
 selects up to 20 unchanged, synchronized occurrences, chooses an earlier/later
 shift of 1–720 minutes and reviews each old/new time before starting. Every
@@ -20,7 +20,7 @@ identities; it expires after ten minutes if not started. The operation UUID bind
 an immutable request. Replaying it cannot change the selection or offset. Start
 is idempotent, rechecks local authority/content and permits one running operation
 per source family. The existing outbox scheduler admits one child at a time;
-closing the browser does not cancel the operation.
+closing the browser or mobile panel does not cancel the operation.
 
 Each child reuses the existing `graphOccurrenceContent` admission, conditional
 PATCH, durable dispatch marker and read-only recovery. Before admission, the
@@ -67,8 +67,7 @@ journal foreign keys. No frontend polling request dispatches a write.
 The optional `outlookOccurrenceMove` capability is sent only to clients requesting
 `outlookOrganizer=10`; v9 keeps its UTC-only contract, and v8 and earlier responses retain their existing shape. Bulk endpoints also require this opt-in for non-UTC previews, results and starts. See [global time-zone rules](outlook-time-zones.md).
 The existing organizer-write and event-time-edit flags must be enabled. This work
-does not change their deployment configuration. Mobile native clients do not yet
-expose this bulk action; the responsive web dialog does.
+does not change their deployment configuration. Native mobile clients expose the same bulk action using the existing sheet, picker and button primitives.
 
 ## Verification, 2026-09-23
 
@@ -98,4 +97,44 @@ confirmation → result → close/reopen flow at 1280px/light and 390px/dark, in
 keyboard focus, axe, layering, horizontal overflow and console errors. The existing
 series-time editor is included in the browser regression run. Browser plugin not
 available; the repository's Playwright workflow was used. Other browsers and native
-mobile presentation are not covered by this change.
+mobile presentation were not covered by that web change.
+
+
+## Native client, 2026-09-24
+
+The native action is offered only for an exact stored home-source event with the
+server capability. Its sheet stays mounted across canonical observation revisions;
+other provider editors retain their revision-based invalidation. The account,
+server, source and occurrence remain outer session boundaries.
+
+A captured authenticated client reads the latest durable operation on open. Only
+explicit Preview/Move actions send POSTs. A failed preview retains its immutable
+request for an identical retry after a fresh status read. Reads are aborted on
+revision changes, backgrounding and disposal; backgrounding clears rendered dates
+and pauses polling. Foregrounding revalidates status before actions are enabled.
+A revision notification during a write hides the old view and coalesces a fresh
+read after the write settles. Neither reopening nor polling restarts work.
+
+The virtualized selection list allows at most 20 dates. Preview rows show old/new
+times in the series zone and honor the user's date order and 12/24-hour setting;
+an overnight end date is explicit. Meetings require a button that says guests will
+be notified. Running/partial results distinguish moved, failed, unconfirmed and
+unstarted occurrences; unconfirmed results cannot open a new preview. No provider
+family data is added to the offline event store or persisted by this UI.
+
+Verification: native transport, session lifecycle, component wiring and formatting
+tests cover immutable retries, double taps, explicit confirmation, expired
+previews, account/source boundaries, revision/read races, background/resume,
+read-only reopen, partial outcomes and global zones. The full client Vitest suite,
+TypeScript and client lint are run for this change.
+
+Rendered QA used the actual React Native components in a temporary Expo Web
+harness with simulated API replies, at 390×844/dark, 320×740/dark and
+768×1024/light. It exercised detail → selection → preview → event revision refresh
+→ explicit start → close/reopen → partial/unknown result, checked viewport bounds
+and captured screenshots. Browser plugin not available; Playwright was used.
+Only the expected native BackHandler-on-web warning remained. This is presentation
+and interaction evidence, not a new live Graph integration test. The available
+Android emulator contains a release-only app; native keyboard, TalkBack/VoiceOver,
+Android/iOS binary execution and device lifecycle behavior still need device QA.
+The earlier live coordinator evidence above remains unchanged.
