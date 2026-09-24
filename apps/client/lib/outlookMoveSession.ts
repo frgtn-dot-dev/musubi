@@ -115,6 +115,9 @@ export class OutlookMoveSession {
     finally {
       if (this.write === controller) this.write = undefined;
       if (this.refreshPending && !this.disposed && !this.suspended) { this.refreshPending = false; await this.refresh(); }
+      // React may consume the result synchronously, before finally releases the
+      // write lock. Publish that release too so dismiss controls cannot stay locked.
+      else if (current()) this.update({ ...this.state });
     }
   }
 }

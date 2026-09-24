@@ -95,3 +95,17 @@ it("recovers a lost start response by reading the journal", async () => {
   await session.confirm(); api.getLatestOutlookMove.mockResolvedValue(running); await session.refresh();
   expect(session.state.result).toEqual(running); expect(api.startOutlookMove).toHaveBeenCalledTimes(1);
 });
+it("notifies mounted controls after the write lock releases", async () => {
+  await session.start();
+  const observed: boolean[] = []; session.subscribe(() => observed.push(session.busy));
+  await session.preview([id(10)], 30);
+  expect(observed).toContain(true); expect(observed.at(-1)).toBe(false);
+});
+it("revalidates after backgrounding during a write without dispatching again", async () => {
+  api.getLatestOutlookMove.mockResolvedValue(preview); await session.start();
+  const pending = deferred<OutlookMoveResult>(); api.startOutlookMove.mockReturnValue(pending.promise);
+  const starting = session.confirm(); session.suspend(); await session.resume();
+  expect(session.state.result).toBeUndefined(); api.getLatestOutlookMove.mockResolvedValue(running);
+  pending.resolve(running); await starting;
+  expect(session.state.result).toEqual(running); expect(api.startOutlookMove).toHaveBeenCalledTimes(1);
+});
